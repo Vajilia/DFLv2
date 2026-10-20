@@ -1,0 +1,15 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
