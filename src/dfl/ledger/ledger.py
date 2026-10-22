@@ -1,0 +1,469 @@
+"""League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
+
+Principles (Design Document 8.7, sections 11, 12, 17)
+  * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
+    rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
+  * Two-tier transactions: a move is hard-rejected only if it breaks the viability invariant (or a roster rule);
+    a club left above the cap registers an overage that the next cut to 53 must clear.
+  * Viability invariant: for the current and every committed future year,
+        committed money + 48 x minimum salary + reserve <= cap          (committed money <= 735)
+    "Committed money" is what the club owes in that year even if every contract were released today: dead money,
+    floor supplements, guarantees, earned base, and (this year) every unpaid bonus accelerated onto the cap.
+    This is the strict, worst-case reading of the document's "dead money" term (assumption A1 in docs/LEDGER.md).
+    In the current year the 48 x minimum replacement cost is pro-rated to the paid weeks still to come (A2). A move is
+    rejected if it leaves a year over the limit AND raises that year's committed money; a club that drifts over the
+    limit by the passage of weeks (earned salary accrues) is not frozen, it just cannot make things worse.
+  * No banking: unused room is lost; nothing carries to the next year.
+"""
+import copy
+import hashlib
+import json
+from dataclasses import dataclass, field
+from fractions import Fraction as F
+
+from . import rules as R
+from .contracts import Contract, ContractError
+from .positions import OL, shortfalls
+
+
+class LedgerError(Exception):
+    pass
+
+
+class Rejected(LedgerError):
+    """A transaction broke a rule and was rolled back."""
+
+
+@dataclass
+class Player:
+    pid: int
+    pos: str
+    ovr: int
+    age: int = 24
+    seasons: int = 0               # credited seasons
+    contract: Contract = None
+    club: str = None
+    where: str = "fa"              # fa | roster | ps | ir | waivers | retired
+    out_weeks: int = 0
+    elevations: int = 0
+    ir_since: int = None
+
+    @property
+    def veteran(self):
+        return self.seasons > R.PS_VETERAN_AFTER
+
+
+@dataclass
+class Club:
+    cid: str
+    roster: list = field(default_factory=list)
+    ps: list = field(default_factory=list)
+    ir: list = field(default_factory=list)
+    dead: dict = field(default_factory=dict)         # year -> dead money
+    supplement: dict = field(default_factory=dict)   # year -> floor supplement (guaranteed, counted against the cap)
+    picks: set = field(default_factory=set)          # (draft_year, round, original cid)
+    ir_returns_used: int = 0
+    split_years: set = field(default_factory=set)
+    _cmap: dict = field(default=None, repr=False, compare=False)
+    _cmap_week: tuple = field(default=None, repr=False, compare=False)
+
+    def all_pids(self):
+        return self.roster + self.ps + self.ir
+
+    def snapshot(self):
+        s = Club(self.cid, list(self.roster), list(self.ps), list(self.ir), dict(self.dead), dict(self.supplement),
+                 set(self.picks), self.ir_returns_used, set(self.split_years))
+        return s
+
+
+class Ledger:
+    def __init__(self, cids, year=2000):
+        self.year, self.week, self.phase = year, 0, "offseason"
+        self.draft_completed = year - 1
+        self.clubs = {c: Club(c) for c in cids}
+        self.players = {}
+        self.waivers = {}              # pid -> dict(from=cid, relief={year: amount})
+        self.events = []
+        self._next_pid = 1
+        for c in cids:
+            for y in range(year, year + 3):
+                for rnd in range(1, 8):
+                    self.clubs[c].picks.add((y, rnd, c))
+
+    # ---------- bookkeeping
+    def log(self, kind, **kw):
+        self.events.append({"id": len(self.events) + 1, "year": self.year, "week": self.week, "kind": kind, **kw})
+
+    def new_player(self, pos, ovr, age=24, seasons=0):
+        p = Player(self._next_pid, pos, ovr, age, seasons)
+        self.players[p.pid] = p
+        self._next_pid += 1
+        return p
+
+    def digest(self):
+        h = hashlib.sha256()
+        for cid in sorted(self.clubs):
+            c = self.clubs[cid]
+            h.update(json.dumps([cid, c.roster, c.ps, c.ir, sorted((y, str(v)) for y, v in c.dead.items()),
+                                 sorted((y, str(v)) for y, v in c.supplement.items()), sorted(c.picks),
+                                 c.ir_returns_used], default=str).encode())
+        for pid in sorted(self.players):
+            p = self.players[pid]
+            h.update(f"{pid}|{p.pos}|{p.ovr}|{p.club}|{p.where}|{p.contract}|{p.out_weeks}".encode())
+        return h.hexdigest()
+
+    # ---------- money
+    def contracts_of(self, cid):
+        return [self.players[p].contract for p in self.clubs[cid].all_pids()]
+
+    def cap_number(self, cid, year=None):
+        year = self.year if year is None else year
+        c = self.clubs[cid]
+        return (sum((k.cap_hit(year) for k in self.contracts_of(cid) if k), F(0))
+                + c.dead.get(year, F(0)) + c.supplement.get(year, F(0)))
+
+    def overage(self, cid):
+        return max(F(0), self.cap_number(cid) - R.CAP)
+
+    def committed(self, cid):
+        """{year: money owed in that year if every contract were released at the start of it (this year: now)}."""
+        c = self.clubs[cid]
+        key = (self.year, self.week)
+        if c._cmap is not None and c._cmap_week == key:
+            return c._cmap
+        m = {}
+        for y, v in c.dead.items():
+            if y >= self.year:
+                m[y] = m.get(y, F(0)) + v
+        for y, v in c.supplement.items():
+            if y >= self.year:
+                m[y] = m.get(y, F(0)) + v
+        for pid in c.all_pids():
+            k = self.players[pid].contract
+            if k:
+                # worst case for each year: every contract released at the start of that year (now, for this year),
+                # so the accelerated bonus lands in the year it would actually land in
+                for y in range(self.year, k.end_year + 1):
+                    v = k.release_charges(y, self.week if y == self.year else 0).get(y, F(0))
+                    if v:
+                        m[y] = m.get(y, F(0)) + v
+        c._cmap, c._cmap_week = m, key
+        return m
+
+    def limit(self, year):
+        """Largest committed money the invariant allows in `year`."""
+        repl = R.REQUIRED_PLACES * R.MIN_SALARY
+        if year == self.year:
+            repl = repl * F(R.PAID_WEEKS - self.week, R.PAID_WEEKS)
+        return R.CAP - R.RESERVE - repl
+
+    def viability_margin(self, cid):
+        m = self.committed(cid)
+        years = set(m) | {self.year}
+        return min(self.limit(y) - m.get(y, F(0)) for y in years)
+
+    def _viable(self, cid, before):
+        after = self.committed(cid)
+        return all(v <= self.limit(y) or v <= before.get(y, F(0)) for y, v in after.items())
+
+    # ---------- transaction wrapper (reserve / commit)
+    def _txn(self, cids, pids, fn, label):
+        before = {c: dict(self.committed(c)) for c in cids}
+        snap_c = {c: self.clubs[c].snapshot() for c in cids}
+        snap_p = {p: copy.copy(self.players[p]) for p in pids if p in self.players}
+        snap_w = {k: {**v, "relief": dict(v["relief"])} for k, v in self.waivers.items()}
+        n_events = len(self.events)
+        try:
+            out = fn()
+            for c in cids:
+                self.clubs[c]._cmap = None
+                if not self._viable(c, before[c]):
+                    raise Rejected(f"{label}: breaks the viability invariant for {c}")
+            return out
+        except Exception:
+            for c, s in snap_c.items():          # restore in place so references held elsewhere stay valid
+                self.clubs[c].__dict__.update(s.__dict__)
+                self.clubs[c]._cmap = None
+            for p, s in snap_p.items():
+                self.players[p].__dict__.update(s.__dict__)
+            self.waivers = snap_w
+            del self.events[n_events:]
+            raise
+
+    # ---------- roster counts
+    def room(self, cid, slot):
+        c = self.clubs[cid]
+        if self.phase in ("offseason", "camp"):
+            return len(c.roster) + len(c.ps) < R.PRESEASON_CEILING
+        return len(c.roster) < R.ROSTER_MAX if slot == "roster" else len(c.ps) < R.PS_MAX
+
+    def ps_veterans(self, cid):
+        return sum(1 for p in self.clubs[cid].ps if self.players[p].veteran)
+
+    # ---------- transactions
+    def sign(self, cid, pid, contract, slot="roster"):
+        p = self.players[pid]
+
+        def go():
+            if p.where != "fa":
+                raise Rejected(f"player {pid} is not a free agent")
+            if (contract.start_year, contract.start_week) != (self.year, self.week):
+                raise Rejected("contract must start now")
+            if slot not in ("roster", "ps"):
+                raise Rejected("slot")
+            if not self.room(cid, slot):
+                raise Rejected(f"no {slot} room for {cid}")
+            if slot == "ps" and p.veteran and self.ps_veterans(cid) >= R.PS_VETERANS_MAX:
+                raise Rejected("practice squad veteran limit")
+            p.contract, p.club, p.where = contract, cid, slot
+            getattr(self.clubs[cid], slot).append(pid)
+            self.log("sign", club=cid, pid=pid, slot=slot, cap_hit=str(contract.cap_hit(self.year)))
+        self._txn([cid], [pid], go, "sign")
+        return p
+
+    def _lists(self, cid):
+        c = self.clubs[cid]
+        return {"roster": c.roster, "ps": c.ps, "ir": c.ir}
+
+    def release(self, cid, pid, split=False):
+        """Release a player: charges become dead money; she enters waivers (resolve with `resolve_waivers`)."""
+        p = self.players[pid]
+
+        def go():
+            if p.club != cid or p.where not in ("roster", "ps", "ir"):
+                raise Rejected("player is not under contract to that club")
+            c = self.clubs[cid]
+            if split:
+                if self.year in c.split_years:
+                    raise Rejected("split release already used this league year")
+                c.split_years.add(self.year)
+            charges = p.contract.release_charges(self.year, self.week, split)
+            base_only = p.contract.release_charges(self.year, self.week, split, keep_guarantees=False)
+            for y, v in charges.items():
+                c.dead[y] = c.dead.get(y, F(0)) + v
+            relief = {y: charges.get(y, F(0)) - base_only.get(y, F(0)) for y in charges}
+            relief = {y: v for y, v in relief.items() if v > 0}
+            # a guarantee claimed by another club leaves this club; the bonus never does
+            self._lists(cid)[p.where].remove(pid)
+            self.waivers[pid] = {"from": cid, "relief": relief, "contract": p.contract}
+            p.where = "waivers"
+            self.log("release", club=cid, pid=pid, split=split, dead={str(y): str(v) for y, v in charges.items()})
+        self._txn([cid], [pid], go, "release")
+
+    def resolve_waivers(self, claim_order, wants=None):
+        """One simulated day passes. `claim_order` is the priority list of club ids; `wants(cid, player)` says whether
+        a club claims. A claimant assumes unpaid base and guarantees (never the bonus). Unclaimed players become free agents."""
+        claimed = []
+        for pid in sorted(self.waivers):
+            w = self.waivers[pid]
+            p = self.players[pid]
+            took = False
+            for cid in claim_order:
+                if cid == w["from"] or (wants and not wants(cid, p)):
+                    continue
+                try:
+                    self._claim(cid, pid)
+                    took = True
+                    claimed.append((pid, cid))
+                    break
+                except Rejected:
+                    continue
+            if not took:
+                p.where, p.club, p.contract = "fa", None, None
+                del self.waivers[pid]
+        return claimed
+
+    def _claim(self, cid, pid):
+        w = self.waivers[pid]
+        p = self.players[pid]
+        src = w["from"]
+
+        def go():
+            slot = "roster"
+            if not self.room(cid, slot):
+                raise Rejected("no roster room to claim")
+            for y, v in w["relief"].items():
+                self.clubs[src].dead[y] = self.clubs[src].dead.get(y, F(0)) - v
+            p.contract = w["contract"].assumed_by_receiver(self.year, self.week)
+            p.club, p.where = cid, "roster"
+            self.clubs[cid].roster.append(pid)
+            del self.waivers[pid]
+            self.log("claim", club=cid, pid=pid, from_club=src)
+        self._txn([cid, src], [pid], go, "claim")
+
+    def trade_open(self):
+        return self.phase != "season" or self.week <= R.TRADE_LAST_GAME_WEEK
+
+    def trade(self, a, a_gives, b, b_gives, a_picks=(), b_picks=()):
+        pids = list(a_gives) + list(b_gives)
+
+        def go():
+            if not self.trade_open():
+                raise Rejected("trade window closed")
+            if a == b:
+                raise Rejected("same club")
+            for src, dst, gives, picks in ((a, b, a_gives, a_picks), (b, a, b_gives, b_picks)):
+                for pid in gives:
+                    p = self.players[pid]
+                    if p.club != src or p.where not in ("roster", "ir"):
+                        raise Rejected("only players on the roster or injured reserve can be traded")
+                    k = p.contract
+                    for y, v in k.release_charges(self.year, self.week, False, keep_guarantees=False).items():
+                        self.clubs[src].dead[y] = self.clubs[src].dead.get(y, F(0)) + v
+                    self._lists(src)[p.where].remove(pid)
+                    p.contract = k.assumed_by_receiver(self.year, self.week)
+                    p.club = dst
+                    self._lists(dst)[p.where].append(pid)
+                for pk in picks:
+                    if pk not in self.clubs[src].picks:
+                        raise Rejected(f"{src} does not own pick {pk}")
+                    if not self.draft_completed < pk[0] <= self.draft_completed + 3:
+                        raise Rejected("only the next three uncompleted drafts' picks are tradable")
+                    self.clubs[src].picks.remove(pk)
+                    self.clubs[dst].picks.add(pk)
+            for c in (a, b):
+                cl = self.clubs[c]
+                if self.phase in ("offseason", "camp"):
+                    if len(cl.roster) + len(cl.ps) > R.PRESEASON_CEILING:
+                        raise Rejected(f"{c} over the preseason ceiling")
+                elif len(cl.roster) > R.ROSTER_MAX:
+                    raise Rejected(f"{c} over 53")
+            self.log("trade", a=a, b=b, a_gives=list(a_gives), b_gives=list(b_gives))
+        self._txn([a, b], pids, go, "trade")
+
+    def restructure(self, cid, pid, amount):
+        p = self.players[pid]
+
+        def go():
+            if p.club != cid or p.where not in ("roster", "ir"):
+                raise Rejected("player not on the roster")
+            try:
+                p.contract = p.contract.restructured(self.year, self.week, F(amount))
+            except ContractError as e:
+                raise Rejected(str(e))
+            self.log("restructure", club=cid, pid=pid, amount=str(amount))
+        self._txn([cid], [pid], go, "restructure")
+
+    # ---------- injured reserve, practice squad
+    def place_on_ir(self, cid, pid):
+        p = self.players[pid]
+        if p.club != cid or p.where != "roster":
+            raise Rejected("player not on the 53")
+        if p.out_weeks < R.IR_MIN_GAMES:
+            raise Rejected("injury shorter than the four-game minimum")
+        self.clubs[cid].roster.remove(pid)
+        self.clubs[cid].ir.append(pid)
+        p.where, p.ir_since = "ir", self.week
+        self.log("ir", club=cid, pid=pid)
+
+    def return_from_ir(self, cid, pid):
+        p, c = self.players[pid], self.clubs[cid]
+        if p.club != cid or p.where != "ir":
+            raise Rejected("not on injured reserve")
+        if c.ir_returns_used >= R.IR_RETURNS_MAX:
+            raise Rejected("no designated returns left this season")
+        if p.out_weeks > 0 or self.week - p.ir_since < R.IR_MIN_GAMES:
+            raise Rejected("not yet eligible to return")
+        if len(c.roster) >= R.ROSTER_MAX and self.phase not in ("offseason", "camp"):
+            raise Rejected("no roster room")
+        c.ir.remove(pid)
+        c.roster.append(pid)
+        p.where, p.ir_since = "roster", None
+        c.ir_returns_used += 1
+        self.log("ir_return", club=cid, pid=pid)
+
+    def promote(self, cid, pid):
+        p, c = self.players[pid], self.clubs[cid]
+        if p.club != cid or p.where != "ps":
+            raise Rejected("not on the practice squad")
+        if len(c.roster) >= R.ROSTER_MAX and self.phase not in ("offseason", "camp"):
+            raise Rejected("no roster room")
+        c.ps.remove(pid)
+        c.roster.append(pid)
+        p.where = "roster"
+        self.log("promote", club=cid, pid=pid)
+
+    # ---------- calendar
+    def start_camp(self):
+        self.phase = "camp"
+
+    def cut_down(self, cid):
+        """The cut to 53 and 16: sizes, overage, positional coverage, then the floor supplement."""
+        c = self.clubs[cid]
+        if self.phase != "camp":
+            raise Rejected("not in camp")
+        if len(c.roster) > R.ROSTER_MAX or len(c.ps) > R.PS_MAX or self.ps_veterans(cid) > R.PS_VETERANS_MAX:
+            raise Rejected(f"{cid}: roster {len(c.roster)} / squad {len(c.ps)} not within 53 / 16")
+        if self.overage(cid) > 0:
+            raise Rejected(f"{cid}: overage {self.overage(cid)} not cleared")
+        counts = {}
+        for pid in c.roster:
+            p = self.players[pid]
+            if p.out_weeks == 0:
+                counts[p.pos] = counts.get(p.pos, 0) + 1
+        short = shortfalls(counts)
+        if short:
+            raise Rejected(f"{cid}: positional minimums not met {short}")
+        num = self.cap_number(cid)
+        if num < R.FLOOR:
+            sup = R.FLOOR - num
+            assert num + sup <= R.CAP - R.RESERVE, "supplement would consume the reserve"
+            c.supplement[self.year] = c.supplement.get(self.year, F(0)) + sup
+            c._cmap = None
+            self.log("floor_supplement", club=cid, amount=str(sup))
+        self.log("cut_down", club=cid)
+
+    def complete_draft(self):
+        self.draft_completed = self.year
+
+    def probe(self, cids, pids, fn):
+        """Would `fn` succeed? Runs it and rolls everything back either way."""
+        class _Undo(Exception):
+            pass
+
+        def go():
+            fn()
+            raise _Undo()
+        try:
+            self._txn(cids, pids, go, "probe")
+        except _Undo:
+            return True
+        except Rejected:
+            return False
+        return True
+
+    def begin_season(self):
+        self.phase, self.week = "season", 0
+
+    def advance_week(self):
+        self.week += 1
+        for p in self.players.values():
+            if p.out_weeks > 0:
+                p.out_weeks -= 1
+        for c in self.clubs.values():
+            c._cmap = None
+        self.log("week")
+
+    def end_season(self):
+        self.phase = "post"
+
+    def new_year(self):
+        """League year rolls over. Contracts that have run out release their players to the free-agent pool; elevations and
+        IR returns reset; old dead money drops off; nothing is banked."""
+        self.year += 1
+        self.week, self.phase = 0, "offseason"
+        for c in self.clubs.values():
+            for pid in list(c.all_pids()):
+                p = self.players[pid]
+                if p.contract.end_year < self.year:
+                    self._lists(c.cid)[p.where].remove(pid)
+                    p.contract, p.club, p.where = None, None, "fa"
+            c.dead = {y: v for y, v in c.dead.items() if y >= self.year}
+            c.supplement = {y: v for y, v in c.supplement.items() if y >= self.year}
+            c.ir_returns_used = 0
+            c._cmap = None
+            for rnd in range(1, 8):
+                c.picks.add((self.year + 2, rnd, c.cid))
+        for p in self.players.values():
+            p.elevations = 0
+        self.log("new_year")
