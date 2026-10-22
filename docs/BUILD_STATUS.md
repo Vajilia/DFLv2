@@ -26,8 +26,19 @@ The placeholder resolver can exercise structure, standings and rotation. It is *
 | Snapshot zip import and gap analysis | cancelled: no snapshot exists; DFLv2 is rebuilt from the spec |
 | Owner decisions (cap banking, practice squad size, last-place wild card, IR returns, season length) | done: Edition 8.7 |
 
+## Phase 1: roster and cap ledger (built; `docs/LEDGER.md`)
+| Piece | Status |
+| --- | --- |
+| Contracts, bonuses, release/split/trade/waiver arithmetic, rookie scale | `src/dfl/ledger/contracts.py`; unit-tested |
+| Rosters, practice squad, IR, cut to 53, floor supplement, viability gate, rollback | `src/dfl/ledger/ledger.py`; unit-tested |
+| Game day: active 48/47, elevations, emergency list, forfeit test | `src/dfl/ledger/gameday.py`; unit-tested |
+| Determinism (same seed, same digest across hash seeds) | tested |
+| 100-year soak, 48 clubs (2 bonus-heavy), seed 1, placeholder world | **PASS** in 2,075 s: 86,400 games, 0 forfeits, 0 legal-move failures, 32 short-handed games, 9 emergency lists, 2,387 trades (13 refused), 992 waiver claims, 1,189 floor supplements. Final digest `49a0b5eb38da...`. CI runs a 3-year version. |
+
+Read the soak honestly: "invariant never violated" means every club is inside the limit at each season start and at each year-end audit, and no move ever worsened an over-limit year. Within a season clubs drift over the limit as earned salary accrues (peak committed 1,380 against a 735 limit, margin minimum -405; overage peak 130). Floor supplements are exempt from the gate (A3). The world driving the soak is a placeholder, so rates (supplements, trades, injuries) say nothing about realism.
+
 ## Not built yet (next)
-1. Roster and cap ledger (contracts, dead money, viability invariant, cut to 53, practice squad, IR, elevations, emergency list).
+1. (Ledger is done; see above.)
 2. Ambassador Tour and Bowl results (the tables are generated; games are not played).
 3. The real game engine behind the `Resolver` interface (spec open item 2).
 4. Everything in spec section 20.

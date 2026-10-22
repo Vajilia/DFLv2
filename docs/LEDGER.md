@@ -21,7 +21,7 @@ Authority: Design Document Ed 8.7, sections 11, 12, 17. Where the document is si
 - **A7 Restructure** converts base salary into a bonus prorated over the remaining years (never below the minimum salary). The document does not define it.
 
 ## Soak result
-See the run section in `docs/BUILD_STATUS.md` (the 100-year figures and digest).
+100 years, 48 clubs, seed 1: PASS (see `docs/BUILD_STATUS.md` for figures and digest `49a0b5eb38da...`). Regenerate with `python3 -I tools/run_ledger_soak.py --years 100 --seed 1 --report out/ledger_soak.md` (about 35 minutes).
 
 ## Not evidence for
 The world driving the soak (player ratings, aging, prices, trades, injuries) is a placeholder. It shows the rules cannot jam or be broken; it says nothing about market realism (open item 3).
