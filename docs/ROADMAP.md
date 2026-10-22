@@ -11,7 +11,7 @@ Written 2026-10-22, after Milestone 1. This is a plan, not a set of accepted dec
 6. **Status you can trust.** `docs/BUILD_STATUS.md` says verified, untested, or proposed for each piece.
 
 ## Where we are
-Milestone 1 is done (branch `milestone-1-league-layer`): specification Edition 8.6, Season 1 template, standings and tiebreaks, the eight-season rotation, a season loop with a placeholder game resolver, 24 tests, a 100-season run with 0 validator failures. Missing: the 339-file snapshot (`DFL-vBeta_source_snapshot_2026-10-20.zip`, still only in the ChatGPT conversation), the roster and cap ledger, Tour and Bowl games, the real game engine, and everything about people.
+Milestone 1 is done and merged to `main`; Phase 0 is partly done (divergence register, CI, merge) and waits on the snapshot zip and five owner decisions (`docs/V1_DIVERGENCES.md`). Milestone 1 contents: specification Edition 8.6, Season 1 template, standings and tiebreaks, the eight-season rotation, a season loop with a placeholder game resolver, 24 tests, a 100-season run with 0 validator failures. Missing: the 339-file snapshot (`DFL-vBeta_source_snapshot_2026-10-20.zip`, still only in the ChatGPT conversation), the roster and cap ledger, Tour and Bowl games, the real game engine, and everything about people.
 
 ## The shape
 Two products, in this order:

@@ -17,6 +17,15 @@ Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `pyt
 
 The placeholder resolver can exercise structure, standings and rotation. It is **not** evidence for scoring realism, tie frequency, or fairness bands; those need the real game engine.
 
+## Phase 0: intake and decisions (2026-10-22)
+| Item | Status |
+| --- | --- |
+| v1 audit against Edition 8.6 | done, source read only (nothing executed): `docs/V1_DIVERGENCES.md`, 20 rows, 5 questions for the owner |
+| CI on every push | done: `.github/workflows/ci.yml`, first run green on GitHub |
+| Milestone 1 merged to `main` | done (fast-forward, with the owner's consent) |
+| Snapshot zip import and gap analysis | **blocked**: the zip has not been provided |
+| Owner decisions (cap banking, practice squad size, last-place wild card, IR returns, season length) | **open**: see `docs/V1_DIVERGENCES.md` |
+
 ## Not built yet (next)
 1. Roster and cap ledger (contracts, dead money, viability invariant, cut to 53, practice squad, IR, elevations, emergency list).
 2. Ambassador Tour and Bowl results (the tables are generated; games are not played).
