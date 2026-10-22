@@ -1,0 +1,18 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit and property tests
+        run: python3 -I -m unittest discover -s tests -v
+      - name: Specification hash and Season 1 tables
+        run: python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.6.md
+      - name: 30-season run (placeholder resolver), every season validated
+        run: python3 -I tools/run_seasons.py --seasons 30 --seed 1 --out runs/ci
