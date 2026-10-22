@@ -112,10 +112,12 @@ def division_orders(teams, rec, seed=""):
 
 
 def conference_seeds(conf, teams, rec, div_orders, seed=""):
-    """Seven playoff clubs, seed 1 first: four division winners ordered by the cascade, then three wild cards."""
+    """Seven playoff clubs, seed 1 first: four division winners ordered by the cascade, then three wild cards
+    (never a division's last-place club, which is exiled)."""
     winners = [o[0] for dv, o in sorted(div_orders.items()) if dv[0] == conf]
     ordered = rank(winners, rec, teams, f"{seed}|{conf}|winners")
-    others = [c for c, dv in teams.items() if dv[0] == conf and c not in winners]
+    exiled = {o[-1] for dv, o in div_orders.items() if dv[0] == conf}     # a last-place club cannot take a wild card
+    others = [c for c, dv in teams.items() if dv[0] == conf and c not in winners and c not in exiled]
     wild = rank(others, rec, teams, f"{seed}|{conf}|wild")[:3]
     return ordered + wild
 

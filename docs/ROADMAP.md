@@ -11,7 +11,7 @@ Written 2026-10-22, after Milestone 1. This is a plan, not a set of accepted dec
 6. **Status you can trust.** `docs/BUILD_STATUS.md` says verified, untested, or proposed for each piece.
 
 ## Where we are
-Milestone 1 is done and merged to `main`; Phase 0 is partly done (divergence register, CI, merge) and waits on the snapshot zip and five owner decisions (`docs/V1_DIVERGENCES.md`). Milestone 1 contents: specification Edition 8.6, Season 1 template, standings and tiebreaks, the eight-season rotation, a season loop with a placeholder game resolver, 24 tests, a 100-season run with 0 validator failures. Missing: the 339-file snapshot (`DFL-vBeta_source_snapshot_2026-10-20.zip`, still only in the ChatGPT conversation), the roster and cap ledger, Tour and Bowl games, the real game engine, and everything about people.
+Milestone 1 is done and merged to `main`; Phase 0 is done: divergence register, CI, merge, five owner rulings (Edition 8.7). There is no snapshot; the engine is rebuilt from the spec. Milestone 1 contents: specification Edition 8.7, Season 1 template, standings and tiebreaks, the eight-season rotation, a season loop with a placeholder game resolver, 24 tests, a 100-season run with 0 validator failures. Missing: the 339-file snapshot (`DFL-vBeta_source_snapshot_2026-10-20.zip`, still only in the ChatGPT conversation), the roster and cap ledger, Tour and Bowl games, the real game engine, and everything about people.
 
 ## The shape
 Two products, in this order:
@@ -22,7 +22,7 @@ Reason for the order: people-and-agents is the most expensive and least testable
 
 ## Phase 0 — Intake and decisions (now)
 - **Goal:** one source of truth and no hidden surprises.
-- **Work:** import the snapshot zip, scan for secrets and junk, run its tests in a clean clone, and write a gap analysis against Edition 8.6. Audit v1 against the spec and list every divergence (known: tiebreak method, cap scale and floor, roster minimums, tie-game rule, fill-ins). Turn on CI (GitHub Actions running the tests on every push). Merge Milestone 1.
+- **Work:** import the snapshot zip, scan for secrets and junk, run its tests in a clean clone, and write a gap analysis against Edition 8.7. Audit v1 against the spec and list every divergence (known: tiebreak method, cap scale and floor, roster minimums, tie-game rule, fill-ins). Turn on CI (GitHub Actions running the tests on every push). Merge Milestone 1.
 - **Exit test:** every divergence is a ticket marked adopt, reject or ask; CI is green.
 - **Needs from the owner:** the zip; the cap decision (spec says $1,000 with an $800 floor and no banking; v1 says $100M, banking to $125M, 90% floor); approval to merge Milestone 1.
 

@@ -1,8 +1,8 @@
 # DFL — Living Design Document
-**Edition 8.6 · 2026-10-22** (amends Edition 8.5; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `1c5df8a1944c295e920b1ef2cac90185e2af7f5a7d8b3597a7be669ce7ad1b00`
+**Edition 8.7 · 2026-10-22** (amends Edition 8.6; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `a43c0916ece3bd71a0de8a808b77db03f9f5876d328dc294cce032abba02e690`
 
-**Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `validate.py`, `rotation.py`, `standings.py` and `test_standings.py` (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
+**Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
 **Reading order for implementers:** §2 → §3 → §5 → §6 → §10 → §11 → §17 → §18.
 
@@ -23,11 +23,12 @@ Single source. Nothing below repeats a figure that appears here.
 | Ambassador Tour | 8 clubs, 7 rounds, 28 games |
 | Cap · floor · reserve · min salary · comp threshold · CEO salary | $1,000 · $800 · $25 · $5 · $75 · $2,000 |
 | Rookie scale (R1–R7) · first-round option | $25/$18/$14/$11/$9/$7/$5 · $35 |
-| Roster · practice squad · preseason ceiling · required places · Bowl places | 53 · 8 · 75 · 48 · 53 |
+| Roster · practice squad · preseason ceiling · required places · Bowl places | 53 · 16 · 75 · 48 · 53 |
 | Draft | 7 rounds × 48 = 336 picks |
 | Bracket winner paths · halls · directional relationships | 8,192 · 59 · 2,256 |
 | Draft class size · pool floor per position · leadership candidates per role | 672 · 8 · 4 |
 | Real time: offseason · per competitive week block · year | 45 min · 120 min · ≈55 h |
+| Season length target | about 50 hours of real time; a target, and missing it is not a defect |
 | Recall threshold · CEO election cycle | sentiment 20 · every 3 seasons |
 | Tiara recipients · Hall credited seasons · starting memories | 53 + 6 staff · 5 · 32 |
 | Physics timestep · decision interval | 0.05 s · ≤0.10 s |
@@ -86,7 +87,7 @@ calendar_week,phase,numbered_week,saturday,sunday,monday,note
 - **Exile and seeds.** After the last regular-season game, each division's five active clubs are ranked by the tiebreak cascade below. Ranks 1–4 become the next season's seeds 1–4. The last-place club is exiled: it is the next season's ambassador, and exile cannot be declined. The current ambassador returns as seed 5, so every division has seeds 1–5 and one ambassador every year. Season 1 seeds are drawn by chance.
 - **Tiebreak cascade.** It orders every ranking: divisions, playoff seeding and the exile decision. Steps run in this order, each used only while clubs remain tied: (1) overall wins; (2) overall win %; (3) division wins; (4) division win %; (5) conference wins; (6) conference win %; (7) strength of schedule; (8) point differential; (9) strength of victory; then a seeded draw. Steps 3–4 apply only when every tied club is in the same division, and steps 5–6 only when every tied club is in the same conference. A tied group is sorted once by the whole cascade; there is no step-by-step reduction.
 - **Records.** A tied game counts as not played in the standings only: it adds no win or loss, no division or conference record, and is left out of every win % and every opponent list (so out of strength of schedule and strength of victory). For statistical purposes it is played: games played, points scored and points allowed include it, and so does point differential. Win % = wins ÷ (wins + losses), counted as 0 when a club has no decisions. Strength of schedule = the combined win % of every opponent played (their total wins ÷ their total wins and losses, once per game played); strength of victory = the same for every opponent beaten; for both, a higher figure ranks higher. Point differential = points scored minus points allowed over all regular-season games. Ambassadors' Tour results play no part.
-- **Playoffs.** Identical to the NFL's. Seven clubs per conference: the four division winners (seeds 1–4) and the three best other clubs (seeds 5–7), all ordered by the cascade. Seed 1 has a bye. Wild card round: 2 v 7, 3 v 6, 4 v 5. Divisional round: seed 1 plays the lowest remaining seed and the other two survivors meet. Then the conference championships, then the Diamond Coronation between the two conference champions. Playoff games are played at the higher seed's home venue. The Coronation's venue is chosen by a fictitious fan vote held in June and announced on 4 July from the 48 DFL club venues; no venue may host the Coronation twice within a rolling 40-year window, which leaves nine eligible venues each year. The vote is decided by a seeded random draw among the nine eligible venues. If a finalist's own venue wins the vote, it plays at home.
+- **Playoffs.** Identical to the NFL's. Seven clubs per conference: the four division winners (seeds 1–4) and the three best other clubs (seeds 5–7), all ordered by the cascade. Seed 1 has a bye. Wild card round: 2 v 7, 3 v 6, 4 v 5. Divisional round: seed 1 plays the lowest remaining seed and the other two survivors meet. Then the conference championships, then the Diamond Coronation between the two conference champions. A division's last-place club is exiled and cannot take a wild card. Playoff games are played at the higher seed's home venue. The Coronation's venue is chosen by a fictitious fan vote held in June and announced on 4 July from the 48 DFL club venues; no venue may host the Coronation twice within a rolling 40-year window, which leaves nine eligible venues each year. The vote is decided by a seeded random draw among the nine eligible venues. If a finalist's own venue wins the vote, it plays at home.
 - Ambassadors keep identity, full roster obligations and full cap, play the 7-game Tour, and receive a first-round lottery band.
 - **Seed beds and rotation.** The schedule template has eight seed beds, each holding seed positions 1–5, in two blocks: beds 1–4 and beds 5–8. Each division fills one bed, its five active clubs holding the bed's positions by seed. In Season 1 the Western divisions fill beds 1–4 in the order Northwest, Southwest, Central, Southern, and the Eastern divisions fill beds 5–8 in the order Midwest, Northeast, East, Southeast. Each season every division moves one bed on inside its block (bed 4 to bed 1, bed 8 to bed 5). After four seasons the conferences flip: in Season 5 the Western divisions fill beds 5–8 in the same order and the Eastern divisions fill beds 1–4. The next four seasons rotate inside the new blocks, then the conferences flip back, so the pattern repeats every eight seasons. Divisions never change conference. In formula form, for season n let k = (n − 1) mod 4, p = ⌊(n − 1) ÷ 4⌋ mod 2, and i = the division's position (0–3) in its conference's order above: a Western division fills bed 1 + 4p + (i + k) mod 4 and an Eastern division fills bed 1 + 4(1 − p) + (i + k) mod 4. Clubs never change division; only seeds and beds move.
 - 59 halls: 1 league, 2 conference, 8 division, 48 club.
@@ -668,11 +669,12 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Uncommon penalties may be implemented partially; gaps are recorded in an implementation coverage register.
 
 ## §11 Positions, rosters, contracts, cap
-- Normal roster 53 plus practice squad 8. Preseason ceiling 75 including practice squad. Required places 48; Bowl places 53 (5 discretionary).
+- Normal roster 53 plus practice squad 16, at most 6 of whom may be veterans with more than 2 credited seasons (NFL default). Preseason ceiling 75 including practice squad. Required places 48; Bowl places 53 (5 discretionary).
 - Positional minimums (the 48 required places): K 1; P 1; QB 3; HB 3, or HB 2 and FB 1; WR 5; TE 2; LT 2, LG 2, C 1, RG 2, RT 2; LE 2, RE 2, DT 3; ROLB 2, MLB 3, LOLB 2; CB 5; FS 2, SS 2; LS 1. Coverage is checked at the cut and on voluntary packages.
 - A club may operate temporarily short while seeking affordable replacements, but must be able to field 11 medically available legal players or forfeit.
-- **Emergency fill-ins (NFL defaults).** Game-day active roster 48, or 47 with fewer than 8 offensive linemen. Between games a club may place a player on injured reserve (out at least four games), elevate up to two practice-squad players for a game (each player at most three times a season; an elevated player reverts to the practice squad afterward), sign a free agent at no less than the minimum salary, or claim a waived player, each subject to the viability invariant. Nothing can be signed during a game. If no medically available player remains at a position during a game, the club's emergency list for that position supplies a dressed player, who plays out of position. Before every kickoff each club files an emergency list with at least one name for every position, including K, P, LS and QB; the engine applies its out-of-position penalty.
+- **Emergency fill-ins (NFL defaults).** Game-day active roster 48, or 47 with fewer than 8 offensive linemen. Between games a club may place a player on injured reserve (out at least four games; at most eight players per club per season may be designated to return), elevate up to two practice-squad players for a game (each player at most three times a season; an elevated player reverts to the practice squad afterward), sign a free agent at no less than the minimum salary, or claim a waived player, each subject to the viability invariant. Nothing can be signed during a game. If no medically available player remains at a position during a game, the club's emergency list for that position supplies a dressed player, who plays out of position. Before every kickoff each club files an emergency list with at least one name for every position, including K, P, LS and QB; the engine applies its out-of-position penalty.
 - Injured reserve and suspension supply no cap relief.
+- **No banking.** Unused cap room does not carry over; each league year starts from the same cap.
 - Salary floor $800, cap $1,000, emergency reserve $25, minimum salary $5, comp qualifying threshold $75.
 - Dead money counts against the cap and toward the floor. Release or trade immediately accelerates every uncharged bonus onto the original club's current cap.
 - **Viability invariant.** For every club-year: `dead money + required-minimum roster cost (48 × $5 = $240) + reserve ≤ cap`, so **dead money ≤ $735**. Checked before every signing, release, trade and restructure, for the current and every committed future year.
@@ -740,7 +742,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Same inputs, rule version, event ID and seeded key reproduce the same result.
 
 ## §18 Validator
-Reference implementation: `validate.py <tables_dir> [--season N]`; exit code is the number of failed checks. `rotation.py` generates any season from the Season 1 template and runs the validator over many seasons of random standings. Checks that depend on an open item (§20) are reported as warnings.
+Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit code is the number of failed checks. `tools/run_seasons.py` generates any season from the Season 1 template and runs the validator over many seasons of simulated results. Checks that depend on an open item (§20) are reported as warnings.
 
 **SCHEDULE** — 360 rows; no self-fixtures; per club 18 games, 9H/9A; per club 8 divisional (4H/4A, each rival twice), 4 interconference (equal-seed, one per opposing division), 6 same-conference non-division; weeks 1–14 have 20 games and weeks 15–19 have 16; exactly 3 breaks after weeks 4/9/14; per club exactly one bye in weeks 15–19 and each such week's byes form one complete seed group across all eight divisions; all dates are Sat/Sun/Mon; no game inside Tue 00:01–Fri 23:59 and no regular-season game on an active-club break date; every week 1 pairing is equal-seed; per club, kickoff-slot points (§6) total 33–38.
 
@@ -752,18 +754,18 @@ Reference implementation: `validate.py <tables_dir> [--season N]`; exit code is 
 
 **TEAMS** — `team_id`, `abbr`, `team_name` unique; exactly 40 active and 8 ambassador, one ambassador per division; `is_active == (club_status = "active")`; `is_league_member` true on all 48; `bed_id` unique among active and shaped `bed-rank`, each division's five active clubs sharing one bed; **`(primary_hex, secondary_hex)` unique across all 48**; `tertiary_hex` matches `COLOR_REGISTRY`.
 
-**ROTATION** — in every season the eight divisions fill beds 1–8 exactly once; each division moves one bed on inside its block; the conferences flip every fourth season and the pattern repeats every eight; seeds 1–4 are the previous season's ranks 1–4, seed 5 is the returning ambassador, and each division's last-place club is the next ambassador; every generated season passes every check above, with each season's final order produced by `standings.py` from simulated results.
+**ROTATION** — in every season the eight divisions fill beds 1–8 exactly once; each division moves one bed on inside its block; the conferences flip every fourth season and the pattern repeats every eight; seeds 1–4 are the previous season's ranks 1–4, seed 5 is the returning ambassador, and each division's last-place club is the next ambassador; every generated season passes every check above, with each season's final order produced by `src/dfl/standings.py` from simulated results.
 
-**STANDINGS** — `test_standings.py` passes: tie handling (standings versus statistics), the cascade including the wins-before-win % order, the division and conference step skips and the sorted-once rule, the seeded draw, playoff seeding and bracket, exile and seed hand-off, the Coronation window, and invariants over 150 simulated seasons on the real schedule (every club 18 games, wins equal losses, point differentials sum to zero, input order irrelevant).
+**STANDINGS** — `tests/test_standings.py` passes: tie handling (standings versus statistics), the cascade including the wins-before-win % order, the division and conference step skips and the sorted-once rule, the seeded draw, playoff seeding and bracket, exile and seed hand-off, the Coronation window, and invariants over 150 simulated seasons on the real schedule (every club 18 games, wins equal losses, point differentials sum to zero, input order irrelevant).
 
 **CROSS-FILE** — every Schedule and Tour city resolves to exactly one `team_city` (a stadium town such as Minneapolis does not); no ambassador appears in the Schedule; the eight ambassadors equal the eight `lottery_1_8` clubs; gemstone hexes match between `TEAMS` and `COLOR_REGISTRY`.
 
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.6 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4 and 8.5 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.7 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5 and 8.6 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
-- A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `validate.py --doc` does this.
+- A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
 - §0 is the single source for every figure. A mechanical check scans for numeric and money tokens and flags any figure appearing twice with different values.
 
@@ -799,13 +801,19 @@ Reference implementation: `validate.py <tables_dir> [--season N]`; exit code is 
 | 2026-10-22 | §11 | emergency fill-ins: game-day roster, injured reserve, practice-squad elevation, between-game signings and a per-position emergency list | owner asked for a system; NFL defaults | 8.6 |
 | 2026-10-22 | §18 | `standings.py` and `test_standings.py` added; `rotation.py` now ranks simulated results with `standings.py` | first test round | 8.6 |
 | 2026-10-22 | §20 | vote-weighting and emergency fill-in items closed; fill-in parameters and standings assumptions added | resolved or restated | 8.6 |
+| 2026-10-22 | §11 | cap room does not carry over (no banking) | owner's ruling | 8.7 |
+| 2026-10-22 | §0, §11 | practice squad 8 → 16, at most 6 veterans | owner's ruling (NFL size) | 8.7 |
+| 2026-10-22 | §3 | a division's last-place club cannot take a wild card | owner's ruling | 8.7 |
+| 2026-10-22 | §11 | injured reserve: at most 8 designated returns per club per season | owner's ruling (NFL default) | 8.7 |
+| 2026-10-22 | §0, §20 | season length target about 50 hours, non-binding | owner's ruling | 8.7 |
+| 2026-10-22 | header, §18 | reference code now the DFLv2 repository layout | repository move | 8.7 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
 2. Engine content: play catalogue, numeric route landmarks, blocking rules, coverage responsibilities, ball flight, injury and fatigue models.
 3. Negotiation and market-clearing mechanics; development, aging and retirement curves.
 4. Bowl roster repair mechanism when a position shortfall occurs.
-5. The real-time to simulated-time mapping under deterministic pacing.
+5. The real-time to simulated-time mapping under deterministic pacing (target about 50 hours a season, non-binding).
 6. §19 promises a stable ID on every rule; none are assigned yet, so the changelog uses section references.
 7. Tie-game frequency: ties are excluded from records, so the order of overall wins before overall win % matters only when ties occur. Calibrate in simulation so that ties stay highly unlikely.
 8. Fill-in parameters inherited from the NFL and not yet confirmed: game-day roster 48/47, two practice-squad elevations a game and three a player a season, four-game injured reserve minimum. The out-of-position penalty belongs with engine content (item 2).

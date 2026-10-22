@@ -13,6 +13,6 @@ jobs:
       - name: Unit and property tests
         run: python3 -I -m unittest discover -s tests -v
       - name: Specification hash and Season 1 tables
-        run: python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.6.md
+        run: python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.7.md
       - name: 30-season run (placeholder resolver), every season validated
         run: python3 -I tools/run_seasons.py --seasons 30 --seed 1 --out runs/ci

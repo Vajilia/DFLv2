@@ -145,6 +145,33 @@ class Playoffs(unittest.TestCase):
         self.assertEqual({s[0] for s in seeds[:3]}, {"S", "E", "C"})
         self.assertEqual({s for s in seeds[4:]}, {"S2", "E2", "C2"})
 
+    def test_last_place_club_cannot_take_a_wild_card(self):
+        # Division N's five clubs all finish 10-8, so its last place (n5, worst division record) could outrank
+        # other divisions' tied clubs across divisions on conference record. It must still be excluded.
+        t, rec = {}, {}
+
+        def add(c, dv, w, cw, dw, l=None):
+            t[c] = ("W", dv)
+            rec[c] = S.Rec()
+            r = rec[c]
+            r.w, r.l, r.cw, r.cl, r.dw, r.dl = w, (18 - w) if l is None else l, cw, 12 - cw, dw, 8 - dw
+        add("n1", "N", 14, 9, 7)
+        for c, dw in zip(("n2", "n3", "n4", "n5"), (4, 3, 2, 1)):
+            add(c, "N", 10, 9 if c == "n5" else 4, dw)         # n5: last in division, best conference record
+        for dv in "SEC":
+            add(f"{dv}1", dv, 13, 8, 6)
+            add(f"{dv}2", dv, 10, 5, 4)
+            add(f"{dv}3", dv, 10, 3, 3)
+            add(f"{dv}4", dv, 6, 3, 2)
+            add(f"{dv}5", dv, 5, 3, 1)
+        orders = S.division_orders(t, rec, "z")
+        self.assertEqual(orders[("W", "N")][-1], "n5")
+        seeds = S.conference_seeds("W", t, rec, orders, "z")
+        self.assertNotIn("n5", seeds)
+        self.assertEqual(len(seeds), 7)
+        for dv in "NSEC":
+            self.assertNotIn(orders[("W", dv)][-1], seeds)
+
     def test_bracket_shape_and_home(self):
         self.assertEqual(S.wild_card_pairs(), [(2, 7), (3, 6), (4, 5)])
         self.assertEqual(S.divisional_pairs([1, 4, 5, 7]), [(1, 7), (4, 5)])
