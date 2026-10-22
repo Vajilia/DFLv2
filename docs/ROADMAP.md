@@ -45,7 +45,7 @@ Reason for the order: people-and-agents is the most expensive and least testable
 
 ## Phase 4 — Fairness and calibration
 - **Goal:** prove the league meets its own definition of fair competitiveness.
-- **Work:** a harness for the fairness bands (v1's 13 are the starting point), the exile standard (competitive for 3rd or better within about 3 seasons, never automatic), strength-of-schedule push toward average, century-long runs, and the parity profiles. Build **tight** first; **loose** and **none** are separate test beds added afterward.
+- **Work:** a harness for the fairness bands (v1's 15, in `rules.py`, are the starting point), the exile standard (competitive for 3rd or better within about 3 seasons, never automatic), strength-of-schedule push toward average, century-long runs, and the parity profiles. Build **tight** first; **loose** and **none** are separate test beds added afterward.
 - **Exit test:** every band passes with error-bar verdicts over many seeds; any trend outside the bands is reported, not tuned away silently.
 - **Needs from the owner:** whether the bands are too tight for long-term enjoyment (you've flagged this); approval of any band change.
 
