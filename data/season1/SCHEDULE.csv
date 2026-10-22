@@ -1,0 +1,361 @@
+week,game,date,kickoff,away,home
+1,1,2000-07-01,17:30,Oklahoma City,St. Louis
+1,2,2000-07-02,10:00,Las Vegas,New Orleans
+1,3,2000-07-02,10:00,Arizona,Pittsburgh
+1,4,2000-07-02,10:00,Kansas City,Philadelphia
+1,5,2000-07-02,10:00,Seattle,Florida
+1,6,2000-07-02,10:00,Mexico City,Chicago
+1,7,2000-07-02,10:00,Dakota,Tennessee
+1,8,2000-07-02,10:00,Calgary,Atlanta
+1,9,2000-07-02,10:00,Denver,Cincinnati
+1,10,2000-07-02,10:00,Omaha,New England
+1,11,2000-07-02,10:00,Montana,Carolina
+1,12,2000-07-02,13:00,Sacramento,Miami
+1,13,2000-07-02,13:00,San Francisco,Alabama
+1,14,2000-07-02,13:00,San Antonio,Green Bay
+1,15,2000-07-02,13:00,San Diego,Detroit
+1,16,2000-07-02,13:00,Houston,Montreal
+1,17,2000-07-02,13:00,Utah,Washington
+1,18,2000-07-02,17:30,New Mexico,New York
+1,19,2000-07-02,17:30,Idaho,Cleveland
+1,20,2000-07-03,17:30,Dallas,Toronto
+2,1,2000-07-08,17:30,Chicago,Omaha
+2,2,2000-07-09,10:00,Montreal,Oklahoma City
+2,3,2000-07-09,10:00,New York,Denver
+2,4,2000-07-09,10:00,Detroit,Seattle
+2,5,2000-07-09,10:00,Washington,Sacramento
+2,6,2000-07-09,10:00,Pittsburgh,Calgary
+2,7,2000-07-09,10:00,Cleveland,Las Vegas
+2,8,2000-07-09,10:00,Philadelphia,San Antonio
+2,9,2000-07-09,10:00,Tennessee,Dallas
+2,10,2000-07-09,10:00,New England,Mexico City
+2,11,2000-07-09,10:00,Carolina,San Francisco
+2,12,2000-07-09,13:00,Alabama,Montana
+2,13,2000-07-09,13:00,Green Bay,Kansas City
+2,14,2000-07-09,13:00,Florida,San Diego
+2,15,2000-07-09,13:00,New Orleans,Idaho
+2,16,2000-07-09,13:00,Miami,Utah
+2,17,2000-07-09,13:00,Atlanta,Arizona
+2,18,2000-07-09,17:30,St. Louis,Houston
+2,19,2000-07-09,17:30,Toronto,Dakota
+2,20,2000-07-10,17:30,Cincinnati,New Mexico
+3,1,2000-07-15,17:30,Montana,St. Louis
+3,2,2000-07-16,10:00,Washington,Dallas
+3,3,2000-07-16,10:00,Carolina,Houston
+3,4,2000-07-16,10:00,Arizona,Green Bay
+3,5,2000-07-16,10:00,Seattle,New England
+3,6,2000-07-16,10:00,San Francisco,Montreal
+3,7,2000-07-16,10:00,New Orleans,Denver
+3,8,2000-07-16,10:00,Florida,Mexico City
+3,9,2000-07-16,10:00,Miami,Dakota
+3,10,2000-07-16,10:00,Calgary,Philadelphia
+3,11,2000-07-16,10:00,San Diego,Chicago
+3,12,2000-07-16,13:00,Sacramento,Toronto
+3,13,2000-07-16,13:00,Idaho,Cincinnati
+3,14,2000-07-16,13:00,Alabama,Oklahoma City
+3,15,2000-07-16,13:00,Las Vegas,New York
+3,16,2000-07-16,13:00,Atlanta,San Antonio
+3,17,2000-07-16,13:00,Cleveland,New Mexico
+3,18,2000-07-16,17:30,Utah,Tennessee
+3,19,2000-07-16,17:30,Pittsburgh,Kansas City
+3,20,2000-07-17,17:30,Detroit,Omaha
+4,1,2000-07-22,17:30,Chicago,Seattle
+4,2,2000-07-23,10:00,New England,San Diego
+4,3,2000-07-23,10:00,Tennessee,Sacramento
+4,4,2000-07-23,10:00,San Antonio,Pittsburgh
+4,5,2000-07-23,10:00,Cincinnati,Las Vegas
+4,6,2000-07-23,10:00,Green Bay,Calgary
+4,7,2000-07-23,10:00,Denver,Cleveland
+4,8,2000-07-23,10:00,Omaha,Florida
+4,9,2000-07-23,10:00,St. Louis,San Francisco
+4,10,2000-07-23,10:00,Dakota,Washington
+4,11,2000-07-23,10:00,Kansas City,Atlanta
+4,12,2000-07-23,13:00,Toronto,Utah
+4,13,2000-07-23,13:00,New York,Idaho
+4,14,2000-07-23,13:00,Dallas,Miami
+4,15,2000-07-23,13:00,New Mexico,New Orleans
+4,16,2000-07-23,13:00,Philadelphia,Arizona
+4,17,2000-07-23,13:00,Mexico City,Detroit
+4,18,2000-07-23,17:30,Oklahoma City,Carolina
+4,19,2000-07-23,17:30,Montreal,Montana
+4,20,2000-07-24,17:30,Houston,Alabama
+5,1,2000-08-05,17:30,Florida,New Orleans
+5,2,2000-08-06,10:00,New York,Montreal
+5,3,2000-08-06,10:00,San Francisco,Montana
+5,4,2000-08-06,10:00,Kansas City,Omaha
+5,5,2000-08-06,10:00,Toronto,Philadelphia
+5,6,2000-08-06,10:00,Carolina,New England
+5,7,2000-08-06,10:00,Atlanta,Washington
+5,8,2000-08-06,10:00,Arizona,Idaho
+5,9,2000-08-06,10:00,San Antonio,Las Vegas
+5,10,2000-08-06,10:00,Dakota,Oklahoma City
+5,11,2000-08-06,10:00,Tennessee,Detroit
+5,12,2000-08-06,13:00,San Diego,Utah
+5,13,2000-08-06,13:00,New Mexico,Houston
+5,14,2000-08-06,13:00,Mexico City,Sacramento
+5,15,2000-08-06,13:00,Alabama,Chicago
+5,16,2000-08-06,13:00,St. Louis,Cincinnati
+5,17,2000-08-06,13:00,Pittsburgh,Cleveland
+5,18,2000-08-06,17:30,Seattle,Dallas
+5,19,2000-08-06,17:30,Miami,Green Bay
+5,20,2000-08-07,17:30,Calgary,Denver
+6,1,2000-08-12,17:30,San Francisco,Mexico City
+6,2,2000-08-13,10:00,Denver,Oklahoma City
+6,3,2000-08-13,10:00,San Antonio,Utah
+6,4,2000-08-13,10:00,Cincinnati,Tennessee
+6,5,2000-08-13,10:00,Omaha,Dakota
+6,6,2000-08-13,10:00,Las Vegas,Kansas City
+6,7,2000-08-13,10:00,New Mexico,Idaho
+6,8,2000-08-13,10:00,Alabama,Atlanta
+6,9,2000-08-13,10:00,Miami,Pittsburgh
+6,10,2000-08-13,10:00,New Orleans,Cleveland
+6,11,2000-08-13,10:00,Montreal,St. Louis
+6,12,2000-08-13,13:00,Montana,Houston
+6,13,2000-08-13,13:00,Sacramento,Seattle
+6,14,2000-08-13,13:00,Dallas,Calgary
+6,15,2000-08-13,13:00,Philadelphia,New York
+6,16,2000-08-13,13:00,New England,Toronto
+6,17,2000-08-13,13:00,Green Bay,Chicago
+6,18,2000-08-13,17:30,Arizona,San Diego
+6,19,2000-08-13,17:30,Detroit,Washington
+6,20,2000-08-14,17:30,Florida,Carolina
+7,1,2000-08-19,17:30,Detroit,Miami
+7,2,2000-08-20,10:00,Washington,Carolina
+7,3,2000-08-20,10:00,Idaho,Montana
+7,4,2000-08-20,10:00,Omaha,Denver
+7,5,2000-08-20,10:00,Mexico City,New Mexico
+7,6,2000-08-20,10:00,Dallas,San Antonio
+7,7,2000-08-20,10:00,Dakota,Calgary
+7,8,2000-08-20,10:00,Green Bay,Toronto
+7,9,2000-08-20,10:00,Cleveland,Cincinnati
+7,10,2000-08-20,10:00,St. Louis,Alabama
+7,11,2000-08-20,10:00,Chicago,Montreal
+7,12,2000-08-20,13:00,Oklahoma City,Seattle
+7,13,2000-08-20,13:00,Utah,Arizona
+7,14,2000-08-20,13:00,San Diego,Houston
+7,15,2000-08-20,13:00,Tennessee,Florida
+7,16,2000-08-20,13:00,Atlanta,New York
+7,17,2000-08-20,13:00,Pittsburgh,New Orleans
+7,18,2000-08-20,17:30,Las Vegas,San Francisco
+7,19,2000-08-20,17:30,Philadelphia,New England
+7,20,2000-08-21,17:30,Kansas City,Sacramento
+8,1,2000-08-26,17:30,Denver,San Antonio
+8,2,2000-08-27,10:00,Carolina,Pittsburgh
+8,3,2000-08-27,10:00,Miami,Alabama
+8,4,2000-08-27,10:00,Oklahoma City,Omaha
+8,5,2000-08-27,10:00,New Mexico,Dallas
+8,6,2000-08-27,10:00,Dakota,Mexico City
+8,7,2000-08-27,10:00,Seattle,Utah
+8,8,2000-08-27,10:00,New York,New Orleans
+8,9,2000-08-27,10:00,Washington,Florida
+8,10,2000-08-27,10:00,Cleveland,Atlanta
+8,11,2000-08-27,10:00,Montana,San Diego
+8,12,2000-08-27,13:00,Idaho,Kansas City
+8,13,2000-08-27,13:00,Houston,San Francisco
+8,14,2000-08-27,13:00,Arizona,Las Vegas
+8,15,2000-08-27,13:00,Toronto,Detroit
+8,16,2000-08-27,13:00,St. Louis,Green Bay
+8,17,2000-08-27,13:00,Montreal,New England
+8,18,2000-08-27,17:30,Calgary,Sacramento
+8,19,2000-08-27,17:30,Cincinnati,Chicago
+8,20,2000-08-28,17:30,Tennessee,Philadelphia
+9,1,2000-09-02,17:30,Miami,Atlanta
+9,2,2000-09-03,10:00,Utah,Omaha
+9,3,2000-09-03,10:00,Dallas,Houston
+9,4,2000-09-03,10:00,San Francisco,Arizona
+9,5,2000-09-03,10:00,Las Vegas,Sacramento
+9,6,2000-09-03,10:00,Kansas City,Denver
+9,7,2000-09-03,10:00,Toronto,Montreal
+9,8,2000-09-03,10:00,Green Bay,Cincinnati
+9,9,2000-09-03,10:00,Detroit,Cleveland
+9,10,2000-09-03,10:00,New England,New York
+9,11,2000-09-03,10:00,Carolina,Alabama
+9,12,2000-09-03,13:00,Idaho,San Antonio
+9,13,2000-09-03,13:00,Seattle,Dakota
+9,14,2000-09-03,13:00,Calgary,New Mexico
+9,15,2000-09-03,13:00,Pittsburgh,Tennessee
+9,16,2000-09-03,13:00,Chicago,Washington
+9,17,2000-09-03,13:00,New Orleans,Philadelphia
+9,18,2000-09-03,17:30,Mexico City,Montana
+9,19,2000-09-03,17:30,Florida,St. Louis
+9,20,2000-09-04,17:30,Oklahoma City,San Diego
+10,1,2000-09-16,17:30,New Mexico,Arizona
+10,2,2000-09-17,10:00,Pittsburgh,Detroit
+10,3,2000-09-17,10:00,Cleveland,Carolina
+10,4,2000-09-17,10:00,Idaho,Seattle
+10,5,2000-09-17,10:00,Sacramento,San Francisco
+10,6,2000-09-17,10:00,Chicago,Miami
+10,7,2000-09-17,10:00,Florida,Toronto
+10,8,2000-09-17,10:00,San Antonio,Dakota
+10,9,2000-09-17,10:00,Denver,Las Vegas
+10,10,2000-09-17,10:00,Philadelphia,Cincinnati
+10,11,2000-09-17,10:00,Kansas City,Utah
+10,12,2000-09-17,13:00,Mexico City,Oklahoma City
+10,13,2000-09-17,13:00,Dallas,San Diego
+10,14,2000-09-17,13:00,Montana,Calgary
+10,15,2000-09-17,13:00,New York,Green Bay
+10,16,2000-09-17,13:00,New England,Washington
+10,17,2000-09-17,13:00,Tennessee,St. Louis
+10,18,2000-09-17,17:30,Houston,Omaha
+10,19,2000-09-17,17:30,Alabama,Montreal
+10,20,2000-09-18,17:30,Atlanta,New Orleans
+11,1,2000-09-23,17:30,New England,Tennessee
+11,2,2000-09-24,10:00,Florida,Miami
+11,3,2000-09-24,10:00,Arizona,Dallas
+11,4,2000-09-24,10:00,Las Vegas,New Mexico
+11,5,2000-09-24,10:00,Oklahoma City,Houston
+11,6,2000-09-24,10:00,Montana,Utah
+11,7,2000-09-24,10:00,Calgary,Seattle
+11,8,2000-09-24,10:00,Washington,Philadelphia
+11,9,2000-09-24,10:00,Green Bay,Cleveland
+11,10,2000-09-24,10:00,New York,Pittsburgh
+11,11,2000-09-24,10:00,Detroit,Montreal
+11,12,2000-09-24,13:00,Omaha,San Francisco
+11,13,2000-09-24,13:00,Dakota,Kansas City
+11,14,2000-09-24,13:00,San Diego,Sacramento
+11,15,2000-09-24,13:00,St. Louis,Carolina
+11,16,2000-09-24,13:00,Toronto,Chicago
+11,17,2000-09-24,13:00,New Orleans,Alabama
+11,18,2000-09-24,17:30,Denver,Idaho
+11,19,2000-09-24,17:30,Cincinnati,Atlanta
+11,20,2000-09-25,17:30,San Antonio,Mexico City
+12,1,2000-09-30,17:30,Las Vegas,Calgary
+12,2,2000-10-01,10:00,Oklahoma City,Kansas City
+12,3,2000-10-01,10:00,Denver,Dakota
+12,4,2000-10-01,10:00,Mexico City,Dallas
+12,5,2000-10-01,10:00,Utah,Idaho
+12,6,2000-10-01,10:00,Pittsburgh,Toronto
+12,7,2000-10-01,10:00,Miami,New England
+12,8,2000-10-01,10:00,Detroit,St. Louis
+12,9,2000-10-01,10:00,Carolina,Chicago
+12,10,2000-10-01,10:00,New Orleans,Cincinnati
+12,11,2000-10-01,10:00,San Francisco,San Diego
+12,12,2000-10-01,13:00,Omaha,Montana
+12,13,2000-10-01,13:00,Houston,Seattle
+12,14,2000-10-01,13:00,Sacramento,Arizona
+12,15,2000-10-01,13:00,Atlanta,Tennessee
+12,16,2000-10-01,13:00,Alabama,Florida
+12,17,2000-10-01,13:00,Montreal,Philadelphia
+12,18,2000-10-01,17:30,San Antonio,New Mexico
+12,19,2000-10-01,17:30,Washington,Green Bay
+12,20,2000-10-02,17:30,Cleveland,New York
+13,1,2000-10-07,17:30,Cincinnati,Pittsburgh
+13,2,2000-10-08,10:00,San Diego,Las Vegas
+13,3,2000-10-08,10:00,Houston,San Antonio
+13,4,2000-10-08,10:00,Chicago,Tennessee
+13,5,2000-10-08,10:00,New York,Toronto
+13,6,2000-10-08,10:00,New Mexico,Denver
+13,7,2000-10-08,10:00,Sacramento,Omaha
+13,8,2000-10-08,10:00,Alabama,Detroit
+13,9,2000-10-08,10:00,Montana,Oklahoma City
+13,10,2000-10-08,10:00,St. Louis,New England
+13,11,2000-10-08,10:00,Green Bay,New Orleans
+13,12,2000-10-08,13:00,Utah,Mexico City
+13,13,2000-10-08,13:00,Dallas,Kansas City
+13,14,2000-10-08,13:00,Calgary,Idaho
+13,15,2000-10-08,13:00,Montreal,Carolina
+13,16,2000-10-08,13:00,Cleveland,Washington
+13,17,2000-10-08,13:00,Atlanta,Florida
+13,18,2000-10-08,17:30,Seattle,San Francisco
+13,19,2000-10-08,17:30,Philadelphia,Miami
+13,20,2000-10-09,17:30,Dakota,Arizona
+14,1,2000-10-14,17:30,Omaha,Dallas
+14,2,2000-10-15,10:00,Kansas City,New Mexico
+14,3,2000-10-15,10:00,Seattle,Montana
+14,4,2000-10-15,10:00,Utah,Calgary
+14,5,2000-10-15,10:00,Houston,Mexico City
+14,6,2000-10-15,10:00,Chicago,St. Louis
+14,7,2000-10-15,10:00,Tennessee,Green Bay
+14,8,2000-10-15,10:00,Carolina,Detroit
+14,9,2000-10-15,10:00,San Diego,Dakota
+14,10,2000-10-15,10:00,Philadelphia,Cleveland
+14,11,2000-10-15,10:00,Montreal,Florida
+14,12,2000-10-15,13:00,Idaho,Las Vegas
+14,13,2000-10-15,13:00,San Francisco,Oklahoma City
+14,14,2000-10-15,13:00,Arizona,Denver
+14,15,2000-10-15,13:00,Cincinnati,New York
+14,16,2000-10-15,13:00,Toronto,Atlanta
+14,17,2000-10-15,13:00,New Orleans,Miami
+14,18,2000-10-15,17:30,Sacramento,San Antonio
+14,19,2000-10-15,17:30,New England,Alabama
+14,20,2000-10-16,17:30,Washington,Pittsburgh
+15,1,2000-10-28,17:30,Philadelphia,Montreal
+15,2,2000-10-29,10:00,Pittsburgh,Carolina
+15,3,2000-10-29,10:00,Atlanta,Alabama
+15,4,2000-10-29,10:00,New York,New England
+15,5,2000-10-29,10:00,Kansas City,Oklahoma City
+15,6,2000-10-29,10:00,New Mexico,Mexico City
+15,7,2000-10-29,10:00,Arizona,San Francisco
+15,8,2000-10-29,13:00,Calgary,Montana
+15,9,2000-10-29,13:00,Denver,Omaha
+15,10,2000-10-29,13:00,San Antonio,Houston
+15,11,2000-10-29,13:00,Chicago,Cincinnati
+15,12,2000-10-29,13:00,Green Bay,St. Louis
+15,13,2000-10-29,13:00,Cleveland,Detroit
+15,14,2000-10-29,17:30,Las Vegas,San Diego
+15,15,2000-10-29,17:30,New Orleans,Florida
+15,16,2000-10-30,17:30,Seattle,Idaho
+16,1,2000-11-04,17:30,Dakota,Denver
+16,2,2000-11-05,10:00,Washington,Cleveland
+16,3,2000-11-05,10:00,Florida,Atlanta
+16,4,2000-11-05,10:00,Miami,New Orleans
+16,5,2000-11-05,10:00,Seattle,Calgary
+16,6,2000-11-05,10:00,Idaho,Utah
+16,7,2000-11-05,10:00,San Diego,Arizona
+16,8,2000-11-05,13:00,Sacramento,Las Vegas
+16,9,2000-11-05,13:00,Mexico City,San Antonio
+16,10,2000-11-05,13:00,Dallas,New Mexico
+16,11,2000-11-05,13:00,Tennessee,Cincinnati
+16,12,2000-11-05,13:00,New England,Philadelphia
+16,13,2000-11-05,13:00,Detroit,Pittsburgh
+16,14,2000-11-05,17:30,Omaha,Kansas City
+16,15,2000-11-05,17:30,Toronto,New York
+16,16,2000-11-06,17:30,Chicago,Green Bay
+17,1,2000-11-11,17:30,Carolina,Washington
+17,2,2000-11-12,10:00,New Orleans,Atlanta
+17,3,2000-11-12,10:00,St. Louis,Tennessee
+17,4,2000-11-12,10:00,New York,Philadelphia
+17,5,2000-11-12,10:00,Houston,Dallas
+17,6,2000-11-12,10:00,Idaho,Calgary
+17,7,2000-11-12,10:00,New Mexico,San Antonio
+17,8,2000-11-12,13:00,Las Vegas,Arizona
+17,9,2000-11-12,13:00,San Francisco,Sacramento
+17,10,2000-11-12,13:00,Denver,Kansas City
+17,11,2000-11-12,13:00,Cincinnati,Green Bay
+17,12,2000-11-12,13:00,Montreal,Toronto
+17,13,2000-11-12,13:00,Alabama,Miami
+17,14,2000-11-12,17:30,Oklahoma City,Dakota
+17,15,2000-11-12,17:30,Cleveland,Pittsburgh
+17,16,2000-11-13,17:30,Utah,Montana
+18,1,2000-11-18,17:30,Kansas City,Dakota
+18,2,2000-11-19,10:00,Green Bay,Tennessee
+18,3,2000-11-19,10:00,Florida,Alabama
+18,4,2000-11-19,10:00,Philadelphia,Toronto
+18,5,2000-11-19,10:00,Mexico City,Houston
+18,6,2000-11-19,10:00,San Antonio,Dallas
+18,7,2000-11-19,10:00,Arizona,Sacramento
+18,8,2000-11-19,13:00,Montana,Seattle
+18,9,2000-11-19,13:00,San Diego,San Francisco
+18,10,2000-11-19,13:00,Omaha,Oklahoma City
+18,11,2000-11-19,13:00,Atlanta,Miami
+18,12,2000-11-19,13:00,St. Louis,Chicago
+18,13,2000-11-19,13:00,Pittsburgh,Washington
+18,14,2000-11-19,17:30,Calgary,Utah
+18,15,2000-11-19,17:30,Detroit,Carolina
+18,16,2000-11-20,17:30,New England,Montreal
+19,1,2000-11-25,17:30,Carolina,Cleveland
+19,2,2000-11-26,10:00,Miami,Florida
+19,3,2000-11-26,10:00,Washington,Detroit
+19,4,2000-11-26,10:00,Cincinnati,St. Louis
+19,5,2000-11-26,10:00,Sacramento,San Diego
+19,6,2000-11-26,10:00,Oklahoma City,Denver
+19,7,2000-11-26,10:00,Montana,Idaho
+19,8,2000-11-26,13:00,Utah,Seattle
+19,9,2000-11-26,13:00,Dakota,Omaha
+19,10,2000-11-26,13:00,Houston,New Mexico
+19,11,2000-11-26,13:00,Montreal,New York
+19,12,2000-11-26,13:00,Toronto,New England
+19,13,2000-11-26,13:00,Alabama,New Orleans
+19,14,2000-11-26,17:30,Dallas,Mexico City
+19,15,2000-11-26,17:30,Tennessee,Chicago
+19,16,2000-11-27,17:30,San Francisco,Las Vegas

@@ -1,0 +1,29 @@
+tour_round,calendar_week,date,kickoff,game,away_nominal,home_nominal,venue_slot
+1,1,2000-07-01,17:30,1,Tampa Bay,Portland,TR-1
+1,1,2000-07-02,10:00,2,Baja,Indianapolis,TR-1
+1,1,2000-07-02,13:00,3,Los Angeles,Baltimore,TR-1
+1,1,2000-07-03,17:30,4,Minnesota,Buffalo,TR-1
+2,4,2000-07-22,17:30,1,Portland,Baja,TR-2
+2,4,2000-07-23,10:00,2,Baltimore,Tampa Bay,TR-2
+2,4,2000-07-23,13:00,3,Indianapolis,Minnesota,TR-2
+2,4,2000-07-24,17:30,4,Buffalo,Los Angeles,TR-2
+3,8,2000-08-19,17:30,1,Baltimore,Portland,TR-3
+3,8,2000-08-20,10:00,2,Minnesota,Baja,TR-3
+3,8,2000-08-20,13:00,3,Tampa Bay,Buffalo,TR-3
+3,8,2000-08-21,17:30,4,Los Angeles,Indianapolis,TR-3
+4,11,2000-09-09,17:30,1,Portland,Minnesota,TR-4
+4,11,2000-09-10,10:00,2,Buffalo,Baltimore,TR-4
+4,11,2000-09-10,13:00,3,Baja,Los Angeles,TR-4
+4,11,2000-09-11,17:30,4,Indianapolis,Tampa Bay,TR-4
+5,15,2000-10-07,17:30,1,Buffalo,Portland,TR-5
+5,15,2000-10-08,10:00,2,Los Angeles,Minnesota,TR-5
+5,15,2000-10-08,13:00,3,Baltimore,Indianapolis,TR-5
+5,15,2000-10-09,17:30,4,Tampa Bay,Baja,TR-5
+6,18,2000-10-28,17:30,1,Portland,Los Angeles,TR-6
+6,18,2000-10-29,10:00,2,Indianapolis,Buffalo,TR-6
+6,18,2000-10-29,13:00,3,Minnesota,Tampa Bay,TR-6
+6,18,2000-10-30,17:30,4,Baja,Baltimore,TR-6
+7,22,2000-11-25,17:30,1,Indianapolis,Portland,TR-7
+7,22,2000-11-26,10:00,2,Los Angeles,Tampa Bay,TR-7
+7,22,2000-11-26,13:00,3,Buffalo,Baja,TR-7
+7,22,2000-11-27,17:30,4,Baltimore,Minnesota,TR-7

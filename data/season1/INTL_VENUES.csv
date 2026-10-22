@@ -1,0 +1,51 @@
+venue_id,city,country,venue_name,capacity,region,suitability,lat,lon,timezone,active
+INTL-001,London,England,Wembley Stadium,90000,Europe,proven,51.556,-0.280,Europe/London,true
+INTL-002,London,England,Tottenham Hotspur Stadium,62850,Europe,proven,51.604,-0.066,Europe/London,true
+INTL-003,London,England,Twickenham Stadium,82000,Europe,proven,51.456,-0.342,Europe/London,true
+INTL-004,London,England,London Stadium,62500,Europe,,51.539,-0.017,Europe/London,true
+INTL-005,Manchester,England,Old Trafford,74000,Europe,,53.463,-2.291,Europe/London,true
+INTL-006,London,England,Emirates Stadium,60700,Europe,,51.555,-0.108,Europe/London,true
+INTL-007,Cardiff,Wales,Principality Stadium,74500,Europe,,51.478,-3.183,Europe/London,true
+INTL-008,Edinburgh,Scotland,Murrayfield Stadium,67100,Europe,,55.942,-3.241,Europe/London,true
+INTL-009,Dublin,Ireland,Croke Park,82300,Europe,,53.361,-6.251,Europe/Dublin,true
+INTL-010,Dublin,Ireland,Aviva Stadium,51700,Europe,,53.335,-6.229,Europe/Dublin,true
+INTL-011,Saint-Denis,France,Stade de France,80700,Europe,,48.925,2.360,Europe/Paris,true
+INTL-012,Munich,Germany,Allianz Arena,75000,Europe,proven,48.219,11.625,Europe/Berlin,true
+INTL-013,Berlin,Germany,Olympiastadion,74200,Europe,,52.515,13.240,Europe/Berlin,true
+INTL-014,Frankfurt,Germany,Deutsche Bank Park,58000,Europe,proven,50.069,8.645,Europe/Berlin,true
+INTL-015,Dortmund,Germany,Signal Iduna Park,81300,Europe,,51.493,7.452,Europe/Berlin,true
+INTL-016,Madrid,Spain,Santiago Bernabéu,78000,Europe,proven,40.453,-3.688,Europe/Madrid,true
+INTL-017,Madrid,Spain,Metropolitano Stadium,70000,Europe,,40.436,-3.600,Europe/Madrid,true
+INTL-018,Milan,Italy,San Siro,75800,Europe,,45.478,9.124,Europe/Rome,true
+INTL-019,Rome,Italy,Stadio Olimpico,70600,Europe,,41.934,12.455,Europe/Rome,true
+INTL-020,Lisbon,Portugal,Estádio da Luz,68100,Europe,,38.753,-9.185,Europe/Lisbon,true
+INTL-021,Amsterdam,Netherlands,Johan Cruyff Arena,55900,Europe,,52.314,4.942,Europe/Amsterdam,true
+INTL-022,Gothenburg,Sweden,Ullevi Stadium,43000,Europe,,57.706,11.987,Europe/Stockholm,true
+INTL-023,Tokyo,Japan,Japan National Stadium,67700,Asia,,35.678,139.715,Asia/Tokyo,true
+INTL-024,Yokohama,Japan,Nissan Stadium,72300,Asia,,35.510,139.606,Asia/Tokyo,true
+INTL-025,Saitama,Japan,Saitama Stadium 2002,63700,Asia,,35.803,139.718,Asia/Tokyo,true
+INTL-026,Seoul,South Korea,Seoul World Cup Stadium,66700,Asia,,37.568,126.897,Asia/Seoul,true
+INTL-027,Seoul,South Korea,Seoul Olympic Stadium,69900,Asia,,37.516,127.072,Asia/Seoul,true
+INTL-028,Kuala Lumpur,Malaysia,Bukit Jalil National Stadium,87400,Asia,,3.055,101.692,Asia/Kuala_Lumpur,true
+INTL-029,Jakarta,Indonesia,Gelora Bung Karno Stadium,77200,Asia,,-6.219,106.802,Asia/Jakarta,true
+INTL-030,Lusail,Qatar,Lusail Stadium,88900,Asia,,25.421,51.491,Asia/Qatar,true
+INTL-031,Kolkata,India,Salt Lake Stadium,85000,Asia,,22.570,88.410,Asia/Kolkata,true
+INTL-032,Ahmedabad,India,Narendra Modi Stadium,132000,Asia,,23.092,72.597,Asia/Kolkata,true
+INTL-033,Johannesburg,South Africa,FNB Stadium,94700,Africa,,-26.235,27.982,Africa/Johannesburg,true
+INTL-034,Cape Town,South Africa,Cape Town Stadium,58300,Africa,,-33.903,18.411,Africa/Johannesburg,true
+INTL-035,Durban,South Africa,Moses Mabhida Stadium,55000,Africa,,-29.829,31.030,Africa/Johannesburg,true
+INTL-036,Johannesburg,South Africa,Ellis Park Stadium,62500,Africa,,-26.198,28.060,Africa/Johannesburg,true
+INTL-037,Cairo,Egypt,Cairo International Stadium,75000,Africa,,30.069,31.315,Africa/Cairo,true
+INTL-038,Casablanca,Morocco,Stade Mohammed V,45000,Africa,,33.578,-7.643,Africa/Casablanca,true
+INTL-039,Rio de Janeiro,Brazil,Maracanã Stadium,78800,South America,,-22.912,-43.230,America/Sao_Paulo,true
+INTL-040,São Paulo,Brazil,Neo Química Arena,49200,South America,proven,-23.545,-46.474,America/Sao_Paulo,true
+INTL-041,São Paulo,Brazil,MorumBIS Stadium,66800,South America,,-23.600,-46.720,America/Sao_Paulo,true
+INTL-042,Belo Horizonte,Brazil,Mineirão Stadium,61900,South America,,-19.866,-43.971,America/Sao_Paulo,true
+INTL-043,Buenos Aires,Argentina,Estadio Monumental,85000,South America,,-34.545,-58.450,America/Argentina/Buenos_Aires,true
+INTL-044,Montevideo,Uruguay,Estadio Centenario,60200,South America,,-34.895,-56.153,America/Montevideo,true
+INTL-045,Santiago,Chile,Estadio Nacional,48700,South America,,-33.464,-70.610,America/Santiago,true
+INTL-046,Melbourne,Australia,Melbourne Cricket Ground,100000,Oceania,,-37.820,144.983,Australia/Melbourne,true
+INTL-047,Sydney,Australia,Stadium Australia,83500,Oceania,,-33.847,151.063,Australia/Sydney,true
+INTL-048,Perth,Australia,Optus Stadium,61200,Oceania,,-31.951,115.889,Australia/Perth,true
+INTL-049,Adelaide,Australia,Adelaide Oval,53600,Oceania,,-34.916,138.596,Australia/Adelaide,true
+INTL-050,Auckland,New Zealand,Eden Park,50000,Oceania,,-36.875,174.745,Pacific/Auckland,true

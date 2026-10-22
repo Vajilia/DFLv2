@@ -22,6 +22,15 @@ A persistent, female-only, 48-franchise football universe featuring autonomous m
 
 The prepared package in the ChatGPT conversation is named `DFL-vBeta_source_snapshot_2026-10-20.zip`. The package includes source and tests but excludes SQLite historical archives. It should be inspected for secrets and temporary artifacts before import.
 
+## Milestone 1 (league layer) — see `docs/BUILD_STATUS.md`
+
+```
+python3 -I -m unittest discover -s tests          # 24 tests
+python3 -I tools/run_seasons.py --seasons 100     # multi-season run, validates every season's tables
+python3 tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.6.md
+```
+The specification lives in `docs/spec/` and wins over any v1 behaviour.
+
 ## Production safety
 
 Existing production site: https://diamondfootballleague.com
