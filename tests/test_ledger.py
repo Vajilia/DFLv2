@@ -86,9 +86,9 @@ class Rosters(unittest.TestCase):
             L.sign("A", p.pid, MIN, "roster")
         p = L.new_player("WR", 60)
         with self.assertRaises(Rejected):
-            L.sign("A", p.pid, MIN, "roster")                    # 76th
+            L.sign("A", p.pid, MIN, "roster")                    # one past the ceiling
         L.start_camp(); L.begin_season()
-        self.assertEqual(len(L.clubs["A"].roster), 75)
+        self.assertEqual(len(L.clubs["A"].roster), R.PRESEASON_CEILING)
         q = L.new_player("WR", 60)
         with self.assertRaises(Rejected):
             L.sign("A", q.pid, MIN, "roster")                    # in season the roster is capped at 53

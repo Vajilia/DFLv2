@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.10 · 2026-10-22** (amends Edition 8.9; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `6f4f60c3ce6356d7d4452f09af73cc5cddd97755d17f56f56dcd46cb086460f8`
+**Edition 8.11 · 2026-10-22** (amends Edition 8.10; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `965b647531c6a00c8fa6ae4b63fde3ee86402510120f09dbf58bc1084ff447b7`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -23,7 +23,7 @@ Single source. Nothing below repeats a figure that appears here.
 | Ambassador Tour | 8 clubs, 7 rounds, 28 games |
 | Cap · reserve · min salary · comp threshold · CEO salary | $1,000 · $25 · $5 · $75 · $2,000 |
 | Rookie scale (R1–R7) · first-round option | $25/$18/$14/$11/$9/$7/$5 · $35 |
-| Roster · practice squad · preseason ceiling · required places · Bowl places | 53 · 16 · 75 · 48 · 53 |
+| Roster · practice squad · preseason ceiling · required places · Bowl places | 53 · 16 · 90 · 48 · 53 |
 | Contracts counted against the cap before the final cut · credited seasons that exempt a released player from waivers | 69 (53 + 16) · 4 |
 | Draft | 7 rounds × 48 = 336 picks |
 | Bracket winner paths · halls · directional relationships | 8,192 · 59 · 2,256 |
@@ -684,7 +684,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Uncommon penalties may be implemented partially; gaps are recorded in an implementation coverage register.
 
 ## §11 Positions, rosters, contracts, cap
-- Normal roster 53 plus practice squad 16, at most 6 of whom may be veterans with more than 2 credited seasons (NFL default). Preseason ceiling 75 including practice squad. Required places 48; Bowl places 53 (5 discretionary).
+- Normal roster 53 plus practice squad 16, at most 6 of whom may be veterans with more than 2 credited seasons (NFL default). Preseason ceiling 90 including practice squad (the NFL's number). Required places 48; Bowl places 53 (5 discretionary).
 - Positional minimums (the 48 required places): K 1; P 1; QB 3; HB 3, or HB 2 and FB 1; WR 5; TE 2; LT 2, LG 2, C 1, RG 2, RT 2; LE 2, RE 2, DT 3; ROLB 2, MLB 3, LOLB 2; CB 5; FS 2, SS 2; LS 1. Coverage is checked at the cut and on voluntary packages.
 - A club may operate temporarily short while seeking affordable replacements, but must be able to field 11 medically available legal players or forfeit.
 - **Emergency fill-ins (NFL defaults).** Game-day active roster 48, or 47 with fewer than 8 offensive linemen. Between games a club may place a player on injured reserve (out at least four games; at most eight players per club per season may be designated to return), elevate up to two practice-squad players for a game (each player at most three times a season; an elevated player reverts to the practice squad afterward), sign a free agent at no less than the minimum salary, or claim a waived player, each subject to the viability invariant. Nothing can be signed during a game. If no medically available player remains at a position during a game, the club's emergency list for that position supplies a dressed player, who plays out of position. Before every kickoff each club files an emergency list with at least one name for every position, including K, P, LS and QB; the engine applies its out-of-position penalty.
@@ -781,7 +781,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.10 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8 and 8.9 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.11 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9 and 8.10 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -834,6 +834,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §3 | tiebreak cascade confirmed as written; rationale recorded (columns shown on the standings page) | owner's ruling; the NFL's head-to-head, restart and common-games steps are deliberately not adopted | 8.9 |
 | 2026-10-22 | §2 | year undefined → the DFL year runs 1 January to 31 December; offseason order and provisional dates added | owner's ruling ("dialed back to Jan. 1st to Dec. 31st"); dates are the builder's proposal pending owner confirmation | 8.10 |
 | 2026-10-22 | §12 | compensatory picks counted every qualifying departure → departures netted against signings (NFL) | builder's default after owner asked for the NFL's method; compensation is not a parity tool | 8.10 |
+| 2026-10-22 | §0, §11 | preseason ceiling 75 → 90 including the practice squad | owner's ruling (the NFL's number); 75 could not hold a 69-man club plus a full draft class | 8.11 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -848,6 +849,5 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 10. Calibrate the pre-cut cap count (§0) once the market exists: it is adapted from the NFL's top 51 of a 90-player camp roster, and the ratio does not carry over exactly. Also decide whether drafted rookies need a reserved allowance, as the NFL's rookie pool provides (none of the placeholder soak's draft picks went unsigned).
 11. Floor removal relies on the sentiment and recall mechanism pricing poor spending and poor results; its inputs are unbuilt (people layer). Payroll spread across clubs is a fairness-band candidate.
 12. Emergency cap borrowing (owner proposal): deferred. The viability invariant is built so that no legal roster is ever unreachable; revisit only if a real jam appears once the market exists.
-13. Preseason ceiling: 75 including the practice squad cannot hold a 69-man club plus a full draft class (7 picks and up to 2 compensatory), so the simulation has each club cut a veteran to sign every pick. The NFL cuts once from 90 to 53. Owner to decide between 75 and 90.
-14. Exile-return loop: a club exiled as last place returns the next year as seed 5 with a lottery pick in slots 1-8; whether this traps weak clubs in a cycle, and whether extra picks for exiled clubs would help or would reward losing, must be measured with the real engine (parity profiles, Phase 4).
-15. Offseason dates in §2 are provisional.
+13. Exile-return loop: a club exiled as last place returns the next year as seed 5 with a lottery pick in slots 1-8; whether this traps weak clubs in a cycle, and whether extra picks for exiled clubs would help or would reward losing, must be measured with the real engine (parity profiles, Phase 4).
+14. Offseason dates in §2 are provisional.

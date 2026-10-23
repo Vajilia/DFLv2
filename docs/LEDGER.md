@@ -2,13 +2,13 @@
 
 Code: `src/dfl/ledger/` (`rules`, `positions`, `contracts`, `ledger`, `gameday`, and a **placeholder** `world` used only to drive the soak).
 Tests: `tests/test_ledger.py`, `tests/test_ledger_determinism.py`. Soak: `tools/run_ledger_soak.py`.
-Authority: Design Document Ed 8.10, sections 11, 12, 17. Where the document was silent, the interpretation below is the builder's; the owner delegated two of them (A1, A7) and ruled on the rest.
+Authority: Design Document Ed 8.11, sections 11, 12, 17. Where the document was silent, the interpretation below is the builder's; the owner delegated two of them (A1, A7) and ruled on the rest.
 
 ## What is enforced
 - Money is exact (`Fraction`). Cap $1,000, reserve $25, minimum salary $5. **No salary floor** (Ed 8.8). **No banking.**
 - **Cap timing (Ed 8.9, adapted from the NFL's top-51 rule).** The cap is enforced all year. Until the final cut a club's cap number is dead money plus its 69 highest cap hits (the camp bodies beyond that do not count); afterwards every contract counts. A signing, claim, trade or restructure that leaves a club over the cap *and* raises its cap number is rejected. A release is never blocked by the cap. At the final cut every club must be at or under the cap; the season cannot start with a club over.
 - Practice-squad salaries count against the cap.
-- Rosters: 53 + practice squad 16 (at most 6 veterans); preseason ceiling 75 combined; 48 required places by position (incl. long snapper); IR minimum 4 games, at most 8 returns per club per season.
+- Rosters: 53 + practice squad 16 (at most 6 veterans); preseason ceiling 90 combined; 48 required places by position (incl. long snapper); IR minimum 4 games, at most 8 returns per club per season.
 - Game day: 48 active (47 with fewer than 8 healthy OL), 2 elevations per game, 3 per player, a named emergency player for any position with nobody left. A club forfeits only if fewer than 11 healthy players exist.
 - Waivers: a released player with 4+ credited seasons goes straight to free agency (NFL vested-veteran rule); the releasing club keeps all of her dead money. Everyone else clears a one-day waiver period.
 - Contracts: steady/rising/declining, 1-5 years, guarantees, prorated bonuses (up to 5 years), rookie scale (4 fixed years, R1 option $35), release charges, once-per-year split release, trade (receiver assumes unpaid base and guarantees, never the bonus), waiver claim.
