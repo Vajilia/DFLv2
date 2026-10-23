@@ -1,0 +1,16 @@
+name,low,high,meaning,origin
+win_pct_sd,0.13,0.19,"Spread of regular-season win percentage across active clubs (pure luck alone is about 0.12)",v1 limit accepted by the owner 2026-10-04
+year_to_year_corr,0.10,0.50,"How much a club's win % repeats from one season to the next (0 = pure luck, 1 = fixed)",v1 limit accepted by the owner 2026-10-04
+close_game_share,0.35,0.55,"Share of regular-season games decided by 8 points or fewer",v1 limit accepted by the owner 2026-10-04
+repeat_champion_rate,0.00,0.12,"Share of seasons in which the champion is the previous champion",v1 limit accepted by the owner 2026-10-04
+max_titles_in_20,0,4.7,"Most titles one club wins in any 20-season stretch, averaged over leagues",v1 limit accepted by the owner 2026-10-04
+worst_league_titles,0,7,"Most titles one club wins in any 20 seasons in the single worst league",v1 limit accepted by the owner 2026-10-04
+best_team_title_odds,0.08,0.25,"How often the club with the strongest starters (hidden ratings) wins the title",v1 limit accepted by the owner 2026-10-04; 'on paper' measured from hidden starter ratings
+returner_avg_finish,2.8,3.4,"Average division finish of a club in its first season back from exile (3.0 = league average)",v1 limit accepted by the owner 2026-10-04
+returner_win_div,0.10,0.30,"Share of returning clubs that win their division",v1 limit accepted by the owner 2026-10-04
+returner_fifth_again,0.10,0.30,"Share of returning clubs that finish 5th again",v1 limit accepted by the owner 2026-10-04
+returner_top3_in_3,0.75,0.97,"Share of returners that finish 3rd or better in their division at least once in their first three seasons back (owner: able to be competitive within three seasons)",v1 limit accepted by the owner 2026-10-04
+returner_playoff_first,0.20,0.55,"Share of returners that make the playoffs in their first season back (owner: never an automatic playoff spot)",v1 limit accepted by the owner 2026-10-04
+exile_effect,-0.5,0.5,"Extra club rating in points (about half a win per point) two years after finishing 5th versus finishing 4th; converted from win % at 34 points per 1.00",v1 limit accepted by the owner 2026-10-04
+exile_double_early,0.00,0.10,"Share of exiled clubs that get a top-8 pick on returning and then a top-16 pick in the next draft; in the v2 rules every returner gets a top-8 pick, so this is the share with a top-16 pick the next year",v1 limit adapted to the v2 draft rule
+stuck_at_bottom,0.00,0.10,"Share of club-seasons that follow three straight bottom-two division finishes (exile years skipped)",v1 limit accepted by the owner 2026-10-04

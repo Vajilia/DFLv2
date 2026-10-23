@@ -16,21 +16,9 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
-from dfl.engine.squad import OFF, DEF  # noqa: E402
 from dfl.year import Universe  # noqa: E402
 
-STARTERS = OFF + DEF + (("K", 1), ("P", 1))
-
-
-def club_strength(w, cid):
-    """Mean hidden overall of the best starters at each position (what the engine would field when healthy)."""
-    by = {}
-    for pid in w.L.clubs[cid].roster:
-        by.setdefault(w.L.players[pid].pos, []).append(w.rating[pid])
-    vals = []
-    for pos, n in STARTERS:
-        vals += sorted(by.get(pos, []), reverse=True)[:n]
-    return S.mean(vals) if vals else 0.0
+from dfl.fairness import club_strength  # noqa: E402
 
 
 def snapshot(u, rep):
