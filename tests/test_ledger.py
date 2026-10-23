@@ -8,10 +8,18 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from dfl.ledger import gameday, rules as R  # noqa: E402
 from dfl.ledger.contracts import Contract, ContractError, rookie_contract  # noqa: E402
-from dfl.ledger.ledger import Ledger, Rejected  # noqa: E402
+from dfl.ledger.ledger import Ledger as _Ledger, Rejected  # noqa: E402
 from dfl.ledger.positions import MINIMUMS, shortfalls  # noqa: E402
 
 MIN = Contract(2000, (5,))
+
+
+def Ledger(cids, year=2000, drafted=True):
+    """A ledger for the tests; by default this year's draft is already done so no rookie reserve muddies the arithmetic."""
+    L = _Ledger(cids, year)
+    if drafted:
+        L.draft_completed = year
+    return L
 
 
 def fill(L, cid, spec=None, ovr=60, contract=None, slot="roster"):
@@ -194,6 +202,7 @@ class Viability(unittest.TestCase):
         L = Ledger(["A", "B"])
         fill(L, "B", contract=Contract(2000, (15,) * 2))          # B spends, A does not
         L.new_year()
+        L.complete_draft()                                        # (an unmade draft would reserve rookie cap room)
         self.assertEqual(L.cap_number("A"), 0)
         self.assertFalse(hasattr(L.clubs["A"], "bank"))
         self.assertEqual(L.limit(L.year), R.CAP - R.RESERVE - 240)   # same limit for every club, every year
@@ -215,7 +224,7 @@ class Money(unittest.TestCase):
         self.assertEqual(L.cap_number("B"), 20)
 
     def test_trade_window_and_picks(self):
-        L = Ledger(["A", "B"])
+        L = Ledger(["A", "B"], drafted=False)
         a, b = L.new_player("QB", 80), L.new_player("QB", 70)
         L.sign("A", a.pid, MIN); L.sign("B", b.pid, MIN)
         pick = (2000, 1, "A")
@@ -430,3 +439,75 @@ class GameDay(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PoolAndReserve(unittest.TestCase):
+    def test_four_consecutive_years_in_the_pool_retire_her_and_remove_her(self):
+        L = Ledger(["A"])
+        p = L.new_player("WR", 60)
+        pid = p.pid
+        for yr in range(3):
+            L.new_year()
+            self.assertIn(pid, L.players, f"still listed at opening {yr + 1}")
+            self.assertEqual(L.players[pid].pool_years, yr + 1)
+        L.new_year()                                              # fourth opening unsigned
+        self.assertNotIn(pid, L.players)
+        self.assertEqual(L.retired["pool"], 1)
+
+    def test_being_hired_resets_the_clock(self):
+        L = Ledger(["A"])
+        p = L.new_player("WR", 60, seasons=4)                      # vested: a release goes straight back to the pool
+        L.new_year(); L.new_year(); L.new_year()
+        self.assertEqual(p.pool_years, 3)
+        L.sign("A", p.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(p.pool_years, 0)
+        L.release("A", p.pid)                                     # back in the pool, counting from zero
+        for _ in range(3):
+            L.new_year()
+        self.assertIn(p.pid, L.players)
+        L.new_year()
+        self.assertNotIn(p.pid, L.players)
+
+    def test_expiring_contract_starts_the_clock_at_zero_and_rostered_players_never_count(self):
+        L = Ledger(["A"])
+        a = L.new_player("WR", 60)
+        b = L.new_player("WR", 60)
+        L.sign("A", a.pid, Contract(2000, (5, 5), (), (), 0))
+        L.sign("A", b.pid, Contract(2000, (5,), (), (), 0))
+        L.new_year()                                              # 2001: b's contract expired, a still under contract
+        self.assertEqual((a.where, b.where, a.pool_years, b.pool_years), ("roster", "fa", 0, 0))
+        L.new_year()                                              # 2002: a expired too; b has been in the pool one opening
+        self.assertEqual((a.pool_years, b.pool_years), (0, 1))
+
+    def test_only_pool_members_can_be_retired(self):
+        L = Ledger(["A"])
+        p = L.new_player("WR", 60)
+        L.sign("A", p.pid, MIN)
+        with self.assertRaises(Rejected):
+            L.retire(p.pid, "age")
+
+    def test_unmade_picks_reserve_cap_room_at_the_rookie_scale(self):
+        L = Ledger(["A"], drafted=False)
+        self.assertEqual(L.rookie_reserve("A"), [25, 18, 14, 11, 9, 7, 5])
+        self.assertEqual(L.cap_number("A"), 89)
+        L.clubs["A"].picks.add((2000, 8, "A"))                   # a compensatory pick reserves the round-7 scale
+        self.assertEqual(L.cap_number("A"), 94)
+        L.complete_draft()
+        self.assertEqual(L.cap_number("A"), 0)
+
+    def test_reserve_leaves_room_and_a_traded_pick_moves_its_reserve(self):
+        L = Ledger(["A", "B"], drafted=False)
+        for _ in range(60):
+            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (15,)))          # 900 + 89 reserved = 989
+        with self.assertRaises(Rejected):
+            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (20,)))          # would leave no room for the class
+        L.trade("A", [], "B", [], a_picks=[(2000, 1, "A")])
+        self.assertEqual(L.cap_number("A"), 900 + 64)
+        self.assertEqual(L.cap_number("B"), 89 + 25)
+
+    def test_signing_the_pick_replaces_its_reserve(self):
+        L = Ledger(["A"], drafted=False)
+        L.clubs["A"].picks.discard((2000, 1, "A"))
+        p = L.new_player("WR", 60)
+        L.sign("A", p.pid, rookie_contract(2000, 1, first_round_option=True))
+        self.assertEqual(L.cap_number("A"), 89)                  # 64 reserved + 25 signed

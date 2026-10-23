@@ -251,8 +251,6 @@ class World:
         if skip:
             return
         for p in list(L.players.values()):
-            if p.where == "retired":
-                continue
             p.age += 1
             if p.where in ("roster", "ps", "ir"):
                 p.seasons += 1
@@ -260,7 +258,7 @@ class World:
             p.ovr = int(max(30, min(99, p.ovr + drift)))
             p.elevations = 0
             if p.where == "fa" and (p.age >= 34 or (p.age >= 31 and self.rng.random() < 0.15) or p.ovr < 40):
-                p.where = "retired"
+                L.retire(p.pid, "age")
 
     def pre_draft_trim(self):
         L = self.L
@@ -302,6 +300,7 @@ class World:
             needy = {pos for _, pos in self.need(owner, ("roster", "ps"))}
             pick = next((p for p in avail[:40] if p.pos in needy), avail[0])
             pick.where = "fa"
+            L.clubs[owner].picks.discard((L.year, rnd, orig))     # the pick is spent; the real contract replaces its cap reserve
             c = rookie_contract(L.year, min(rnd, 7), first_round_option=(rnd == 1))
             slot = "roster" if len(L.clubs[owner].roster) < 62 else "ps"
             if slot == "ps" and not L.room(owner, "ps"):
@@ -311,7 +310,6 @@ class World:
             if not L.room(owner, slot) or not self.try_sign(owner, pick, slot, c):
                 pick.where = "fa"        # unsigned draftee becomes a free agent
                 self.stats["unsigned_picks"] += 1
-            L.clubs[owner].picks.discard((L.year, rnd, orig))
             self.stats["picks_made"] = self.stats.get("picks_made", 0) + 1
 
     def finish_draft(self):

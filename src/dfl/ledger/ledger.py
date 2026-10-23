@@ -1,6 +1,6 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.11, sections 11, 12, 17)
+Principles (Design Document 8.12, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
   * Cap timing (Ed 8.9): the cap is enforced all year. Until the final cut a club's cap number counts only its 69 highest
@@ -54,6 +54,7 @@ class Player:
     ir_since: int = None
     prev_club: str = None          # club whose contract just expired (free-agent movement tracking)
     snap_top: bool = False         # top quarter of her club's snaps last year (PLACEHOLDER: ranked by rating until the engine exists)
+    pool_years: int = 0            # year openings survived unsigned in the free-agent pool; reset when hired; retired at POOL_YEARS_MAX
 
     @property
     def veteran(self):
@@ -91,6 +92,7 @@ class Ledger:
         self.waivers = {}              # pid -> dict(from=cid, relief={year: amount})
         self.events = []
         self.fa_moves = []             # free agents who changed clubs this offseason (feeds compensatory picks)
+        self.retired = {"pool": 0, "age": 0}     # characters removed from the list, by reason (career records go to the people layer)
         self._next_pid = 1
         for c in cids:
             for y in range(year, year + 3):
@@ -123,10 +125,19 @@ class Ledger:
     def contracts_of(self, cid):
         return [self.players[p].contract for p in self.clubs[cid].all_pids()]
 
+    def rookie_reserve(self, cid):
+        """Cap hits of the club's unmade picks in this year's draft, at the rookie scale (round 8 and 9 picks at the round-7 scale).
+        They count against the cap until the pick is made, so a club always keeps the room to sign its class (NFL rookie reserve)."""
+        if self.draft_completed >= self.year:
+            return []
+        return sorted((R.ROOKIE_SCALE[min(pk[1], 7) - 1] for pk in self.clubs[cid].picks if pk[0] == self.year), reverse=True)
+
     def cap_number(self, cid, year=None):
         year = self.year if year is None else year
         c = self.clubs[cid]
         hits = [k.cap_hit(year) for k in self.contracts_of(cid) if k]
+        if year == self.year:
+            hits += self.rookie_reserve(cid)
         if year == self.year and self.phase in ("offseason", "camp") and len(hits) > R.CAP_COUNTED_BEFORE_CUT:
             hits = sorted(hits, reverse=True)[:R.CAP_COUNTED_BEFORE_CUT]
         return sum(hits, F(0)) + c.dead.get(year, F(0))
@@ -229,6 +240,7 @@ class Ledger:
             if slot == "ps" and p.veteran and self.ps_veterans(cid) >= R.PS_VETERANS_MAX:
                 raise Rejected("practice squad veteran limit")
             p.contract, p.club, p.where = contract, cid, slot
+            p.pool_years = 0
             getattr(self.clubs[cid], slot).append(pid)
             if p.prev_club is not None and self.phase in ("offseason", "camp"):
                 if p.prev_club != cid:
@@ -465,14 +477,26 @@ class Ledger:
     def end_season(self):
         self.phase = "post"
 
+    def retire(self, pid, reason):
+        """A free agent leaves the game for good and is removed from the list (database size). Only pool members can retire here."""
+        p = self.players[pid]
+        if p.where != "fa":
+            raise Rejected(f"player {pid} is not in the pool")
+        del self.players[pid]
+        self.retired[reason] = self.retired.get(reason, 0) + 1
+
     def new_year(self):
         """League year rolls over. Contracts that have run out release their players to the free-agent pool; elevations and
         IR returns reset; old dead money drops off; nothing is banked."""
         self.year += 1
         self.week, self.phase = 0, "offseason"
         self.fa_moves = []
-        for p in self.players.values():
+        for pid, p in list(self.players.items()):
             p.prev_club = None
+            if p.where == "fa":
+                p.pool_years += 1
+                if p.pool_years >= R.POOL_YEARS_MAX:
+                    self.retire(pid, "pool")
         for c in self.clubs.values():
             ranked = sorted(c.all_pids(), key=lambda i: (-self.players[i].ovr, i))
             top = set(ranked[:max(1, len(ranked) // 4)])

@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.11 · 2026-10-22** (amends Edition 8.10; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `965b647531c6a00c8fa6ae4b63fde3ee86402510120f09dbf58bc1084ff447b7`
+**Edition 8.12 · 2026-10-23** (amends Edition 8.11; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `f2c816938dc3f750c409380070f6d04595a5b051c54bebcbf7de8206afe0f204`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -702,6 +702,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - **Viability margin** = cap − dead money − minimum-roster cost − reserve, logged per club-year; flag below $50.
 - Contract shapes: steady, rising or declining. At most five covered years and five bonus proration years. Bonus is paid on signing and cap-prorated evenly. The receiving club assumes unpaid base and attached guarantees, never the bonus.
 - Removed: incentives, roster bonuses, June 1 designation, franchise tag, restricted and exclusive-rights free agency, no-trade clauses, conditional compensation, cap-space trades.
+- Rookie reserve (NFL rookie-pool principle): until a draft pick is made, the pick's rookie-scale cap hit (rounds 8 and 9 at the round-7 scale, $5) counts in the owning club's cap number for the year of that draft, so a club always keeps room to sign its class; the reserve moves with a traded pick and is replaced by the real contract when the pick is made. It adds no committed money, because rookie contracts carry no guarantees.
 - Rookies accept selection and sign four fixed years at $25/$18/$14/$11/$9/$7/$5. First-round option salary $35. Within-round slot rank breaks otherwise equal terms.
 - Extensions require two completed seasons and mutual consent.
 - Salary prorates over the 22 paid regular-season weeks, same denominator for active and ambassador clubs. Midseason deals pay remaining weeks only and expire at year close. Postseason-only replacements pay one salary-week equivalent.
@@ -723,7 +724,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Scouting and analytics estimate from evidence with position-specific biases. Official position is permanent.
 - Starting budget 32 detailed memories per character; recent and defining events stay detailed, routine events merge into relationship summaries.
 - Relationships are sparse and directed, recording only actual contacts.
-- Draft classes contain 672 players, at least 12 per position. Pools hold at least 8 medically available unsigned players per position and 4 willing candidates per leadership role. Four consecutive seasons in a pool end active candidacy.
+- Draft classes contain 672 players, at least 12 per position. Pools hold at least 8 medically available unsigned players per position and 4 willing candidates per leadership role. A character may stay in a pool (free agents, leadership candidates) at most four consecutive years: if she is still unsigned at the fourth league-year opening after she entered it, she retires permanently and is removed from the list (her career record is archived by the people layer). Being hired resets the clock to zero, and a player released later starts a new count. A drafted player who goes unsigned enters the pool when the draft ends. This bounds database size.
 - Retirement takes effect at offseason opening. Development and aging curves are data, not narrative.
 
 ## §14 Fans, governance, expectations
@@ -781,7 +782,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.11 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9 and 8.10 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.12 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10 and 8.11 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -835,6 +836,8 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §2 | year undefined → the DFL year runs 1 January to 31 December; offseason order and provisional dates added | owner's ruling ("dialed back to Jan. 1st to Dec. 31st"); dates are the builder's proposal pending owner confirmation | 8.10 |
 | 2026-10-22 | §12 | compensatory picks counted every qualifying departure → departures netted against signings (NFL) | builder's default after owner asked for the NFL's method; compensation is not a parity tool | 8.10 |
 | 2026-10-22 | §0, §11 | preseason ceiling 75 → 90 including the practice squad | owner's ruling (the NFL's number); 75 could not hold a 69-man club plus a full draft class | 8.11 |
+| 2026-10-23 | §13 | four consecutive seasons in a pool ended active candidacy → at four consecutive years she retires permanently and is removed from the list; being hired resets the clock | owner's ruling (keeps the database from bloating) | 8.12 |
+| 2026-10-23 | §11 | added the rookie reserve: unmade picks count at the rookie scale in the cap number | owner approved the builder's recommendation (the NFL's rookie-pool principle); unsigned draft picks were 2.5% of picks in the 100-year test | 8.12 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -846,7 +849,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 7. Tie-game frequency: ties are excluded from records, so the order of overall wins before overall win % matters only when ties occur. Calibrate in simulation so that ties stay highly unlikely.
 8. Fill-in parameters inherited from the NFL and not yet confirmed: game-day roster 48/47, two practice-squad elevations a game and three a player a season, four-game injured reserve minimum. The out-of-position penalty belongs with engine content (item 2).
 9. Standings assumptions to confirm: higher strength of schedule and strength of victory rank higher (NFL default); a club with no decisions has a win % of 0; the seeded draw is the last resort and is rerun from a season-and-scope seed.
-10. Calibrate the pre-cut cap count (§0) once the market exists: it is adapted from the NFL's top 51 of a 90-player camp roster, and the ratio does not carry over exactly. Also decide whether drafted rookies need a reserved allowance, as the NFL's rookie pool provides (none of the placeholder soak's draft picks went unsigned).
+10. Calibrate the pre-cut cap count (§0) once the market exists: it is adapted from the NFL's top 51 of a 90-player camp roster, and the ratio does not carry over exactly. (The rookie reserve, §11, is built and replaces the open question about rookie room.)
 11. Floor removal relies on the sentiment and recall mechanism pricing poor spending and poor results; its inputs are unbuilt (people layer). Payroll spread across clubs is a fairness-band candidate.
 12. Emergency cap borrowing (owner proposal): deferred. The viability invariant is built so that no legal roster is ever unreachable; revisit only if a real jam appears once the market exists.
 13. Exile-return loop: a club exiled as last place returns the next year as seed 5 with a lottery pick in slots 1-8; whether this traps weak clubs in a cycle, and whether extra picks for exiled clubs would help or would reward losing, must be measured with the real engine (parity profiles, Phase 4).
