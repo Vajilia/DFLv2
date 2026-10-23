@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from dfl.ledger import gameday, rules as R  # noqa: E402
 from dfl.ledger.contracts import Contract, ContractError, rookie_contract  # noqa: E402
 from dfl.ledger.ledger import Ledger as _Ledger, Rejected  # noqa: E402
-from dfl.ledger.positions import MINIMUMS, shortfalls  # noqa: E402
+from dfl.ledger.positions import MINIMUMS, POSITIONS, shortfalls  # noqa: E402
 
 MIN = Contract(2000, (5,))
 
@@ -105,17 +105,17 @@ class Rosters(unittest.TestCase):
         L = Ledger(["A"])
         L.start_camp(); L.begin_season()
         for i in range(R.PS_MAX):
-            p = L.new_player("WR", 60, seasons=5 if i < R.PS_VETERANS_MAX else 0)
+            p = L.new_player(POSITIONS[i % 22], 60, seasons=5 if i < R.PS_VETERANS_MAX else 0)
             L.sign("A", p.pid, MIN, "ps")
         with self.assertRaises(Rejected):
-            L.sign("A", L.new_player("WR", 60).pid, MIN, "ps")   # 17th
+            L.sign("A", L.new_player("QB", 60).pid, MIN, "ps")   # 17th
         L2 = Ledger(["A"])
         L2.start_camp(); L2.begin_season()
         for _ in range(R.PS_VETERANS_MAX):
-            L2.sign("A", L2.new_player("WR", 60, seasons=5).pid, MIN, "ps")
+            L2.sign("A", L2.new_player(POSITIONS[_], 60, seasons=5).pid, MIN, "ps")
         with self.assertRaises(Rejected):
-            L2.sign("A", L2.new_player("WR", 60, seasons=5).pid, MIN, "ps")   # 7th veteran
-        L2.sign("A", L2.new_player("WR", 60, seasons=1).pid, MIN, "ps")      # a second-year player is fine
+            L2.sign("A", L2.new_player("QB", 60, seasons=5).pid, MIN, "ps")   # 7th veteran
+        L2.sign("A", L2.new_player("QB", 60, seasons=1).pid, MIN, "ps")      # a second-year player is fine
 
     def test_a_signing_must_start_now_and_a_player_signs_once(self):
         L = Ledger(["A", "B"])
@@ -361,19 +361,19 @@ class CutDownAndCap(unittest.TestCase):
 
     def test_in_season_signing_that_breaks_the_cap_is_rejected_but_release_is_not_blocked(self):
         L = Ledger(["A"])
-        ps = [L.new_player("WR", 60) for _ in range(24)]
+        ps = [L.new_player(POSITIONS[i % 22], 60) for i in range(24)]       # (positions spread: a block holds only so many jersey numbers)
         for p in ps:
             L.sign("A", p.pid, Contract(2000, (40,)))              # 960
         L.start_camp(); L.begin_season()
-        extra = L.new_player("WR", 60)
+        extra = L.new_player("QB", 60)
         with self.assertRaises(Rejected):
             L.sign("A", extra.pid, Contract(L.year, (50,), (), (), L.week))    # 1010 > cap
         L.sign("A", extra.pid, Contract(L.year, (40,), (), (), L.week))        # 1000 is at the cap: fine
         # a release that accelerates a bonus can leave a club over; it is never blocked by the cap
         L2 = Ledger(["A"])
-        for p in [L2.new_player("WR", 60) for _ in range(24)]:
+        for p in [L2.new_player(POSITIONS[i % 22], 60) for i in range(24)]:
             L2.sign("A", p.pid, Contract(2000, (40,)))
-        q = L2.new_player("WR", 60)
+        q = L2.new_player("QB", 60)
         L2.sign("A", q.pid, Contract(2000, (30,), (), ((10, 0, 1),)))          # 960 + 40 = 1000
         L2.start_camp(); L2.begin_season()
         L2.release("A", q.pid)
@@ -511,3 +511,127 @@ class PoolAndReserve(unittest.TestCase):
         p = L.new_player("WR", 60)
         L.sign("A", p.pid, rookie_contract(2000, 1, first_round_option=True))
         self.assertEqual(L.cap_number("A"), 89)                  # 64 reserved + 25 signed
+
+
+class JerseyNumbers(unittest.TestCase):
+    def season(self, cids=("A",)):
+        L = Ledger(list(cids))
+        L.start_camp()
+        L.begin_season()
+        return L
+
+    def nums(self, L, cid):
+        return {L.players[i].pid: L.players[i].number for i in L.clubs[cid].all_pids()}
+
+    def test_every_position_has_a_block_and_a_new_arrival_takes_the_lowest_open(self):
+        from dfl.ledger import numbers as N
+        self.assertEqual(set(N.PRIMARY), set(POSITIONS))
+        L = self.season()
+        a = L.new_player("QB", 60); b = L.new_player("QB", 60); k = L.new_player("K", 60); s = L.new_player("SS", 60)
+        for p in (a, b, k, s):
+            L.sign("A", p.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual((a.number, b.number, k.number, s.number), (10, 11, 1, 40))
+
+    def test_numbers_are_unique_in_a_club_and_a_full_block_rejects_a_position_with_no_overflow(self):
+        L = self.season()
+        for _ in range(10):
+            L.sign("A", L.new_player("CB", 60).pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(sorted(self.nums(L, "A").values()), list(range(20, 30)))
+        with self.assertRaises(Rejected):
+            L.sign("A", L.new_player("CB", 60).pid, Contract(L.year, (5,), (), (), L.week))     # 11th CB: no number, no overflow
+
+    def test_overflow_only_when_the_primary_block_is_full(self):
+        L = self.season()
+        for _ in range(10):
+            L.sign("A", L.new_player("WR", 60).pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(sorted(self.nums(L, "A").values()), list(range(80, 90)))
+        w = L.new_player("WR", 60)
+        L.sign("A", w.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(w.number, 15)                                   # WR overflow
+        lb = [L.new_player("MLB", 60) for _ in range(11)]
+        for p in lb:
+            L.sign("A", p.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual([p.number for p in lb], list(range(50, 60)) + [40])
+        de = [L.new_player("DT", 60) for _ in range(11)]
+        for p in de:
+            L.sign("A", p.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(de[-1].number, 70)
+
+    def test_a_primary_player_bumps_an_overflow_holder(self):
+        L = self.season()
+        wrs = [L.new_player("WR", 60, seasons=4) for _ in range(15)]
+        for p in wrs:
+            L.sign("A", p.pid, Contract(L.year, (5,), (), (), L.week))     # 10 in 80-89, 5 overflow in 15-19
+        L.release("A", wrs[3].pid)                                          # vested: straight to free agency, frees 83
+        te = L.new_player("TE", 60)
+        L.sign("A", te.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertTrue(15 <= te.number <= 19)                              # got a primary number
+        self.assertTrue(all(L.players[w.pid].number in range(80, 90) or L.players[w.pid].number in range(15, 20)
+                            for w in wrs if w.pid != wrs[3].pid))
+        self.assertEqual(len(self.nums(L, "A")), len(set(self.nums(L, "A").values())))
+
+    def test_a_number_is_freed_at_once_and_there_are_no_retired_numbers(self):
+        L = self.season()
+        a = L.new_player("QB", 60, seasons=4)
+        L.sign("A", a.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(a.number, 10)
+        L.release("A", a.pid)
+        self.assertIsNone(a.number)
+        b = L.new_player("QB", 60)
+        L.sign("A", b.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(b.number, 10)
+
+    def test_same_club_resigning_takes_the_old_number_back_if_free_other_clubs_do_not(self):
+        L = self.season(("A", "B"))
+        a, b = L.new_player("QB", 60, seasons=4), L.new_player("QB", 60, seasons=4)
+        for p in (a, b):
+            L.sign("A", p.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual((a.number, b.number), (10, 11))
+        L.release("A", a.pid)
+        L.release("A", b.pid)
+        L.sign("A", b.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(b.number, 11)                                       # her old number, not the lowest open (10)
+        L.release("A", b.pid)
+        L.sign("B", b.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(b.number, 10)                                       # a new club: lowest open
+        L.release("B", b.pid)
+        L.sign("A", L.new_player("QB", 60).pid, Contract(L.year, (5,), (), (), L.week))      # takes 10 at A
+        L.sign("A", b.pid, Contract(L.year, (5,), (), (), L.week))
+        self.assertEqual(b.number, 11)                                       # her last club was B (number 10, taken here): lowest open
+
+    def test_trade_keeps_the_number_if_free_else_gives_another(self):
+        L = Ledger(["A", "B"], drafted=True)
+        L.start_camp(); L.begin_season()
+        a = L.new_player("QB", 60); b = L.new_player("QB", 60)
+        L.sign("A", a.pid, Contract(L.year, (5,), (), (), L.week))           # A: 10
+        L.sign("B", L.new_player("QB", 60).pid, Contract(L.year, (5,), (), (), L.week))      # B: 10
+        L.sign("B", b.pid, Contract(L.year, (5,), (), (), L.week))           # B: 11
+        L.trade("A", [a.pid], "B", [])                                       # 10 is taken at B
+        self.assertEqual(a.number, 12)
+        c = L.new_player("HB", 60)
+        L.sign("B", c.pid, Contract(L.year, (5,), (), (), L.week))           # 30
+        L.trade("B", [c.pid], "A", [])                                       # 30 is free at A: kept
+        self.assertEqual(c.number, 30)
+
+    def test_the_final_cut_ends_the_camp_relaxation(self):
+        L = Ledger(["A"])
+        fill(L, "A")
+        qbs = [L.new_player("QB", 60, seasons=4) for _ in range(5)]          # QB block holds 5 and 3 QBs are already there
+        L.start_camp()
+        for p in qbs:
+            L.sign("A", p.pid, Contract(L.year, (5,), (), (), L.week))
+        odd = [p for p in qbs if not 10 <= p.number <= 14]
+        self.assertTrue(odd)                                                # camp gave some an off-block number
+        for p in odd:
+            L.release("A", p.pid)
+        L.cut_down("A")
+        self.assertTrue(all(10 <= L.players[i].number <= 14 for i in L.clubs["A"].roster if L.players[i].pos == "QB"))
+        self.assertTrue(all(L.players[i].number is not None for i in L.clubs["A"].all_pids()))
+
+    def test_numbers_stay_with_the_player_through_the_year_turn_while_under_contract(self):
+        L = self.season()
+        a = L.new_player("CB", 60)
+        L.sign("A", a.pid, Contract(L.year, (5, 5), (), (), L.week))
+        n = a.number
+        L.end_season(); L.new_year()
+        self.assertEqual(a.number, n)                                       # under contract: she keeps it (exile or not)

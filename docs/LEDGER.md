@@ -2,13 +2,14 @@
 
 Code: `src/dfl/ledger/` (`rules`, `positions`, `contracts`, `ledger`, `gameday`, and a **placeholder** `world` used only to drive the soak).
 Tests: `tests/test_ledger.py`, `tests/test_ledger_determinism.py`. Soak: `tools/run_ledger_soak.py`.
-Authority: Design Document Ed 8.14, sections 11, 12, 17. Where the document was silent, the interpretation below is the builder's; the owner delegated two of them (A1, A7) and ruled on the rest.
+Authority: Design Document Ed 8.15, sections 11, 12, 17. Where the document was silent, the interpretation below is the builder's; the owner delegated two of them (A1, A7) and ruled on the rest.
 
 ## What is enforced
 - Money is exact (`Fraction`). Cap $1,000, reserve $25, minimum salary $5. **No salary floor** (Ed 8.8). **No banking.**
 - **Cap timing (Ed 8.9, adapted from the NFL's top-51 rule).** The cap is enforced all year. Until the final cut a club's cap number is dead money plus its 69 highest cap hits (the camp bodies beyond that do not count); afterwards every contract counts. A signing, claim, trade or restructure that leaves a club over the cap *and* raises its cap number is rejected. A release is never blocked by the cap. At the final cut every club must be at or under the cap; the season cannot start with a club over.
 - Practice-squad salaries count against the cap.
 - **Rookie reserve (Ed 8.12, NFL rookie-pool principle).** Until a pick is made, its rookie-scale hit (rounds 8/9 at the round-7 scale) counts in the owner's cap number for that draft year; it follows a traded pick and is replaced by the real contract (the pick is spent just before the signing, so nothing is counted twice). Rookie contracts carry no guarantees, so the reserve adds nothing to committed money.
+- **Jersey numbers (Ed 8.14/8.15).** `ledger/numbers.py` holds the blocks and `choose`; the ledger assigns on sign, claim and trade (`_give_number`), keeps a number while the player is with the club, frees it on leaving, lets a same-club re-signing reclaim hers, bumps an overflow holder for a primary player, and `cut_down` ends the camp relaxation (`plan_numbers`). A position with no overflow holds at most its block's numbers (10 CBs, 5 QBs); the autopilot sheds surplus players to free a number (`release_for_number`).
 - **Pool limit (Ed 8.12).** `Player.pool_years` counts year openings spent unsigned in the pool; hiring resets it; at 4 the player is retired and deleted from the list (`Ledger.retire`, counted in `Ledger.retired`). Age retirement of free agents uses the same removal.
 - Rosters: 53 + practice squad 16 (at most 6 veterans); preseason ceiling 90 combined; 48 required places by position (incl. long snapper); IR minimum 4 games, at most 8 returns per club per season.
 - Game day: 48 active (47 with fewer than 8 healthy OL), 2 elevations per game, 3 per player, a named emergency player for any position with nobody left. A club forfeits only if fewer than 11 healthy players exist.

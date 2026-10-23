@@ -1,6 +1,6 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.14, sections 11, 12, 17)
+Principles (Design Document 8.15, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
   * Cap timing (Ed 8.9): the cap is enforced all year. Until the final cut a club's cap number counts only its 69 highest
@@ -26,6 +26,7 @@ import json
 from dataclasses import dataclass, field
 from fractions import Fraction as F
 
+from . import numbers as N
 from . import rules as R
 from .contracts import Contract, ContractError
 from .positions import OL, shortfalls
@@ -54,6 +55,9 @@ class Player:
     ir_since: int = None
     prev_club: str = None          # club whose contract just expired (free-agent movement tracking)
     snap_top: bool = False         # top quarter of her club's snaps last year (PLACEHOLDER: ranked by rating until the engine exists)
+    number: int = None             # jersey number while with a club (Ed 8.15)
+    last_club: str = None          # club and number she last held, so a same-club re-signing can take it back
+    last_number: int = None
     pool_years: int = 0            # year openings survived unsigned in the free-agent pool; reset when hired; retired at POOL_YEARS_MAX
 
     @property
@@ -118,7 +122,7 @@ class Ledger:
                                  c.ir_returns_used], default=str).encode())
         for pid in sorted(self.players):
             p = self.players[pid]
-            h.update(f"{pid}|{p.pos}|{p.ovr}|{p.club}|{p.where}|{p.contract}|{p.out_weeks}".encode())
+            h.update(f"{pid}|{p.pos}|{p.ovr}|{p.club}|{p.where}|{p.contract}|{p.out_weeks}|{p.number}".encode())
         return h.hexdigest()
 
     # ---------- money
@@ -225,6 +229,80 @@ class Ledger:
         return sum(1 for p in self.clubs[cid].ps if self.players[p].veteran)
 
     # ---------- transactions
+    # ---------- jersey numbers
+    def _relaxed(self):
+        return self.phase in ("offseason", "camp")
+
+    def _taken(self, cid, but=None):
+        return {self.players[i].number for i in self.clubs[cid].all_pids() if i != but and self.players[i].number is not None}
+
+    def _give_number(self, cid, p, prefer=None):
+        """Give `p` (already on `cid`'s lists) a number: keep `prefer` if free and legal, else the lowest open one. A player in her own
+        block has priority: if only overflow holders stand in the way, one of them is moved to another number."""
+        relaxed = self._relaxed()
+        taken = self._taken(cid, but=p.pid)
+        n = N.choose(p.pos, taken, relaxed, prefer)
+        if n is None or (not N.is_primary(p.pos, n) and n != prefer and not relaxed):
+            lo, hi = N.PRIMARY[p.pos]
+            for i in sorted(self.clubs[cid].all_pids()):
+                q = self.players[i]
+                if i != p.pid and q.number is not None and lo <= q.number <= hi and not N.is_primary(q.pos, q.number):
+                    other = N.choose(q.pos, taken | {q.number}, relaxed)
+                    if other is not None:
+                        q.number, n = other, q.number
+                        break
+        if n is None:
+            raise Rejected(f"no jersey number open for {p.pos} at {cid}")
+        p.number = n
+
+    def plan_numbers(self, cid):
+        """In-season numbering of a club: ({pid: new number} for players whose number changes, [pids who cannot get a legal one]).
+        Players holding a number in their own block keep it; players with none (or an illegal or shared one) are placed next, so a
+        primary player takes precedence over an overflow holder; overflow holders keep theirs if still free."""
+        c = self.clubs[cid]
+        taken, keep, fresh, overflow = set(), set(), [], []
+        for pid in sorted(c.all_pids()):
+            p = self.players[pid]
+            n = p.number
+            if n is not None and N.is_primary(p.pos, n) and n not in taken:
+                taken.add(n)
+            elif n is not None and N.legal(p.pos, n) and n not in taken:
+                overflow.append(p)
+            else:
+                fresh.append(p)
+        new, bad = {}, []
+        for p in fresh:
+            n = N.choose(p.pos, taken)
+            if n is None:
+                bad.append(p.pid)
+            else:
+                new[p.pid] = n
+                taken.add(n)
+        for p in overflow:
+            if p.number not in taken:
+                taken.add(p.number)
+                continue
+            n = N.choose(p.pos, taken)
+            if n is None:
+                bad.append(p.pid)
+            else:
+                new[p.pid] = n
+                taken.add(n)
+        return new, bad
+
+    def number_room(self, cid, pos):
+        """Could one more player at `pos` hold a legal in-season number at `cid`? (Used by autopilots before signing in camp.)"""
+        new, bad = self.plan_numbers(cid)
+        if bad:
+            return False
+        taken = {self.players[i].number for i in self.clubs[cid].all_pids() if i not in new and self.players[i].number is not None}
+        return N.choose(pos, taken | set(new.values())) is not None
+
+    def _release_number(self, p, cid):
+        if p.number is not None:
+            p.last_club, p.last_number = cid, p.number
+        p.number = None
+
     def sign(self, cid, pid, contract, slot="roster"):
         p = self.players[pid]
 
@@ -242,6 +320,7 @@ class Ledger:
             p.contract, p.club, p.where = contract, cid, slot
             p.pool_years = 0
             getattr(self.clubs[cid], slot).append(pid)
+            self._give_number(cid, p, prefer=p.last_number if p.last_club == cid else None)
             if p.prev_club is not None and self.phase in ("offseason", "camp"):
                 if p.prev_club != cid:
                     self.fa_moves.append({"pid": pid, "from": p.prev_club, "to": cid, "base": contract.years[0],
@@ -279,6 +358,7 @@ class Ledger:
             if p.seasons >= R.VESTED_SEASONS:      # a vested veteran is not subject to waivers
                 del self.waivers[pid]
                 p.where, p.club, p.contract = "fa", None, None
+                self._release_number(p, cid)
             else:
                 p.where = "waivers"
             self.log("release", club=cid, pid=pid, split=split, dead={str(y): str(v) for y, v in charges.items()})
@@ -304,6 +384,7 @@ class Ledger:
                     continue
             if not took:
                 p.where, p.club, p.contract = "fa", None, None
+                self._release_number(p, w["from"])
                 del self.waivers[pid]
         return claimed
 
@@ -321,6 +402,7 @@ class Ledger:
             p.contract = w["contract"].assumed_by_receiver(self.year, self.week)
             p.club, p.where = cid, "roster"
             self.clubs[cid].roster.append(pid)
+            self._give_number(cid, p, prefer=p.number)
             del self.waivers[pid]
             self.log("claim", club=cid, pid=pid, from_club=src)
         self._txn([cid, src], [pid], go, "claim")
@@ -355,6 +437,9 @@ class Ledger:
                         raise Rejected("only the next three uncompleted drafts' picks are tradable")
                     self.clubs[src].picks.remove(pk)
                     self.clubs[dst].picks.add(pk)
+            for src, dst, gives in ((a, b, a_gives), (b, a, b_gives)):
+                for pid in sorted(gives):
+                    self._give_number(dst, self.players[pid], prefer=self.players[pid].number)
             for c in (a, b):
                 cl = self.clubs[c]
                 if self.phase in ("offseason", "camp"):
@@ -438,6 +523,12 @@ class Ledger:
         short = shortfalls(counts)
         if short:
             raise Rejected(f"{cid}: positional minimums not met {short}")
+        # the final cut ends the camp relaxation: anyone whose number is outside her blocks is given a legal one
+        new, bad = self.plan_numbers(cid)
+        if bad:
+            raise Rejected(f"{cid}: no legal jersey number for {sorted({self.players[i].pos for i in bad})}")
+        for pid, n in new.items():
+            self.players[pid].number = n
         self.log("cut_down", club=cid)
 
     def complete_draft(self):
@@ -506,6 +597,7 @@ class Ledger:
                 if p.contract.end_year < self.year:
                     self._lists(c.cid)[p.where].remove(pid)
                     p.prev_club = c.cid
+                    self._release_number(p, c.cid)
                     p.contract, p.club, p.where = None, None, "fa"
             c.dead = {y: v for y, v in c.dead.items() if y >= self.year}
             c.ir_returns_used = 0

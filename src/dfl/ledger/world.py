@@ -152,11 +152,42 @@ class World:
                 pool = self.fas(want)
             if not L.room(cid, "roster"):
                 self.drop_weakest(cid, avoid=pos, slots=("roster",))
+            if not L.number_room(cid, want):         # her block is full of surplus players: make a number free first
+                self.release_for_number(cid, want)
             if not self.try_sign(cid, pool[0], "roster", Contract(L.year, (R.MIN_SALARY,), (), (), L.week)):
                 # a club at the cap makes room: release the surplus-position player whose release relieves the cap most
                 if not self.make_cap_room(cid, avoid=pos):
                     return False
         return False
+
+    def release_for_number(self, cid, pos):
+        """Free a jersey number for `pos`: release the weakest surplus player competing for the same numbers (her own block, or any
+        player standing in a number she could use), preferring an injured one. Players needed for a league minimum are kept."""
+        from . import numbers as N
+        L = self.L
+        c = L.clubs[cid]
+        ranges = [N.PRIMARY[pos]] + ([N.OVERFLOW[pos]] if pos in N.OVERFLOW else [])
+        have = self.counts(cid, ("roster",), healthy=True)
+        req = dict(MINIMUMS, HB=3)
+        cand = []
+        for pid in c.roster + c.ps + c.ir:
+            q = L.players[pid]
+            if q.where == "roster" and q.out_weeks == 0 and have.get(q.pos, 0) <= req.get(q.pos, 0):
+                continue
+            if q.pos == pos or N.PRIMARY[q.pos] == N.PRIMARY[pos] or (q.number is not None and any(N.in_range(q.number, r) for r in ranges)):
+                cand.append(q)
+        if not cand:
+            return False
+        def relief(x):          # prefer a release that does not raise the cap number (a bonus accelerating onto this year can)
+            k = x.contract
+            return k.cap_hit(L.year) - k.release_charges(L.year, L.week).get(L.year, F(0))
+        q = min(cand, key=lambda x: (relief(x) < 0, x.out_weeks == 0, self.value(x), x.pid))
+        try:
+            L.release(cid, q.pid)
+        except Rejected as e:
+            self._reject("release", e)
+            return False
+        return True
 
     def make_cap_room(self, cid, avoid=None):
         """Release one player (not needed to meet a minimum) whose release lowers the cap number. False if none exists."""
@@ -342,7 +373,13 @@ class World:
         L = self.L
         while len(L.clubs[cid].ps) < R.PS_MAX and L.room(cid, "ps"):
             vets = L.ps_veterans(cid) >= R.PS_VETERANS_MAX
-            pool = [p for p in self.fas() if p.ovr < 62 and not (vets and p.veteran)]
+            room = {}
+
+            def numbered(pos):
+                if pos not in room:
+                    room[pos] = L.number_room(cid, pos)
+                return room[pos]
+            pool = [p for p in self.fas() if p.ovr < 62 and not (vets and p.veteran) and numbered(p.pos)]
             if not pool:
                 break
             if not self.try_sign(cid, pool[0], "ps", Contract(L.year, (R.MIN_SALARY,), (), (), L.week)):
@@ -376,6 +413,15 @@ class World:
                 if best is None:
                     break
                 L.release(cid, best.pid)
+                continue
+            _, unnumbered = L.plan_numbers(cid)
+            if unnumbered:          # more players at a position than it has jersey numbers: shed the weakest of that position
+                pos = L.players[unnumbered[0]].pos
+                if self.release_for_number(cid, pos):
+                    continue
+                weakest = min((L.players[i] for i in c.roster + c.ps + c.ir if L.players[i].pos == pos),
+                              key=lambda q: (q.out_weeks == 0, self.value(q), q.pid))      # an injured player frees a number without costing a healthy body
+                L.release(cid, weakest.pid)
                 continue
             if shortfalls(self.counts(cid, ("roster",))):
                 self.fix_minimums(cid)
