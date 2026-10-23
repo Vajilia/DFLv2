@@ -70,7 +70,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **100-year rerun under Ed 8.18 with cards, development and the engine (seed 1): PASS.** 4,900 events in order, 100 validator passes with 0 failures, 77,600 game days, 0 forfeits, 0 short-handed, 0 emergency lists, 0 legal-move failures, 33,600 draft picks made and 0 unsigned, 2,878 trades (47 refused), 890 waiver claims, 0 compensatory picks (placeholder prices rarely reach $75), 48 distinct Coronation venues, digest `3fdd57a78389...`, 3,520 s.
 
 ## Phase 4 first pass: fairness bands (2026-10-23)
-- **Built:** `src/dfl/fairness.py`, `tools/fairness.py`, `data/fairness/BANDS.csv` (v1's 15 bands, owner-accepted 2026-10-04), 12 tests. Six leagues of 36 seasons on the living league: **10 PASS, 2 FAIL, 3 UNCLEAR.** The failures are win % spread (0.205 against 0.19) and a missing v2 rule for returners' second draft (24% top-16 picks against 10%). Full table, definitions and caveats in `docs/FAIRNESS.md`. Nothing was tuned. Two owner decisions are waiting (ceiling on win % spread; restore the v1 returner draft rule).
+- **Built:** `src/dfl/fairness.py`, `tools/fairness.py`, `data/fairness/BANDS.csv` (v1's 15 bands, owner-accepted 2026-10-04), 12 tests. Six leagues of 36 seasons on the living league. First pass (Ed 8.18): 10 PASS, 2 FAIL, 3 UNCLEAR; the owner then restored the v1 returner draft rule (Ed 8.19) and the re-measure gives **13 PASS, 1 FAIL (win % spread 0.207 against 0.19), 1 UNCLEAR (exile effect)**. Full tables, definitions and caveats in `docs/FAIRNESS.md`. One owner decision is waiting: the ceiling on win % spread.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).
