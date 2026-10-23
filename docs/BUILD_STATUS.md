@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.7.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.8.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -33,9 +33,9 @@ The placeholder resolver can exercise structure, standings and rotation. It is *
 | Rosters, practice squad, IR, cut to 53, floor supplement, viability gate, rollback | `src/dfl/ledger/ledger.py`; unit-tested |
 | Game day: active 48/47, elevations, emergency list, forfeit test | `src/dfl/ledger/gameday.py`; unit-tested |
 | Determinism (same seed, same digest across hash seeds) | tested |
-| 100-year soak, 48 clubs (2 bonus-heavy), seed 1, placeholder world | **PASS** in 2,075 s: 86,400 games, 0 forfeits, 0 legal-move failures, 32 short-handed games, 9 emergency lists, 2,387 trades (13 refused), 992 waiver claims, 1,189 floor supplements. Final digest `49a0b5eb38da...`. CI runs a 3-year version. |
+| 100-year soak, 48 clubs (2 bonus-heavy), seed 1, placeholder world | Passed under Ed 8.7 rules (86,400 games, 0 forfeits, 0 legal-move failures). **Re-run under Ed 8.8 (no floor, cap binds from the final cut) is in progress**; a 6-year 48-club run passed (0 forfeits, 0 legal-move failures). CI runs a 3-year version. |
 
-Read the soak honestly: "invariant never violated" means every club is inside the limit at each season start and at each year-end audit, and no move ever worsened an over-limit year. Within a season clubs drift over the limit as earned salary accrues (peak committed 1,380 against a 735 limit, margin minimum -405; overage peak 130). Floor supplements are exempt from the gate (A3). The world driving the soak is a placeholder, so rates (supplements, trades, injuries) say nothing about realism.
+Read the soak honestly: "invariant never violated" means every club is inside the limit at each season start and at each year-end audit, and no move ever worsened an over-limit year. Within a season clubs drift over the limit as earned salary accrues (peak committed 1,380 against a 735 limit, margin minimum -405; overage peak 130). The world driving the soak is a placeholder, so rates (supplements, trades, injuries) say nothing about realism.
 
 ## Not built yet (next)
 1. (Ledger is done; see above.)

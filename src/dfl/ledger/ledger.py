@@ -1,14 +1,17 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.7, sections 11, 12, 17)
+Principles (Design Document 8.8, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
-  * Two-tier transactions: a move is hard-rejected only if it breaks the viability invariant (or a roster rule);
-    a club left above the cap registers an overage that the next cut to 53 must clear.
+  * Cap timing (Ed 8.8): the cap is not enforced from the start of the league year until the final cut. At the final cut
+    a club must be at or under the cap; from then to year close a move that leaves a club over the cap and raises its
+    cap number is rejected. A release is never blocked by the cap (it may carry a club over; the club then cannot add
+    cap until it is back under). The viability invariant binds at all times, which is what guarantees the cut is reachable.
+  * There is no salary floor. Practice-squad salaries count against the cap.
   * Viability invariant: for the current and every committed future year,
         committed money + 48 x minimum salary + reserve <= cap          (committed money <= 735)
     "Committed money" is what the club owes in that year even if every contract were released today: dead money,
-    floor supplements, guarantees, earned base, and (this year) every unpaid bonus accelerated onto the cap.
+    guarantees, earned base, and (this year) every unpaid bonus accelerated onto the cap.
     This is the strict, worst-case reading of the document's "dead money" term (assumption A1 in docs/LEDGER.md).
     In the current year the 48 x minimum replacement cost is pro-rated to the paid weeks still to come (A2). A move is
     rejected if it leaves a year over the limit AND raises that year's committed money; a club that drifts over the
@@ -60,7 +63,6 @@ class Club:
     ps: list = field(default_factory=list)
     ir: list = field(default_factory=list)
     dead: dict = field(default_factory=dict)         # year -> dead money
-    supplement: dict = field(default_factory=dict)   # year -> floor supplement (guaranteed, counted against the cap)
     picks: set = field(default_factory=set)          # (draft_year, round, original cid)
     ir_returns_used: int = 0
     split_years: set = field(default_factory=set)
@@ -71,7 +73,7 @@ class Club:
         return self.roster + self.ps + self.ir
 
     def snapshot(self):
-        s = Club(self.cid, list(self.roster), list(self.ps), list(self.ir), dict(self.dead), dict(self.supplement),
+        s = Club(self.cid, list(self.roster), list(self.ps), list(self.ir), dict(self.dead),
                  set(self.picks), self.ir_returns_used, set(self.split_years))
         return s
 
@@ -105,7 +107,7 @@ class Ledger:
         for cid in sorted(self.clubs):
             c = self.clubs[cid]
             h.update(json.dumps([cid, c.roster, c.ps, c.ir, sorted((y, str(v)) for y, v in c.dead.items()),
-                                 sorted((y, str(v)) for y, v in c.supplement.items()), sorted(c.picks),
+                                 sorted(c.picks),
                                  c.ir_returns_used], default=str).encode())
         for pid in sorted(self.players):
             p = self.players[pid]
@@ -120,10 +122,14 @@ class Ledger:
         year = self.year if year is None else year
         c = self.clubs[cid]
         return (sum((k.cap_hit(year) for k in self.contracts_of(cid) if k), F(0))
-                + c.dead.get(year, F(0)) + c.supplement.get(year, F(0)))
+                + c.dead.get(year, F(0)))
 
     def overage(self, cid):
         return max(F(0), self.cap_number(cid) - R.CAP)
+
+    def cap_binds(self):
+        """The cap is enforced after the final cut (in season and after), not in the off-season or camp."""
+        return self.phase in ("season", "post")
 
     def committed(self, cid):
         """{year: money owed in that year if every contract were released at the start of it (this year: now)}."""
@@ -133,9 +139,6 @@ class Ledger:
             return c._cmap
         m = {}
         for y, v in c.dead.items():
-            if y >= self.year:
-                m[y] = m.get(y, F(0)) + v
-        for y, v in c.supplement.items():
             if y >= self.year:
                 m[y] = m.get(y, F(0)) + v
         for pid in c.all_pids():
@@ -167,8 +170,9 @@ class Ledger:
         return all(v <= self.limit(y) or v <= before.get(y, F(0)) for y, v in after.items())
 
     # ---------- transaction wrapper (reserve / commit)
-    def _txn(self, cids, pids, fn, label):
+    def _txn(self, cids, pids, fn, label, capcheck=True):
         before = {c: dict(self.committed(c)) for c in cids}
+        cap_before = {c: self.cap_number(c) for c in cids}
         snap_c = {c: self.clubs[c].snapshot() for c in cids}
         snap_p = {p: copy.copy(self.players[p]) for p in pids if p in self.players}
         snap_w = {k: {**v, "relief": dict(v["relief"])} for k, v in self.waivers.items()}
@@ -179,6 +183,10 @@ class Ledger:
                 self.clubs[c]._cmap = None
                 if not self._viable(c, before[c]):
                     raise Rejected(f"{label}: breaks the viability invariant for {c}")
+                if capcheck and self.cap_binds():
+                    now = self.cap_number(c)
+                    if now > R.CAP and now > cap_before[c]:
+                        raise Rejected(f"{label}: breaks the cap for {c}")
             return out
         except Exception:
             for c, s in snap_c.items():          # restore in place so references held elsewhere stay valid
@@ -248,7 +256,7 @@ class Ledger:
             self.waivers[pid] = {"from": cid, "relief": relief, "contract": p.contract}
             p.where = "waivers"
             self.log("release", club=cid, pid=pid, split=split, dead={str(y): str(v) for y, v in charges.items()})
-        self._txn([cid], [pid], go, "release")
+        self._txn([cid], [pid], go, "release", capcheck=False)
 
     def resolve_waivers(self, claim_order, wants=None):
         """One simulated day passes. `claim_order` is the priority list of club ids; `wants(cid, player)` says whether
@@ -388,7 +396,7 @@ class Ledger:
         self.phase = "camp"
 
     def cut_down(self, cid):
-        """The cut to 53 and 16: sizes, overage, positional coverage, then the floor supplement."""
+        """The final cut to 53 and 16: sizes, cap (the cap binds from here on), positional coverage. There is no salary floor."""
         c = self.clubs[cid]
         if self.phase != "camp":
             raise Rejected("not in camp")
@@ -404,13 +412,6 @@ class Ledger:
         short = shortfalls(counts)
         if short:
             raise Rejected(f"{cid}: positional minimums not met {short}")
-        num = self.cap_number(cid)
-        if num < R.FLOOR:
-            sup = R.FLOOR - num
-            assert num + sup <= R.CAP - R.RESERVE, "supplement would consume the reserve"
-            c.supplement[self.year] = c.supplement.get(self.year, F(0)) + sup
-            c._cmap = None
-            self.log("floor_supplement", club=cid, amount=str(sup))
         self.log("cut_down", club=cid)
 
     def complete_draft(self):
@@ -433,6 +434,9 @@ class Ledger:
         return True
 
     def begin_season(self):
+        over = [c for c in self.clubs if self.overage(c) > 0]
+        if over:
+            raise Rejected(f"clubs over the cap at the end of the final cut: {over}")
         self.phase, self.week = "season", 0
 
     def advance_week(self):
@@ -459,7 +463,6 @@ class Ledger:
                     self._lists(c.cid)[p.where].remove(pid)
                     p.contract, p.club, p.where = None, None, "fa"
             c.dead = {y: v for y, v in c.dead.items() if y >= self.year}
-            c.supplement = {y: v for y, v in c.supplement.items() if y >= self.year}
             c.ir_returns_used = 0
             c._cmap = None
             for rnd in range(1, 8):

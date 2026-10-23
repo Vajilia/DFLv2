@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.7 · 2026-10-22** (amends Edition 8.6; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `a43c0916ece3bd71a0de8a808b77db03f9f5876d328dc294cce032abba02e690`
+**Edition 8.8 · 2026-10-22** (amends Edition 8.7; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `6ddb13606ff276f09d7ba6059a55f4d0e939174ace0077cbdeedb0c1ff523bab`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -21,7 +21,7 @@ Single source. Nothing below repeats a figure that appears here.
 | Kickoff windows | 5 — Sat 17:30, Sun 10:00, Sun 13:00, Sun 17:30, Mon 17:30 |
 | Postseason | 14 clubs (7 per conference), 13 games |
 | Ambassador Tour | 8 clubs, 7 rounds, 28 games |
-| Cap · floor · reserve · min salary · comp threshold · CEO salary | $1,000 · $800 · $25 · $5 · $75 · $2,000 |
+| Cap · reserve · min salary · comp threshold · CEO salary | $1,000 · $25 · $5 · $75 · $2,000 |
 | Rookie scale (R1–R7) · first-round option | $25/$18/$14/$11/$9/$7/$5 · $35 |
 | Roster · practice squad · preseason ceiling · required places · Bowl places | 53 · 16 · 75 · 48 · 53 |
 | Draft | 7 rounds × 48 = 336 picks |
@@ -675,10 +675,14 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - **Emergency fill-ins (NFL defaults).** Game-day active roster 48, or 47 with fewer than 8 offensive linemen. Between games a club may place a player on injured reserve (out at least four games; at most eight players per club per season may be designated to return), elevate up to two practice-squad players for a game (each player at most three times a season; an elevated player reverts to the practice squad afterward), sign a free agent at no less than the minimum salary, or claim a waived player, each subject to the viability invariant. Nothing can be signed during a game. If no medically available player remains at a position during a game, the club's emergency list for that position supplies a dressed player, who plays out of position. Before every kickoff each club files an emergency list with at least one name for every position, including K, P, LS and QB; the engine applies its out-of-position penalty.
 - Injured reserve and suspension supply no cap relief.
 - **No banking.** Unused cap room does not carry over; each league year starts from the same cap.
-- Salary floor $800, cap $1,000, emergency reserve $25, minimum salary $5, comp qualifying threshold $75.
-- Dead money counts against the cap and toward the floor. Release or trade immediately accelerates every uncharged bonus onto the original club's current cap.
-- **Viability invariant.** For every club-year: `dead money + required-minimum roster cost (48 × $5 = $240) + reserve ≤ cap`, so **dead money ≤ $735**. Checked before every signing, release, trade and restructure, for the current and every committed future year.
-- **Two-tier transactions.** Hard-reject a move only if it breaks the invariant. Otherwise execute; a club left above the cap registers a bounded overage cleared by the next cut to 53.
+- Cap $1,000, emergency reserve $25, minimum salary $5, comp qualifying threshold $75.
+- **No salary floor.** A club may spend as little as it likes; unused room is lost (no banking). Chronic underspending is answered by fan sentiment and the recall ballot (§14), not by a payment rule.
+- **Cap timing.** The cap is not enforced from the start of the league year through camp. At the final cut to 53 and 16 every club must be at or under the cap; a cut that leaves a club over is refused, and the season cannot begin with any club over. From the final cut until the league year closes, a signing, claim, trade or restructure that leaves a club over the cap and raises its cap number is rejected. A release is never blocked by the cap (its accelerated bonus may carry a club over; it then cannot add cap until it is back under). The viability invariant binds at all times, which is what keeps the final cut reachable.
+- Practice-squad salaries count against the cap like any other salary.
+- Dead money counts against the cap. Release or trade immediately accelerates every uncharged bonus onto the original club's current cap.
+- **Viability invariant.** For every club-year: `dead money + required-minimum roster cost (48 × $5 = $240) + reserve ≤ cap`, so **dead money ≤ $735**. Checked before every signing, release, trade and restructure, for the current and every committed future year. "Dead money" here is the strict reading: everything the club would owe in that year if every contract were released at the start of it (guarantees, earned base, every uncharged bonus accelerated, and dead charges already booked). In the current year the replacement cost is pro-rated to the paid weeks still to come. A move is rejected if it leaves a year over the limit and raises that year's figure; time alone (earned salary accruing) does not freeze a club.
+- **Transactions.** A move is rejected if it breaks a roster rule, the viability invariant, or (from the final cut) the cap as stated under Cap timing. Nothing else rejects a move: no league vote and no fairness veto.
+- **Restructure.** Converts part of a current or future year's base salary into a bonus prorated evenly over the contract's remaining years (at most five). Base salary may not fall below the minimum salary. It is a transaction like any other and is subject to the viability invariant and the cap timing rule.
 - **Split release.** Once per club per league year, one release's uncharged bonus accelerates 50/50 across the current and next year instead of in full.
 - **Viability margin** = cap − dead money − minimum-roster cost − reserve, logged per club-year; flag below $50.
 - Contract shapes: steady, rising or declining. At most five covered years and five bonus proration years. Bonus is paid on signing and cap-prorated evenly. The receiving club assumes unpaid base and attached guarantees, never the bonus.
@@ -686,9 +690,8 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Rookies accept selection and sign four fixed years at $25/$18/$14/$11/$9/$7/$5. First-round option salary $35. Within-round slot rank breaks otherwise equal terms.
 - Extensions require two completed seasons and mutual consent.
 - Salary prorates over the 22 paid regular-season weeks, same denominator for active and ambassador clubs. Midseason deals pay remaining weeks only and expire at year close. Postseason-only replacements pay one salary-week equivalent.
-- At the cut to 53 a floor shortfall becomes an evenly distributed, fully guaranteed supplement counted against the cap, using exact fractional amounts and never consuming the reserve.
 - Released players enter one simulated-day waiver period. Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands.
-- Future-year minimum-salary reservations are feasibility checks, not charges, and do not count toward the floor.
+- Future-year minimum-salary reservations are feasibility checks, not charges.
 
 ## §12 Draft, trades, waivers
 - Seven rounds, 48 ordinary selections per round, 336 total.
@@ -697,7 +700,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Compensatory picks follow round seven, at most two per club and 48 league-wide. Qualifying departures require first-year base ≥ $75 and a top-quarter snap share.
 - Trade assets are named players and owned picks in the next three not-yet-completed drafts.
 - Trading opens at the global close of leadership hiring. In competition, finalise only Tuesday 00:01 through Friday 23:59 league time, ending Friday 23:59 before the first game of numbered week 9.
-- No league vote, waiting period or subjective fairness veto. A transaction that makes either club's cap illegal is rejected.
+- No league vote, waiting period or subjective fairness veto. A trade that, from the final cut, leaves either club over the cap and raises its cap number is rejected; before the final cut the cap does not apply.
 
 ## §13 Characters, AI and memory
 - All characters are female. Every character has a durable ID and an immutable creation portrait.
@@ -763,7 +766,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.7 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5 and 8.6 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.8 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6 and 8.7 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -807,6 +810,10 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §11 | injured reserve: at most 8 designated returns per club per season | owner's ruling (NFL default) | 8.7 |
 | 2026-10-22 | §0, §20 | season length target about 50 hours, non-binding | owner's ruling | 8.7 |
 | 2026-10-22 | header, §18 | reference code now the DFLv2 repository layout | repository move | 8.7 |
+| 2026-10-22 | §0, §11 | salary floor $800 and the floor supplement → removed | owner's ruling: fan sentiment and recall answer underspending | 8.8 |
+| 2026-10-22 | §11 | overage tolerated and cleared at the cut → cap unenforced until the final cut, enforced from then | owner's ruling | 8.8 |
+| 2026-10-22 | §11 | practice-squad salaries count against the cap (stated) | owner's ruling | 8.8 |
+| 2026-10-22 | §11 | viability "dead money" defined strictly; restructure defined | left to the builder by the owner; recorded in docs/LEDGER.md | 8.8 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -818,3 +825,6 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 7. Tie-game frequency: ties are excluded from records, so the order of overall wins before overall win % matters only when ties occur. Calibrate in simulation so that ties stay highly unlikely.
 8. Fill-in parameters inherited from the NFL and not yet confirmed: game-day roster 48/47, two practice-squad elevations a game and three a player a season, four-game injured reserve minimum. The out-of-position penalty belongs with engine content (item 2).
 9. Standings assumptions to confirm: higher strength of schedule and strength of victory rank higher (NFL default); a club with no decisions has a win % of 0; the seeded draw is the last resort and is rerun from a season-and-scope seed.
+10. Off-season market discipline: with no cap before the final cut, the only budget limits during free agency are the viability invariant and roster ceilings; market mechanics (item 3) must price this so clubs do not routinely sign far past what they can keep.
+11. Floor removal relies on the sentiment and recall mechanism pricing poor spending and poor results; its inputs are unbuilt (people layer). Payroll spread across clubs is a fairness-band candidate.
+12. Emergency cap borrowing (owner proposal): deferred. The viability invariant is built so that no legal roster is ever unreachable; revisit only if a real jam appears once the market exists.

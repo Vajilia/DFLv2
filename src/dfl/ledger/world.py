@@ -36,7 +36,7 @@ class World:
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
         self.stats = {"rejections": {}, "trades": 0, "trades_rejected": 0, "claims": 0, "forfeits": 0, "short_games": 0,
-                      "emergency_games": 0, "elevations": 0, "ir_moves": 0, "floor_supplements": 0, "overage_max": F(0),
+                      "emergency_games": 0, "elevations": 0, "ir_moves": 0, "offseason_overage_max": F(0), "overage_max": F(0), "payroll_min": None,
                       "margin_min": None, "games": 0, "committed_max": F(0), "legal_move_failures": 0}
         self._found()
 
@@ -185,6 +185,8 @@ class World:
         self.free_agency()
         L.start_camp()
         for cid in L.clubs:
+            self.stats["offseason_overage_max"] = max(self.stats["offseason_overage_max"], L.overage(cid))
+        for cid in L.clubs:
             self.camp(cid)
         self.top_up_pool()
         L.begin_season()
@@ -281,7 +283,7 @@ class World:
                 break
 
     def camp(self, cid):
-        """Cut to 53 and 16, clear any overage, make sure the minimums hold, then the league applies the floor."""
+        """Cut to 53 and 16, clear any overage (the cap binds from the final cut), make sure the minimums hold."""
         L = self.L
         c = L.clubs[cid]
         for _ in range(200):
@@ -321,8 +323,9 @@ class World:
         except Rejected as e:
             self._reject("cut_down", e)
             raise
-        if L.clubs[cid].supplement.get(L.year):
-            self.stats["floor_supplements"] += 1
+        pay = L.cap_number(cid)
+        if self.stats["payroll_min"] is None or pay < self.stats["payroll_min"]:
+            self.stats["payroll_min"] = pay
 
     def season(self):
         L, rng = self.L, self.rng
@@ -472,7 +475,5 @@ class World:
             c._cmap = None
             for y, v in L.committed(cid).items():
                 if y > L.year or (strict_current and y == L.year):
-                    # the floor supplement is applied at the cut and is not a signing, release, trade or restructure,
-                    # so the gate never sees it (assumption A3); everything else must be inside the limit
-                    assert v - c.supplement.get(y, 0) <= L.limit(y), f"{cid} {y}: committed {v} > {L.limit(y)}"
+                    assert v <= L.limit(y), f"{cid} {y}: committed {v} > {L.limit(y)}"
             assert len(c.roster) <= R.ROSTER_MAX and len(c.ps) <= R.PS_MAX

@@ -277,7 +277,7 @@ class Money(unittest.TestCase):
             L.restructure("A", q.pid, 198)                       # would leave 2, below the $5 minimum salary
 
 
-class CutDownAndFloor(unittest.TestCase):
+class CutDownAndCap(unittest.TestCase):
     def club(self, salary=5):
         L = Ledger(["A"])
         fill(L, "A", contract=Contract(2000, (salary,)))
@@ -285,14 +285,13 @@ class CutDownAndFloor(unittest.TestCase):
             L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (salary,)))
         return L
 
-    def test_cut_requires_sizes_coverage_and_applies_exact_floor_supplement(self):
+    def test_there_is_no_salary_floor(self):
         L = self.club()
         L.start_camp()
-        c = L.clubs["A"]
-        L.cut_down("A")
-        self.assertEqual(L.cap_number("A"), R.FLOOR)               # 53 x 5 = 265 lifted to 800
-        self.assertEqual(c.supplement[2000], R.FLOOR - 53 * 5)
-        self.assertLessEqual(L.cap_number("A"), R.CAP - R.RESERVE)  # never consumes the reserve
+        L.cut_down("A")                                            # 53 x 5 = 265, far under $800: allowed, nothing added
+        self.assertEqual(L.cap_number("A"), 53 * 5)
+        self.assertFalse(hasattr(R, "FLOOR"))
+        self.assertFalse(hasattr(L.clubs["A"], "supplement"))
 
     def test_cut_refuses_oversize_overage_and_missing_minimums(self):
         L = self.club()
@@ -309,16 +308,51 @@ class CutDownAndFloor(unittest.TestCase):
         fill(L, "A", contract=Contract(2000, (40,)))               # 48 x 40 = 1920 > cap
         L.start_camp()
         with self.assertRaises(Rejected):
-            L.cut_down("A")                                       # overage must be cleared first
+            L.cut_down("A")                                       # the cap must be met at the final cut
 
-    def test_floor_supplement_is_fractional_and_exact(self):
+    def test_cap_is_not_enforced_before_the_final_cut(self):
         L = Ledger(["A"])
-        fill(L, "A", contract=Contract(2000, (F(13, 3),) * 1 if False else (5,)))
-        for p in L.players.values():
-            pass
+        for _ in range(30):
+            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (40,)))     # 1200 of salary: over the cap, off-season
+        self.assertGreater(L.overage("A"), 0)
         L.start_camp()
-        L.cut_down("A")
-        self.assertIsInstance(L.clubs["A"].supplement[2000], F)
+        L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (40,)))         # still camp: allowed
+        self.assertFalse(L.cap_binds())
+
+    def test_begin_season_refuses_a_club_over_the_cap(self):
+        L = Ledger(["A", "B"])
+        for _ in range(30):
+            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (40,)))
+        L.start_camp()
+        with self.assertRaises(Rejected):
+            L.begin_season()
+
+    def test_in_season_signing_that_breaks_the_cap_is_rejected_but_release_is_not_blocked(self):
+        L = Ledger(["A"])
+        ps = [L.new_player("WR", 60) for _ in range(24)]
+        for p in ps:
+            L.sign("A", p.pid, Contract(2000, (40,)))              # 960
+        L.start_camp(); L.begin_season()
+        extra = L.new_player("WR", 60)
+        with self.assertRaises(Rejected):
+            L.sign("A", extra.pid, Contract(L.year, (50,), (), (), L.week))    # 1010 > cap
+        L.sign("A", extra.pid, Contract(L.year, (40,), (), (), L.week))        # 1000 is at the cap: fine
+        # a release that accelerates a bonus can leave a club over; it is never blocked by the cap
+        L2 = Ledger(["A"])
+        for p in [L2.new_player("WR", 60) for _ in range(24)]:
+            L2.sign("A", p.pid, Contract(2000, (40,)))
+        q = L2.new_player("WR", 60)
+        L2.sign("A", q.pid, Contract(2000, (30,), (), ((10, 0, 1),)))          # 960 + 40 = 1000
+        L2.start_camp(); L2.begin_season()
+        L2.release("A", q.pid)
+        self.assertLessEqual(L2.cap_number("A"), 1000)
+
+    def test_practice_squad_salary_counts_against_the_cap(self):
+        L = Ledger(["A"])
+        L.start_camp(); L.begin_season()
+        p = L.new_player("WR", 60, seasons=0)
+        L.sign("A", p.pid, Contract(L.year, (12,), (), (), L.week), "ps")
+        self.assertEqual(L.cap_number("A"), 12)
 
 
 class GameDay(unittest.TestCase):

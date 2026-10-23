@@ -1,7 +1,7 @@
-"""Constants from Design Document 8.7, sections 0 and 11. Money is exact (Fraction), in the document's units."""
+"""Constants from Design Document 8.8, sections 0 and 11. Money is exact (Fraction), in the document's units."""
 from fractions import Fraction as F
 
-CAP, FLOOR, RESERVE, MIN_SALARY = F(1000), F(800), F(25), F(5)
+CAP, RESERVE, MIN_SALARY = F(1000), F(25), F(5)
 REQUIRED_PLACES = 48
 ROSTER_MAX, PS_MAX, PS_VETERANS_MAX, PS_VETERAN_AFTER = 53, 16, 6, 2     # veteran = more than 2 credited seasons
 PRESEASON_CEILING = 75                      # roster plus practice squad before the cut
