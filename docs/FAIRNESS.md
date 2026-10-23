@@ -126,6 +126,29 @@ League 2
 - **Schedule push toward average: none.** A schedule that ignores strength still shows a slope of -0.026 (a club cannot play herself); the measured slope is -0.024, so the push is +0.002 per rating point, which across the league's strength spread (about 1.2 points) is less than 0.003 rating points of opponent strength. Opponents are chosen by last season's seed, and seed predicts strength weakly (strength repeats only 0.37 year to year). No band covers this and none is failing; if you want an actual push, the lever is how the schedule template ties opponents to place (spec section 6). I recommend leaving it alone: the bands pass without it.
 - **Exile standard (competitive for 3rd or better within about 3 seasons, never automatic):** covered by the returner bands: 81% of returners finish 3rd or better at least once in three seasons (limit 75% to 97%) and 32% make the playoffs in their first season back (limit 20% to 55%), so it is neither blocked nor automatic.
 
+## People layer slice 5.1: scouting views on (Ed 8.21), six tight leagues of 36 seasons (seeds 1 to 6)
+
+Baseline for comparison: eight pre-scouting leagues (the six Ed 8.20 leagues plus seeds 7 and 8, same code otherwise).
+
+| band | pre-scouting (8 leagues) | scouting on (6 leagues) | verdict now |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.207 ± 0.002 | 0.206 ± 0.002 | PASS |
+| year_to_year_corr | 0.196 ± 0.023 | 0.191 ± 0.024 | PASS |
+| close_game_share | 0.425 | 0.424 | PASS |
+| repeat_champion_rate | 0.062 ± 0.022 | 0.101 ± 0.034 | UNCLEAR (interval reaches 0.135 against a 0.12 ceiling) |
+| max_titles_in_20 | 2.67 | 2.48 | PASS |
+| worst_league_titles | 4 | 3 | PASS |
+| best_team_title_odds | 0.196 ± 0.033 | 0.226 ± 0.082 | UNCLEAR (6 leagues too few; 8 leagues pre-scouting passed) |
+| returner bands (6) | all PASS | all PASS | PASS |
+| exile_effect | -0.172 ± 0.352 | 0.684 ± 0.495 | UNCLEAR (point estimate above the 0.5 ceiling) |
+| exile_double_early | 0.000 | 0.000 | PASS |
+| stuck_at_bottom | 0.083 | 0.084 | PASS |
+
+Reading it honestly:
+- **No band moved outside its range with certainty**: 12 PASS, 3 UNCLEAR, 0 FAIL. The three unclear bands are each a noisy ratio or rare-event measure; they were unclear in some earlier six-league runs too (best_team_title_odds, exile_effect), so six leagues cannot separate a real move from noise.
+- **The core measures did not move**: win % spread 0.206, year-to-year correlation 0.191 against 0.196, schedule push +0.004 per rating point (still none). Scouting error at the placeholder size is **close to inert** for competitive balance: clubs were already near-random choosers for other reasons (prices, cap, roster churn), and they were not far enough from the truth before to be hurt by an error of this size. Do not read it as proof that smarter clubs will be harmless. Persistence has not risen, so the test of "smarter clubs raise persistence" is still ahead (coaches, GMs, negotiation).
+- **Watch list**: exile_effect (point estimate 0.68 against a ceiling of 0.5, interval 0.19 to 1.18) and repeat_champion_rate (0.101 against 0.12). Next step is more leagues with scouting on (seeds 7 to 12) if either persists; if exile_effect stays above the ceiling with 12 leagues it becomes a real finding to report, not a thing to tune away.
+
 ## Parity test beds (src/dfl/parity.py): can the bands see unfairness?
 v1 defines two profiles: **tight** (the rules as written) and **none** (no salary or fairness regulation). Two 36-season leagues each (seeds 21, 22), compared with the tight result above. In v2 `none` removes the salary cap and the end-of-block rule for returners (the lottery stays: returners have no standing to draft by). I added a third bed, `rigged`, as a control rather than a design option: no cap, and two clubs always shop first in free agency.
 

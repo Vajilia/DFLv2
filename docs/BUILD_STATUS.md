@@ -76,7 +76,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 
 ## People layer, slice 5.1: scouting views (Ed 8.21, 2026-10-23)
 - **Built:** every club decision about players (draft, free agency, releases, practice squad, waivers) uses a noisy club view instead of true ability; error shrinks with credited seasons and the club GM's evaluation rating, and is smaller for a club's own players. Data: `data/characters/SCOUTING.csv`, `SCOUTING_BIAS.csv` (placeholders). 5 tests in `tests/test_living.py`. Plan for the rest of the layer: `docs/PEOPLE.md`.
-- **Not yet:** game day and the engine still use true ability (spec item 22). Fairness re-measure with scouting on is recorded in `docs/FAIRNESS.md` once run.
+- **Not yet:** game day and the engine still use true ability (spec item 22). Fairness re-measure with scouting on (six tight leagues): 12 PASS, 3 UNCLEAR, 0 FAIL; the core measures did not move (`docs/FAIRNESS.md`). Watch: exile effect, repeat champion rate.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).
