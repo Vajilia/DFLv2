@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.13 · 2026-10-23** (amends Edition 8.12; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `193f0d41cba0d568b4e5794f33df8b361ed7c21d6a51fe0eeb302ae7f977a753`
+**Edition 8.14 · 2026-10-23** (amends Edition 8.13; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `9546b38dc1fd9c5f2c2300b25dd74fb5b503dfbe1dce4d4c10b4950323cab2c5`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -704,6 +704,10 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Removed: incentives, roster bonuses, June 1 designation, franchise tag, restricted and exclusive-rights free agency, no-trade clauses, conditional compensation, cap-space trades.
 - Rookie reserve (NFL rookie-pool principle): until a draft pick is made, the pick's rookie-scale cap hit (rounds 8 and 9 at the round-7 scale, $5) counts in the owning club's cap number for the year of that draft, so a club always keeps room to sign its class; the reserve moves with a traded pick and is replaced by the real contract when the pick is made. It adds no committed money, because rookie contracts carry no guarantees.
 - Rookies accept selection and sign four fixed years at $25/$18/$14/$11/$9/$7/$5. First-round option salary $35. Within-round slot rank breaks otherwise equal terms.
+- **Jersey numbers (Edition 8.14).** A number tells a viewer the position. Primary blocks: 1-9 K, P, LS · 10-14 QB · 15-19 TE · 20-29 CB · 30-39 HB, FB · 40-49 FS, SS · 50-59 ROLB, MLB, LOLB · 60-79 LT, LG, C, RG, RT · 80-89 WR · 90-99 LE, RE, DT. Zero and double zero are not used. A number is unique among everyone on a club's roster, practice squad and injured reserve.
+  - *Overflow*, only when the primary block is full: WR may use open numbers 15-19, TE open 80-89, LB open 40-49, DL open 70-79. A player in her primary block has priority: an overflow holder is reassigned when a primary player needs her number.
+  - *Camp*: before the final cut any open number from 1 to 99 is legal. At the final cut anyone outside her primary and overflow blocks is reassigned.
+  - Capacity check: a normal 53 plus 16 needs at most 10 numbers in any block, and WR and TE together fit comfortably with the overflow.
 - Extensions require two completed seasons and mutual consent.
 - Salary prorates over the 22 paid regular-season weeks, same denominator for active and ambassador clubs. Midseason deals pay remaining weeks only and expire at year close. Postseason-only replacements pay one salary-week equivalent.
 - Released players enter one simulated-day waiver period, except a player with the §0 number of credited seasons or more, who goes straight to free agency (NFL vested-veteran rule); her guarantees and bonus stay with the releasing club. Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands.
@@ -790,7 +794,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.13 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11 and 8.12 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.14 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12 and 8.13 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -847,6 +851,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-23 | §13 | four consecutive seasons in a pool ended active candidacy → at four consecutive years she retires permanently and is removed from the list; being hired resets the clock | owner's ruling (keeps the database from bloating) | 8.12 |
 | 2026-10-23 | §11 | added the rookie reserve: unmade picks count at the rookie scale in the cap number | owner approved the builder's recommendation (the NFL's rookie-pool principle); unsigned draft picks were 2.5% of picks in the 100-year test | 8.12 |
 | 2026-10-23 | §13 | character card defined: identity fixed, hidden attributes/growth/traits, public view, per-card seeded creation, 672-player classes with a class-strength shift, founding league | owner asked for a creator built from scratch on current ideas and left the card design to the builder | 8.13 |
+| 2026-10-23 | §11 | jersey-number blocks by position (QB 10-14, TE 15-19, WR 80-89), overflow blocks, unique per club, camp relaxation | owner's ranges; builder's capacity check and overflow recommendation, accepted by the owner | 8.14 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -866,3 +871,4 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 15. Character attributes, their means and the age curve are placeholders until the engine (Phase 3) says which attributes it uses and how; the attribute list and every distribution are data in `data/characters/` and may change. Overall ratings are not yet comparable across positions (a calibration job for Phase 3/4).
 16. Appearance: the creation look is immutable; whether and how a character visibly ages is decided in presentation (Phase 7), by redrawing from the stored look.
 17. Leader pools and hiring (four willing candidates per role, §13) use the same creator and the four-year pool rule; the hiring market itself is people-layer work (Phase 5).
+18. Jersey numbers still to decide: who owns a number (the card carries none; the builder proposes it belongs to the player's contract record for the year), whether clubs may retire numbers and on what honour, whether an exiled club's numbers carry over to its return, and number assignment for rookies and traded players (the builder proposes the NFL's: veterans first, a traded player keeps her number if free).
