@@ -126,6 +126,60 @@ League 2
 - **Schedule push toward average: none.** A schedule that ignores strength still shows a slope of -0.026 (a club cannot play herself); the measured slope is -0.024, so the push is +0.002 per rating point, which across the league's strength spread (about 1.2 points) is less than 0.003 rating points of opponent strength. Opponents are chosen by last season's seed, and seed predicts strength weakly (strength repeats only 0.37 year to year). No band covers this and none is failing; if you want an actual push, the lever is how the schedule template ties opponents to place (spec section 6). I recommend leaving it alone: the bands pass without it.
 - **Exile standard (competitive for 3rd or better within about 3 seasons, never automatic):** covered by the returner bands: 81% of returners finish 3rd or better at least once in three seasons (limit 75% to 97%) and 32% make the playoffs in their first season back (limit 20% to 55%), so it is neither blocked nor automatic.
 
+## Parity test beds (src/dfl/parity.py): can the bands see unfairness?
+v1 defines two profiles: **tight** (the rules as written) and **none** (no salary or fairness regulation). Two 36-season leagues each (seeds 21, 22), compared with the tight result above. In v2 `none` removes the salary cap and the end-of-block rule for returners (the lottery stays: returners have no standing to draft by). I added a third bed, `rigged`, as a control rather than a design option: no cap, and two clubs always shop first in free agency.
+
+**none (no cap, no returner block):**
+
+| band | measured (mean ± 2 SE) | allowed | verdict |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.245 ± 0.000 | 0.13 to 0.21 | FAIL |
+| year_to_year_corr | 0.373 ± 0.013 | 0.1 to 0.5 | PASS |
+| close_game_share | 0.346 ± 0.006 | 0.35 to 0.55 | UNCLEAR |
+| repeat_champion_rate | 0.339 ± 0.107 | 0.0 to 0.12 | FAIL |
+| max_titles_in_20 | 6.500 ± 6.111 | 0.0 to 4.7 | UNCLEAR |
+| worst_league_titles | 10.000 ± 0.000 | 0.0 to 7.0 | FAIL |
+| best_team_title_odds | 0.571 ± 0.214 | 0.08 to 0.25 | FAIL |
+| returner_avg_finish | 3.277 ± 0.071 | 2.8 to 3.4 | PASS |
+| returner_win_div | 0.181 ± 0.022 | 0.1 to 0.3 | PASS |
+| returner_fifth_again | 0.312 ± 0.009 | 0.1 to 0.3 | FAIL |
+| returner_top3_in_3 | 0.736 ± 0.019 | 0.75 to 0.97 | UNCLEAR |
+| returner_playoff_first | 0.308 ± 0.054 | 0.2 to 0.55 | PASS |
+| exile_effect | 0.407 ± 0.460 | -0.5 to 0.5 | UNCLEAR |
+| exile_double_early | 0.299 ± 0.027 | 0.0 to 0.1 | FAIL |
+| stuck_at_bottom | 0.104 ± 0.008 | 0.0 to 0.1 | UNCLEAR |
+
+Schedule push toward average: opponents' mean strength per point of own strength, slope 0.030 (a schedule that ignores strength gives -0.026, because a club never plays herself), so the push is +0.056 per point; correlation 0.117; league slopes 0.034, 0.027. Positive push = stronger clubs face tougher schedules.
+
+**rigged (control):**
+
+| band | measured (mean ± 2 SE) | allowed | verdict |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.244 ± 0.005 | 0.13 to 0.21 | FAIL |
+| year_to_year_corr | 0.434 ± 0.025 | 0.1 to 0.5 | PASS |
+| close_game_share | 0.341 ± 0.004 | 0.35 to 0.55 | FAIL |
+| repeat_champion_rate | 0.607 ± 0.071 | 0.0 to 0.12 | FAIL |
+| max_titles_in_20 | 13.111 ± 3.111 | 0.0 to 4.7 | FAIL |
+| worst_league_titles | 15.000 ± 0.000 | 0.0 to 7.0 | FAIL |
+| best_team_title_odds | 0.625 ± 0.036 | 0.08 to 0.25 | FAIL |
+| returner_avg_finish | 3.263 ± 0.080 | 2.8 to 3.4 | PASS |
+| returner_win_div | 0.152 ± 0.018 | 0.1 to 0.3 | PASS |
+| returner_fifth_again | 0.268 ± 0.045 | 0.1 to 0.3 | UNCLEAR |
+| returner_top3_in_3 | 0.764 ± 0.067 | 0.75 to 0.97 | UNCLEAR |
+| returner_playoff_first | 0.286 ± 0.071 | 0.2 to 0.55 | PASS |
+| exile_effect | -0.175 ± 0.408 | -0.5 to 0.5 | UNCLEAR |
+| exile_double_early | 0.259 ± 0.009 | 0.0 to 0.1 | FAIL |
+| stuck_at_bottom | 0.107 ± 0.019 | 0.0 to 0.1 | UNCLEAR |
+
+Schedule push toward average: opponents' mean strength per point of own strength, slope 0.056 (a schedule that ignores strength gives -0.026, because a club never plays herself), so the push is +0.082 per point; correlation 0.213; league slopes 0.049, 0.063. Positive push = stronger clubs face tougher schedules.
+
+**Reading it.**
+- **The harness can see unfairness.** The rigged control fails 8 of 15 bands (title concentration 13 in 20 seasons against a 4.7 limit; the strongest club wins 63% of titles; repeat champions 61%). A league that is fair by construction would not do that.
+- **Removing the cap alone is enough to fail 5 bands**: win % spread 0.245, repeat champions 34%, the strongest club winning 57% of titles, one club taking 10 titles in 20 seasons, returners finishing 5th again 31%. I expected little here, because clubs have no money or revenue yet, and I was wrong: even random stand-in clubs concentrate talent when nothing limits what they can sign. The cap is doing real parity work now, before any economy exists.
+- exile_double_early rises to 0.30 without the block rule, confirming the Ed 8.19 rule is what holds that band.
+- **Loose** (between tight and none) is not defined by v1 and would be an arbitrary cap multiple; not built. Say if you want one.
+- Limits: two leagues each; the revenue, ownership and sentiment effects wait for the people layer, so `none` here is a cap-and-draft test, not the full v1 meaning.
+
 ## Definitions the builder had to choose
 - Win percentage counts a tie as half a win. Eighteen games a club (40 active clubs, 360 games a season).
 - "Strongest on paper": the active club with the highest mean hidden rating of its best starters at each position (22 on offense and defense, K and P).
