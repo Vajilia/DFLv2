@@ -304,28 +304,51 @@ class CutDownAndCap(unittest.TestCase):
         L.start_camp()
         with self.assertRaises(Rejected):
             L.cut_down("A")                                       # no kicker
-        L = Ledger(["A"])
-        fill(L, "A", contract=Contract(2000, (40,)))               # 48 x 40 = 1920 > cap
+        L = self.club()
+        L.clubs["A"].dead[2000] = F(2000)                          # a club carried over the cap into the cut
         L.start_camp()
         with self.assertRaises(Rejected):
             L.cut_down("A")                                       # the cap must be met at the final cut
 
-    def test_cap_is_not_enforced_before_the_final_cut(self):
+    def test_cap_is_enforced_all_year_counting_only_the_top_69_before_the_cut(self):
         L = Ledger(["A"])
-        for _ in range(30):
-            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (40,)))     # 1200 of salary: over the cap, off-season
-        self.assertGreater(L.overage("A"), 0)
+        for _ in range(64):
+            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (15,)))     # 960
+        for _ in range(11):
+            L.sign("A", L.new_player("WR", 60).pid, MIN)                       # 75 players: payroll 1015, counted 985
+        self.assertEqual(L.cap_number("A"), 985)
+        self.assertGreater(sum(k.cap_hit(2000) for k in L.contracts_of("A")), R.CAP)
         L.start_camp()
-        L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (40,)))         # still camp: allowed
-        self.assertFalse(L.cap_binds())
+        L.release("A", L.clubs["A"].roster[-1])                     # a release is fine
+        L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (20,)))          # counted -> 1000: at the cap, allowed
+        with self.assertRaises(Rejected):
+            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (25,)))      # counted -> over the cap: refused
+        L2 = Ledger(["A"])
+        for _ in range(66):
+            L2.sign("A", L2.new_player("WR", 60).pid, Contract(2000, (15,)))    # 990
+        with self.assertRaises(Rejected):
+            L2.sign("A", L2.new_player("WR", 60).pid, Contract(2000, (15,)))    # the 67th hit would be counted: 1005
 
     def test_begin_season_refuses_a_club_over_the_cap(self):
         L = Ledger(["A", "B"])
-        for _ in range(30):
-            L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (40,)))
+        L.sign("A", L.new_player("WR", 60).pid, MIN)
+        L.clubs["A"].dead[2000] = F(2000)
         L.start_camp()
         with self.assertRaises(Rejected):
             L.begin_season()
+
+    def test_vested_veteran_release_skips_waivers_but_stays_on_the_books(self):
+        L = Ledger(["A", "B"])
+        vet = L.new_player("QB", 80, seasons=R.VESTED_SEASONS)
+        young = L.new_player("QB", 80, seasons=R.VESTED_SEASONS - 1)
+        for p in (vet, young):
+            L.sign("A", p.pid, Contract(2000, (20,) * 3, (20, 0, 0), ((30, 0, 3),)))
+        L.release("A", vet.pid)
+        self.assertEqual((vet.where, vet.club, vet.contract), ("fa", None, None))
+        self.assertNotIn(vet.pid, L.waivers)
+        self.assertEqual(L.clubs["A"].dead[2000], 20 + 30)         # guarantee and bonus both stay with the releasing club
+        L.release("A", young.pid)
+        self.assertEqual(young.where, "waivers")
 
     def test_in_season_signing_that_breaks_the_cap_is_rejected_but_release_is_not_blocked(self):
         L = Ledger(["A"])

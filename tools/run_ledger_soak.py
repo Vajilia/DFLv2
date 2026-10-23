@@ -45,7 +45,7 @@ def main():
         f"- result: {'PASS' if ok else 'FAIL'} (invariants audited every year; any violation aborts the run)",
         f"- final digest: `{digests[-1]}`", f"- games: {s['games']}, short-handed: {s['short_games']}, emergency lists: {s['emergency_games']}, forfeits: {s['forfeits']}",
         f"- legal-move failures: {s['legal_move_failures']}", f"- trades: {s['trades']} (rejected {s['trades_rejected']}), waiver claims: {s['claims']}",
-        f"- elevations: {s['elevations']}, IR moves: {s['ir_moves']}, lowest payroll at the cut: {float(s['payroll_min'] or 0):.1f}",
+        f"- elevations: {s['elevations']}, IR moves: {s['ir_moves']}, lowest payroll at the cut: {float(s['payroll_min'] or 0):.1f}, draft picks the club could not sign: {s['unsigned_picks']}",
         f"- overage max in season: {float(s['overage_max']):.1f}, before the final cut: {float(s['offseason_overage_max']):.1f}, committed max: {float(s['committed_max']):.1f}, viability margin min: {float(s['margin_min'] or 0):.1f}",
         f"- run time: {secs:.0f}s", "", "## Rejections (the gate working)", ""] + [f"- {v:5d}  {k}" for k, v in rej.items()]
     out = "\n".join(lines) + "\n"

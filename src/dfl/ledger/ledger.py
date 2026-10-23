@@ -1,12 +1,14 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.8, sections 11, 12, 17)
+Principles (Design Document 8.9, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
-  * Cap timing (Ed 8.8): the cap is not enforced from the start of the league year until the final cut. At the final cut
-    a club must be at or under the cap; from then to year close a move that leaves a club over the cap and raises its
-    cap number is rejected. A release is never blocked by the cap (it may carry a club over; the club then cannot add
-    cap until it is back under). The viability invariant binds at all times, which is what guarantees the cut is reachable.
+  * Cap timing (Ed 8.9): the cap is enforced all year. Until the final cut a club's cap number counts only its 69 highest
+    cap hits plus dead money (the NFL's top-51 rule, adapted); afterwards every contract counts. A move that leaves a
+    club over the cap and raises its cap number is rejected; a release is never blocked by the cap (it may carry a club
+    over; the club then cannot add cap until it is back under). At the final cut every club must be at or under the cap.
+    The viability invariant binds at all times, which is what guarantees the cut is reachable.
+  * Waivers (Ed 8.9): a player with 4 or more credited seasons who is released goes straight to free agency.
   * There is no salary floor. Practice-squad salaries count against the cap.
   * Viability invariant: for the current and every committed future year,
         committed money + 48 x minimum salary + reserve <= cap          (committed money <= 735)
@@ -121,15 +123,14 @@ class Ledger:
     def cap_number(self, cid, year=None):
         year = self.year if year is None else year
         c = self.clubs[cid]
-        return (sum((k.cap_hit(year) for k in self.contracts_of(cid) if k), F(0))
-                + c.dead.get(year, F(0)))
+        hits = [k.cap_hit(year) for k in self.contracts_of(cid) if k]
+        if year == self.year and self.phase in ("offseason", "camp") and len(hits) > R.CAP_COUNTED_BEFORE_CUT:
+            hits = sorted(hits, reverse=True)[:R.CAP_COUNTED_BEFORE_CUT]
+        return sum(hits, F(0)) + c.dead.get(year, F(0))
 
     def overage(self, cid):
         return max(F(0), self.cap_number(cid) - R.CAP)
 
-    def cap_binds(self):
-        """The cap is enforced after the final cut (in season and after), not in the off-season or camp."""
-        return self.phase in ("season", "post")
 
     def committed(self, cid):
         """{year: money owed in that year if every contract were released at the start of it (this year: now)}."""
@@ -183,7 +184,7 @@ class Ledger:
                 self.clubs[c]._cmap = None
                 if not self._viable(c, before[c]):
                     raise Rejected(f"{label}: breaks the viability invariant for {c}")
-                if capcheck and self.cap_binds():
+                if capcheck:
                     now = self.cap_number(c)
                     if now > R.CAP and now > cap_before[c]:
                         raise Rejected(f"{label}: breaks the cap for {c}")
@@ -234,7 +235,7 @@ class Ledger:
         return {"roster": c.roster, "ps": c.ps, "ir": c.ir}
 
     def release(self, cid, pid, split=False):
-        """Release a player: charges become dead money; she enters waivers (resolve with `resolve_waivers`)."""
+        """Release a player: charges become dead money; she enters waivers (resolve with `resolve_waivers`), unless she has 4+ credited seasons, when she goes straight to free agency."""
         p = self.players[pid]
 
         def go():
@@ -254,7 +255,11 @@ class Ledger:
             # a guarantee claimed by another club leaves this club; the bonus never does
             self._lists(cid)[p.where].remove(pid)
             self.waivers[pid] = {"from": cid, "relief": relief, "contract": p.contract}
-            p.where = "waivers"
+            if p.seasons >= R.VESTED_SEASONS:      # a vested veteran is not subject to waivers
+                del self.waivers[pid]
+                p.where, p.club, p.contract = "fa", None, None
+            else:
+                p.where = "waivers"
             self.log("release", club=cid, pid=pid, split=split, dead={str(y): str(v) for y, v in charges.items()})
         self._txn([cid], [pid], go, "release", capcheck=False)
 

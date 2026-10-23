@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.8 · 2026-10-22** (amends Edition 8.7; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `6ddb13606ff276f09d7ba6059a55f4d0e939174ace0077cbdeedb0c1ff523bab`
+**Edition 8.9 · 2026-10-22** (amends Edition 8.8; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `b79a70906008708811d9542905c9e008501a91c5f2c3b0075cafbd50aa46b8e1`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -24,6 +24,7 @@ Single source. Nothing below repeats a figure that appears here.
 | Cap · reserve · min salary · comp threshold · CEO salary | $1,000 · $25 · $5 · $75 · $2,000 |
 | Rookie scale (R1–R7) · first-round option | $25/$18/$14/$11/$9/$7/$5 · $35 |
 | Roster · practice squad · preseason ceiling · required places · Bowl places | 53 · 16 · 75 · 48 · 53 |
+| Contracts counted against the cap before the final cut · credited seasons that exempt a released player from waivers | 69 (53 + 16) · 4 |
 | Draft | 7 rounds × 48 = 336 picks |
 | Bracket winner paths · halls · directional relationships | 8,192 · 59 · 2,256 |
 | Draft class size · pool floor per position · leadership candidates per role | 672 · 8 · 4 |
@@ -85,7 +86,7 @@ calendar_week,phase,numbered_week,saturday,sunday,monday,note
 ## §3 League structure
 - Two conferences (Western, Eastern), four divisions each, six clubs per division: five active and one ambassador.
 - **Exile and seeds.** After the last regular-season game, each division's five active clubs are ranked by the tiebreak cascade below. Ranks 1–4 become the next season's seeds 1–4. The last-place club is exiled: it is the next season's ambassador, and exile cannot be declined. The current ambassador returns as seed 5, so every division has seeds 1–5 and one ambassador every year. Season 1 seeds are drawn by chance.
-- **Tiebreak cascade.** It orders every ranking: divisions, playoff seeding and the exile decision. Steps run in this order, each used only while clubs remain tied: (1) overall wins; (2) overall win %; (3) division wins; (4) division win %; (5) conference wins; (6) conference win %; (7) strength of schedule; (8) point differential; (9) strength of victory; then a seeded draw. Steps 3–4 apply only when every tied club is in the same division, and steps 5–6 only when every tied club is in the same conference. A tied group is sorted once by the whole cascade; there is no step-by-step reduction.
+- **Tiebreak cascade.** It orders every ranking: divisions, playoff seeding and the exile decision. Steps run in this order, each used only while clubs remain tied: (1) overall wins; (2) overall win %; (3) division wins; (4) division win %; (5) conference wins; (6) conference win %; (7) strength of schedule; (8) point differential; (9) strength of victory; then a seeded draw. Steps 3–4 apply only when every tied club is in the same division, and steps 5–6 only when every tied club is in the same conference. A tied group is sorted once by the whole cascade; there is no step-by-step reduction. The cascade is deliberately a list of columns, so every step can be shown beside each club on the standings page in this order; it intentionally has no head-to-head step and no restart (owner ruling, Edition 8.9).
 - **Records.** A tied game counts as not played in the standings only: it adds no win or loss, no division or conference record, and is left out of every win % and every opponent list (so out of strength of schedule and strength of victory). For statistical purposes it is played: games played, points scored and points allowed include it, and so does point differential. Win % = wins ÷ (wins + losses), counted as 0 when a club has no decisions. Strength of schedule = the combined win % of every opponent played (their total wins ÷ their total wins and losses, once per game played); strength of victory = the same for every opponent beaten; for both, a higher figure ranks higher. Point differential = points scored minus points allowed over all regular-season games. Ambassadors' Tour results play no part.
 - **Playoffs.** Identical to the NFL's. Seven clubs per conference: the four division winners (seeds 1–4) and the three best other clubs (seeds 5–7), all ordered by the cascade. Seed 1 has a bye. Wild card round: 2 v 7, 3 v 6, 4 v 5. Divisional round: seed 1 plays the lowest remaining seed and the other two survivors meet. Then the conference championships, then the Diamond Coronation between the two conference champions. A division's last-place club is exiled and cannot take a wild card. Playoff games are played at the higher seed's home venue. The Coronation's venue is chosen by a fictitious fan vote held in June and announced on 4 July from the 48 DFL club venues; no venue may host the Coronation twice within a rolling 40-year window, which leaves nine eligible venues each year. The vote is decided by a seeded random draw among the nine eligible venues. If a finalist's own venue wins the vote, it plays at home.
 - Ambassadors keep identity, full roster obligations and full cap, play the 7-game Tour, and receive a first-round lottery band.
@@ -677,7 +678,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - **No banking.** Unused cap room does not carry over; each league year starts from the same cap.
 - Cap $1,000, emergency reserve $25, minimum salary $5, comp qualifying threshold $75.
 - **No salary floor.** A club may spend as little as it likes; unused room is lost (no banking). Chronic underspending is answered by fan sentiment and the recall ballot (§14), not by a payment rule.
-- **Cap timing.** The cap is not enforced from the start of the league year through camp. At the final cut to 53 and 16 every club must be at or under the cap; a cut that leaves a club over is refused, and the season cannot begin with any club over. From the final cut until the league year closes, a signing, claim, trade or restructure that leaves a club over the cap and raises its cap number is rejected. A release is never blocked by the cap (its accelerated bonus may carry a club over; it then cannot add cap until it is back under). The viability invariant binds at all times, which is what keeps the final cut reachable.
+- **Cap timing (adapted from the NFL's top-51 rule).** The cap is enforced all year. From the start of the league year until the final cut to 53 and 16, a club's cap number is dead money plus its highest cap hits, counting only the §0 number of contracts; the extra camp bodies do not count. From the final cut until the league year closes every contract counts. A signing, claim, trade or restructure that leaves a club over the cap and raises its cap number is rejected. A release is never blocked by the cap (its accelerated bonus may carry a club over; it then cannot add cap until it is back under). At the final cut every club must be at or under the cap, a cut that leaves a club over is refused, and the season cannot begin with any club over. The viability invariant binds at all times, which is what keeps the final cut reachable.
 - Practice-squad salaries count against the cap like any other salary.
 - Dead money counts against the cap. Release or trade immediately accelerates every uncharged bonus onto the original club's current cap.
 - **Viability invariant.** For every club-year: `dead money + required-minimum roster cost (48 × $5 = $240) + reserve ≤ cap`, so **dead money ≤ $735**. Checked before every signing, release, trade and restructure, for the current and every committed future year. "Dead money" here is the strict reading: everything the club would owe in that year if every contract were released at the start of it (guarantees, earned base, every uncharged bonus accelerated, and dead charges already booked). In the current year the replacement cost is pro-rated to the paid weeks still to come. A move is rejected if it leaves a year over the limit and raises that year's figure; time alone (earned salary accruing) does not freeze a club.
@@ -690,7 +691,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Rookies accept selection and sign four fixed years at $25/$18/$14/$11/$9/$7/$5. First-round option salary $35. Within-round slot rank breaks otherwise equal terms.
 - Extensions require two completed seasons and mutual consent.
 - Salary prorates over the 22 paid regular-season weeks, same denominator for active and ambassador clubs. Midseason deals pay remaining weeks only and expire at year close. Postseason-only replacements pay one salary-week equivalent.
-- Released players enter one simulated-day waiver period. Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands.
+- Released players enter one simulated-day waiver period, except a player with the §0 number of credited seasons or more, who goes straight to free agency (NFL vested-veteran rule); her guarantees and bonus stay with the releasing club. Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands.
 - Future-year minimum-salary reservations are feasibility checks, not charges.
 
 ## §12 Draft, trades, waivers
@@ -700,7 +701,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Compensatory picks follow round seven, at most two per club and 48 league-wide. Qualifying departures require first-year base ≥ $75 and a top-quarter snap share.
 - Trade assets are named players and owned picks in the next three not-yet-completed drafts.
 - Trading opens at the global close of leadership hiring. In competition, finalise only Tuesday 00:01 through Friday 23:59 league time, ending Friday 23:59 before the first game of numbered week 9.
-- No league vote, waiting period or subjective fairness veto. A trade that, from the final cut, leaves either club over the cap and raises its cap number is rejected; before the final cut the cap does not apply.
+- No league vote, waiting period or subjective fairness veto. A trade that leaves either club over the cap and raises its cap number is rejected.
 
 ## §13 Characters, AI and memory
 - All characters are female. Every character has a durable ID and an immutable creation portrait.
@@ -766,7 +767,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.8 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6 and 8.7 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.9 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7 and 8.8 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -814,6 +815,9 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §11 | overage tolerated and cleared at the cut → cap unenforced until the final cut, enforced from then | owner's ruling | 8.8 |
 | 2026-10-22 | §11 | practice-squad salaries count against the cap (stated) | owner's ruling | 8.8 |
 | 2026-10-22 | §11 | viability "dead money" defined strictly; restructure defined | left to the builder by the owner; recorded in docs/LEDGER.md | 8.8 |
+| 2026-10-22 | §11 | no cap until the final cut → cap enforced all year, counting only the highest 69 contracts before the final cut | owner's ruling: defer to the NFL's top-51 method; stops free-agency hoarding | 8.9 |
+| 2026-10-22 | §11, §12 | every released player goes through waivers → a player with 4 or more credited seasons goes straight to free agency | owner's ruling: NFL vested-veteran rule | 8.9 |
+| 2026-10-22 | §3 | tiebreak cascade confirmed as written; rationale recorded (columns shown on the standings page) | owner's ruling; the NFL's head-to-head, restart and common-games steps are deliberately not adopted | 8.9 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -825,6 +829,6 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 7. Tie-game frequency: ties are excluded from records, so the order of overall wins before overall win % matters only when ties occur. Calibrate in simulation so that ties stay highly unlikely.
 8. Fill-in parameters inherited from the NFL and not yet confirmed: game-day roster 48/47, two practice-squad elevations a game and three a player a season, four-game injured reserve minimum. The out-of-position penalty belongs with engine content (item 2).
 9. Standings assumptions to confirm: higher strength of schedule and strength of victory rank higher (NFL default); a club with no decisions has a win % of 0; the seeded draw is the last resort and is rerun from a season-and-scope seed.
-10. Off-season market discipline: with no cap before the final cut, the only budget limits during free agency are the viability invariant and roster ceilings; market mechanics (item 3) must price this so clubs do not routinely sign far past what they can keep.
+10. Calibrate the pre-cut cap count (§0) once the market exists: it is adapted from the NFL's top 51 of a 90-player camp roster, and the ratio does not carry over exactly. Also decide whether drafted rookies need a reserved allowance, as the NFL's rookie pool provides (none of the placeholder soak's draft picks went unsigned).
 11. Floor removal relies on the sentiment and recall mechanism pricing poor spending and poor results; its inputs are unbuilt (people layer). Payroll spread across clubs is a fairness-band candidate.
 12. Emergency cap borrowing (owner proposal): deferred. The viability invariant is built so that no legal roster is ever unreachable; revisit only if a real jam appears once the market exists.

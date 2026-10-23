@@ -36,7 +36,7 @@ class World:
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
         self.stats = {"rejections": {}, "trades": 0, "trades_rejected": 0, "claims": 0, "forfeits": 0, "short_games": 0,
-                      "emergency_games": 0, "elevations": 0, "ir_moves": 0, "offseason_overage_max": F(0), "overage_max": F(0), "payroll_min": None,
+                      "emergency_games": 0, "elevations": 0, "ir_moves": 0, "unsigned_picks": 0, "offseason_overage_max": F(0), "overage_max": F(0), "payroll_min": None,
                       "margin_min": None, "games": 0, "committed_max": F(0), "legal_move_failures": 0}
         self._found()
 
@@ -245,6 +245,7 @@ class World:
                     slot = "roster"
                 if not L.room(owner, slot) or not self.try_sign(owner, pick, slot, c):
                     pick.where = "fa"        # unsigned draftee becomes a free agent
+                    self.stats["unsigned_picks"] += 1
                 L.clubs[owner].picks.discard((L.year, rnd, orig))
         for p in pool:
             if p.where == "draft":

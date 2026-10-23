@@ -1,9 +1,11 @@
-"""Constants from Design Document 8.8, sections 0 and 11. Money is exact (Fraction), in the document's units."""
+"""Constants from Design Document 8.9, sections 0 and 11. Money is exact (Fraction), in the document's units."""
 from fractions import Fraction as F
 
 CAP, RESERVE, MIN_SALARY = F(1000), F(25), F(5)
 REQUIRED_PLACES = 48
 ROSTER_MAX, PS_MAX, PS_VETERANS_MAX, PS_VETERAN_AFTER = 53, 16, 6, 2     # veteran = more than 2 credited seasons
+CAP_COUNTED_BEFORE_CUT = ROSTER_MAX + PS_MAX                           # Ed 8.9: top-N rule (NFL top 51 of 90, adapted)
+VESTED_SEASONS = 4                                                      # Ed 8.9: released at 4+ credited seasons skips waivers
 PRESEASON_CEILING = 75                      # roster plus practice squad before the cut
 PAID_WEEKS = 22                             # salary prorates over 22 paid regular-season weeks
 IR_MIN_GAMES, IR_RETURNS_MAX = 4, 8
