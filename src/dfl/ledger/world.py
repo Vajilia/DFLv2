@@ -203,26 +203,48 @@ class World:
         return None
 
     # ---------- the year
-    def step_year(self, first=False):
-        L, rng = self.L, self.rng
+    # Each method below is one calendar event (calendar.py); step_year runs them back to back for the ledger soak and
+    # year.py fires them on their dates.
+    def open_year(self, first=False):
+        """Offseason opens: the league year turns, contracts expire, retirements take effect."""
         if not first:
-            L.new_year()
+            self.L.new_year()
         self.age_and_retire(skip=first)
         self.top_up_pool()
+
+    def free_agency_open(self):
         self.pre_draft_trim()
-        self.draft()
         self.free_agency()
-        L.start_camp()
-        for cid in L.clubs:
-            self.stats["offseason_overage_max"] = max(self.stats["offseason_overage_max"], L.overage(cid))
-        for cid in L.clubs:
+
+    def camp_open(self):
+        self.L.start_camp()
+        for cid in self.L.clubs:
+            self.stats["offseason_overage_max"] = max(self.stats["offseason_overage_max"], self.L.overage(cid))
+
+    def final_cuts(self):
+        for cid in self.L.clubs:
             self.camp(cid)
         self.top_up_pool()
-        L.begin_season()
+
+    def start_season(self):
+        self.L.begin_season()
         self.audit(strict_current=True)          # every club starts the season viable
-        self.season()
-        L.end_season()
+
+    def end_season(self):
+        self.L.end_season()
         self.audit()
+
+    def step_year(self, first=False):
+        self.open_year(first)
+        self.free_agency_open()
+        self.start_draft()
+        self.draft_rounds(range(1, 8))
+        self.finish_draft()
+        self.camp_open()
+        self.final_cuts()
+        self.start_season()
+        self.season()
+        self.end_season()
 
     def age_and_retire(self, skip=False):
         L = self.L
@@ -243,7 +265,7 @@ class World:
     def pre_draft_trim(self):
         L = self.L
         for cid in L.clubs:
-            while len(L.clubs[cid].roster) + len(L.clubs[cid].ps) > 68:
+            while len(L.clubs[cid].roster) + len(L.clubs[cid].ps) > R.PRESEASON_CEILING - 9:     # room for 7 picks + 2 comps
                 if not self.drop_weakest(cid, keep_minimums=False):
                     break
         # waivers clear
@@ -251,35 +273,52 @@ class World:
         self.rng.shuffle(order)
         self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: p.ovr > 62 and self.rng.random() < 0.3))
 
-    def draft(self):
+    def start_draft(self, order=None, comps=()):
+        """Create the class and put the compensatory picks (rounds 8 and 9) into their owners' hands."""
+        from .. import draft as D
         L, rng = self.L, self.rng
-        pool = []
+        self._pool = []
         for _ in range(672):
             pos = rng.choice([p for p, n in TEMPLATE.items() for _ in range(n)])
-            pool.append(self.new_prospect(pos, 56, 9, rng.randint(21, 23)))
-        for p in pool:
+            self._pool.append(self.new_prospect(pos, 56, 9, rng.randint(21, 23)))
+        for p in self._pool:
             p.where = "draft"
-        for rnd in range(1, 8):
+        if order is None:
             order = sorted(L.clubs)
             rng.shuffle(order)
-            for orig in order:
-                owner = next(cid for cid, c in L.clubs.items() if (L.year, rnd, orig) in c.picks)
-                avail = sorted((p for p in pool if p.where == "draft"), key=lambda q: (-q.ovr, q.pid))
-                needy = {pos for _, pos in self.need(owner, ("roster", "ps"))}
-                pick = next((p for p in avail[:40] if p.pos in needy), avail[0])
-                pick.where = "fa"
-                c = rookie_contract(L.year, rnd, first_round_option=(rnd == 1))
-                slot = "roster" if len(L.clubs[owner].roster) < 62 else "ps"
-                if slot == "ps" and not L.room(owner, "ps"):
-                    slot = "roster"
-                if not L.room(owner, slot) or not self.try_sign(owner, pick, slot, c):
-                    pick.where = "fa"        # unsigned draftee becomes a free agent
-                    self.stats["unsigned_picks"] += 1
-                L.clubs[owner].picks.discard((L.year, rnd, orig))
-        for p in pool:
+        self._slots = D.full_slots(L.year, order, comps)
+        for rnd, _, club in self._slots:
+            if rnd > D.ROUNDS:
+                L.clubs[club].picks.add((L.year, rnd, club))
+
+    def draft_rounds(self, rounds):
+        L = self.L
+        rounds = set(rounds)
+        for rnd, _, orig in self._slots:
+            if rnd not in rounds:
+                continue
+            owner = next(cid for cid, c in L.clubs.items() if (L.year, rnd, orig) in c.picks)
+            avail = sorted((p for p in self._pool if p.where == "draft"), key=lambda q: (-q.ovr, q.pid))
+            needy = {pos for _, pos in self.need(owner, ("roster", "ps"))}
+            pick = next((p for p in avail[:40] if p.pos in needy), avail[0])
+            pick.where = "fa"
+            c = rookie_contract(L.year, min(rnd, 7), first_round_option=(rnd == 1))
+            slot = "roster" if len(L.clubs[owner].roster) < 62 else "ps"
+            if slot == "ps" and not L.room(owner, "ps"):
+                slot = "roster"
+            if not L.room(owner, slot):
+                self.drop_weakest(owner)          # a club cuts a veteran to sign its pick
+            if not L.room(owner, slot) or not self.try_sign(owner, pick, slot, c):
+                pick.where = "fa"        # unsigned draftee becomes a free agent
+                self.stats["unsigned_picks"] += 1
+            L.clubs[owner].picks.discard((L.year, rnd, orig))
+            self.stats["picks_made"] = self.stats.get("picks_made", 0) + 1
+
+    def finish_draft(self):
+        for p in self._pool:
             if p.where == "draft":
                 p.where = "fa"
-        L.complete_draft()
+        self.L.complete_draft()
 
     def free_agency(self):
         L, rng = self.L, self.rng
@@ -287,7 +326,8 @@ class World:
             self.fix_minimums(cid)
             budget_floor = R.CAP - R.RESERVE - F(90)
             for _ in range(40):
-                if not L.room(cid, "roster") or L.cap_number(cid) >= budget_floor and cid not in self.reckless:
+                if (not L.room(cid, "roster") or L.cap_number(cid) >= budget_floor and cid not in self.reckless
+                        or len(L.clubs[cid].roster) + len(L.clubs[cid].ps) >= R.PRESEASON_CEILING - 9):    # leave room for 7 picks + 2 comps
                     break
                 needy = [pos for _, pos in self.need(cid)] or list(TEMPLATE)
                 pos = rng.choice(needy)
@@ -358,27 +398,32 @@ class World:
             self.stats["payroll_min"] = pay
 
     def season(self):
-        L, rng = self.L, self.rng
         for week in range(1, R.PAID_WEEKS + 1):
-            L.advance_week()
-            self.injuries()
-            for cid in L.clubs:
-                self.weekly(cid, week)
-            if week <= 18:
-                self.games(week)
-            if week <= R.TRADE_LAST_PAID_WEEK:
-                self.trades()
-            order = sorted(L.clubs)
-            rng.shuffle(order)
-            self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: p.ovr > 65 and rng.random() < 0.2))
-            self.top_up_pool()
-            for cid in L.clubs:
-                self.stats["overage_max"] = max(self.stats["overage_max"], L.overage(cid))
-                m = L.viability_margin(cid)
-                self.stats["margin_min"] = m if self.stats["margin_min"] is None else min(self.stats["margin_min"], m)
-                self.stats["committed_max"] = max(self.stats["committed_max"], max(L.committed(cid).values(), default=F(0)))
-                if week % 3 == 1 and not self.legal_move_exists(cid):
-                    self.stats["legal_move_failures"] += 1
+            self.play_paid_week(week, None)
+
+    def play_paid_week(self, week, playing):
+        """One paid week (regular or break): clock, injuries, club upkeep, game days for the clubs that play, trades,
+        waivers, audits. `playing` is the set of clubs with a game this week (None: every club, for the soak)."""
+        L, rng = self.L, self.rng
+        L.advance_week()
+        assert L.week == week, (L.week, week)
+        self.injuries()
+        for cid in L.clubs:
+            self.weekly(cid, week)
+        self.games(week, playing)
+        if week <= R.TRADE_LAST_PAID_WEEK:
+            self.trades()
+        order = sorted(L.clubs)
+        rng.shuffle(order)
+        self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: p.ovr > 65 and rng.random() < 0.2))
+        self.top_up_pool()
+        for cid in L.clubs:
+            self.stats["overage_max"] = max(self.stats["overage_max"], L.overage(cid))
+            m = L.viability_margin(cid)
+            self.stats["margin_min"] = m if self.stats["margin_min"] is None else min(self.stats["margin_min"], m)
+            self.stats["committed_max"] = max(self.stats["committed_max"], max(L.committed(cid).values(), default=F(0)))
+            if week % 3 == 1 and not self.legal_move_exists(cid):
+                self.stats["legal_move_failures"] += 1
 
     def injuries(self):
         L, rng = self.L, self.rng
@@ -428,14 +473,15 @@ class World:
             self.try_sign(cid, pool[0], "roster", Contract(L.year, (R.MIN_SALARY,), (), (), L.week))
             break
 
-    def games(self, week):
+    def games(self, week, playing=None):
         L = self.L
-        for cid in L.clubs:
+        for cid in (sorted(L.clubs) if playing is None else sorted(playing)):
             before = sum(p.elevations for p in L.players.values() if p.club == cid and p.where == "ps")
             gd = gameday.build(L, cid)
             after = sum(p.elevations for p in L.players.values() if p.club == cid and p.where == "ps")
             self.stats["elevations"] += after - before
             self.stats["games"] += 1
+            self.stats.setdefault("games_by_week", {})[week] = self.stats.get("games_by_week", {}).get(week, 0) + 1
             if gd.short:
                 self.stats["short_games"] += 1
             if gd.emergency:

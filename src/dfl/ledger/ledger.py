@@ -52,6 +52,8 @@ class Player:
     out_weeks: int = 0
     elevations: int = 0
     ir_since: int = None
+    prev_club: str = None          # club whose contract just expired (free-agent movement tracking)
+    snap_top: bool = False         # top quarter of her club's snaps last year (PLACEHOLDER: ranked by rating until the engine exists)
 
     @property
     def veteran(self):
@@ -88,6 +90,7 @@ class Ledger:
         self.players = {}
         self.waivers = {}              # pid -> dict(from=cid, relief={year: amount})
         self.events = []
+        self.fa_moves = []             # free agents who changed clubs this offseason (feeds compensatory picks)
         self._next_pid = 1
         for c in cids:
             for y in range(year, year + 3):
@@ -177,7 +180,7 @@ class Ledger:
         snap_c = {c: self.clubs[c].snapshot() for c in cids}
         snap_p = {p: copy.copy(self.players[p]) for p in pids if p in self.players}
         snap_w = {k: {**v, "relief": dict(v["relief"])} for k, v in self.waivers.items()}
-        n_events = len(self.events)
+        n_events, n_moves = len(self.events), len(self.fa_moves)
         try:
             out = fn()
             for c in cids:
@@ -197,6 +200,7 @@ class Ledger:
                 self.players[p].__dict__.update(s.__dict__)
             self.waivers = snap_w
             del self.events[n_events:]
+            del self.fa_moves[n_moves:]
             raise
 
     # ---------- roster counts
@@ -226,6 +230,11 @@ class Ledger:
                 raise Rejected("practice squad veteran limit")
             p.contract, p.club, p.where = contract, cid, slot
             getattr(self.clubs[cid], slot).append(pid)
+            if p.prev_club is not None and self.phase in ("offseason", "camp"):
+                if p.prev_club != cid:
+                    self.fa_moves.append({"pid": pid, "from": p.prev_club, "to": cid, "base": contract.years[0],
+                                          "snap_top_quarter": p.snap_top})
+                p.prev_club = None
             self.log("sign", club=cid, pid=pid, slot=slot, cap_hit=str(contract.cap_hit(self.year)))
         self._txn([cid], [pid], go, "sign")
         return p
@@ -461,11 +470,18 @@ class Ledger:
         IR returns reset; old dead money drops off; nothing is banked."""
         self.year += 1
         self.week, self.phase = 0, "offseason"
+        self.fa_moves = []
+        for p in self.players.values():
+            p.prev_club = None
         for c in self.clubs.values():
+            ranked = sorted(c.all_pids(), key=lambda i: (-self.players[i].ovr, i))
+            top = set(ranked[:max(1, len(ranked) // 4)])
             for pid in list(c.all_pids()):
                 p = self.players[pid]
+                p.snap_top = pid in top
                 if p.contract.end_year < self.year:
                     self._lists(c.cid)[p.where].remove(pid)
+                    p.prev_club = c.cid
                     p.contract, p.club, p.where = None, None, "fa"
             c.dead = {y: v for y, v in c.dead.items() if y >= self.year}
             c.ir_returns_used = 0
