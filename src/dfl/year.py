@@ -4,9 +4,11 @@
 and cap ledger (`ledger.world.World`: contracts, draft, free agency, cuts, weeks) and fires every event of
 `calendar.year_events(year)` on its date, in order. Club ids are the league's team_city names.
 
-Everything about player quality, prices and injuries is still the ledger's PLACEHOLDER world, and games are decided by the
-placeholder resolver. What this module proves is structure: that every event of the year fires once, in order, with the
-right preconditions, for as many years as you care to run.
+Players are character cards (founding league, draft classes, pool top-ups from the `Creator`; yearly development, aging and
+retirement), games are played by the engine from the squads the ledger dresses (`engine=True`, the default; `engine=False` uses the
+placeholder resolver), and the engine's injuries go back into the ledger. Prices and the clubs' decisions are still the autopilot's
+placeholders. This module proves that every event of the year fires once, in order, with the right preconditions, for as many years
+as you care to run, and it is the living league that fairness is measured on.
 """
 import random
 
@@ -14,16 +16,17 @@ from . import calendar as C
 from . import draft, league, standings
 from .ledger import rules as R
 from .ledger.world import World
+from .engine.ledger_engine import LedgerEngine
 from .resolver import PlaceholderResolver
 
 
 class Universe:
-    def __init__(self, tables, seed=1, reckless=2):
+    def __init__(self, tables, seed=1, reckless=2, engine=True):
         self.tpl = league.Template(tables)
         self.clubs = sorted(t["team_city"] for t in self.tpl.teams)
-        self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR)
+        self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR, engine_injuries=engine)
         self.state = self.tpl.initial_state()
-        self.resolver = PlaceholderResolver()
+        self.resolver = LedgerEngine(self.world) if engine else PlaceholderResolver()
         self.rng = random.Random(f"{seed}|league")
         self.seed_str = f"dfl{seed}"
         self.history = {}
@@ -150,15 +153,19 @@ class Universe:
         self.world.end_season()
         self.run.finish_regular()
         self.run.play_round("wild_card")
+        self.world.heal_round()
 
     def on_divisional(self, year, date, key):
         self.run.play_round("divisional")
+        self.world.heal_round()
 
     def on_conference_championships(self, year, date, key):
         self.run.play_round("conference")
+        self.world.heal_round()
 
     def on_ambassador_bowl(self, year, date, key):
         self.run.play_bowl()
+        self.world.heal_round()
 
     def on_coronation(self, year, date, key):
         c = self.run.play_coronation()

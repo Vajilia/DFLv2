@@ -44,8 +44,9 @@ class Staff:
 
 
 class Squad:
-    def __init__(self, cid, cards, staff=None):
+    def __init__(self, cid, cards, staff=None, ratings=None):
         self.cid = cid
+        self.ratings = ratings or {}      # card id -> hidden true overall, when the caller keeps them current (saves recomputing)
         self.cards = {c.identity.id: c for c in cards}
         self.staff = staff or Staff()
         self.out = set()                 # ids injured in this game
@@ -57,7 +58,7 @@ class Squad:
     def _rate(self, c):
         i = c.identity.id
         if i not in self._rating:
-            self._rating[i] = overall(c)
+            self._rating[i] = self.ratings[i] if i in self.ratings else overall(c)
         return self._rating[i]
 
     def available(self, pos):
@@ -114,7 +115,9 @@ class Squad:
                     0.35 * mean(wmean(c, {"TAK": 60, "AWR": 20, "SPD": 20}) for c in lb) +
                     0.15 * mean(wmean(c, {"TAK": 70, "AWR": 30}) for c in db),
         }
-        k, p = self.available("K"), self.available("P")
+        # with no kicker or punter dressed (an emergency), the best leg among the rest takes the kick
+        legs = lambda w: max(self.cards.values(), key=lambda c: (wmean(c, w), -c.identity.id))
+        k, p = self.available("K") or [legs({"KPW": 40, "KAC": 60})], self.available("P") or [legs({"KPW": 60, "KAC": 40})]
         u["kick"] = wmean(k[0], {"KPW": 40, "KAC": 60})
         u["punt"] = wmean(p[0], {"KPW": 60, "KAC": 40})
         z = {n: (u[n] - P.get("mean_" + n, P["mean_kick"] if n == "punt" else 70)) / P.get("sd_" + n, P["sd_kick"] if n == "punt" else 5) for n in u}

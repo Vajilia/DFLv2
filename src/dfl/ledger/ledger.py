@@ -1,6 +1,6 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.17, sections 11, 12, 17)
+Principles (Design Document 8.18, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
   * Cap timing (Ed 8.9): the cap is enforced all year. Until the final cut a club's cap number counts only its 69 highest
@@ -107,10 +107,15 @@ class Ledger:
     def log(self, kind, **kw):
         self.events.append({"id": len(self.events) + 1, "year": self.year, "week": self.week, "kind": kind, **kw})
 
-    def new_player(self, pos, ovr, age=24, seasons=0):
-        p = Player(self._next_pid, pos, ovr, age, seasons)
+    def new_player(self, pos, ovr, age=24, seasons=0, pid=None):
+        """Register a player. With `pid` (a character card's id) the ledger uses that id; otherwise it numbers her itself."""
+        if pid is None:
+            pid = self._next_pid
+        if pid in self.players:
+            raise Rejected(f"player id {pid} is already in use")
+        p = Player(pid, pos, ovr, age, seasons)
         self.players[p.pid] = p
-        self._next_pid += 1
+        self._next_pid = max(self._next_pid, pid + 1)
         return p
 
     def digest(self):

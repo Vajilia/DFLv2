@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.17 · 2026-10-23** (amends Edition 8.16; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `26a6d7fc28b6ab3052dde684206656c5252777fcb42f6a0daec557c8f83e050a`
+**Edition 8.18 · 2026-10-23** (amends Edition 8.17; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `8aa0af610bb39d59a77facac5612582543112cfe56779e28d428e8bb57ee94cd`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -740,7 +740,12 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
   - *Draft class*: 672 prospects aged 21 to 23, at least 12 at every position, remaining places shared by how many of each position a club carries. Each class has its own strength shift (some classes are weak, some strong); this is a fairness parameter, set in data.
   - *Founding league*: each club gets a 53, a 16-player practice squad, six leaders and the pool gets at least 8 per position; veterans are spread over ages 21 to 34 with talent shifted up (survivors). All players are adults.
   - Slots for the 32 detailed memories and the sparse directed relationship map exist on the card and are filled by the people layer.
-- Retirement takes effect at offseason opening. Development and aging curves are data, not narrative.
+- **Development, aging and retirement (Edition 8.18).** Cards change once a year, at offseason opening, and never during a season. The curves are data (`data/characters/AGE_CURVE.csv`, `DEVELOPMENT.csv`) and are placeholders until the owner rules on them (§20 item 3).
+  - *Development*: the age curve gives a multiplier by years from the card's own peak age (below 1 before the peak, 1 around it, falling after). Each year every attribute is multiplied by the curve at her new age divided by the curve at her old age, so a card climbs to the potential she was created with at her peak and declines after it. How fully an attribute follows the curve depends on its kind: physical attributes fully, learned skills mostly, mental attributes little (so awareness and composure hold up with age). Before her peak she also gains her hidden remaining ceiling, spread over the years left to the peak. Work ethic speeds growth and slows decline; her personal volatility scales the yearly random change. Leaders do not develop until the people layer builds their careers.
+  - *Retirement*: only a free agent can retire at an offseason opening. Nothing happens before six years past her own peak; then the chance rises each year, is higher for a low true overall, and is certain at age 40. The four-year pool rule above also applies and is unchanged. A retired character leaves the list and her name becomes free. A player under contract does not retire (§20 item 19).
+  - *Injuries* are made by the engine and written back to the club's ledger; they heal 26 weeks over the offseason (data).
+  - *Squads*: a club's squad for a game is exactly its game-day active list (§11), as cards, with its coaches' ratings; elevations and emergency players included. The engine reads cards; it holds no second copy of any roster.
+  - *Market floor (builder's default)*: a free agent does not sign for far less than her market price; only players priced at or near the league minimum sign for it. Greed, ambition and loyalty in negotiation are people-layer work (§20 item 3).
 
 ## §14 Fans, governance, expectations
 - Each club has a fan card representing one million fans. Three viewpoints are seeded between 20 and 50 percent and normalised.
@@ -797,7 +802,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.17 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15 and 8.16 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.18 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16 and 8.17 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -858,11 +863,12 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-23 | §11 | jersey-number stewardship: assigned on joining, kept while with the club (through exile), freed on leaving; no retired numbers | owner's ruling | 8.15 |
 | 2026-10-23 | §10, §20 | engine build order: rules core and play-level resolver first, spatial engine later behind the same interface; items 2 and 7 updated with slice-1 results | owner chose the recommended path | 8.16 |
 | 2026-10-23 | §20 | tie-game frequency item closed: the measured rate (about 1.5% of regular-season games) is accepted and the overtime rule stands | owner's ruling ("accept the rates") | 8.17 |
+| 2026-10-23 | §13, §20 | development, aging and retirement defined and built on placeholder curve data; the engine squad is the ledger's game-day active list; market floor default; open items 19 and 20 added | owner said "start away" on connecting cards to the ledger; curves are the builder's placeholders pending a ruling | 8.18 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
 2. Engine content: play catalogue, numeric route landmarks, blocking rules, coverage responsibilities, ball flight, injury and fatigue models. Slice 1 (play-level resolver, clock and rules core, injuries, calibration harness) is built; formations, blocking, coverage, ball flight, fatigue and challenges remain for the spatial engine.
-3. Negotiation and market-clearing mechanics; development, aging and retirement curves.
+3. Negotiation and market-clearing mechanics. Development, aging and retirement are built (§13, Edition 8.18) on placeholder curves in data; the owner has not yet ruled on their numbers.
 4. Bowl roster repair mechanism when a position shortfall occurs.
 5. The real-time to simulated-time mapping under deterministic pacing (target about 50 hours a season, non-binding).
 6. §19 promises a stable ID on every rule; none are assigned yet, so the changelog uses section references.
@@ -878,3 +884,5 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 16. Appearance: the creation look is immutable; whether and how a character visibly ages is decided in presentation (Phase 7), by redrawing from the stored look.
 17. Leader pools and hiring (four willing candidates per role, §13) use the same creator and the four-year pool rule; the hiring market itself is people-layer work (Phase 5).
 18. Jersey numbers: none open. The same-club re-signing reclaim and lowest-open assignment are the builder's defaults (change on request).
+19. Retirement of a player under contract: nothing retires while signed, so a player can finish a contract at an age when a free agent would already have retired, and a retirement mid-contract (cap treatment, dead money, voided years) has no rule yet. Needs an owner ruling when the market exists.
+20. Talent economy: the free-agent pool stays large (about 2,600 characters in the living-league measurement, mostly undrafted draftees and released veterans waiting out the four-year rule), the stand-in clubs choose players by true overall (real clubs will work from scouting estimates, §13), and prices are a placeholder curve. Whether the pool size, the draft-to-veteran talent gap and rookie-scale surplus keep the league fair is the Phase 4 measurement.

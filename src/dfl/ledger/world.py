@@ -1,11 +1,17 @@
-"""Synthetic world for exercising the ledger: player supply, a deterministic autopilot, a year loop and audits.
+"""A living world around the ledger: players come from character cards, develop, age and retire; a deterministic autopilot
+(the stand-in for clubs' decisions) pushes the ledger through realistic volumes of signings, releases, trades, injuries and cuts.
 
-EVERYTHING in this file about players (ratings, aging, injuries, prices) is a PLACEHOLDER MODEL. It exists to push the
-ledger through realistic volumes of signings, releases, trades, injuries and cuts. It is not evidence about league balance.
+Players are character cards (`characters`): the founding league, every draft class and every top-up of the free-agent pool are
+made by the `Creator`; a card's hidden attributes develop each year by `characters.development`. What is STILL PLACEHOLDER here:
+the autopilot's decisions (it ranks players by their true overall, where real clubs will work from scouting estimates), prices
+(`ask`), the random injuries of players who are not playing (the engine injures those who are), and leaders, who do not yet age or
+change clubs (the people layer). It is not evidence about league balance by itself; measure balance with the engine running.
 """
 import random
 from fractions import Fraction as F
 
+from ..characters import Creator, load_tables
+from ..characters.development import develop, retire_chance
 from . import gameday, rules as R
 from .contracts import Contract, ContractError, rookie_contract
 from .ledger import Ledger, Rejected
@@ -22,27 +28,61 @@ PS_TEMPLATE = tuple("MLB" if p == "LB" else p for p in PS_TEMPLATE)
 assert len(PS_TEMPLATE) == 16
 
 
+PRICE_BASE = 60          # PLACEHOLDER: overall at which a player is worth more than the minimum
+
+
 def ask(player):
     """Market annual value of a player (placeholder price curve)."""
-    v = 5 + max(0, player.ovr - 55) * F(16, 10)
+    v = 5 + max(0, player.ovr - PRICE_BASE) * F(16, 10)
     if player.pos == "QB":
         v *= F(3, 2)
     return F(int(v))
 
 
 class World:
-    def __init__(self, cids, seed=1, reckless=(), year=2000):
+    def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False):
         self.rng = random.Random(seed)
+        self.dev_rng = random.Random(f"{seed}|develop")
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
+        self.tables = tables or load_tables()
+        self.creator = Creator(seed, self.tables)
+        self.cards = {}                  # player id -> Card, for everyone in the ledger (the id is the card id)
+        self.rating = {}                 # player id -> hidden true overall (float), refreshed when the card develops
+        self.leaders = {}                # club -> {role: Card}; they do not age or move yet (people layer)
+        self.active = {}                 # club -> GameDay of its latest game
+        self.active_week = {}
+        self.engine_injuries = engine_injuries     # True: the engine injures players who play; the random model keeps to the rest
         self.stats = {"rejections": {}, "trades": 0, "trades_rejected": 0, "claims": 0, "forfeits": 0, "short_games": 0,
                       "emergency_games": 0, "elevations": 0, "ir_moves": 0, "unsigned_picks": 0, "offseason_overage_max": F(0), "overage_max": F(0), "payroll_min": None,
                       "margin_min": None, "games": 0, "committed_max": F(0), "legal_move_failures": 0}
         self._found()
 
     # ---------- supply
-    def new_prospect(self, pos, mean=55, sd=8, age=22, seasons=0):
-        return self.L.new_player(pos, max(30, min(99, int(self.rng.gauss(mean, sd)))), age, seasons)
+    def register(self, card, seasons=0):
+        """Put a character into the ledger under her card id. The autopilot sees her true overall rounded (placeholder for scouting)."""
+        o = card.true_overall(self.tables)
+        p = self.L.new_player(card.identity.pos, int(round(o)), card.age(self.L.year), seasons, pid=card.identity.id)
+        self.cards[p.pid] = card
+        self.rating[p.pid] = o
+        return p
+
+    def purge(self):
+        """Characters the ledger has retired leave the list; their names may be used again."""
+        for pid in [k for k in self.cards if k not in self.L.players]:
+            self.creator.release_name(self.cards.pop(pid))
+            self.rating.pop(pid, None)
+
+    def injure(self, pid, weeks):
+        """An injury from the engine: she misses `weeks` games (the clock turns before each paid week's games; after the season it does not)."""
+        p = self.L.players[pid]
+        p.out_weeks = max(p.out_weeks, weeks + (1 if self.L.phase == "season" else 0))
+
+    def heal_round(self):
+        """A postseason round has been played: injuries move on a week (paid weeks do this themselves)."""
+        for p in self.L.players.values():
+            if p.out_weeks > 0:
+                p.out_weeks -= 1
 
     def _reject(self, label, e):
         import re
@@ -52,14 +92,16 @@ class World:
     def _found(self):
         """Founding Day: every club starts with an all-rookie 53 and a squad of 16."""
         L = self.L
-        for cid in L.clubs:
-            for pos, n in TEMPLATE.items():
-                for _ in range(n):
-                    p = self.new_prospect(pos, 58, 8, self.rng.randint(21, 24))
-                    L.sign(cid, p.pid, rookie_contract(L.year, self.rng.randint(1, 7)), "roster")
-            for pos in PS_TEMPLATE:
-                p = self.new_prospect(pos, 50, 7)
-                L.sign(cid, p.pid, rookie_contract(L.year, 7), "ps")
+        f = self.creator.founding(L.year, sorted(L.clubs))
+        for cid in sorted(L.clubs):
+            d = f["clubs"][cid]
+            for card in d["roster"]:
+                L.sign(cid, self.register(card).pid, rookie_contract(L.year, self.rng.randint(1, 7)), "roster")
+            for card in d["ps"]:
+                L.sign(cid, self.register(card).pid, rookie_contract(L.year, 7), "ps")
+            self.leaders[cid] = {c.identity.role: c for c in d["leaders"]}
+        for card in f["pool"]:
+            self.register(card, seasons=max(0, min(4, card.age(L.year) - 22)))
         self.top_up_pool()
 
     def top_up_pool(self, floor=8):
@@ -71,7 +113,8 @@ class World:
                 have[p.pos] = have.get(p.pos, 0) + 1
         for pos in POSITIONS:
             for _ in range(max(0, floor - have.get(pos, 0))):
-                self.new_prospect(pos, 47, 7, self.rng.randint(22, 28), self.rng.randint(0, 4))
+                age = self.rng.randint(22, 28)
+                self.register(self.creator.player(pos, age, L.year, "pool", talent_mean=-0.6), seasons=min(4, age - 22))
 
     # ---------- contracts
     def offer(self, cid, p, rookie=False):
@@ -109,7 +152,7 @@ class World:
             except (Rejected, ContractError) as e:
                 self._reject("sign", e)
                 tries += 1
-                if tries > 2 or rookie_c is not None:
+                if tries > 2 or rookie_c is not None or ask(p) > 2 * R.MIN_SALARY:      # nobody takes far less than her price
                     return False
                 c = Contract(self.L.year, (max(R.MIN_SALARY, ask(p) / 2),) * 1, (), (), self.L.week) if tries == 1 else \
                     Contract(self.L.year, (R.MIN_SALARY,), (), (), self.L.week)
@@ -127,6 +170,13 @@ class World:
     def fas(self, pos=None):
         return sorted((p for p in self.L.players.values() if p.where == "fa" and p.out_weeks == 0 and (pos is None or p.pos == pos)),
                       key=lambda q: (-q.ovr, q.pid))
+
+    def cheap(self, pos=None):
+        """Free agents who would sign for the league minimum, best first (a market price at or under the minimum). If nobody at that
+        position is that cheap, the lowest-rated free agents. The autopilot may not buy a star at the minimum: nobody sells one."""
+        pool = self.fas(pos)
+        ok = [p for p in pool if ask(p) <= R.MIN_SALARY]
+        return ok or pool[::-1]
 
     def value(self, p):
         return p.ovr - max(0, p.age - 30) * 2
@@ -146,10 +196,10 @@ class World:
                 return True
             pos = sorted(short)[0]
             want = "HB" if pos == "HB" else pos
-            pool = self.fas(want)
+            pool = self.cheap(want)
             if not pool:
                 self.top_up_pool()
-                pool = self.fas(want)
+                pool = self.cheap(want)
             if not L.room(cid, "roster"):
                 self.drop_weakest(cid, avoid=pos, slots=("roster",))
             if not L.number_room(cid, want):         # her block is full of surplus players: make a number free first
@@ -263,6 +313,7 @@ class World:
 
     def end_season(self):
         self.L.end_season()
+        self.active.clear()
         self.audit()
 
     def step_year(self, first=False):
@@ -278,18 +329,24 @@ class World:
         self.end_season()
 
     def age_and_retire(self, skip=False):
-        L = self.L
+        """The year turns: every card is a year older and develops; injuries heal over the offseason; free agents may retire."""
+        L, D = self.L, self.tables.development
+        self.purge()                       # the pool rule (four years unsigned) already retired some at the league-year turn
         if skip:
             return
-        for p in list(L.players.values()):
-            p.age += 1
+        for pid in sorted(L.players):
+            p, card = L.players[pid], self.cards[pid]
+            p.age = card.age(L.year)
             if p.where in ("roster", "ps", "ir"):
                 p.seasons += 1
-            drift = self.rng.gauss(1.5 if p.age < 26 else (0 if p.age < 30 else -2), 2.5)
-            p.ovr = int(max(30, min(99, p.ovr + drift)))
+            develop(card, L.year, self.dev_rng, self.tables)
+            o = card.true_overall(self.tables)
+            self.rating[pid], p.ovr = o, int(round(o))
             p.elevations = 0
-            if p.where == "fa" and (p.age >= 34 or (p.age >= 31 and self.rng.random() < 0.15) or p.ovr < 40):
-                L.retire(p.pid, "age")
+            p.out_weeks = max(0, p.out_weeks - int(D["heal_offseason_weeks"]))
+            if p.where == "fa" and self.dev_rng.random() < retire_chance(card, L.year, o, self.tables):
+                L.retire(pid, "age")
+        self.purge()
 
     def pre_draft_trim(self):
         L = self.L
@@ -307,11 +364,10 @@ class World:
         from .. import draft as D
         L, rng = self.L, self.rng
         self._pool = []
-        for _ in range(672):
-            pos = rng.choice([p for p, n in TEMPLATE.items() for _ in range(n)])
-            self._pool.append(self.new_prospect(pos, 56, 9, rng.randint(21, 23)))
-        for p in self._pool:
+        for card in self.creator.draft_class(L.year):
+            p = self.register(card)
             p.where = "draft"
+            self._pool.append(p)
         if order is None:
             order = sorted(L.clubs)
             rng.shuffle(order)
@@ -379,7 +435,7 @@ class World:
                 if pos not in room:
                     room[pos] = L.number_room(cid, pos)
                 return room[pos]
-            pool = [p for p in self.fas() if p.ovr < 62 and not (vets and p.veteran) and numbered(p.pos)]
+            pool = [p for p in self.cheap() if ask(p) <= R.MIN_SALARY and not (vets and p.veteran) and numbered(p.pos)]
             if not pool:
                 break
             if not self.try_sign(cid, pool[0], "ps", Contract(L.year, (R.MIN_SALARY,), (), (), L.week)):
@@ -472,7 +528,10 @@ class World:
     def injuries(self):
         L, rng = self.L, self.rng
         for cid, c in L.clubs.items():
+            dressed = set(self.active[cid].active) if self.engine_injuries and cid in self.active else ()
             for pid in list(c.roster):
+                if pid in dressed:          # the engine injures those who play
+                    continue
                 p = L.players[pid]
                 if p.out_weeks == 0 and rng.random() < 0.008:
                     p.out_weeks = rng.randint(1, 8) if rng.random() < 0.9 else rng.randint(9, 40)
@@ -511,7 +570,7 @@ class World:
                         self._reject("release", e)
                     break
         while len(c.roster) < R.ROSTER_MAX - 2 and rng.random() < 0.3:
-            pool = self.fas()
+            pool = self.cheap()
             if not pool:
                 break
             self.try_sign(cid, pool[0], "roster", Contract(L.year, (R.MIN_SALARY,), (), (), L.week))
@@ -522,6 +581,7 @@ class World:
         for cid in (sorted(L.clubs) if playing is None else sorted(playing)):
             before = sum(p.elevations for p in L.players.values() if p.club == cid and p.where == "ps")
             gd = gameday.build(L, cid)
+            self.active[cid], self.active_week[cid] = gd, L.week
             after = sum(p.elevations for p in L.players.values() if p.club == cid and p.where == "ps")
             self.stats["elevations"] += after - before
             self.stats["games"] += 1
