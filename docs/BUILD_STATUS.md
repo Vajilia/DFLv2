@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.16.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.17.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -61,7 +61,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Jersey numbers (Ed 8.15): built in the ledger**, 9 tests. A real finding: a position's block caps how many such players a club can carry (e.g. 10 CBs), so the placeholder autopilot now sheds surplus players; **100-year rerun under Ed 8.15 (seed 1): PASS.** 4,900 events in order, 100 validator passes with 0 failures, 77,600 game days, 0 forfeits, 34 short-handed, 8 emergency lists, 0 legal-move failures, 33,601 picks made and 0 unsigned, 2,883 trades (20 refused), 1,506 waiver claims, 1 compensatory pick, 48 distinct Coronation venues, digest `8ef20974c043...`, 1,226 s.
 
 ## Game engine, slice 1 (2026-10-23)
-- **Built:** `src/dfl/engine/` (rules core per spec section 10, play-level resolver, injuries), `data/engine/` (parameters, penalties, bands), `tools/calibrate_engine.py`, 13 tests. About 290 games per second. **Placeholder honesty:** the numbers are tuned to NFL aggregates (21 to 22 of 24 bands met per seed, misses marginal); they say nothing yet about DFL parity. Measured tie frequency is about 1.5% of regular-season games (owner decision pending). Not yet wired into the season loop (the Ambassador Bowl needs All-Star squads). Details in `docs/ENGINE.md`.
+- **Built:** `src/dfl/engine/` (rules core per spec section 10, play-level resolver, injuries), `data/engine/` (parameters, penalties, bands), `tools/calibrate_engine.py`, 13 tests. About 290 games per second. **Placeholder honesty:** the numbers are tuned to NFL aggregates (21 to 22 of 24 bands met per seed, misses marginal); they say nothing yet about DFL parity. Measured tie frequency is about 1.5% of regular-season games (owner accepted, Ed 8.17). Not yet wired into the season loop (the Ambassador Bowl needs All-Star squads). Details in `docs/ENGINE.md`.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

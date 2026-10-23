@@ -19,7 +19,7 @@ td,2.3,3.1,touchdowns per team
 first_downs,18,24,first downs per team
 top_share,0.47,0.53,home share of time of possession
 ot_rate,0.03,0.10,share of games that reach overtime
-tie_rate,0.0005,0.015,share of regular-season games that end tied
+tie_rate,0.0005,0.02,share of regular-season games that end tied (owner accepted about 1.5% on 2026-10-23)
 home_win,0.52,0.60,home win share between equal clubs
 margin_sd,11,15.5,standard deviation of the final margin
 injuries,0.4,1.4,game injuries per team per game

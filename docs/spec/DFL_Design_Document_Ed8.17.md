@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.16 · 2026-10-23** (amends Edition 8.15; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `b567b67f53400c527222307905015eb7bc926ee5d54e41b1259568f23e088554`
+**Edition 8.17 · 2026-10-23** (amends Edition 8.16; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `26a6d7fc28b6ab3052dde684206656c5252777fcb42f6a0daec557c8f83e050a`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -797,7 +797,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.16 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14 and 8.15 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.17 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15 and 8.16 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -857,6 +857,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-23 | §11 | jersey-number blocks by position (QB 10-14, TE 15-19, WR 80-89), overflow blocks, unique per club, camp relaxation | owner's ranges; builder's capacity check and overflow recommendation, accepted by the owner | 8.14 |
 | 2026-10-23 | §11 | jersey-number stewardship: assigned on joining, kept while with the club (through exile), freed on leaving; no retired numbers | owner's ruling | 8.15 |
 | 2026-10-23 | §10, §20 | engine build order: rules core and play-level resolver first, spatial engine later behind the same interface; items 2 and 7 updated with slice-1 results | owner chose the recommended path | 8.16 |
+| 2026-10-23 | §20 | tie-game frequency item closed: the measured rate (about 1.5% of regular-season games) is accepted and the overtime rule stands | owner's ruling ("accept the rates") | 8.17 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -865,7 +866,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 4. Bowl roster repair mechanism when a position shortfall occurs.
 5. The real-time to simulated-time mapping under deterministic pacing (target about 50 hours a season, non-binding).
 6. §19 promises a stable ID on every rule; none are assigned yet, so the changelog uses section references.
-7. Tie-game frequency: ties are excluded from records, so the order of overall wins before overall win % matters only when ties occur. Calibrate in simulation so that ties stay highly unlikely. Measured with the slice-1 engine (placeholder, tuned to NFL aggregates): about 1.5% of regular-season games end level (about 21% of overtime games); decide whether that is acceptable, or lengthen overtime or add an overtime tiebreak.
+7. Tie-game frequency: ties are excluded from records, so the order of overall wins before overall win % matters only when ties occur. The owner accepted (2026-10-23) the roughly 1.5% of regular-season games the slice-1 engine produces under the ten-minute overtime with a possession for each side; the overtime rule stands as written. Re-measure with the spatial engine; the rate is a monitored figure, not a target.
 8. Fill-in parameters inherited from the NFL and not yet confirmed: game-day roster 48/47, two practice-squad elevations a game and three a player a season, four-game injured reserve minimum. The out-of-position penalty belongs with engine content (item 2).
 9. Standings assumptions to confirm: higher strength of schedule and strength of victory rank higher (NFL default); a club with no decisions has a win % of 0; the seeded draw is the last resort and is rerun from a season-and-scope seed.
 10. Calibrate the pre-cut cap count (§0) once the market exists: it is adapted from the NFL's top 51 of a 90-player camp roster, and the ratio does not carry over exactly. (The rookie reserve, §11, is built and replaces the open question about rookie room.)
