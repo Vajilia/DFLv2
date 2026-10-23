@@ -45,9 +45,12 @@ def report(a):
             + F.format_table(rows) + "\n")
     if all("games" in lg[0] for lg in leagues):
         pushes = [F.schedule_push(lg, a.warmup) for lg in leagues]
-        text += (f"\nSchedule push toward average (opponents' mean strength per point of own strength): slope "
-                 f"{sum(p[0] for p in pushes) / len(pushes):.3f}, correlation {sum(p[1] for p in pushes) / len(pushes):.3f} "
-                 f"(per league slopes: {', '.join(f'{p[0]:.3f}' for p in pushes)}). Positive = stronger clubs face tougher schedules.\n")
+        slope = sum(p[0] for p in pushes) / len(pushes)
+        base = F.schedule_baseline(len(leagues[0][-1]["strength"]))
+        text += (f"\nSchedule push toward average: opponents' mean strength per point of own strength, slope {slope:.3f} "
+                 f"(a schedule that ignores strength gives {base:.3f}, because a club never plays herself), so the push is {slope - base:+.3f} "
+                 f"per point; correlation {sum(p[1] for p in pushes) / len(pushes):.3f}; league slopes {', '.join(f'{p[0]:.3f}' for p in pushes)}. "
+                 f"Positive push = stronger clubs face tougher schedules.\n")
     if len(leagues[0]) >= 40:
         bands = F.load_bands()
         text += "\nTrend by decade (flags mark a banded figure outside its limits):\n"

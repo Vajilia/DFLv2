@@ -64,6 +64,68 @@ First-pass table (Ed 8.18), for the record:
 1. **win_pct_sd**: measured 0.207 against the old 0.19 ceiling. The NFL's own spread is about 0.19 to 0.21, so on 2026-10-23 the owner accepted the builder's recommendation to raise the ceiling to 0.21 rather than tune the engine toward a limit stricter than real football (Ed 8.20).
 2. **exile_effect -0.16 points (plus or minus 0.47)** straddles its limit of plus or minus 0.5: no sign of a lasting exile effect, but the error bar is too wide to say it is inside the band. More leagues would settle it.
 
+## Century runs (Ed 8.20, tight): two leagues of 100 seasons (seeds 11, 12)
+Tool: `tools/fairness.py run --years 100`, then `report`, which also prints the decade-by-decade trend and the schedule push. First 8 seasons dropped.
+
+| band | measured (mean ± 2 SE) | allowed | verdict |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.208 ± 0.003 | 0.13 to 0.21 | UNCLEAR |
+| year_to_year_corr | 0.204 ± 0.033 | 0.1 to 0.5 | PASS |
+| close_game_share | 0.421 ± 0.008 | 0.35 to 0.55 | PASS |
+| repeat_champion_rate | 0.054 ± 0.022 | 0.0 to 0.12 | PASS |
+| max_titles_in_20 | 2.623 ± 0.096 | 0.0 to 4.7 | PASS |
+| worst_league_titles | 4.000 ± 0.000 | 0.0 to 7.0 | PASS |
+| best_team_title_odds | 0.212 ± 0.054 | 0.08 to 0.25 | UNCLEAR |
+| returner_avg_finish | 3.125 ± 0.130 | 2.8 to 3.4 | PASS |
+| returner_win_div | 0.185 ± 0.022 | 0.1 to 0.3 | PASS |
+| returner_fifth_again | 0.230 ± 0.061 | 0.1 to 0.3 | PASS |
+| returner_top3_in_3 | 0.815 ± 0.035 | 0.75 to 0.97 | PASS |
+| returner_playoff_first | 0.319 ± 0.033 | 0.2 to 0.55 | PASS |
+| exile_effect | 0.238 ± 1.344 | -0.5 to 0.5 | UNCLEAR |
+| exile_double_early | 0.000 ± 0.000 | 0.0 to 0.1 | PASS |
+| stuck_at_bottom | 0.088 ± 0.010 | 0.0 to 0.1 | PASS |
+
+Schedule push toward average: opponents' mean strength per point of own strength, slope -0.024 (a schedule that ignores strength gives -0.026, because a club never plays herself), so the push is +0.002 per point; correlation -0.098; league slopes -0.023, -0.025. Positive push = stronger clubs face tougher schedules.
+
+Trend by decade (flags mark a banded figure outside its limits):
+
+League 1
+
+| seasons | win % spread | close games | points/team game | most titles by one club | distinct champions | roster rating | club-strength spread |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2000-2009 | 0.201 | 0.438 | 20.6 | 2 | 9 | 68.8 | 1.09 |
+| 2010-2019 | 0.205 | 0.434 | 20.9 | 1 | 10 | 67.7 | 1.13 |
+| 2020-2029 | 0.212* | 0.423 | 21.1 | 2 | 9 | 67.5 | 1.22 |
+| 2030-2039 | 0.208 | 0.422 | 19.9 | 3 | 7 | 68.0 | 1.13 |
+| 2040-2049 | 0.207 | 0.419 | 20.4 | 3 | 7 | 68.2 | 1.18 |
+| 2050-2059 | 0.211* | 0.426 | 20.0 | 2 | 9 | 68.0 | 1.19 |
+| 2060-2069 | 0.209 | 0.423 | 20.9 | 2 | 9 | 67.8 | 1.11 |
+| 2070-2079 | 0.211* | 0.418 | 20.3 | 2 | 8 | 67.4 | 1.18 |
+| 2080-2089 | 0.207 | 0.428 | 19.5 | 2 | 9 | 67.8 | 1.12 |
+| 2090-2099 | 0.211* | 0.429 | 20.3 | 2 | 9 | 67.4 | 1.16 |
+
+League 2
+
+| seasons | win % spread | close games | points/team game | most titles by one club | distinct champions | roster rating | club-strength spread |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2000-2009 | 0.190 | 0.437 | 20.6 | 3 | 6 | 69.0 | 1.01 |
+| 2010-2019 | 0.207 | 0.403 | 20.2 | 1 | 10 | 68.3 | 1.13 |
+| 2020-2029 | 0.200 | 0.430 | 20.9 | 2 | 9 | 67.6 | 1.10 |
+| 2030-2039 | 0.211* | 0.419 | 20.0 | 2 | 9 | 67.6 | 1.16 |
+| 2040-2049 | 0.213* | 0.411 | 19.9 | 3 | 7 | 67.6 | 1.19 |
+| 2050-2059 | 0.205 | 0.417 | 20.0 | 3 | 6 | 67.6 | 1.16 |
+| 2060-2069 | 0.208 | 0.404 | 20.6 | 1 | 10 | 67.9 | 1.22 |
+| 2070-2079 | 0.208 | 0.419 | 20.0 | 2 | 8 | 67.7 | 1.17 |
+| 2080-2089 | 0.201 | 0.422 | 20.0 | 2 | 9 | 67.9 | 1.09 |
+| 2090-2099 | 0.207 | 0.422 | 19.4 | 3 | 8 | 67.9 | 1.16 |
+
+**Reading it.**
+- **No drift in a century.** Roster rating stays between 67 and 69, points per team game between 19 and 21, club-strength spread between 1.0 and 1.2, and no decade has more than 3 titles for one club or fewer than 6 distinct champions in 10 seasons. Nothing is trending; the league does not run away or collapse.
+- **Win % spread sits on its ceiling** (0.208 against 0.21; decades range 0.190 to 0.213, and 8 of 20 decades land just over, marked *). Over a century this band is UNCLEAR, not passing comfortably. Same message as before: it is the band to watch when the people layer arrives.
+- **Best-team title odds (0.21) and exile effect** remain UNCLEAR on two leagues; the values are inside the limits but the bars are wide.
+- **Schedule push toward average: none.** A schedule that ignores strength still shows a slope of -0.026 (a club cannot play herself); the measured slope is -0.024, so the push is +0.002 per rating point, which across the league's strength spread (about 1.2 points) is less than 0.003 rating points of opponent strength. Opponents are chosen by last season's seed, and seed predicts strength weakly (strength repeats only 0.37 year to year). No band covers this and none is failing; if you want an actual push, the lever is how the schedule template ties opponents to place (spec section 6). I recommend leaving it alone: the bands pass without it.
+- **Exile standard (competitive for 3rd or better within about 3 seasons, never automatic):** covered by the returner bands: 81% of returners finish 3rd or better at least once in three seasons (limit 75% to 97%) and 32% make the playoffs in their first season back (limit 20% to 55%), so it is neither blocked nor automatic.
+
 ## Definitions the builder had to choose
 - Win percentage counts a tie as half a win. Eighteen games a club (40 active clubs, 360 games a season).
 - "Strongest on paper": the active club with the highest mean hidden rating of its best starters at each position (22 on offense and defense, K and P).

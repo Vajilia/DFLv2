@@ -129,6 +129,15 @@ class SchedulePushAndTrend(unittest.TestCase):
             s["games"] = [[ranked[i], ranked[len(ranked) - 1 - i]] for i in range(len(ranked)) for _ in (1, 2)]
         self.assertLess(F.schedule_push(lg, warmup=2)[1], -0.3)
 
+    def test_a_schedule_that_ignores_strength_shows_only_the_never_play_yourself_slope(self):
+        lg = toy_league(30, 12)
+        rng = random.Random(5)
+        for s in lg:
+            cs = sorted(s["strength"])
+            s["games"] = [[a, b] for a in cs for b in rng.sample([c for c in cs if c != a], 6)]
+        slope = F.schedule_push(lg, warmup=2)[0]
+        self.assertAlmostEqual(slope, F.schedule_baseline(40), delta=0.012)
+
     def test_decades_split_a_century_into_blocks_with_the_headline_figures(self):
         lg = toy_league(40, 10)
         rows = F.decades(lg, 10)

@@ -179,6 +179,12 @@ def schedule_push(seasons, warmup=WARMUP):
     return (sum(x * y for x, y in zip(xs, ys)) / sx if sx else float("nan")), corr(xs, ys)
 
 
+def schedule_baseline(n_clubs):
+    """The slope a schedule that ignores strength still shows: a club never plays herself, so the stronger she is the weaker the
+    average of the others she can meet. For n active clubs that is -1/(n-1) (about -0.026 for 40)."""
+    return -1.0 / (n_clubs - 1)
+
+
 def decades(seasons, size=10, warmup=0):
     """Trend table: for each block of `size` seasons, the headline figures, so drift over a century is visible and reported."""
     rows = []
