@@ -1,0 +1,41 @@
+feature,value,weight
+skin,1,1
+skin,2,1
+skin,3,1
+skin,4,1
+skin,5,1
+skin,6,1
+skin,7,1
+skin,8,1
+skin,9,1
+skin,10,1
+hair_color,black,30
+hair_color,dark brown,28
+hair_color,brown,20
+hair_color,light brown,10
+hair_color,blonde,8
+hair_color,red,3
+hair_color,gray,1
+hair_style,short crop,1
+hair_style,bob,1
+hair_style,shoulder,1
+hair_style,long,1
+hair_style,braids,1
+hair_style,curls,1
+hair_style,ponytail,1
+hair_style,bun,1
+hair_style,locs,1
+hair_style,shaved,1
+eye_color,brown,50
+eye_color,dark brown,18
+eye_color,hazel,12
+eye_color,green,6
+eye_color,blue,8
+eye_color,gray,4
+eye_color,amber,2
+face,oval,1
+face,round,1
+face,square,1
+face,heart,1
+face,long,1
+face,diamond,1

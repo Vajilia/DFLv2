@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.12 · 2026-10-23** (amends Edition 8.11; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `f2c816938dc3f750c409380070f6d04595a5b051c54bebcbf7de8206afe0f204`
+**Edition 8.13 · 2026-10-23** (amends Edition 8.12; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `193f0d41cba0d568b4e5794f33df8b361ed7c21d6a51fe0eeb302ae7f977a753`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -725,6 +725,14 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Starting budget 32 detailed memories per character; recent and defining events stay detailed, routine events merge into relationship summaries.
 - Relationships are sparse and directed, recording only actual contacts.
 - Draft classes contain 672 players, at least 12 per position. Pools hold at least 8 medically available unsigned players per position and 4 willing candidates per leadership role. A character may stay in a pool (free agents, leadership candidates) at most four consecutive years: if she is still unsigned at the fourth league-year opening after she entered it, she retires permanently and is removed from the list (her career record is archived by the people layer). Being hired resets the clock to zero, and a player released later starts a new count. A drafted player who goes unsigned enters the pool when the draft ends. This bounds database size.
+- **Character card (Edition 8.13).** Every player and every club leader (CEO, GM, head coach, offensive, defensive and special-teams coordinators) has one card, made by the character creator, a standalone module: seed and request in, complete card out. The ledger and the engine read cards and never generate characters.
+  - *Identity* is fixed at creation: durable ID, role, name, birth year, official position, creation height and weight, and the creation look (a small set of appearance choices, not an image, so the portrait can be redrawn identically). Age is derived from the birth year. Names are unique among listed characters and reusable after a character leaves the list.
+  - *Hidden state*: true attributes on a 1-99 scale, a personal growth profile (peak age, remaining ceiling, volatility), and six traits on 0-100 (ambition, loyalty, work ethic, temperament, greed, leadership). The viewer, hiring actors, voters and narration see only the public view: name, role, position, age, body and look. There is no stored overall rating; any overall is derived from the hidden attributes and is for the engine only.
+  - *Attributes* are data (`data/characters/`). Players have eight core attributes (speed, acceleration, strength, agility, stamina, durability, awareness, composure) plus two or three skills of their position group; leaders have three role attributes. Attributes within a card correlate through one shared talent factor.
+  - *Creation*: each card is drawn from its own random stream seeded by the world seed and its ID, so it does not depend on how many cards were made before it. Position is chosen first and attributes and body are drawn conditional on it, which keeps class quotas exact.
+  - *Draft class*: 672 prospects aged 21 to 23, at least 12 at every position, remaining places shared by how many of each position a club carries. Each class has its own strength shift (some classes are weak, some strong); this is a fairness parameter, set in data.
+  - *Founding league*: each club gets a 53, a 16-player practice squad, six leaders and the pool gets at least 8 per position; veterans are spread over ages 21 to 34 with talent shifted up (survivors). All players are adults.
+  - Slots for the 32 detailed memories and the sparse directed relationship map exist on the card and are filled by the people layer.
 - Retirement takes effect at offseason opening. Development and aging curves are data, not narrative.
 
 ## §14 Fans, governance, expectations
@@ -782,7 +790,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.12 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10 and 8.11 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.13 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11 and 8.12 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -838,6 +846,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §0, §11 | preseason ceiling 75 → 90 including the practice squad | owner's ruling (the NFL's number); 75 could not hold a 69-man club plus a full draft class | 8.11 |
 | 2026-10-23 | §13 | four consecutive seasons in a pool ended active candidacy → at four consecutive years she retires permanently and is removed from the list; being hired resets the clock | owner's ruling (keeps the database from bloating) | 8.12 |
 | 2026-10-23 | §11 | added the rookie reserve: unmade picks count at the rookie scale in the cap number | owner approved the builder's recommendation (the NFL's rookie-pool principle); unsigned draft picks were 2.5% of picks in the 100-year test | 8.12 |
+| 2026-10-23 | §13 | character card defined: identity fixed, hidden attributes/growth/traits, public view, per-card seeded creation, 672-player classes with a class-strength shift, founding league | owner asked for a creator built from scratch on current ideas and left the card design to the builder | 8.13 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -854,3 +863,6 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 12. Emergency cap borrowing (owner proposal): deferred. The viability invariant is built so that no legal roster is ever unreachable; revisit only if a real jam appears once the market exists.
 13. Exile-return loop: a club exiled as last place returns the next year as seed 5 with a lottery pick in slots 1-8; whether this traps weak clubs in a cycle, and whether extra picks for exiled clubs would help or would reward losing, must be measured with the real engine (parity profiles, Phase 4).
 14. Offseason dates in §2 are provisional.
+15. Character attributes, their means and the age curve are placeholders until the engine (Phase 3) says which attributes it uses and how; the attribute list and every distribution are data in `data/characters/` and may change. Overall ratings are not yet comparable across positions (a calibration job for Phase 3/4).
+16. Appearance: the creation look is immutable; whether and how a character visibly ages is decided in presentation (Phase 7), by redrawing from the stored look.
+17. Leader pools and hiring (four willing candidates per role, §13) use the same creator and the four-year pool rule; the hiring market itself is people-layer work (Phase 5).

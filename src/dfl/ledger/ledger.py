@@ -1,6 +1,6 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.12, sections 11, 12, 17)
+Principles (Design Document 8.13, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
   * Cap timing (Ed 8.9): the cap is enforced all year. Until the final cut a club's cap number counts only its 69 highest

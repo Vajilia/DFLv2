@@ -37,6 +37,12 @@ Reason for the order: people-and-agents is the most expensive and least testable
 - **Work:** Ambassador Tour and Bowl played; offseason calendar (draft, free agency, trade deadline, cuts); the 8-team lottery and 48-pick draft; exile relief; the all-rookie Founding Day build.
 - **Exit test:** 100 full years with every calendar event firing in order and every table validating.
 
+## Phase 2.5 — Character creator (built 2026-10-23, Ed 8.13)
+- **Goal:** one place that makes every character, before the engine needs them.
+- **Work:** the character card (identity, hidden attributes, growth, traits, public view), a seeded creator, 672-player draft classes with a class-strength shift, the founding league population. Code in `src/dfl/characters/`, data in `data/characters/`, tests in `tests/test_characters.py`, sample cards from `tools/show_cards.py`.
+- **Not yet done:** the ledger still uses placeholder `ovr` players; wiring the ledger's world to cards, and the real attribute list, wait for the engine (Phase 3). Pools and retirement use the Ed 8.12 four-year rule.
+- **Needs from the owner:** nothing now; the attribute set is revisited when the engine is specified.
+
 ## Phase 3 — Game engine (the big one)
 - **Goal:** replace the placeholder resolver with real football.
 - **Work, in slices, spec before code:** (1) run and pass plays and a drive model, (2) penalties from the ~20 most common NFL penalties, (3) injuries at NFL-average frequency, (4) overtime and ties, (5) box scores, (6) play log and the second per-play table for the 2D view. Each slice has calibration bands (scoring, plays per game, penalties, injuries, tie rate).
@@ -51,7 +57,7 @@ Reason for the order: people-and-agents is the most expensive and least testable
 
 ## Phase 5 — People
 - **Goal:** living characters, carefully bounded.
-- **Work:** players first (archetypes as fixed souls, perception, personality, development, aging, retirement, the origin-card creator), then coaches (one pool for head coaches and coordinators, small capped effects), then GMs, CEOs and fans. Negotiations as meeting rooms only where independent parties need a say (contracts, trades, interviews). Analytics definitions (§20.1).
+- **Work:** players first (archetypes as fixed souls, perception, personality, development, aging, retirement), then coaches (one pool for head coaches and coordinators, small capped effects), then GMs, CEOs and fans. Negotiations as meeting rooms only where independent parties need a say (contracts, trades, interviews). Analytics definitions (§20.1).
 - **Exit test:** adding people leaves every Phase 4 band inside range; all character effects are capped and tested.
 - **Needs from the owner:** development and aging curves (§20.3); anything that changes how agents may act.
 

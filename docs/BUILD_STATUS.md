@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.12.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.13.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -53,6 +53,10 @@ Caveats: 846 picks (2.5%) went unsigned, almost all at the two deliberately reck
 Found by integrating (and fixed): the ledger closed trades one week early (now matches the calendar, with a test); a club at the cap could not fill a positional minimum (autopilot now makes cap room); the 75-player preseason ceiling could not hold a 69-man club plus a full draft class (owner ruled the NFL's 90, Edition 8.11).
 
 Not built (people layer, engine): leadership hiring, All-Star voting and rosters, real snap shares for compensatory picks, exile-return parity measurement.
+
+## Ed 8.12 ledger changes and the character creator (2026-10-23)
+- **Verified by tests:** four-consecutive-year pool limit (retire and delete; reset on hire), rookie reserve in the cap number (unmade picks at rookie scale; 10-year check: 0 unsigned picks). 100-year rerun result is recorded below once it finishes.
+- **Character creator (Ed 8.13): built, standalone.** `src/dfl/characters/`, data in `data/characters/`, 15 tests, sample output via `tools/show_cards.py`. **Placeholder honesty:** the attribute list, means, spreads and age curve are provisional until the engine exists, and overall ratings are not comparable across positions yet. Not yet wired to the ledger world (still placeholder `ovr`).
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

@@ -1,0 +1,41 @@
+code,kind,name,note
+SPD,core,Speed,Top running speed
+ACC,core,Acceleration,Burst and change of pace
+STR,core,Strength,Power at the point of contact
+AGI,core,Agility,Change of direction
+STA,core,Stamina,Holds form through a game and a season
+DUR,core,Durability,Resistance to injury
+AWR,mental,Awareness,Reads the play; football sense
+CMP,mental,Composure,Performance under pressure
+THP,skill,Throw power,QB
+THA,skill,Throw accuracy,QB
+PRS,skill,Pocket presence,QB
+VIS,skill,Vision,Finds and reads running lanes
+ELU,skill,Elusiveness,Avoids tacklers
+BSE,skill,Ball security,Holds the ball
+HND,skill,Hands,Catches the ball
+RTE,skill,Route running,Separation on routes
+CTC,skill,Contested catch,Wins the ball in traffic
+RBK,skill,Run blocking,
+PBK,skill,Pass blocking,
+TEC,skill,Technique,Hand placement and leverage
+PRU,skill,Pass rush,
+RDF,skill,Run defense,
+BSH,skill,Block shedding,
+TAK,skill,Tackling,
+COV,skill,Coverage,
+BAL,skill,Ball skills,Finds and wins the ball in the air
+KPW,skill,Kick power,
+KAC,skill,Kick accuracy,
+SNP,skill,Snapping,Accuracy and speed of the snap
+FIN,leader,Financial judgment,CEO
+GOV,leader,Governance,CEO
+PUB,leader,Public standing,CEO
+EVL,leader,Talent evaluation,GM
+NEG,leader,Negotiation,GM
+BLD,leader,Roster building,GM
+MGT,leader,Game management,HC
+MOT,leader,Motivation,HC
+TCH,leader,Teaching,HC and coordinators
+SCH,leader,Scheme design,Coordinators
+ADJ,leader,In-game adjustment,Coordinators
