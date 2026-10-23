@@ -40,11 +40,12 @@ def ask(player):
 
 
 class World:
-    def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False):
+    def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False, priority=()):
         self.rng = random.Random(seed)
         self.dev_rng = random.Random(f"{seed}|develop")
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
+        self.priority = list(priority)             # clubs that always shop first in free agency (a parity-test control only)
         self.tables = tables or load_tables()
         self.creator = Creator(seed, self.tables)
         self.cards = {}                  # player id -> Card, for everyone in the ledger (the id is the card id)
@@ -407,7 +408,9 @@ class World:
 
     def free_agency(self):
         L, rng = self.L, self.rng
-        for cid in sorted(L.clubs, key=lambda c: rng.random()):
+        order = sorted(L.clubs, key=lambda c: rng.random())
+        order = [c for c in self.priority if c in L.clubs] + [c for c in order if c not in self.priority]
+        for cid in order:
             self.fix_minimums(cid)
             budget_floor = R.CAP - R.RESERVE - F(90)
             for _ in range(40):

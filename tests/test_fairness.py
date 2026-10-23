@@ -41,7 +41,8 @@ def toy_league(seasons=40, seed=1, strength_weight=0.0, rng_games=17):
         champ = ranked[0] if strength_weight else rng.choice(ranked[:14])
         out.append({"year": 2000 + s, "records": recs, "orders": orders, "exiled": exiled, "seeds": seeds, "champion": champ,
                     "draft_order": list(reversed(ranked)), "margins": [rng.choice((3, 7, 10, 14, 21)) for _ in range(300)],
-                    "strength": {c: base[c] for c in recs}})
+                    "strength": {c: base[c] for c in recs}, "extra": {"roster_mean": 68.0},
+                    "games": [[a, b] for a in recs for b in rng.sample(sorted(recs), 3) if a != b]})
     return out
 
 
@@ -110,6 +111,32 @@ class Metrics(unittest.TestCase):
                 s["orders"][d] = o
         m = F.league_metrics(lg, warmup=2)
         self.assertGreater(m["stuck_at_bottom"], 0.0)
+
+
+class SchedulePushAndTrend(unittest.TestCase):
+    def test_schedule_push_is_positive_when_strong_clubs_face_strong_clubs(self):
+        lg = toy_league(12, 9)
+        for s in lg:
+            st = s["strength"]
+            ranked = sorted(st, key=lambda c: st[c])
+            s["games"] = [[ranked[i], ranked[min(len(ranked) - 1, i + k)]] for i in range(len(ranked)) for k in (1, 2, 3)]
+        slope, c = F.schedule_push(lg, warmup=2)
+        self.assertGreater(c, 0.3)
+        # opponents drawn from the strongest clubs only: strong clubs face weak ones -> negative
+        for s in lg:
+            st = s["strength"]
+            ranked = sorted(st, key=lambda c: st[c])
+            s["games"] = [[ranked[i], ranked[len(ranked) - 1 - i]] for i in range(len(ranked)) for _ in (1, 2)]
+        self.assertLess(F.schedule_push(lg, warmup=2)[1], -0.3)
+
+    def test_decades_split_a_century_into_blocks_with_the_headline_figures(self):
+        lg = toy_league(40, 10)
+        rows = F.decades(lg, 10)
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows[0]["seasons"], "2000-2009")
+        for r in rows:
+            self.assertGreaterEqual(r["most_titles_one_club"], 1)
+            self.assertTrue(0 < r["close_game_share"] < 1)
 
 
 class Verdicts(unittest.TestCase):

@@ -9,6 +9,7 @@ ROUNDS = 7
 COMP_LEAGUE_MAX = 48
 COMP_CLUB_MAX = 2
 COMP_BASE_MIN = 75          # first-year base, in the document's money units (section 0: comp threshold)
+RETURNER_BLOCK = True       # Edition 8.19; a parity test bed (parity.py) may switch it off
 ELIMINATION_ORDER = ("wild_card", "divisional", "conference", "runner_up", "champion")
 
 
@@ -54,6 +55,7 @@ def base_order(ranked, elimination, returning, seed, returned=()):
     worst_first = list(reversed(ranked))
     order = lottery(returning, seed)
     non_playoff = [c for c in worst_first if c not in elimination]
+    returned = returned if RETURNER_BLOCK else ()
     order += [c for c in non_playoff if c not in returned] + [c for c in non_playoff if c in returned]
     for stage in ELIMINATION_ORDER:
         order += [c for c in worst_first if elimination.get(c) == stage]

@@ -21,13 +21,14 @@ from dfl import fairness as F  # noqa: E402
 
 def run(a):
     from dfl.year import Universe
-    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed)
+    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed, profile=a.profile)
     seasons, t0 = [], time.time()
     for _ in range(a.years):
         rep = u.play_year()
         w = u.world
         strength = {c: F.club_strength(w, c) for c in rep["result"]["outcome"]["records"]}
-        seasons.append(F.season_record(rep["year"], rep, strength))
+        extra = {"roster_mean": sum(w.rating[i] for c in u.L.clubs.values() for i in c.roster) / sum(len(c.roster) for c in u.L.clubs.values())}
+        seasons.append(F.season_record(rep["year"], rep, strength, extra))
         print(f"seed {a.seed} {rep['year']} {time.time() - t0:.0f}s", flush=True)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as f:
@@ -42,6 +43,21 @@ def report(a):
     rows = F.verdicts(leagues, warmup=a.warmup)
     text = (f"Fairness bands: {len(leagues)} league(s), {len(leagues[0])} seasons each, first {a.warmup} dropped as warm-up.\n\n"
             + F.format_table(rows) + "\n")
+    if all("games" in lg[0] for lg in leagues):
+        pushes = [F.schedule_push(lg, a.warmup) for lg in leagues]
+        text += (f"\nSchedule push toward average (opponents' mean strength per point of own strength): slope "
+                 f"{sum(p[0] for p in pushes) / len(pushes):.3f}, correlation {sum(p[1] for p in pushes) / len(pushes):.3f} "
+                 f"(per league slopes: {', '.join(f'{p[0]:.3f}' for p in pushes)}). Positive = stronger clubs face tougher schedules.\n")
+    if len(leagues[0]) >= 40:
+        bands = F.load_bands()
+        text += "\nTrend by decade (flags mark a banded figure outside its limits):\n"
+        for k, lg in enumerate(leagues, 1):
+            text += f"\nLeague {k}\n\n| seasons | win % spread | close games | points/team game | most titles by one club | distinct champions | roster rating | club-strength spread |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+            for d in F.decades(lg):
+                wf = "*" if not bands["win_pct_sd"][0] <= d["win_pct_sd"] <= bands["win_pct_sd"][1] else ""
+                cf = "*" if not bands["close_game_share"][0] <= d["close_game_share"] <= bands["close_game_share"][1] else ""
+                text += (f"| {d['seasons']} | {d['win_pct_sd']:.3f}{wf} | {d['close_game_share']:.3f}{cf} | {d['points_per_team_game']:.1f} | "
+                         f"{d['most_titles_one_club']} | {d['distinct_champions']} | {d['roster_mean']:.1f} | {d['club_strength_sd']:.2f} |\n")
     print(text)
     if a.md:
         with open(a.md, "w") as f:
@@ -55,6 +71,7 @@ def main():
     r.add_argument("--seed", type=int, default=1)
     r.add_argument("--years", type=int, default=36)
     r.add_argument("--out", required=True)
+    r.add_argument("--profile", default="tight", choices=("tight", "none", "rigged"), help="parity test bed (see src/dfl/parity.py)")
     p = sub.add_parser("report")
     p.add_argument("files", nargs="+")
     p.add_argument("--warmup", type=int, default=F.WARMUP)

@@ -36,11 +36,13 @@ def load_bands(path=BANDS_FILE):
         return {r["name"]: (float(r["low"]), float(r["high"]), r["meaning"]) for r in csv.DictReader(f)}
 
 
-def season_record(year, report, strength):
-    """Compact, JSON-friendly record of one finished season from a `Universe` report."""
+def season_record(year, report, strength, extra=None):
+    """Compact, JSON-friendly record of one finished season from a `Universe` report. `extra` carries measured side figures (trend data)."""
     res = report["result"]
     out = res["outcome"]
     return {
+        "games": [[g["away"], g["home"]] for g in res["games"]],
+        "extra": extra or {},
         "year": year,
         "records": {c: [r.w, r.l, r.t, r.pf, r.pa] for c, r in out["records"].items()},
         "orders": {"|".join(dv): list(o) for dv, o in out["division_orders"].items()},
@@ -155,6 +157,49 @@ def league_metrics(seasons, warmup=WARMUP):
             stuck += all(k >= 4 for _, k in ss[j - 3:j])
     m["stuck_at_bottom"] = stuck / tot if tot else float("nan")
     return m
+
+
+def schedule_push(seasons, warmup=WARMUP):
+    """Does the schedule push clubs toward average? For each season and active club: the mean hidden strength of her opponents. Returns
+    (slope, correlation) of opponent strength on own strength, pooled over seasons after warm-up, each season centred on its own mean.
+    Positive: stronger clubs face tougher schedules (a push toward average). Zero: schedules ignore strength."""
+    xs, ys = [], []
+    for s in list(seasons)[warmup:]:
+        st = s["strength"]
+        opp = {}
+        for a, h in s["games"]:
+            opp.setdefault(a, []).append(st[h])
+            opp.setdefault(h, []).append(st[a])
+        mx = S.mean(st[c] for c in opp)
+        my = S.mean(S.mean(v) for v in opp.values())
+        for c, v in opp.items():
+            xs.append(st[c] - mx)
+            ys.append(S.mean(v) - my)
+    sx = sum(x * x for x in xs)
+    return (sum(x * y for x, y in zip(xs, ys)) / sx if sx else float("nan")), corr(xs, ys)
+
+
+def decades(seasons, size=10, warmup=0):
+    """Trend table: for each block of `size` seasons, the headline figures, so drift over a century is visible and reported."""
+    rows = []
+    seasons = list(seasons)
+    for i in range(warmup, len(seasons) - size + 1, size):
+        blk = seasons[i:i + size]
+        champs = {}
+        for s in blk:
+            champs[s["champion"]] = champs.get(s["champion"], 0) + 1
+        ex = [s["extra"] for s in blk if s.get("extra")]
+        rows.append({
+            "seasons": f"{blk[0]['year']}-{blk[-1]['year']}",
+            "win_pct_sd": S.mean(S.pstdev([win_pct(r) for r in s["records"].values()]) for s in blk),
+            "close_game_share": sum(1 for s in blk for x in s["margins"] if x <= CLOSE) / sum(len(s["margins"]) for s in blk),
+            "points_per_team_game": S.mean(s["records"][c][3] / max(1, sum(s["records"][c][:3])) for s in blk for c in s["records"]),
+            "most_titles_one_club": max(champs.values()),
+            "distinct_champions": len(champs),
+            "roster_mean": S.mean(e["roster_mean"] for e in ex) if ex else float("nan"),
+            "club_strength_sd": S.mean(S.pstdev(list(s["strength"].values())) for s in blk),
+        })
+    return rows
 
 
 def verdicts(leagues, bands=None, warmup=WARMUP, z=2.0):

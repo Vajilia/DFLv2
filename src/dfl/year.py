@@ -13,7 +13,7 @@ as you care to run, and it is the living league that fairness is measured on.
 import random
 
 from . import calendar as C
-from . import draft, league, standings
+from . import draft, league, parity, standings
 from .ledger import rules as R
 from .ledger.world import World
 from .engine.ledger_engine import LedgerEngine
@@ -21,10 +21,13 @@ from .resolver import PlaceholderResolver
 
 
 class Universe:
-    def __init__(self, tables, seed=1, reckless=2, engine=True):
+    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight"):
         self.tpl = league.Template(tables)
         self.clubs = sorted(t["team_city"] for t in self.tpl.teams)
-        self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR, engine_injuries=engine)
+        self.profile = profile
+        settings = parity.apply(profile)
+        priority = self.clubs[-settings["priority_clubs"]:] if settings.get("priority_clubs") else ()
+        self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR, engine_injuries=engine, priority=priority)
         self.state = self.tpl.initial_state()
         self.resolver = LedgerEngine(self.world) if engine else PlaceholderResolver()
         self.rng = random.Random(f"{seed}|league")
