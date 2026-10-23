@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.20 · 2026-10-23** (amends Edition 8.19; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `03d1f02463a95b4c57cf356995545c850df4f846d7e868795fd0f36b94418a8f`
+**Edition 8.21 · 2026-10-23** (amends Edition 8.20; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `eab3d33a3c38c80a2b79a047fffcfab9ad85735a91f8a51f13946b5badfaa12c`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -729,7 +729,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 ## §13 Characters, AI and memory
 - All characters are female. Every character has a durable ID and an immutable creation portrait.
 - Hidden ability is never exposed to hiring actors, voters, fan expectations or narration.
-- Scouting and analytics estimate from evidence with position-specific biases. Official position is permanent.
+- Scouting and analytics estimate from evidence with position-specific biases. Official position is permanent. The scouting rule is defined below (Edition 8.21).
 - Starting budget 32 detailed memories per character; recent and defining events stay detailed, routine events merge into relationship summaries.
 - Relationships are sparse and directed, recording only actual contacts.
 - Draft classes contain 672 players, at least 12 per position. Pools hold at least 8 medically available unsigned players per position and 4 willing candidates per leadership role. A character may stay in a pool (free agents, leadership candidates) at most four consecutive years: if she is still unsigned at the fourth league-year opening after she entered it, she retires permanently and is removed from the list (her career record is archived by the people layer). Being hired resets the clock to zero, and a player released later starts a new count. A drafted player who goes unsigned enters the pool when the draft ends. This bounds database size.
@@ -746,6 +746,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
   - *Retirement*: only a free agent can retire at an offseason opening. Nothing happens before six years past her own peak; then the chance rises each year, is higher for a low true overall, and is certain at age 40. The four-year pool rule above also applies and is unchanged. A retired character leaves the list and her name becomes free. A player under contract does not retire (§20 item 19).
   - *Injuries* are made by the engine and written back to the club's ledger; they heal 26 weeks over the offseason (data).
   - *Squads*: a club's squad for a game is exactly its game-day active list (§11), as cards, with its coaches' ratings; elevations and emergency players included. The engine reads cards; it holds no second copy of any roster.
+  - *Scouting views (Edition 8.21).* A club never sees a player's true ability. A club's view of a player is her hidden overall plus a position bias plus an error. The error is fixed for that club and player for one league year and is new the next year; it shrinks with the player's credited seasons (more evidence, by 1 over the square root of 1 plus 0.7 per season), shrinks with the club's own general manager's evaluation rating (a rating of 100 cuts it by half, a rating of 0 raises it by half), and is smaller for the club's own players. Every club decision about players uses the club's view: draft picks, free-agent signings, releases, practice-squad choices, waiver claims. Market prices are set by the player's market rating, so a club can overpay for a player it overrates. Game-day depth and the engine still use true ability (coaches see practice; open item 22). The error size, evidence rate, evaluator effect and position biases are data (`data/characters/SCOUTING.csv`, `SCOUTING_BIAS.csv`) and are placeholders.
   - *Market floor (builder's default)*: a free agent does not sign for far less than her market price; only players priced at or near the league minimum sign for it. Greed, ambition and loyalty in negotiation are people-layer work (§20 item 3).
 
 ## §14 Fans, governance, expectations
@@ -803,7 +804,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.20 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18 and 8.19 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.21 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19 and 8.20 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -867,6 +868,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-23 | §13, §20 | development, aging and retirement defined and built on placeholder curve data; the engine squad is the ledger's game-day active list; market floor default; open items 19 and 20 added | owner said "start away" on connecting cards to the ledger; curves are the builder's placeholders pending a ruling | 8.18 |
 | 2026-10-23 | §12, §20 | returner's second draft: a club in its first season back that misses the playoffs picks as a block at the end of the non-playoff clubs; item 13 updated, item 21 added | owner said "yes please" to restoring his 2026-10-04 v1 ruling after the fairness bands showed 24% of returners with a top-16 pick (limit 10%) | 8.19 |
 | 2026-10-23 | §20 | fairness band for win-percentage spread: ceiling 0.19 raised to 0.21 | owner's ruling, on the builder's recommendation, after the living-league measurement showed 0.207 | 8.20 |
+| 2026-10-23 | §13, §20 | club scouting views: every club decision about players uses a noisy, evidence-shrinking, evaluator-scaled estimate instead of true ability; items 20 and 22 | people layer, first slice (players first, per the roadmap); owner asked for the people layer after the rest of Phase 4 | 8.21 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -888,5 +890,6 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 17. Leader pools and hiring (four willing candidates per role, §13) use the same creator and the four-year pool rule; the hiring market itself is people-layer work (Phase 5).
 18. Jersey numbers: none open. The same-club re-signing reclaim and lowest-open assignment are the builder's defaults (change on request).
 19. Retirement of a player under contract: nothing retires while signed, so a player can finish a contract at an age when a free agent would already have retired, and a retirement mid-contract (cap treatment, dead money, voided years) has no rule yet. Needs an owner ruling when the market exists.
-20. Talent economy: the free-agent pool stays large (about 2,600 characters in the living-league measurement, mostly undrafted draftees and released veterans waiting out the four-year rule), the stand-in clubs choose players by true overall (real clubs will work from scouting estimates, §13), and prices are a placeholder curve. Whether the pool size, the draft-to-veteran talent gap and rookie-scale surplus keep the league fair is the Phase 4 measurement.
+20. Talent economy: the free-agent pool stays large (about 2,600 characters in the living-league measurement, mostly undrafted draftees and released veterans waiting out the four-year rule), the stand-in clubs choose players by their scouting views (§13, Edition 8.21) with placeholder error sizes, and prices are a placeholder curve. Whether the pool size, the draft-to-veteran talent gap and rookie-scale surplus keep the league fair is the Phase 4 measurement.
 21. Fairness bands (Phase 4): v1's 15 working limits are ported as data (`data/fairness/BANDS.csv`) and measured on the living league (`docs/FAIRNESS.md`). One change: the ceiling on win-percentage spread is 0.21, not 0.19 (owner's ruling 2026-10-23; the NFL's own spread is about 0.19 to 0.21, and the engine's 0.207 was not to be tuned toward a limit stricter than real football). Every band must be re-run when the people layer replaces the stand-in clubs.
+22. Coaches' view: starters are chosen by true ability on game day. Real coaches judge by what they see, which is close to the truth but not equal to it; whether the head coach's and coordinators' own error should replace it belongs with the coaches slice of the people layer (Phase 5).

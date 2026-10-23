@@ -1,0 +1,23 @@
+pos,bias,note
+QB,1.5,"PLACEHOLDER: clubs tend to overrate passers"
+HB,1.0,"PLACEHOLDER: clubs tend to overrate backs"
+FB,0.0,
+WR,1.0,"PLACEHOLDER: clubs tend to overrate receivers"
+TE,0.0,
+LT,-0.5,"PLACEHOLDER: line play is harder to see"
+LG,-0.5,
+C,-0.5,
+RG,-0.5,
+RT,-0.5,
+LE,0.0,
+RE,0.5,
+DT,0.0,
+ROLB,0.0,
+MLB,0.5,
+LOLB,0.0,
+CB,0.5,
+FS,0.0,
+SS,0.0,
+K,-1.0,"PLACEHOLDER: specialists are undervalued"
+P,-1.0,
+LS,-1.5,

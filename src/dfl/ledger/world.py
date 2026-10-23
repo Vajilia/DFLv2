@@ -10,7 +10,10 @@ change clubs (the people layer). It is not evidence about league balance by itse
 import random
 from fractions import Fraction as F
 
+import math
+
 from ..characters import Creator, load_tables
+from ..characters.creator import rng_for
 from ..characters.development import develop, retire_chance
 from . import gameday, rules as R
 from .contracts import Contract, ContractError, rookie_contract
@@ -51,6 +54,7 @@ class World:
         self.cards = {}                  # player id -> Card, for everyone in the ledger (the id is the card id)
         self.rating = {}                 # player id -> hidden true overall (float), refreshed when the card develops
         self.leaders = {}                # club -> {role: Card}; they do not age or move yet (people layer)
+        self._views = {}                 # (club, player) -> that club's estimate this league year
         self.active = {}                 # club -> GameDay of its latest game
         self.active_week = {}
         self.engine_injuries = engine_injuries     # True: the engine injures players who play; the random model keeps to the rest
@@ -67,6 +71,25 @@ class World:
         self.cards[p.pid] = card
         self.rating[p.pid] = o
         return p
+
+    def view(self, cid, p):
+        """A club's estimate of a player's overall (Edition 8.21): her hidden overall plus the position's bias plus an error that is
+        fixed for the club and player over a league year, shrinks with her credited seasons and with the club's general manager's
+        evaluation, and is smaller for the club's own players. Clubs decide by this, never by the true figure."""
+        key = (cid, p.pid)
+        v = self._views.get(key)
+        if v is None:
+            S = self.tables.scouting
+            gm = self.leaders.get(cid, {}).get("gm")
+            evl = gm.attrs.get("EVL", 50) if gm else 50
+            sd = S["base_sd"] / math.sqrt(1 + S["seasons_k"] * p.seasons)
+            sd *= 1 - S["evl_effect"] * (evl - 50) / 50
+            if p.club == cid:
+                sd *= S["own_factor"]
+            sd = max(S["min_sd"], sd)
+            z = rng_for(self.creator.seed, "scout", cid, p.pid, self.L.year).gauss(0, 1)
+            v = self._views[key] = self.rating[p.pid] + self.tables.scouting_bias.get(p.pos, 0.0) + sd * z
+        return v
 
     def purge(self):
         """Characters the ledger has retired leave the list; their names may be used again."""
@@ -168,19 +191,21 @@ class World:
                     out[p.pos] = out.get(p.pos, 0) + 1
         return out
 
-    def fas(self, pos=None):
-        return sorted((p for p in self.L.players.values() if p.where == "fa" and p.out_weeks == 0 and (pos is None or p.pos == pos)),
-                      key=lambda q: (-q.ovr, q.pid))
+    def fas(self, pos=None, cid=None):
+        """Healthy free agents, best first: by the club's own view when a club is looking, by market rating otherwise."""
+        rank = (lambda q: (-self.view(cid, q), q.pid)) if cid else (lambda q: (-q.ovr, q.pid))
+        return sorted((p for p in self.L.players.values() if p.where == "fa" and p.out_weeks == 0 and (pos is None or p.pos == pos)), key=rank)
 
-    def cheap(self, pos=None):
+    def cheap(self, pos=None, cid=None):
         """Free agents who would sign for the league minimum, best first (a market price at or under the minimum). If nobody at that
         position is that cheap, the lowest-rated free agents. The autopilot may not buy a star at the minimum: nobody sells one."""
-        pool = self.fas(pos)
+        pool = self.fas(pos, cid)
         ok = [p for p in pool if ask(p) <= R.MIN_SALARY]
         return ok or pool[::-1]
 
-    def value(self, p):
-        return p.ovr - max(0, p.age - 30) * 2
+    def value(self, p, cid=None):
+        base = self.view(cid, p) if cid else p.ovr
+        return base - max(0, p.age - 30) * 2
 
     def need(self, cid, slots=("roster",)):
         """Positions short of the template count, most urgent first."""
@@ -197,10 +222,10 @@ class World:
                 return True
             pos = sorted(short)[0]
             want = "HB" if pos == "HB" else pos
-            pool = self.cheap(want)
+            pool = self.cheap(want, cid)
             if not pool:
                 self.top_up_pool()
-                pool = self.cheap(want)
+                pool = self.cheap(want, cid)
             if not L.room(cid, "roster"):
                 self.drop_weakest(cid, avoid=pos, slots=("roster",))
             if not L.number_room(cid, want):         # her block is full of surplus players: make a number free first
@@ -232,7 +257,7 @@ class World:
         def relief(x):          # prefer a release that does not raise the cap number (a bonus accelerating onto this year can)
             k = x.contract
             return k.cap_hit(L.year) - k.release_charges(L.year, L.week).get(L.year, F(0))
-        q = min(cand, key=lambda x: (relief(x) < 0, x.out_weeks == 0, self.value(x), x.pid))
+        q = min(cand, key=lambda x: (relief(x) < 0, x.out_weeks == 0, self.value(x, cid), x.pid))
         try:
             L.release(cid, q.pid)
         except Rejected as e:
@@ -255,7 +280,7 @@ class World:
             relief = k.cap_hit(L.year) - k.release_charges(L.year, L.week).get(L.year, F(0))
             if relief <= 0:
                 continue
-            key = (relief / (1 + max(0, self.value(p) - 45)), -p.pid)
+            key = (relief / (1 + max(0, self.value(p, cid) - 45)), -p.pid)
             if best is None or key > best_key:
                 best, best_key = p, key
         if best is None:
@@ -272,7 +297,7 @@ class World:
         c = L.clubs[cid]
         have = self.counts(cid, ("roster",), healthy=True)
         cand = [L.players[pid] for s in slots for pid in getattr(c, s)]
-        cand.sort(key=lambda q: (self.value(q) - (0 if q.where == "roster" else 100), q.pid))
+        cand.sort(key=lambda q: (self.value(q, cid) - (0 if q.where == "roster" else 100), q.pid))
         req = dict(MINIMUMS, HB=3)
         for p in cand:
             if keep_minimums and p.where == "roster" and p.out_weeks == 0 and have.get(p.pos, 0) <= req.get(p.pos, 0):
@@ -332,6 +357,7 @@ class World:
     def age_and_retire(self, skip=False):
         """The year turns: every card is a year older and develops; injuries heal over the offseason; free agents may retire."""
         L, D = self.L, self.tables.development
+        self._views.clear()                # clubs re-judge everyone each league year
         self.purge()                       # the pool rule (four years unsigned) already retired some at the league-year turn
         if skip:
             return
@@ -358,7 +384,7 @@ class World:
         # waivers clear
         order = sorted(L.clubs)
         self.rng.shuffle(order)
-        self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: p.ovr > 62 and self.rng.random() < 0.3))
+        self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: self.view(cid, p) > 62 and self.rng.random() < 0.3))
 
     def start_draft(self, order=None, comps=()):
         """Create the class and put the compensatory picks (rounds 8 and 9) into their owners' hands."""
@@ -384,7 +410,7 @@ class World:
             if rnd not in rounds:
                 continue
             owner = next(cid for cid, c in L.clubs.items() if (L.year, rnd, orig) in c.picks)
-            avail = sorted((p for p in self._pool if p.where == "draft"), key=lambda q: (-q.ovr, q.pid))
+            avail = sorted((p for p in self._pool if p.where == "draft"), key=lambda q: (-self.view(owner, q), q.pid))
             needy = {pos for _, pos in self.need(owner, ("roster", "ps"))}
             pick = next((p for p in avail[:40] if p.pos in needy), avail[0])
             pick.where = "fa"
@@ -419,7 +445,7 @@ class World:
                     break
                 needy = [pos for _, pos in self.need(cid)] or list(TEMPLATE)
                 pos = rng.choice(needy)
-                pool = [p for p in self.fas(pos) if p.ovr > 60]
+                pool = [p for p in self.fas(pos, cid) if self.view(cid, p) > 60]
                 if not pool:
                     break
                 p = pool[0]
@@ -438,7 +464,7 @@ class World:
                 if pos not in room:
                     room[pos] = L.number_room(cid, pos)
                 return room[pos]
-            pool = [p for p in self.cheap() if ask(p) <= R.MIN_SALARY and not (vets and p.veteran) and numbered(p.pos)]
+            pool = [p for p in self.cheap(None, cid) if ask(p) <= R.MIN_SALARY and not (vets and p.veteran) and numbered(p.pos)]
             if not pool:
                 break
             if not self.try_sign(cid, pool[0], "ps", Contract(L.year, (R.MIN_SALARY,), (), (), L.week)):
@@ -456,7 +482,7 @@ class World:
                 if not self.drop_weakest(cid, slots=("roster",)):
                     break
             while len(c.ps) > R.PS_MAX or L.ps_veterans(cid) > R.PS_VETERANS_MAX:
-                p = sorted((L.players[i] for i in c.ps), key=lambda q: (not (q.veteran and L.ps_veterans(cid) > R.PS_VETERANS_MAX), self.value(q), q.pid))[0]
+                p = sorted((L.players[i] for i in c.ps), key=lambda q: (not (q.veteran and L.ps_veterans(cid) > R.PS_VETERANS_MAX), self.value(q, cid), q.pid))[0]
                 L.release(cid, p.pid)
             self.fill_squad(cid)          # the squad counts against the cap, so fill it before measuring overage
             # overage: shed the player whose release relieves the cap the most per point of value lost
@@ -466,9 +492,9 @@ class World:
                     p = L.players[pid]
                     k = p.contract
                     gain = k.cap_hit(L.year) - k.release_charges(L.year, L.week).get(L.year, F(0))
-                    if p.where == "ps" or gain / (1 + max(0, self.value(p) - 45)) > best_gain:
-                        if gain > 0 and (best is None or gain / (1 + max(0, self.value(p) - 45)) > best_gain):
-                            best, best_gain = p, gain / (1 + max(0, self.value(p) - 45))
+                    if p.where == "ps" or gain / (1 + max(0, self.value(p, cid) - 45)) > best_gain:
+                        if gain > 0 and (best is None or gain / (1 + max(0, self.value(p, cid) - 45)) > best_gain):
+                            best, best_gain = p, gain / (1 + max(0, self.value(p, cid) - 45))
                 if best is None:
                     break
                 L.release(cid, best.pid)
@@ -479,7 +505,7 @@ class World:
                 if self.release_for_number(cid, pos):
                     continue
                 weakest = min((L.players[i] for i in c.roster + c.ps + c.ir if L.players[i].pos == pos),
-                              key=lambda q: (q.out_weeks == 0, self.value(q), q.pid))      # an injured player frees a number without costing a healthy body
+                              key=lambda q: (q.out_weeks == 0, self.value(q, cid), q.pid))      # an injured player frees a number without costing a healthy body
                 L.release(cid, weakest.pid)
                 continue
             if shortfalls(self.counts(cid, ("roster",))):
@@ -518,7 +544,7 @@ class World:
             self.trades()
         order = sorted(L.clubs)
         rng.shuffle(order)
-        self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: p.ovr > 65 and rng.random() < 0.2))
+        self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: self.view(cid, p) > 65 and rng.random() < 0.2))
         self.top_up_pool()
         for cid in L.clubs:
             self.stats["overage_max"] = max(self.stats["overage_max"], L.overage(cid))
@@ -564,7 +590,7 @@ class World:
             self.fix_minimums(cid)
         # occasional churn: release a poor, expensive player (this is what creates dead money)
         if cid in self.reckless or rng.random() < 0.01:
-            c_players = sorted((L.players[i] for i in c.roster), key=lambda q: (self.value(q), q.pid))
+            c_players = sorted((L.players[i] for i in c.roster), key=lambda q: (self.value(q, cid), q.pid))
             for p in c_players[:3]:
                 if rng.random() < (0.6 if cid in self.reckless else 0.2) and p.contract.bonuses:
                     try:
@@ -573,7 +599,7 @@ class World:
                         self._reject("release", e)
                     break
         while len(c.roster) < R.ROSTER_MAX - 2 and rng.random() < 0.3:
-            pool = self.cheap()
+            pool = self.cheap(None, cid)
             if not pool:
                 break
             self.try_sign(cid, pool[0], "roster", Contract(L.year, (R.MIN_SALARY,), (), (), L.week))

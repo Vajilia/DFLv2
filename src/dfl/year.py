@@ -109,7 +109,7 @@ class Universe:
     def on_waivers_clear(self, year, date, key):
         order = sorted(self.L.clubs)
         self.world.rng.shuffle(order)
-        self.world.stats["claims"] += len(self.L.resolve_waivers(order, wants=lambda cid, p: p.ovr > 62 and self.world.rng.random() < 0.3))
+        self.world.stats["claims"] += len(self.L.resolve_waivers(order, wants=lambda cid, p: self.world.view(cid, p) > 62 and self.world.rng.random() < 0.3))
 
     # ------------------------------------------------------------------ the season
     def _begin_season(self, year):

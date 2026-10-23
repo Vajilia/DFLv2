@@ -59,6 +59,7 @@ Reason for the order: people-and-agents is the most expensive and least testable
 
 ## Phase 5 — People
 - **Goal:** living characters, carefully bounded.
+- **Progress:** slice 5.1 (scouting views) built, Ed 8.21; plan and remaining slices in `docs/PEOPLE.md`.
 - **Work:** players first (archetypes as fixed souls, perception, personality, development, aging, retirement), then coaches (one pool for head coaches and coordinators, small capped effects), then GMs, CEOs and fans. Negotiations as meeting rooms only where independent parties need a say (contracts, trades, interviews). Analytics definitions (§20.1).
 - **Exit test:** adding people leaves every Phase 4 band inside range; all character effects are capped and tested.
 - **Needs from the owner:** development and aging curves (§20.3); anything that changes how agents may act.

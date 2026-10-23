@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.20.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.21.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -73,6 +73,10 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Built:** `src/dfl/fairness.py`, `tools/fairness.py`, `data/fairness/BANDS.csv` (v1's 15 bands, owner-accepted 2026-10-04), 12 tests. Six leagues of 36 seasons on the living league. First pass (Ed 8.18): 10 PASS, 2 FAIL, 3 UNCLEAR; the owner then restored the v1 returner draft rule (Ed 8.19) and the re-measure gave 13 PASS, 1 FAIL (win % spread 0.207 against 0.19), 1 UNCLEAR; the owner then raised that ceiling to 0.21 (Ed 8.20, the NFL's own spread is about 0.19 to 0.21), so the current score is **14 PASS, 0 FAIL, 1 UNCLEAR (exile effect)**. Full tables, definitions and caveats in `docs/FAIRNESS.md`. No owner decision is waiting on the bands; all must be re-run when the people layer arrives.
 
 - **Phase 4 remainder (2026-10-23):** two 100-season leagues show no drift (rating, scoring and club spread flat; no decade over 3 titles for one club); schedule push toward average measured at +0.002 per rating point, i.e. none; exile standard covered by the returner bands; parity test beds `none` and `rigged` (`src/dfl/parity.py`): the rigged control fails 8 of 15 bands and removing the cap alone fails 5, so the bands do see unfairness. Details in `docs/FAIRNESS.md`.
+
+## People layer, slice 5.1: scouting views (Ed 8.21, 2026-10-23)
+- **Built:** every club decision about players (draft, free agency, releases, practice squad, waivers) uses a noisy club view instead of true ability; error shrinks with credited seasons and the club GM's evaluation rating, and is smaller for a club's own players. Data: `data/characters/SCOUTING.csv`, `SCOUTING_BIAS.csv` (placeholders). 5 tests in `tests/test_living.py`. Plan for the rest of the layer: `docs/PEOPLE.md`.
+- **Not yet:** game day and the engine still use true ability (spec item 22). Fairness re-measure with scouting on is recorded in `docs/FAIRNESS.md` once run.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

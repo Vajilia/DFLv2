@@ -148,6 +148,76 @@ class CardWorld(unittest.TestCase):
             self.assertTrue(all(ask(p) <= R.MIN_SALARY for p in pool))
 
 
+class Scouting(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.w = World(CLUBS, seed=31)
+        cls.w.open_year(first=True)
+
+    def errors(self, players, cid):
+        w = self.w
+        return [w.view(cid, p) - w.rating[p.pid] - w.tables.scouting_bias.get(p.pos, 0.0) for p in players]
+
+    def test_a_view_is_stable_within_a_year_and_differs_between_clubs(self):
+        w = self.w
+        p = next(iter(w.L.players.values()))
+        self.assertEqual(w.view("C01", p), w.view("C01", p))
+        self.assertNotEqual(w.view("C01", p), w.view("C02", p))
+
+    def test_views_are_unbiased_apart_from_the_position_bias_and_noisy(self):
+        w = self.w
+        fa = [p for p in w.L.players.values() if p.where == "fa"][:600]
+        e = self.errors(fa, "C03")
+        self.assertLess(abs(statistics.mean(e)), 0.6)
+        self.assertGreater(statistics.pstdev(e), 1.5)
+
+    def test_more_seasons_and_a_better_evaluator_and_own_players_all_shrink_the_error(self):
+        w = self.w
+        pool = [p for p in w.L.players.values() if p.where == "fa"][:400]
+        rookies = []
+        for p in pool:
+            q = type(p)(p.pid, p.pos, p.ovr, p.age, 0)
+            rookies.append(q)
+        vets = [type(p)(p.pid, p.pos, p.ovr, p.age, 8) for p in pool]
+        def sd(ps):
+            w._views.clear()
+            return statistics.pstdev(self.errors(ps, "C04"))
+        self.assertGreater(sd(rookies), sd(vets) * 1.4)
+        club = "C05"
+        w._views.clear()
+        w.leaders[club]["gm"].attrs["EVL"] = 95
+        good = statistics.pstdev(self.errors(rookies, club))
+        w._views.clear()
+        w.leaders[club]["gm"].attrs["EVL"] = 5
+        bad = statistics.pstdev(self.errors(rookies, club))
+        self.assertGreater(bad, good * 1.5)
+        w._views.clear()
+        own = [type(p)(p.pid, p.pos, p.ovr, p.age, 0, club=club) for p in pool]
+        w.leaders[club]["gm"].attrs["EVL"] = 50
+        w._views.clear()
+        e_own = statistics.pstdev(self.errors(own, club))
+        w._views.clear()
+        e_other = statistics.pstdev(self.errors(rookies, club))
+        self.assertLess(e_own, e_other * 0.8)
+
+    def test_clubs_re_judge_everyone_each_year(self):
+        w = World(CLUBS, seed=32)
+        w.open_year(first=True)
+        p = next(iter(w.L.players.values()))
+        a = w.view("C01", p)
+        w.L.new_year()
+        w.age_and_retire()
+        if p.pid in w.L.players:
+            self.assertNotEqual(w.view("C01", w.L.players[p.pid]), a)
+
+    def test_decisions_follow_the_view_not_the_truth(self):
+        w = World(CLUBS, seed=33)
+        w.open_year(first=True)
+        pool = w.fas("QB", "C06")
+        views = [w.view("C06", p) for p in pool]
+        self.assertEqual(views, sorted(views, reverse=True))
+
+
 class EngineOnTheLedger(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

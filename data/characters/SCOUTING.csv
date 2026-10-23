@@ -1,0 +1,6 @@
+key,value,note
+base_sd,6.0,"A club's error (rating points, one standard deviation) in judging a player with no seasons of evidence"
+seasons_k,0.7,"Evidence: the error shrinks by 1/sqrt(1 + k x credited seasons)"
+own_factor,0.6,"A club judges its own players better (practice and meetings) by this factor on the error"
+evl_effect,0.5,"A general manager's evaluation rating of 100 cuts the error by this fraction, a rating of 0 raises it by the same"
+min_sd,1.0,"The error never falls below this"

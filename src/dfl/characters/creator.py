@@ -47,6 +47,8 @@ def load_tables(path=DATA):
     for r in rd("LOOKS.csv"):
         t.looks.setdefault(r["feature"], []).append((r["value"], float(r["weight"])))
     t.age_curve = {int(r["delta"]): float(r["multiplier"]) for r in rd("AGE_CURVE.csv")}
+    t.scouting = {r["key"]: float(r["value"]) for r in rd("SCOUTING.csv")}
+    t.scouting_bias = {r["pos"]: float(r["bias"]) for r in rd("SCOUTING_BIAS.csv")}
     t.development = {r["key"]: float(r["value"]) for r in rd("DEVELOPMENT.csv")}
     t.first, t.last = lines("FIRST_NAMES.txt"), lines("LAST_NAMES.txt")
     t.attrs = {r["code"]: r for r in rd("ATTRIBUTES.csv")}
