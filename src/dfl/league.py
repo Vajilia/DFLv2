@@ -7,6 +7,7 @@ from last season's final division order (`standings`).  Nothing here knows how a
 """
 import csv
 import os
+import random
 import shutil
 
 from . import standings
@@ -121,32 +122,166 @@ def play_playoffs(seeds_by_conf, resolver, rng):
     return champs, log
 
 
+class SeasonRun:
+    """One season played step by step, in the order the calendar fires the events (calendar.py).
+
+    play_week(n) and play_tour_round(i) resolve games as their dates arrive; finish_regular() fixes the standings and the
+    seeds; play_round() plays a playoff round for both conferences; play_bowl() and play_coronation() finish the year;
+    handoff() returns (result, next_state) exactly as play_season always has.
+    """
+
+    TOUR_SLOTS = 7
+
+    def __init__(self, tpl, state, season, resolver, rng, history, seed="dfl"):
+        self.tpl, self.state, self.season, self.resolver, self.rng, self.history, self.seed = tpl, state, season, resolver, rng, history, seed
+        self.year = FOUNDING_YEAR + season - 1
+        self.teams, self.sched, self.tour = season_tables(tpl, state, season)
+        self.active = {r["team_city"]: (r["conference"], r["division"]) for r in self.teams if r["club_status"] == "active"}
+        self.ambassadors = {r["team_city"]: (r["conference"], r["division"]) for r in self.teams if r["club_status"] == "ambassador"}
+        resolver.start_season(sorted({**self.active, **self.ambassadors}), season, rng)
+        self.week_rows = {}
+        for r in self.sched:
+            self.week_rows.setdefault(int(r["week"]), []).append(r)
+        self.games, self.tour_games, self.playoff_log = [], [], []
+        self.venues = self._draw_venues()
+        self.outcome = None
+        self.alive = {}
+        self.by_seed = {}
+        self.champs = {}
+        self.round_done = []
+        self.bowl = None
+        self.coronation = None
+
+    # ---- venues
+    def _draw_venues(self):
+        with open(f"{self.tpl.dir}/INTL_VENUES.csv", encoding="utf-8", newline="") as f:
+            pool = [r["venue_id"] for r in csv.DictReader(f) if r["active"] == "true"]
+        picks = random.Random(f"{self.seed}|venues|{self.season}").sample(pool, self.TOUR_SLOTS + 1)
+        return {**{f"TR-{i + 1}": picks[i] for i in range(self.TOUR_SLOTS)}, "BOWL": picks[-1]}
+
+    # ---- regular season and Tour
+    def play_week(self, numbered_week):
+        out = []
+        for r in self.week_rows[numbered_week]:
+            a, h = self.resolver.resolve(r, self.rng, decisive=False)
+            g = dict(r, away_score=a, home_score=h)
+            self.games.append(g)
+            out.append(g)
+        return out
+
+    def play_tour_round(self, i):
+        out = []
+        for r in self.tour:
+            if int(r["tour_round"]) != i:
+                continue
+            g = {"away": r["away_nominal"], "home": r["home_nominal"]}
+            a, h = self.resolver.resolve(g, self.rng, decisive=False)
+            g = dict(r, away=g["away"], home=g["home"], away_score=a, home_score=h, venue=self.venues[r["venue_slot"]])
+            self.tour_games.append(g)
+            out.append(g)
+        return out
+
+    def tour_standings(self):
+        """({club: Rec}, {conference: [clubs best first]}) over the Tour so far."""
+        rec = standings.tally(self.ambassadors, self.tour_games)
+        by_conf = {}
+        for c, (conf, _) in self.ambassadors.items():
+            by_conf.setdefault(conf, []).append(c)
+        return rec, {conf: standings.rank(cs, rec, self.ambassadors, f"{self.seed}|tour{self.season}|{conf}")
+                     for conf, cs in sorted(by_conf.items())}
+
+    def finish_regular(self):
+        assert len(self.games) == len(self.sched), "regular season not finished"
+        self.outcome = standings.season_outcome(self.active, self.games, f"{self.seed}|season{self.season}")
+        self.by_seed = {conf: {i + 1: c for i, c in enumerate(clubs)} for conf, clubs in self.outcome["seeds"].items()}
+        self.alive = {conf: [1, 2, 3, 4, 5, 6, 7] for conf in self.by_seed}
+        return self.outcome
+
+    # ---- playoffs
+    def _play(self, conf, a, b):
+        lo, hi = standings.host(a, b), max(a, b)
+        by = self.by_seed[conf]
+        res = self.resolver.resolve({"away": by[hi], "home": by[lo]}, self.rng, decisive=True)
+        self.playoff_log.append((conf, by[hi], by[lo], res[0], res[1]))
+        return lo if res[1] > res[0] else hi
+
+    def play_round(self, name):
+        assert name == ("wild_card", "divisional", "conference")[len(self.round_done)], name
+        for conf in self.by_seed:
+            if name == "wild_card":
+                wc = [self._play(conf, a, b) for a, b in standings.wild_card_pairs()]
+                self.alive[conf] = [1] + wc
+            elif name == "divisional":
+                self.alive[conf] = [self._play(conf, a, b) for a, b in standings.divisional_pairs(self.alive[conf])]
+            else:
+                self.champs[conf] = self.by_seed[conf][self._play(conf, *sorted(self.alive[conf]))]
+        self.round_done.append(name)
+
+    def play_bowl(self):
+        """Western v Eastern Ambassador All-Stars at the Bowl venue. Rosters are the people layer's job (Phase 5); here the
+        All-Star sides carry their conference's Tour clubs and the resolver is told their combined strength."""
+        _, by_conf = self.tour_standings()
+        sides = {}
+        for conf, clubs in by_conf.items():
+            name = f"{conf} All-Stars"
+            sides[conf] = name
+            if hasattr(self.resolver, "strength"):
+                self.resolver.strength[name] = sum(self.resolver.strength.get(c, 0.0) for c in clubs) / len(clubs)
+        res = self.resolver.resolve({"away": sides["Western"], "home": sides["Eastern"]}, self.rng, decisive=True)
+        self.bowl = {"away": sides["Western"], "home": sides["Eastern"], "away_score": res[0], "home_score": res[1],
+                     "venue": self.venues["BOWL"], "staff_clubs": {conf: clubs[0] for conf, clubs in by_conf.items()}}      # each conference's best Tour club supplies its coaches
+        return self.bowl
+
+    def coronation_venue(self):
+        venues = sorted({self.tpl.venue[c] for c in self.tpl.division_of})
+        return standings.coronation_pick(self.history, venues, self.year, self.seed)
+
+    def play_coronation(self):
+        venue = self.coronation_venue()
+        self.history[self.year] = venue
+        finalists = sorted(self.champs.values())
+        away, home = self.champs["Western"], self.champs["Eastern"]
+        res = self.resolver.resolve({"away": away, "home": home}, self.rng, decisive=True)
+        host = next((c for c in finalists if self.tpl.venue[c] == venue), None)
+        self.coronation = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "venue": venue,
+                           "home_club": host, "winner": home if res[1] > res[0] else away}
+        return self.coronation
+
+    # ---- hand-off
+    def draft_order(self, returning=None):
+        """Next draft's base order (draft.py): the whole 40-club league ranked by the cascade, then exits, then the lottery."""
+        from . import draft
+        ranked = standings.rank(list(self.active), self.outcome["records"], self.active, f"{self.seed}|draft{self.season}")
+        elim = draft.elimination_rounds(self.playoff_log, (self.coronation["away"], self.coronation["home"],
+                                                          self.coronation["away_score"], self.coronation["home_score"]))
+        ret = sorted(returning if returning is not None else self.ambassadors)
+        return draft.base_order(ranked, elim, ret, f"{self.seed}|draft{self.season}")
+
+    def handoff(self):
+        new_state = {}
+        for dv in DIVISIONS:
+            order = self.outcome["division_orders"][dv]
+            nxt = standings.next_division_state(order, self.state[dv]["amb"])
+            new_state[dv] = {"seeds": nxt["seeds"], "amb": nxt["ambassador"]}
+        c = self.coronation
+        result = {"season": self.season, "year": self.year, "teams": self.teams, "schedule": self.sched, "tour": self.tour,
+                  "games": self.games, "outcome": self.outcome, "champions": self.champs, "playoff_log": self.playoff_log,
+                  "coronation_venue": c["venue"], "coronation_home_club": c["home_club"], "coronation_winner": c["winner"],
+                  "tour_games": self.tour_games, "bowl": self.bowl, "venues": self.venues, "draft_order": self.draft_order()}
+        return result, new_state
+
+
 def play_season(tpl, state, season, resolver, rng, history, seed="dfl"):
-    """Play one season. Returns (result dict, next state). `history` maps year -> Coronation venue club (mutated)."""
-    teams_rows, sched, tour = season_tables(tpl, state, season)
-    active = {r["team_city"]: (r["conference"], r["division"]) for r in teams_rows if r["club_status"] == "active"}
-    resolver.start_season(sorted(active), season, rng)
-    games = []
-    for r in sched:
-        a, h = resolver.resolve(r, rng, decisive=False)
-        games.append(dict(r, away_score=a, home_score=h))
-    outcome = standings.season_outcome(active, games, f"{seed}|season{season}")
-    champs, playoff_log = play_playoffs(outcome["seeds"], resolver, rng)
-    year = FOUNDING_YEAR + season - 1
-    venues = sorted({tpl.venue[c] for c in tpl.division_of})
-    venue = standings.coronation_pick(history, venues, year, seed)
-    history[year] = venue
-    finalists = sorted(champs.values())
-    c_away, c_home = champs["Western"], champs["Eastern"]
-    c_res = resolver.resolve({"away": c_away, "home": c_home}, rng, decisive=True)
-    host_club = next((c for c in finalists if tpl.venue[c] == venue), None)
-    winner = c_home if c_res[1] > c_res[0] else c_away
-    new_state = {}
-    for dv in DIVISIONS:
-        order = outcome["division_orders"][dv]
-        nxt = standings.next_division_state(order, state[dv]["amb"])
-        new_state[dv] = {"seeds": nxt["seeds"], "amb": nxt["ambassador"]}
-    result = {"season": season, "year": year, "teams": teams_rows, "schedule": sched, "tour": tour, "games": games,
-              "outcome": outcome, "champions": champs, "playoff_log": playoff_log, "coronation_venue": venue,
-              "coronation_home_club": host_club, "coronation_winner": winner}
-    return result, new_state
+    """Play one whole season in one call. Returns (result dict, next state). `history` maps year -> Coronation venue
+    (mutated). The year loop (year.py) uses SeasonRun directly so events fire on their calendar dates."""
+    run = SeasonRun(tpl, state, season, resolver, rng, history, seed)
+    for n in sorted(run.week_rows):
+        run.play_week(n)
+    for i in range(1, 8):
+        run.play_tour_round(i)
+    run.finish_regular()
+    for name in ("wild_card", "divisional", "conference"):
+        run.play_round(name)
+    run.play_bowl()
+    run.play_coronation()
+    return run.handoff()

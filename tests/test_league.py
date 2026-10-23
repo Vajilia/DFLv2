@@ -111,3 +111,60 @@ class Loop(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TourBowlAndDraftOrder(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tpl, cls.res, cls.state = run(6, 3)
+
+    def test_tour_is_a_single_round_robin_among_the_eight_ambassadors(self):
+        for r in self.res:
+            tg = r["tour_games"]
+            self.assertEqual(len(tg), 28)
+            amb = {t["team_city"] for t in r["teams"] if t["club_status"] == "ambassador"}
+            self.assertEqual(len(amb), 8)
+            pairs = {frozenset((g["away"], g["home"])) for g in tg}
+            self.assertEqual(len(pairs), 28)
+            self.assertTrue(all(g["away"] in amb and g["home"] in amb for g in tg))
+            played = {}
+            for g in tg:
+                for c in (g["away"], g["home"]):
+                    played[c] = played.get(c, 0) + 1
+            self.assertEqual(set(played.values()), {7})
+
+    def test_eight_distinct_venues_one_per_round_plus_the_bowl(self):
+        pool = {r["venue_id"] for r in league._read(f"{TABLES}/INTL_VENUES.csv") if r["active"] == "true"}
+        for r in self.res:
+            v = r["venues"]
+            self.assertEqual(len(v), 8)
+            self.assertEqual(len(set(v.values())), 8)
+            self.assertTrue(set(v.values()) <= pool)
+            for g in r["tour_games"]:
+                self.assertEqual(g["venue"], v[g["venue_slot"]])
+            self.assertEqual(r["bowl"]["venue"], v["BOWL"])
+
+    def test_the_bowl_is_played_without_a_tie_between_the_two_all_star_sides(self):
+        for r in self.res:
+            b = r["bowl"]
+            self.assertEqual((b["away"], b["home"]), ("Western All-Stars", "Eastern All-Stars"))
+            self.assertNotEqual(b["away_score"], b["home_score"])
+            amb = {t["team_city"]: t["conference"] for t in r["teams"] if t["club_status"] == "ambassador"}
+            self.assertEqual({conf: amb[c] for conf, c in b["staff_clubs"].items()}, {"Western": "Western", "Eastern": "Eastern"})
+
+    def test_draft_order_has_all_48_clubs_with_returning_ambassadors_first(self):
+        for r in self.res:
+            o = r["draft_order"]
+            amb = {t["team_city"] for t in r["teams"] if t["club_status"] == "ambassador"}
+            self.assertEqual(len(o), 48)
+            self.assertEqual(len(set(o)), 48)
+            self.assertEqual(set(o[:8]), amb)
+            self.assertEqual(o[-1], r["coronation_winner"])
+            self.assertEqual({o[-2]}, {c for c in (r["champions"]["Western"], r["champions"]["Eastern"])} - {r["coronation_winner"]})
+
+    def test_exiled_clubs_pick_in_the_worst_group(self):
+        for r in self.res:
+            o = r["draft_order"]
+            exiled = set(r["outcome"]["exiled"].values())
+            non_playoff_end = 8 + 26
+            self.assertTrue(exiled <= set(o[8:non_playoff_end]))
