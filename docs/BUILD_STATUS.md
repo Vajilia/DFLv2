@@ -33,9 +33,9 @@ The placeholder resolver can exercise structure, standings and rotation. It is *
 | Rosters, practice squad, IR, cut to 53, floor supplement, viability gate, rollback | `src/dfl/ledger/ledger.py`; unit-tested |
 | Game day: active 48/47, elevations, emergency list, forfeit test | `src/dfl/ledger/gameday.py`; unit-tested |
 | Determinism (same seed, same digest across hash seeds) | tested |
-| 100-year soak, 48 clubs (2 bonus-heavy), seed 1, placeholder world | Passed under Ed 8.7 rules (86,400 games, 0 forfeits, 0 legal-move failures). **Re-run under Ed 8.8 (no floor, cap binds from the final cut) is in progress**; a 6-year 48-club run passed (0 forfeits, 0 legal-move failures). CI runs a 3-year version. |
+| 100-year soak, 48 clubs (2 bonus-heavy), seed 1, placeholder world, Ed 8.8 rules | **PASS** in 1,619 s: 86,400 games, 0 forfeits, 0 legal-move failures; 642 short-handed games (0.7%, up from 32 under Ed 8.7 because the cap now binds in season) and 142 emergency lists; 2,324 trades (76 refused), 895 claims; lowest payroll at the cut 509. Final digest `96fec3c8c0dd...`. CI runs a 3-year version. |
 
-Read the soak honestly: "invariant never violated" means every club is inside the limit at each season start and at each year-end audit, and no move ever worsened an over-limit year. Within a season clubs drift over the limit as earned salary accrues (peak committed 1,380 against a 735 limit, margin minimum -405; overage peak 130). The world driving the soak is a placeholder, so rates (supplements, trades, injuries) say nothing about realism.
+Read the soak honestly: "invariant never violated" means every club is inside the limit at each season start and at each year-end audit, and no move ever worsened an over-limit year. Within a season clubs drift over the limit as earned salary accrues (peak committed 1,422 against a 735 limit, margin minimum -447; in-season overage peak 66; the pre-cut overage peak of 358 is allowed by Ed 8.8). The world driving the soak is a placeholder, so rates (supplements, trades, injuries) say nothing about realism.
 
 ## Not built yet (next)
 1. (Ledger is done; see above.)

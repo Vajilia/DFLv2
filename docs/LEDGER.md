@@ -24,7 +24,7 @@ Authority: Design Document Ed 8.8, sections 11, 12, 17. Where the document was s
 Retired by Ed 8.8: A3 (floor supplement exempt from the gate), A5-old (overage tolerated), A6 (practice-squad pay, now a rule).
 
 ## Soak result
-Re-run after the Ed 8.8 changes; see `docs/BUILD_STATUS.md`. Regenerate with `python3 -I tools/run_ledger_soak.py --years 100 --seed 1 --report out/ledger_soak.md` (about 35 minutes).
+100 years, 48 clubs, seed 1, Ed 8.8: PASS (figures and digest `96fec3c8c0dd...` in `docs/BUILD_STATUS.md`). Side effect worth knowing: short-handed games rose from 0.04% to 0.7% because a club at the cap cannot always sign a replacement mid-season; nobody forfeited. Regenerate with `python3 -I tools/run_ledger_soak.py --years 100 --seed 1 --report out/ledger_soak.md` (about 35 minutes).
 
 ## Not evidence for
 The world driving the soak (player ratings, aging, prices, trades, injuries) is a placeholder. It shows the rules cannot jam or be broken; it says nothing about market realism (open item 3).
