@@ -153,8 +153,37 @@ class World:
             if not L.room(cid, "roster"):
                 self.drop_weakest(cid, avoid=pos, slots=("roster",))
             if not self.try_sign(cid, pool[0], "roster", Contract(L.year, (R.MIN_SALARY,), (), (), L.week)):
-                return False
+                # a club at the cap makes room: release the surplus-position player whose release relieves the cap most
+                if not self.make_cap_room(cid, avoid=pos):
+                    return False
         return False
+
+    def make_cap_room(self, cid, avoid=None):
+        """Release one player (not needed to meet a minimum) whose release lowers the cap number. False if none exists."""
+        L = self.L
+        c = L.clubs[cid]
+        have = self.counts(cid, ("roster",), healthy=True)
+        req = dict(MINIMUMS, HB=3)
+        best, best_key = None, None
+        for pid in c.roster + c.ps:
+            p = L.players[pid]
+            if p.where == "roster" and p.out_weeks == 0 and have.get(p.pos, 0) <= req.get(p.pos, 0):
+                continue
+            k = p.contract
+            relief = k.cap_hit(L.year) - k.release_charges(L.year, L.week).get(L.year, F(0))
+            if relief <= 0:
+                continue
+            key = (relief / (1 + max(0, self.value(p) - 45)), -p.pid)
+            if best is None or key > best_key:
+                best, best_key = p, key
+        if best is None:
+            return False
+        try:
+            L.release(cid, best.pid)
+        except Rejected as e:
+            self._reject("release", e)
+            return False
+        return True
 
     def drop_weakest(self, cid, avoid=None, slots=("roster", "ps"), keep_minimums=True):
         L = self.L
@@ -337,7 +366,7 @@ class World:
                 self.weekly(cid, week)
             if week <= 18:
                 self.games(week)
-            if week <= R.TRADE_LAST_GAME_WEEK:
+            if week <= R.TRADE_LAST_PAID_WEEK:
                 self.trades()
             order = sorted(L.clubs)
             rng.shuffle(order)

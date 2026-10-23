@@ -226,7 +226,7 @@ class Money(unittest.TestCase):
         with self.assertRaises(Rejected):
             L.trade("A", [], "B", [], a_picks=[(2005, 1, "A")])   # beyond the next three drafts
         L.start_camp(); L.begin_season()
-        for _ in range(R.TRADE_LAST_GAME_WEEK):
+        for _ in range(R.TRADE_LAST_PAID_WEEK):
             L.advance_week()
         L.trade("A", [a.pid], "B", [b.pid])                       # the last open week
         L.advance_week()

@@ -305,7 +305,7 @@ class Ledger:
         self._txn([cid, src], [pid], go, "claim")
 
     def trade_open(self):
-        return self.phase != "season" or self.week <= R.TRADE_LAST_GAME_WEEK
+        return self.phase != "season" or self.week <= R.TRADE_LAST_PAID_WEEK
 
     def trade(self, a, a_gives, b, b_gives, a_picks=(), b_picks=()):
         pids = list(a_gives) + list(b_gives)

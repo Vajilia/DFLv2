@@ -14,7 +14,7 @@ ACTIVE_LIMIT, ACTIVE_LIMIT_FEW_OL, OL_FOR_FULL = 48, 47, 8
 MAX_COVERED_YEARS, MAX_PRORATION_YEARS = 5, 5
 ROOKIE_SCALE = (F(25), F(18), F(14), F(11), F(9), F(7), F(5))
 ROOKIE_YEARS, R1_OPTION = 4, F(35)
-TRADE_LAST_GAME_WEEK = 8                    # trades close before the first game of numbered week 9
+TRADE_LAST_PAID_WEEK = 9                    # trades close the Friday before numbered week 9, which is calendar (paid) week 10
 
 # Largest committed (owed-regardless) money a club may carry in any one year:
 VIABILITY_MAX_COMMITTED = CAP - REQUIRED_PLACES * MIN_SALARY - RESERVE      # 735

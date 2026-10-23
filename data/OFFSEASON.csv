@@ -1,0 +1,13 @@
+order,event,rule,note
+1,offseason_open,fixed 01-01,"New league year: contracts expire, retirements take effect, cap enforced (top-69 count)"
+2,hiring_open,fixed 01-01,Leadership hiring opens
+3,hiring_close,fixed 01-31,Leadership hiring closes
+4,trading_open,fixed 02-01,"Trading opens at the global close of hiring (spec section 12)"
+5,free_agency_open,fixed 02-01,Free agency opens
+6,draft_round_1,last thu 04,Draft round 1 (the last Thursday of April)
+7,draft_rounds_2_3,after draft_round_1 1,Draft rounds 2 and 3
+8,draft_rounds_4_7,after draft_round_1 2,Draft rounds 4 to 7 and compensatory picks
+9,camp_open,fixed 06-01,Camp opens (preseason ceiling applies)
+10,venue_vote,fixed 06-15,Coronation venue vote (fictional fan vote)
+11,final_cuts,before week1 tue,"Final cut to 53 and 16: all contracts count, cap must be met"
+12,waivers_clear,before week1 wed,Waiver period after the final cut
