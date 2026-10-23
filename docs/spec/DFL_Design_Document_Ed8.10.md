@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.9 · 2026-10-22** (amends Edition 8.8; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `b79a70906008708811d9542905c9e008501a91c5f2c3b0075cafbd50aa46b8e1`
+**Edition 8.10 · 2026-10-22** (amends Edition 8.9; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `6f4f60c3ce6356d7d4452f09af73cc5cddd97755d17f56f56dcd46cb086460f8`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -46,6 +46,20 @@ Single source. Nothing below repeats a figure that appears here.
 
 ## §2 World clock and season calendar
 - The universe opens **1 January 2000**. Season 1's genesis offseason occupies January–June 2000.
+- **The DFL year runs 1 January to 31 December.** The offseason (January to June) is the front of the same year as the season it leads into, and the league year (the cap year) turns on 1 January. Colleges are rotated to match in the storyline; the draft class simply arrives on the DFL's schedule.
+- **Offseason order** (NFL order and spacing, compressed into the first half of the year; the dates are provisional and live in `data/OFFSEASON.csv`, owner may change them without touching anything else):
+
+| Event | Date |
+|---|---|
+| League year turns: contracts expire, retirements take effect, cap enforced (top-count rule, §11) | 1 January |
+| Leadership hiring window | 1–31 January |
+| Trading opens (§12); free agency opens | 1 February |
+| Draft: round 1 on the last Thursday of April; rounds 2–3 the next day; rounds 4–7 and compensatory picks the day after | late April |
+| Camp opens (preseason ceiling applies) | 1 June |
+| Coronation venue vote | 15 June |
+| Final cut to 53 and 16, then the waiver period | the Tuesday and Wednesday before week 1 |
+
+In the DFL calendar a year's events fire in the order of this table, then the 27-week season below, and close on 31 December.
 - **The Diamond Coronation is the last Sunday of the simulated year.** All scheduling is derived backwards from it.
 - Fixed offsets: final regular-season Monday = **C−34**; wild card C−28; divisional C−21; conference C−14; **Ambassador Bowl C−7**; Coronation C. All rungs are Sundays, 7 days apart.
 - Wild card, divisional and conference rounds occupy the fourth, third and second Sundays before the Coronation. The Bowl is the Sunday immediately preceding it, at noon league time.
@@ -698,7 +712,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Seven rounds, 48 ordinary selections per round, 336 total.
 - Order: non-playoff clubs, then clubs by elimination round, then runner-up and champion; worse regular-season record first, relevant tiebreakers reversed.
 - Returning ambassadors receive first-round slots 1–8 by an equal-chance seeded lottery; the lottery identity follows the original pick through trades and supplies their later-round order too.
-- Compensatory picks follow round seven, at most two per club and 48 league-wide. Qualifying departures require first-year base ≥ $75 and a top-quarter snap share.
+- Compensatory picks follow round seven, at most two per club and 48 league-wide. Qualifying movements require a first-year base ≥ $75 on the contract signed, and, for a departure, a top-quarter snap share at the old club. A club's qualifying signings cancel its qualifying departures, highest value first (NFL netting, so a club cannot churn free agents for picks); each unmatched departure earns a pick, best value first, ties to the club picking earlier. Compensation is for free-agent losses only; parity is the job of draft order, the lottery and place-based scheduling (see §20).
 - Trade assets are named players and owned picks in the next three not-yet-completed drafts.
 - Trading opens at the global close of leadership hiring. In competition, finalise only Tuesday 00:01 through Friday 23:59 league time, ending Friday 23:59 before the first game of numbered week 9.
 - No league vote, waiting period or subjective fairness veto. A trade that leaves either club over the cap and raises its cap number is rejected.
@@ -767,7 +781,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.9 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7 and 8.8 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.10 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8 and 8.9 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -818,6 +832,8 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §11 | no cap until the final cut → cap enforced all year, counting only the highest 69 contracts before the final cut | owner's ruling: defer to the NFL's top-51 method; stops free-agency hoarding | 8.9 |
 | 2026-10-22 | §11, §12 | every released player goes through waivers → a player with 4 or more credited seasons goes straight to free agency | owner's ruling: NFL vested-veteran rule | 8.9 |
 | 2026-10-22 | §3 | tiebreak cascade confirmed as written; rationale recorded (columns shown on the standings page) | owner's ruling; the NFL's head-to-head, restart and common-games steps are deliberately not adopted | 8.9 |
+| 2026-10-22 | §2 | year undefined → the DFL year runs 1 January to 31 December; offseason order and provisional dates added | owner's ruling ("dialed back to Jan. 1st to Dec. 31st"); dates are the builder's proposal pending owner confirmation | 8.10 |
+| 2026-10-22 | §12 | compensatory picks counted every qualifying departure → departures netted against signings (NFL) | builder's default after owner asked for the NFL's method; compensation is not a parity tool | 8.10 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -832,3 +848,6 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 10. Calibrate the pre-cut cap count (§0) once the market exists: it is adapted from the NFL's top 51 of a 90-player camp roster, and the ratio does not carry over exactly. Also decide whether drafted rookies need a reserved allowance, as the NFL's rookie pool provides (none of the placeholder soak's draft picks went unsigned).
 11. Floor removal relies on the sentiment and recall mechanism pricing poor spending and poor results; its inputs are unbuilt (people layer). Payroll spread across clubs is a fairness-band candidate.
 12. Emergency cap borrowing (owner proposal): deferred. The viability invariant is built so that no legal roster is ever unreachable; revisit only if a real jam appears once the market exists.
+13. Preseason ceiling: 75 including the practice squad cannot hold a 69-man club plus a full draft class (7 picks and up to 2 compensatory), so the simulation has each club cut a veteran to sign every pick. The NFL cuts once from 90 to 53. Owner to decide between 75 and 90.
+14. Exile-return loop: a club exiled as last place returns the next year as seed 5 with a lottery pick in slots 1-8; whether this traps weak clubs in a cycle, and whether extra picks for exiled clubs would help or would reward losing, must be measured with the real engine (parity profiles, Phase 4).
+15. Offseason dates in §2 are provisional.

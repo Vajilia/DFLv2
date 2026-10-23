@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.9.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.10.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -37,11 +37,23 @@ The placeholder resolver can exercise structure, standings and rotation. It is *
 
 Read the soak honestly: "invariant never violated" means every club is inside the limit at each season start and at each year-end audit, and no move ever worsened an over-limit year. Within a season clubs drift over the limit as earned salary accrues (peak committed 1,422 against a 735 limit, margin minimum -447; in-season overage peak 66; the pre-cut overage peak of 358 is allowed by Ed 8.8). The world driving the soak is a placeholder, so rates (supplements, trades, injuries) say nothing about realism.
 
+## Phase 2: the full calendar (built; exit test result below)
+| Piece | File | Status |
+| --- | --- | --- |
+| The DFL year (Jan 1 to Dec 31), offseason table, in-season events derived from the Coronation | `src/dfl/calendar.py`, `data/OFFSEASON.csv` | tested for 300 years; Season 1 reproduces the published CALENDAR table exactly |
+| Season played step by step: weeks, Tour rounds, venue draw, playoffs, Bowl, Coronation | `src/dfl/league.py` (`SeasonRun`) | tested (28 Tour games, 8 distinct venues, Bowl, hand-off) |
+| Draft order, returning-ambassador lottery, NFL-netted compensatory picks | `src/dfl/draft.py` | tested (incl. lottery uniformity over 4,000 draws) |
+| Ledger events as separate steps, free-agent movement log | `src/dfl/ledger/` | tested |
+| The integrated year: every event fires once, in date order, league and ledger in step | `src/dfl/year.py`, `tools/run_years.py` | tested (3-year unit test; 100-year run below) |
+
+Found by integrating (and fixed): the ledger closed trades one week early (now matches the calendar, with a test); a club at the cap could not fill a positional minimum (autopilot now makes cap room); the 75-player preseason ceiling cannot hold a 69-man club plus a full draft class (spec open item 13, owner decision).
+
+Not built (people layer, engine): leadership hiring, All-Star voting and rosters, real snap shares for compensatory picks, exile-return parity measurement.
+
 ## Not built yet (next)
-1. (Ledger is done; see above.)
-2. Ambassador Tour and Bowl results (the tables are generated; games are not played).
-3. The real game engine behind the `Resolver` interface (spec open item 2).
-4. Everything in spec section 20.
+1. The real game engine behind the `Resolver` interface (spec open item 2).
+2. Fairness bands and parity profiles, then the people layer, persistence and pacing, presentation (see ROADMAP).
+3. Everything in spec section 20.
 
 ## Not imported
 The 339-file `DFL-vBeta_source_snapshot_2026-10-20.zip` is not in this repository and has not been seen. Nothing here claims to include it.
