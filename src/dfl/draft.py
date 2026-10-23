@@ -40,17 +40,21 @@ def elimination_rounds(playoff_log, coronation):
     return out
 
 
-def base_order(ranked, elimination, returning, seed):
+def base_order(ranked, elimination, returning, seed, returned=()):
     """The order of the 48 original clubs for every round, pick 1 first.
 
     ranked: all clubs that played the regular season, best first by the standings cascade (so the reverse is worst first,
     with every tiebreaker reversed). elimination: {club: exit round} for the 14 playoff clubs. returning: the eight
-    ambassadors coming back, who take slots 1-8 by lottery.
+    ambassadors coming back, who take slots 1-8 by lottery. returned: clubs in their first season back from exile, who have
+    already had their lottery pick: one that missed the playoffs picks as a block at the end of the non-playoff clubs
+    (never ahead of her record), worst record first inside the block (Edition 8.19). A returned club that made the playoffs
+    is placed by her playoff exit like any other.
     """
     assert set(elimination) <= set(ranked)
     worst_first = list(reversed(ranked))
     order = lottery(returning, seed)
-    order += [c for c in worst_first if c not in elimination]
+    non_playoff = [c for c in worst_first if c not in elimination]
+    order += [c for c in non_playoff if c not in returned] + [c for c in non_playoff if c in returned]
     for stage in ELIMINATION_ORDER:
         order += [c for c in worst_first if elimination.get(c) == stage]
     assert len(order) == len(set(order)) == len(ranked) + len(returning)

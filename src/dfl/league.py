@@ -1,4 +1,4 @@
-"""Season loop (Design Document 8.18, sections 3, 6, 7).
+"""Season loop (Design Document 8.19, sections 3, 6, 7).
 
 Season 1 tables are the template. Every later season is the template relabelled by (bed, seed): which division
 holds which bed comes from the eight-season rotation (`schedule_bed_rotation`), which club holds which seed comes
@@ -257,7 +257,9 @@ class SeasonRun:
         elim = draft.elimination_rounds(self.playoff_log, (self.coronation["away"], self.coronation["home"],
                                                           self.coronation["away_score"], self.coronation["home_score"]))
         ret = sorted(returning if returning is not None else self.ambassadors)
-        return draft.base_order(ranked, elim, ret, f"{self.seed}|draft{self.season}")
+        # clubs in their first season back (last season's ambassadors, seed 5 now); Season 1's seed 5s were never exiled
+        returned = [] if self.season == 1 else [self.state[dv]["seeds"][5] for dv in self.state]
+        return draft.base_order(ranked, elim, ret, f"{self.seed}|draft{self.season}", returned)
 
     def handoff(self):
         new_state = {}

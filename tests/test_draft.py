@@ -32,6 +32,26 @@ class Order(unittest.TestCase):
         self.assertEqual(o[34:40], list(reversed(ranked[8:14])))      # wild card losers, worse first
         self.assertEqual(o[40:44], list(reversed(ranked[4:8])))       # divisional losers
 
+    def test_clubs_in_their_first_season_back_pick_at_the_end_of_the_non_playoff_block(self):
+        ranked, playoff, ret = self.setup()
+        plain = D.base_order(ranked, playoff, ret, "s")
+        returned = ["C39", "C30", "C20", "C10"]            # C10 made the playoffs; C39 is the worst record, then C30, C20
+        o = D.base_order(ranked, playoff, ret, "s", returned)
+        self.assertEqual(len(o), 48)
+        self.assertEqual(o[:8], plain[:8])                  # the lottery is untouched
+        block = o[8:34]
+        self.assertEqual(block[-3:], ["C39", "C30", "C20"])  # the block closes the non-playoff clubs, worst record first
+        self.assertEqual(block[:-3], [c for c in reversed(ranked[14:]) if c not in ("C39", "C30", "C20")])
+        self.assertEqual(o[34:], plain[34:])                # a returned club that made the playoffs is placed by her exit as usual
+
+    def test_the_returner_block_never_moves_a_club_ahead_of_her_record(self):
+        ranked, playoff, ret = self.setup()
+        plain = D.base_order(ranked, playoff, ret, "s")
+        for r in (["C39"], ["C25", "C26"], ["C14", "C39", "C20"]):
+            o = D.base_order(ranked, playoff, ret, "s", r)
+            for c in r:
+                self.assertGreaterEqual(o.index(c), plain.index(c))
+
     def test_lottery_is_seeded_and_equal_chance(self):
         ret = clubs(8, "R")
         self.assertEqual(D.lottery(ret, "x"), D.lottery(list(reversed(ret)), "x"))     # input order irrelevant

@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.18 · 2026-10-23** (amends Edition 8.17; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `8aa0af610bb39d59a77facac5612582543112cfe56779e28d428e8bb57ee94cd`
+**Edition 8.19 · 2026-10-23** (amends Edition 8.18; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `63b54b083f9396c6e48be54b9965ea4463458cd8ed821366aa43776daaad3c56`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -720,6 +720,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Seven rounds, 48 ordinary selections per round, 336 total.
 - Order: non-playoff clubs, then clubs by elimination round, then runner-up and champion; worse regular-season record first, relevant tiebreakers reversed.
 - Returning ambassadors receive first-round slots 1–8 by an equal-chance seeded lottery; the lottery identity follows the original pick through trades and supplies their later-round order too.
+- **Second draft of a returner (Edition 8.19, restoring the owner's ruling of 2026-10-04).** A club in its first season back from exile has already had its lottery pick. If it misses the playoffs it picks, in every round, as a block at the end of the non-playoff clubs (slots 35 minus the block size through 34), worst record first inside the block, so it never picks ahead of its record. If it makes the playoffs it is placed by its playoff exit like any other club. Season 1 has no returners.
 - Compensatory picks follow round seven, at most two per club and 48 league-wide. Qualifying movements require a first-year base ≥ $75 on the contract signed, and, for a departure, a top-quarter snap share at the old club. A club's qualifying signings cancel its qualifying departures, highest value first (NFL netting, so a club cannot churn free agents for picks); each unmatched departure earns a pick, best value first, ties to the club picking earlier. Compensation is for free-agent losses only; parity is the job of draft order, the lottery and place-based scheduling (see §20).
 - Trade assets are named players and owned picks in the next three not-yet-completed drafts.
 - Trading opens at the global close of leadership hiring. In competition, finalise only Tuesday 00:01 through Friday 23:59 league time, ending Friday 23:59 before the first game of numbered week 9.
@@ -802,7 +803,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.18 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16 and 8.17 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.19 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17 and 8.18 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -864,6 +865,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-23 | §10, §20 | engine build order: rules core and play-level resolver first, spatial engine later behind the same interface; items 2 and 7 updated with slice-1 results | owner chose the recommended path | 8.16 |
 | 2026-10-23 | §20 | tie-game frequency item closed: the measured rate (about 1.5% of regular-season games) is accepted and the overtime rule stands | owner's ruling ("accept the rates") | 8.17 |
 | 2026-10-23 | §13, §20 | development, aging and retirement defined and built on placeholder curve data; the engine squad is the ledger's game-day active list; market floor default; open items 19 and 20 added | owner said "start away" on connecting cards to the ledger; curves are the builder's placeholders pending a ruling | 8.18 |
+| 2026-10-23 | §12, §20 | returner's second draft: a club in its first season back that misses the playoffs picks as a block at the end of the non-playoff clubs; item 13 updated, item 21 added | owner said "yes please" to restoring his 2026-10-04 v1 ruling after the fairness bands showed 24% of returners with a top-16 pick (limit 10%) | 8.19 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -878,7 +880,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 10. Calibrate the pre-cut cap count (§0) once the market exists: it is adapted from the NFL's top 51 of a 90-player camp roster, and the ratio does not carry over exactly. (The rookie reserve, §11, is built and replaces the open question about rookie room.)
 11. Floor removal relies on the sentiment and recall mechanism pricing poor spending and poor results; its inputs are unbuilt (people layer). Payroll spread across clubs is a fairness-band candidate.
 12. Emergency cap borrowing (owner proposal): deferred. The viability invariant is built so that no legal roster is ever unreachable; revisit only if a real jam appears once the market exists.
-13. Exile-return loop: a club exiled as last place returns the next year as seed 5 with a lottery pick in slots 1-8; whether this traps weak clubs in a cycle, and whether extra picks for exiled clubs would help or would reward losing, must be measured with the real engine (parity profiles, Phase 4).
+13. Exile-return loop: a club exiled as last place returns the next year as seed 5 with a lottery pick in slots 1-8; whether this traps weak clubs in a cycle, and whether extra picks for exiled clubs would help or would reward losing, is measured by the fairness bands (`docs/FAIRNESS.md`, first pass on the living league: no trap, returners finish near the league average). The second-draft block above closes the double-pick finding.
 14. Offseason dates in §2 are provisional.
 15. Character attributes, their means and the age curve are placeholders until the engine (Phase 3) says which attributes it uses and how; the attribute list and every distribution are data in `data/characters/` and may change. Overall ratings are not yet comparable across positions (a calibration job for Phase 3/4).
 16. Appearance: the creation look is immutable; whether and how a character visibly ages is decided in presentation (Phase 7), by redrawing from the stored look.
@@ -886,3 +888,4 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 18. Jersey numbers: none open. The same-club re-signing reclaim and lowest-open assignment are the builder's defaults (change on request).
 19. Retirement of a player under contract: nothing retires while signed, so a player can finish a contract at an age when a free agent would already have retired, and a retirement mid-contract (cap treatment, dead money, voided years) has no rule yet. Needs an owner ruling when the market exists.
 20. Talent economy: the free-agent pool stays large (about 2,600 characters in the living-league measurement, mostly undrafted draftees and released veterans waiting out the four-year rule), the stand-in clubs choose players by true overall (real clubs will work from scouting estimates, §13), and prices are a placeholder curve. Whether the pool size, the draft-to-veteran talent gap and rookie-scale surplus keep the league fair is the Phase 4 measurement.
+21. Fairness bands (Phase 4): v1's 15 working limits are ported unchanged as data (`data/fairness/BANDS.csv`) and measured on the living league (`docs/FAIRNESS.md`). Open: the ceiling on win-percentage spread (0.19 against a measured 0.205; the NFL's own is about 0.19 to 0.21), and every band must be re-run when the people layer replaces the stand-in clubs.
