@@ -40,7 +40,7 @@ Reason for the order: people-and-agents is the most expensive and least testable
 ## Phase 2.5 — Character creator (built 2026-10-23, Ed 8.13)
 - **Goal:** one place that makes every character, before the engine needs them.
 - **Work:** the character card (identity, hidden attributes, growth, traits, public view), a seeded creator, 672-player draft classes with a class-strength shift, the founding league population. Code in `src/dfl/characters/`, data in `data/characters/`, tests in `tests/test_characters.py`, sample cards from `tools/show_cards.py`.
-- **Not yet done:** the ledger still uses placeholder `ovr` players; wiring the ledger's world to cards, and the real attribute list, wait for the engine (Phase 3). Pools and retirement use the Ed 8.12 four-year rule.
+- **Wired to the ledger (Ed 8.18, 2026-10-23):** the ledger world's players are cards (founding league, draft classes, pool top-ups from the Creator), cards develop and age yearly and free agents retire by age and rating (placeholder curves in `data/characters/DEVELOPMENT.csv` and `AGE_CURVE.csv`). The real attribute list still waits for the engine's needs (Phase 3).
 - **Needs from the owner:** nothing now; the attribute set is revisited when the engine is specified.
 
 ## Phase 3 — Game engine (the big one) — slice 1 built 2026-10-23
