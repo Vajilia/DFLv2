@@ -1,0 +1,25 @@
+metric,lo,hi,note
+points,20.5,25.5,points per team per game (NFL 2015-2024 about 21.5-24.5)
+plays,60,68,offensive snaps per team per game
+pass_att,31,37,pass attempts per team (excludes sacks)
+comp_pct,0.61,0.67,completion percentage
+yds_per_att,6.5,7.6,gross passing yards per attempt
+sack_rate,0.055,0.075,sacks per dropback
+int,0.55,0.9,interceptions thrown per team
+rush_att,24,30,rushes per team (includes scrambles)
+ypc,4.0,4.8,yards per rush
+fumbles_lost,0.35,0.7,fumbles lost per team
+third_pct,0.36,0.44,third-down conversion rate
+penalties,4.5,7.5,accepted penalties per team (the engine models the ten rulebook penalties only)
+pen_yds,40,65,penalty yards per team
+punts,3.4,5.0,punts per team
+fg_att,1.4,2.3,field-goal attempts per team
+fg_pct,0.78,0.89,field-goal percentage
+td,2.3,3.1,touchdowns per team
+first_downs,18,24,first downs per team
+top_share,0.47,0.53,home share of time of possession
+ot_rate,0.03,0.10,share of games that reach overtime
+tie_rate,0.0005,0.015,share of regular-season games that end tied
+home_win,0.52,0.60,home win share between equal clubs
+margin_sd,11,15.5,standard deviation of the final margin
+injuries,0.4,1.4,game injuries per team per game

@@ -1,0 +1,11 @@
+name,side,rate,yards,auto_first,when,note
+false start,off,0.0181,5,0,pre,
+delay of game,off,0.0043,5,0,pre,
+offside,def,0.0109,5,0,pre,
+offensive holding,off,0.0283,10,0,live,
+defensive holding,def,0.0058,5,1,pass,
+illegal contact,def,0.0029,5,1,pass,
+defensive pass interference,def,0.0130,spot,1,pass,
+offensive pass interference,off,0.0051,10,0,pass,
+personal foul,either,0.0065,15,0,live,
+unsportsmanlike conduct,either,0.0017,15,0,live,

@@ -1,0 +1,69 @@
+name,value,note
+# --- league baseline of unit ratings (z = (rating - mean) / sd); measured on the founding population by tools/calibrate_engine.py --baseline
+mean_qb,71.9,PLACEHOLDER
+sd_qb,5.0,PLACEHOLDER
+mean_pro,73.5,PLACEHOLDER
+sd_pro,3.0,PLACEHOLDER
+mean_recv,74.1,PLACEHOLDER
+sd_recv,2.8,PLACEHOLDER
+mean_rb,77.2,PLACEHOLDER
+sd_rb,4.7,PLACEHOLDER
+mean_runblock,74.4,PLACEHOLDER
+sd_runblock,2.9,PLACEHOLDER
+mean_prush,71.4,PLACEHOLDER
+sd_prush,2.5,PLACEHOLDER
+mean_cover,74.4,PLACEHOLDER
+sd_cover,2.3,PLACEHOLDER
+mean_rdef,73.5,PLACEHOLDER
+sd_rdef,2.0,PLACEHOLDER
+mean_kick,65.5,PLACEHOLDER
+sd_kick,8.5,PLACEHOLDER
+# --- play calling
+pass_rate_base,0.55,share of snaps that are dropbacks in a neutral situation
+# --- passing
+sack_base,0.065,sacks per dropback
+sack_pressure_gain,0.015,added per z of rush-vs-protection edge
+comp_base,0.66,completion rate on a throw
+comp_edge_gain,0.03,per z of QB+receivers vs coverage
+int_base,0.02,interceptions per throw
+int_edge_gain,0.006,per z of edge (negative edge raises)
+pass_yards_mean,11.0,yards per completion
+pass_yards_sd,7.5,spread of completion yards
+pass_edge_yards,0.6,yards per z
+scramble_base,0.03,QB scrambles per dropback
+# --- running
+run_yards_mean,5.3,yards per carry
+run_yards_sd,4.0,spread
+run_edge_yards,0.3,yards per z of run block+back vs run defense
+fumble_run,0.010,fumbles lost per carry
+fumble_sack,0.12,fumbles lost per sack
+big_play_run,0.035,chance of a long run
+# --- penalties are in PENALTIES.csv
+# --- clock
+play_time_run,5.5,seconds
+play_time_pass,5.0,seconds
+delay_normal_lo,30,between-play seconds when the clock runs (lo)
+delay_normal_hi,40,between-play seconds when the clock runs (hi)
+delay_hurry_lo,10,hurry-up (lo)
+delay_hurry_hi,18,hurry-up (hi)
+delay_chains_lo,26,after a first down the clock is stopped to reset the chains (lo)
+delay_chains_hi,34,after a first down (hi)
+oob_run,0.11,run out of bounds
+oob_pass,0.17,completion out of bounds
+oob_hurry_mult,2.5,out-of-bounds multiplier in a hurry-up
+# --- special teams
+fg_mid,58,distance at which a field goal is 50 percent
+fg_scale,7,logistic scale
+pat_prob,0.95,extra point
+two_prob,0.48,two-point try
+punt_mean,45,gross punt distance
+punt_sd,7,spread
+punt_return_mean,6,return yards
+kickoff_touchback,0.62,touchback share
+kickoff_return_mean,24,start of drive after a return (yards from own goal)
+onside_success,0.12,onside kick recovered
+# --- injuries
+injury_rate,0.00028,per player per snap
+mean_punt,62.9,PLACEHOLDER
+sd_punt,7.5,PLACEHOLDER
+home_edge,0.15,home field in z of offensive edge

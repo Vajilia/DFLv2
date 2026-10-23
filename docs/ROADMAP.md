@@ -43,7 +43,8 @@ Reason for the order: people-and-agents is the most expensive and least testable
 - **Not yet done:** the ledger still uses placeholder `ovr` players; wiring the ledger's world to cards, and the real attribute list, wait for the engine (Phase 3). Pools and retirement use the Ed 8.12 four-year rule.
 - **Needs from the owner:** nothing now; the attribute set is revisited when the engine is specified.
 
-## Phase 3 — Game engine (the big one)
+## Phase 3 — Game engine (the big one) — slice 1 built 2026-10-23
+- **Slice 1 (done):** rules core and a play-level resolver, injuries, calibration harness and bands. See `docs/ENGINE.md`. The spatial engine and the remaining slices below are not started.
 - **Goal:** replace the placeholder resolver with real football.
 - **Work, in slices, spec before code:** (1) run and pass plays and a drive model, (2) penalties from the ~20 most common NFL penalties, (3) injuries at NFL-average frequency, (4) overtime and ties, (5) box scores, (6) play log and the second per-play table for the 2D view. Each slice has calibration bands (scoring, plays per game, penalties, injuries, tie rate).
 - **Exit test:** engine output sits inside the accepted football-reasonable bands over thousands of games, and tie frequency is measured, not assumed.

@@ -29,7 +29,14 @@ class Tables:
 
 def load_tables(path=DATA):
     t = Tables()
-    rd = lambda f: list(csv.DictReader(open(os.path.join(path, f), encoding="utf-8")))
+    def rd(f):
+        with open(os.path.join(path, f), encoding="utf-8", newline="") as fh:
+            return list(csv.DictReader(fh))
+
+    def lines(f):
+        with open(os.path.join(path, f), encoding="utf-8") as fh:
+            return [x.strip() for x in fh if x.strip()]
+
     t.positions = {r["pos"]: {k: (float(v) if k not in ("pos", "group") else v) for k, v in r.items()} for r in rd("POSITIONS.csv")}
     t.profile = {}
     for r in rd("PROFILE.csv"):
@@ -40,8 +47,7 @@ def load_tables(path=DATA):
     for r in rd("LOOKS.csv"):
         t.looks.setdefault(r["feature"], []).append((r["value"], float(r["weight"])))
     t.age_curve = {int(r["delta"]): float(r["multiplier"]) for r in rd("AGE_CURVE.csv")}
-    t.first = [x.strip() for x in open(os.path.join(path, "FIRST_NAMES.txt"), encoding="utf-8") if x.strip()]
-    t.last = [x.strip() for x in open(os.path.join(path, "LAST_NAMES.txt"), encoding="utf-8") if x.strip()]
+    t.first, t.last = lines("FIRST_NAMES.txt"), lines("LAST_NAMES.txt")
     t.attrs = {r["code"]: r for r in rd("ATTRIBUTES.csv")}
     return t
 
