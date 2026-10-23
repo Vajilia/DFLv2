@@ -55,7 +55,7 @@ Found by integrating (and fixed): the ledger closed trades one week early (now m
 Not built (people layer, engine): leadership hiring, All-Star voting and rosters, real snap shares for compensatory picks, exile-return parity measurement.
 
 ## Ed 8.12 ledger changes and the character creator (2026-10-23)
-- **Verified by tests:** four-consecutive-year pool limit (retire and delete; reset on hire), rookie reserve in the cap number (unmade picks at rookie scale; 10-year check: 0 unsigned picks). 100-year rerun result is recorded below once it finishes.
+- **Verified by tests:** four-consecutive-year pool limit (retire and delete; reset on hire), rookie reserve in the cap number (unmade picks at rookie scale; 10-year check: 0 unsigned picks). **100-year rerun under Ed 8.12 (seed 1): PASS.** 4,900 events in order, 100 validator passes with 0 failures, 77,600 game days, 0 forfeits, 40 short-handed, 10 emergency lists, 0 legal-move failures, 33,600 draft picks made and **0 unsigned** (was 846 of 33,601), 2,850 trades (36 refused), 1,140 waiver claims, 0 compensatory picks (placeholder prices rarely reach $75), 48 distinct Coronation venues, digest `471e8541f9ea...`, 1,077 s.
 - **Character creator (Ed 8.13): built, standalone.** `src/dfl/characters/`, data in `data/characters/`, 15 tests, sample output via `tools/show_cards.py`. **Placeholder honesty:** the attribute list, means, spreads and age curve are provisional until the engine exists, and overall ratings are not comparable across positions yet. Not yet wired to the ledger world (still placeholder `ovr`).
 
 ## Not built yet (next)
