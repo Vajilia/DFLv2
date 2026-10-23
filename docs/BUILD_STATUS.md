@@ -46,6 +46,10 @@ Read the soak honestly: "invariant never violated" means every club is inside th
 | Ledger events as separate steps, free-agent movement log | `src/dfl/ledger/` | tested |
 | The integrated year: every event fires once, in date order, league and ledger in step | `src/dfl/year.py`, `tools/run_years.py` | tested (3-year unit test; 100-year run below) |
 
+**Exit test (Edition 8.11 rules, seed 1): PASS.** 100 full years: 4,900 calendar events (49 a year), each fired once in date order; 100 seasons of tables passed the validator (0 failures); 77,600 game days, 0 forfeits, 45 short-handed, 9 emergency lists, 0 legal-move failures; 33,601 draft picks made; 2,860 trades (38 refused), 1,179 waiver claims; all 48 Coronation venues used. Final digest `126b76533613...`. Command: `python3 -I tools/run_years.py --years 100 --seed 1` (about 33 minutes).
+
+Caveats: 846 picks (2.5%) went unsigned, almost all at the two deliberately reckless clubs sitting at their cap limit (the NFL reserves cap for its rookie pool; spec open item 10). Only 1 compensatory pick was awarded in 100 years because the placeholder price curve almost never pays a $75 first-year base; the comp rules are covered by unit tests, not by this run.
+
 Found by integrating (and fixed): the ledger closed trades one week early (now matches the calendar, with a test); a club at the cap could not fill a positional minimum (autopilot now makes cap room); the 75-player preseason ceiling could not hold a 69-man club plus a full draft class (owner ruled the NFL's 90, Edition 8.11).
 
 Not built (people layer, engine): leadership hiring, All-Star voting and rosters, real snap shares for compensatory picks, exile-return parity measurement.

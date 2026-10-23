@@ -32,7 +32,7 @@ Reason for the order: people-and-agents is the most expensive and least testable
 - **Exit test:** a 100-season soak under autopilot in which the invariant is never violated, every club always has at least one legal transaction, and no club is forced into forfeit by the rules themselves.
 - **Needs from the owner:** open items on market mechanics (§20.3) as they come up.
 
-## Phase 2 — Full calendar
+## Phase 2 — Full calendar (done 2026-10-23)
 - **Goal:** the whole year, not just the 18 games.
 - **Work:** Ambassador Tour and Bowl played; offseason calendar (draft, free agency, trade deadline, cuts); the 8-team lottery and 48-pick draft; exile relief; the all-rookie Founding Day build.
 - **Exit test:** 100 full years with every calendar event firing in order and every table validating.
