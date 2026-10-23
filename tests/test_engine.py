@@ -134,5 +134,43 @@ class Model(unittest.TestCase):
             self.assertNotIn(hidden, text)
 
 
+class SeasonIntegration(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from dfl import league
+        from dfl.engine.resolver import EngineResolver
+        cls.league, cls.ER = league, EngineResolver
+        cls.tpl = league.Template(os.path.join(ROOT, "data", "season1"))
+        cls.clubs = sorted({r["team_city"] for r in cls.tpl.teams})
+        cls.pop = Creator(5, load_tables()).founding(2001, cls.clubs)
+
+    def season(self, seed=1):
+        res = self.ER({c: Squad(c, self.pop["clubs"][c]["roster"] + self.pop["clubs"][c]["ps"]) for c in self.clubs})
+        state = self.tpl.initial_state()
+        out, _ = self.league.play_season(self.tpl, state, 1, res, random.Random(seed), {}, seed="t")
+        return res, out
+
+    def test_a_whole_season_runs_on_the_engine_and_is_deterministic(self):
+        res, out = self.season()
+        res2, out2 = self.season()
+        self.assertEqual(out["coronation_winner"], out2["coronation_winner"])
+        self.assertEqual(out["outcome"]["seeds"], out2["outcome"]["seeds"])
+        self.assertGreater(res.games_played, 300)
+        self.assertGreater(res.injuries_seen, 100)
+        recs = out["outcome"]["records"].values()
+        self.assertTrue(all(r.w + r.l + r.t > 0 for r in recs))
+
+    def test_the_bowl_is_played_by_all_star_squads(self):
+        res, out = self.season()
+        self.assertEqual((out["bowl"]["away"], out["bowl"]["home"]), ("Western All-Stars", "Eastern All-Stars"))
+        self.assertTrue(out["bowl"]["away_score"] != out["bowl"]["home_score"])
+        self.assertTrue(any(n.endswith("All-Stars") for n in res.sides))
+
+    def test_injured_players_miss_the_clubs_next_games(self):
+        res, _ = self.season()
+        some = next(((c, d) for c, d in res.games_out.items() if d), None)
+        self.assertTrue(some is None or all(n > 0 for n in some[1].values()))
+
+
 if __name__ == "__main__":
     unittest.main()

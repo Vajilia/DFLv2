@@ -26,3 +26,8 @@ Targets are NFL aggregate bands in `data/engine/BANDS.csv`. Of 24 bands, seed 1 
 **Tie frequency (spec open item 7).** With a 10-minute overtime and the both-sides possession rule the engine ties about 1.5% of regular-season games, and about 21% of overtime games end level. That is higher than the NFL's recent rate, because both sides must get the ball and a game can end level after a field goal each. **The owner accepted this rate (2026-10-23); the overtime rule stands.** Re-measure with the spatial engine.
 
 Speed: about 290 games per second, so a 1,056-game season takes about four seconds.
+
+## Wired into the season loop (2026-10-23)
+`EngineResolver` (`src/dfl/engine/resolver.py`) plugs the engine into `league.play_season`: one squad per club from character cards, injuries carried from game to game, All-Star composite squads for the Ambassador Bowl (best four per position across the conference's Tour clubs, until the people layer's voting exists). `python3 tools/run_seasons.py --engine` runs it.
+
+100 seasons, seed 1, **static rosters** (no draft, aging, free agency or retirement between seasons): 0 validator failures, win-percentage spread 0.18 (the NFL's is about 0.19), year-to-year win% correlation 0.40, about 5.7 ties a season. But the league is not fair over time: individual clubs were exiled between 1 and 48 times in 100 years, 12 clubs won every title and one club won 24. **That is the expected result of frozen rosters, not evidence about the DFL's parity machinery.** It is the baseline the draft, the lottery, the cap and the schedule must beat, and it is why the next step is connecting cards to the ledger (draft classes, development, aging, retirement) so the fairness bands can be measured on a living league.

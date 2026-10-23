@@ -23,13 +23,24 @@ def main():
     ap.add_argument("--seasons", type=int, default=100)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--validate-every", type=int, default=1)
+    ap.add_argument("--engine", action="store_true", help="play games with the game engine (character-card squads) instead of the placeholder")
     a = ap.parse_args()
     tpl = league.Template(a.tables)
     state = tpl.initial_state()
     rng = random.Random(a.seed)
-    resolver = PlaceholderResolver()
+    if a.engine:
+        from dfl.characters import Creator
+        from dfl.engine.resolver import EngineResolver
+        from dfl.engine.squad import Squad
+        clubs = sorted({r["team_city"] for r in tpl.teams}) if hasattr(tpl, "teams") else None
+        C = Creator(a.seed)
+        pop = C.founding(2001, clubs)
+        resolver = EngineResolver({c: Squad(c, pop["clubs"][c]["roster"] + pop["clubs"][c]["ps"]) for c in clubs})
+    else:
+        resolver = PlaceholderResolver()
     history, problems = {}, []
     wins_sd, ties, exiles, cor_venues, champs = [], [], {}, [], {}
+    prev_pct, yoy_x, yoy_y, pct_sd = {}, [], [], []
     cor_home, seed1_titles = 0, 0
     os.makedirs(a.out, exist_ok=True)
     for season in range(1, a.seasons + 1):
@@ -44,6 +55,12 @@ def main():
                 problems.append((season, [l for l in p.stdout.splitlines() if l.startswith("FAIL")]))
         rec = out["records"]
         wins_sd.append(statistics.pstdev([r.w for r in rec.values()]))
+        pct = {c: r.w / max(1, r.w + r.l + r.t) for c, r in rec.items()}
+        pct_sd.append(statistics.pstdev(pct.values()))
+        for c, v in pct.items():
+            if c in prev_pct:
+                yoy_x.append(prev_pct[c]); yoy_y.append(v)
+        prev_pct = pct
         ties.append(sum(r.t for r in rec.values()) // 2)
         for c in out["exiled"].values():
             exiles[c] = exiles.get(c, 0) + 1
@@ -57,6 +74,8 @@ def main():
                   for a_, b in zip(*(lambda ys: (ys, ys[1:]))([i for i, x in enumerate(cor_venues) if x == v])))
     report = {
         "seasons": n, "seed": a.seed, "validated_seasons": n // a.validate_every, "validator_failures": len(problems),
+        "win_pct_sd_mean": round(statistics.mean(pct_sd), 3),
+        "win_pct_year_to_year_corr": round(statistics.correlation(yoy_x, yoy_y), 3) if len(yoy_x) > 2 else None,
         "ties_per_season_mean": round(statistics.mean(ties), 2), "wins_sd_mean": round(statistics.mean(wins_sd), 2),
         "exiles_per_club": {"min": min(exiles.values()), "max": max(exiles.values()), "total": sum(exiles.values())},
         "clubs_never_exiled": 48 - len(exiles) if len(exiles) < 48 else 0,
@@ -67,7 +86,7 @@ def main():
     }
     json.dump(report, open(f"{a.out}/report.json", "w"), indent=2)
     with open(f"{a.out}/report.md", "w") as f:
-        f.write(f"# Multi-season run (placeholder resolver)\n\n")
+        f.write(f"# Multi-season run ({'game engine' if a.engine else 'placeholder resolver'})\n\n")
         for k, v in report.items():
             f.write(f"- {k}: {v}\n")
         for s, fl in problems[:10]:

@@ -227,6 +227,8 @@ class SeasonRun:
             sides[conf] = name
             if hasattr(self.resolver, "strength"):
                 self.resolver.strength[name] = sum(self.resolver.strength.get(c, 0.0) for c in clubs) / len(clubs)
+            if hasattr(self.resolver, "all_star_side"):
+                self.resolver.all_star_side(name, clubs)
         res = self.resolver.resolve({"away": sides["Western"], "home": sides["Eastern"]}, self.rng, decisive=True)
         self.bowl = {"away": sides["Western"], "home": sides["Eastern"], "away_score": res[0], "home_score": res[1],
                      "venue": self.venues["BOWL"], "staff_clubs": {conf: clubs[0] for conf, clubs in by_conf.items()}}      # each conference's best Tour club supplies its coaches
