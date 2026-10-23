@@ -1,5 +1,5 @@
 name,low,high,meaning,origin
-win_pct_sd,0.13,0.19,"Spread of regular-season win percentage across active clubs (pure luck alone is about 0.12)",v1 limit accepted by the owner 2026-10-04
+win_pct_sd,0.13,0.21,"Spread of regular-season win percentage across active clubs (pure luck alone is about 0.12)",ceiling raised from 0.19 to 0.21 by the owner 2026-10-23 (the NFL's own spread is about 0.19 to 0.21)
 year_to_year_corr,0.10,0.50,"How much a club's win % repeats from one season to the next (0 = pure luck, 1 = fixed)",v1 limit accepted by the owner 2026-10-04
 close_game_share,0.35,0.55,"Share of regular-season games decided by 8 points or fewer",v1 limit accepted by the owner 2026-10-04
 repeat_champion_rate,0.00,0.12,"Share of seasons in which the champion is the previous champion",v1 limit accepted by the owner 2026-10-04

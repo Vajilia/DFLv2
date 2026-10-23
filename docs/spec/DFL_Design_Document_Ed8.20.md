@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.19 · 2026-10-23** (amends Edition 8.18; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `63b54b083f9396c6e48be54b9965ea4463458cd8ed821366aa43776daaad3c56`
+**Edition 8.20 · 2026-10-23** (amends Edition 8.19; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `03d1f02463a95b4c57cf356995545c850df4f846d7e868795fd0f36b94418a8f`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -803,7 +803,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.19 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17 and 8.18 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.20 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18 and 8.19 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -866,6 +866,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-23 | §20 | tie-game frequency item closed: the measured rate (about 1.5% of regular-season games) is accepted and the overtime rule stands | owner's ruling ("accept the rates") | 8.17 |
 | 2026-10-23 | §13, §20 | development, aging and retirement defined and built on placeholder curve data; the engine squad is the ledger's game-day active list; market floor default; open items 19 and 20 added | owner said "start away" on connecting cards to the ledger; curves are the builder's placeholders pending a ruling | 8.18 |
 | 2026-10-23 | §12, §20 | returner's second draft: a club in its first season back that misses the playoffs picks as a block at the end of the non-playoff clubs; item 13 updated, item 21 added | owner said "yes please" to restoring his 2026-10-04 v1 ruling after the fairness bands showed 24% of returners with a top-16 pick (limit 10%) | 8.19 |
+| 2026-10-23 | §20 | fairness band for win-percentage spread: ceiling 0.19 raised to 0.21 | owner's ruling, on the builder's recommendation, after the living-league measurement showed 0.207 | 8.20 |
 
 ## §20 Open items
 1. Definitions for the analytics terms: role execution, opponent-adjusted difficulty, leverage, replacement baseline, opportunity threshold.
@@ -888,4 +889,4 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 18. Jersey numbers: none open. The same-club re-signing reclaim and lowest-open assignment are the builder's defaults (change on request).
 19. Retirement of a player under contract: nothing retires while signed, so a player can finish a contract at an age when a free agent would already have retired, and a retirement mid-contract (cap treatment, dead money, voided years) has no rule yet. Needs an owner ruling when the market exists.
 20. Talent economy: the free-agent pool stays large (about 2,600 characters in the living-league measurement, mostly undrafted draftees and released veterans waiting out the four-year rule), the stand-in clubs choose players by true overall (real clubs will work from scouting estimates, §13), and prices are a placeholder curve. Whether the pool size, the draft-to-veteran talent gap and rookie-scale surplus keep the league fair is the Phase 4 measurement.
-21. Fairness bands (Phase 4): v1's 15 working limits are ported unchanged as data (`data/fairness/BANDS.csv`) and measured on the living league (`docs/FAIRNESS.md`). Open: the ceiling on win-percentage spread (0.19 against a measured 0.205; the NFL's own is about 0.19 to 0.21), and every band must be re-run when the people layer replaces the stand-in clubs.
+21. Fairness bands (Phase 4): v1's 15 working limits are ported as data (`data/fairness/BANDS.csv`) and measured on the living league (`docs/FAIRNESS.md`). One change: the ceiling on win-percentage spread is 0.21, not 0.19 (owner's ruling 2026-10-23; the NFL's own spread is about 0.19 to 0.21, and the engine's 0.207 was not to be tuned toward a limit stricter than real football). Every band must be re-run when the people layer replaces the stand-in clubs.

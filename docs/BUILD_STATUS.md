@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.19.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.20.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -70,7 +70,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **100-year rerun under Ed 8.18 with cards, development and the engine (seed 1): PASS.** 4,900 events in order, 100 validator passes with 0 failures, 77,600 game days, 0 forfeits, 0 short-handed, 0 emergency lists, 0 legal-move failures, 33,600 draft picks made and 0 unsigned, 2,878 trades (47 refused), 890 waiver claims, 0 compensatory picks (placeholder prices rarely reach $75), 48 distinct Coronation venues, digest `3fdd57a78389...`, 3,520 s.
 
 ## Phase 4 first pass: fairness bands (2026-10-23)
-- **Built:** `src/dfl/fairness.py`, `tools/fairness.py`, `data/fairness/BANDS.csv` (v1's 15 bands, owner-accepted 2026-10-04), 12 tests. Six leagues of 36 seasons on the living league. First pass (Ed 8.18): 10 PASS, 2 FAIL, 3 UNCLEAR; the owner then restored the v1 returner draft rule (Ed 8.19) and the re-measure gives **13 PASS, 1 FAIL (win % spread 0.207 against 0.19), 1 UNCLEAR (exile effect)**. Full tables, definitions and caveats in `docs/FAIRNESS.md`. One owner decision is waiting: the ceiling on win % spread.
+- **Built:** `src/dfl/fairness.py`, `tools/fairness.py`, `data/fairness/BANDS.csv` (v1's 15 bands, owner-accepted 2026-10-04), 12 tests. Six leagues of 36 seasons on the living league. First pass (Ed 8.18): 10 PASS, 2 FAIL, 3 UNCLEAR; the owner then restored the v1 returner draft rule (Ed 8.19) and the re-measure gave 13 PASS, 1 FAIL (win % spread 0.207 against 0.19), 1 UNCLEAR; the owner then raised that ceiling to 0.21 (Ed 8.20, the NFL's own spread is about 0.19 to 0.21), so the current score is **14 PASS, 0 FAIL, 1 UNCLEAR (exile effect)**. Full tables, definitions and caveats in `docs/FAIRNESS.md`. No owner decision is waiting on the bands; all must be re-run when the people layer arrives.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

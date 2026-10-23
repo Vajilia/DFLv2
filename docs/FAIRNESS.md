@@ -8,11 +8,13 @@ The 15 bands are v1's working limits, which the owner accepted on 2026-10-04 (V1
 (noted below). A band is judged on the mean over leagues with a two-standard-error interval: PASS if the whole interval is inside the band,
 FAIL if it is entirely outside, UNCLEAR otherwise. Nothing was tuned to produce these numbers.
 
-## Result under Ed 8.19 (current): 13 PASS, 1 FAIL, 1 UNCLEAR
+## Result under Ed 8.20 (current): 14 PASS, 0 FAIL, 1 UNCLEAR
+
+The same six leagues as the Ed 8.19 run, scored against the one changed band (win_pct_sd ceiling 0.19 to 0.21, owner's ruling 2026-10-23, no new simulation needed because the band only moves the threshold). Under Ed 8.19 with the old ceiling the result was 13 PASS, 1 FAIL, 1 UNCLEAR.
 
 | band | measured (mean ± 2 SE) | allowed | verdict |
 | --- | --- | --- | --- |
-| win_pct_sd | 0.207 ± 0.002 | 0.13 to 0.19 | FAIL |
+| win_pct_sd | 0.207 ± 0.002 | 0.13 to 0.21 | PASS |
 | year_to_year_corr | 0.201 ± 0.028 | 0.1 to 0.5 | PASS |
 | close_game_share | 0.423 ± 0.005 | 0.35 to 0.55 | PASS |
 | repeat_champion_rate | 0.071 ± 0.018 | 0.0 to 0.12 | PASS |
@@ -27,6 +29,8 @@ FAIL if it is entirely outside, UNCLEAR otherwise. Nothing was tuned to produce 
 | exile_effect | -0.160 ± 0.469 | -0.5 to 0.5 | UNCLEAR |
 | exile_double_early | 0.000 ± 0.000 | 0.0 to 0.1 | PASS |
 | stuck_at_bottom | 0.084 ± 0.003 | 0.0 to 0.1 | PASS |
+
+Win % spread passes narrowly (0.207, upper bound 0.209 against 0.21): it sits at the NFL's own level and will move when the people layer replaces the stand-in clubs, so it is the band to watch.
 
 ## What changed from the first pass (Ed 8.18: 10 PASS, 2 FAIL, 3 UNCLEAR)
 The first pass found 24% of exiled clubs getting a top-16 pick in the draft after their return (limit 10%). v2 gave returners a top-8 lottery pick but
@@ -56,12 +60,9 @@ First-pass table (Ed 8.18), for the record:
 | exile_double_early | 0.243 ± 0.017 | 0.0 to 0.1 | FAIL |
 | stuck_at_bottom | 0.090 ± 0.008 | 0.0 to 0.1 | PASS |
 
-## The one failure, and the one unclear
-1. **win_pct_sd 0.207 against a 0.19 ceiling.** The NFL's own spread is about 0.19 to 0.21, so the ceiling is at or a little below real football.
-   Not tuned. It is driven by how strongly the engine turns roster strength into wins and by how far apart the stand-in clubs are, and the second
-   will change when the people layer replaces the stand-ins. Owner decision still open: raise the ceiling (about 0.21) or tune the engine.
-2. **exile_effect -0.16 points (plus or minus 0.47)** straddles its limit of plus or minus 0.5: no sign of a lasting exile effect, but the error bar is too wide
-   to say it is inside the band. More leagues would settle it.
+## The win % spread ruling and the one unclear
+1. **win_pct_sd**: measured 0.207 against the old 0.19 ceiling. The NFL's own spread is about 0.19 to 0.21, so on 2026-10-23 the owner accepted the builder's recommendation to raise the ceiling to 0.21 rather than tune the engine toward a limit stricter than real football (Ed 8.20).
+2. **exile_effect -0.16 points (plus or minus 0.47)** straddles its limit of plus or minus 0.5: no sign of a lasting exile effect, but the error bar is too wide to say it is inside the band. More leagues would settle it.
 
 ## Definitions the builder had to choose
 - Win percentage counts a tie as half a win. Eighteen games a club (40 active clubs, 360 games a season).
