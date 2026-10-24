@@ -1,6 +1,6 @@
 # Trade mechanism: design for owner review (not built)
 
-Status: proposal, 2026-10-24. Nothing here is normative until it is written into a Design Document edition. Origin: the owner's idea of 48 persistent general-manager agents polled by a control agent, with a common searchable player list. Builder's amendments are marked **(builder)**.
+Status: stage 1 built (Edition 8.26, 2026-10-24); stages 2 to 4 are proposals. The Design Document is the authority. Origin: the owner's idea of 48 persistent general-manager agents polled by a control agent, with a common searchable player list. Builder's amendments are marked **(builder)**.
 
 ## What the owner proposed
 - 48 persistent agents, one per club, acting as that club's general manager and instructed to show no emotion.
@@ -45,8 +45,13 @@ The decision "propose / accept / reject / counter" sits behind one interface. Th
 3. **Stage 3: pluggable deciders**, then language-model agents on a few clubs with record-and-replay; measure them against autopilot clubs on trade volume, deal balance and the bands.
 4. **Stage 4: scale up** only if the bands hold.
 
-## Needs from the owner
-1. Approval of this staging (autopilot first, agents later).
-2. Whether trades may include picks and future considerations in stage 1 (builder recommends picks yes, cash no).
-3. How large a trade the autopilot may make (builder suggests at most three players a side).
-4. The narrative's role: discretion and relationships generate story material from the trade log; none of it flows back (already agreed).
+## Owner decisions (2026-10-24)
+1. The staging is approved: autopilot first, language-model agents later.
+2. Picks may be traded; **no cash and no trading of cap space**; no limit on the number of trades.
+3. At most three players a side (the builder also capped picks at three a side).
+4. Discretion and relationships generate story material from the trade log; none of it flows back into the engine.
+
+## Stage 1 as built
+`src/dfl/ledger/trading.py`, `data/characters/TRADING.csv`, `tests/test_trading.py` (14 tests). Entry points: `public_list` (the searchable list), `value` and `score` (a club's private valuation), `block`, `negotiate` (the three rounds), `window` (one run of the trading step, called from the offseason trading step and weekly through the last open paid week), and `World.trade_log`. Each deal is dry-run through the ledger before it is proposed. About 0.7 trades per club per year in an eight-club test world; mostly one-for-one swaps.
+
+Known limits: the market price still derives from the hidden overall (stage 2 fixes this); the proposer estimates the other club's valuation from that public price; counters add one asset only; no three-way trades; no relationship effects yet.

@@ -53,6 +53,7 @@ def load_tables(path=DATA):
     t.soul = {r["key"]: float(r["value"]) for r in rd("SOUL.csv")}
     t.negotiation = {r["key"]: float(r["value"]) for r in rd("NEGOTIATION.csv")}
     t.coaching = {r["key"]: float(r["value"]) for r in rd("COACHING.csv")}
+    t.trading = {r["key"]: float(r["value"]) for r in rd("TRADING.csv")}
     t.archetypes = {r["code"]: {"name": r["name"], "self_bias": float(r["self_bias"]),
                                 "centre": {k: float(r[k]) for k in ("AMB", "LOY", "WRK", "TMP", "GRE", "LDR")}} for r in rd("ARCHETYPES.csv")}
     t.first, t.last = lines("FIRST_NAMES.txt"), lines("LAST_NAMES.txt")

@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.25.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.26.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -86,6 +86,9 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 
 ## People layer, slice 5.4: coaches (Ed 8.25, 2026-10-24)
 - **Built, in the owner's structure:** one coach category, posts held not born into, one common pool of new, fired and resigned coaches, CEO over head coach and head coach over coordinators (hiring and firing in the leadership window, on last season's records), retirement, capped teaching effect (`src/dfl/ledger/coaching.py`, `data/characters/COACHING.csv`); 11 tests. Fairness re-measure: `docs/FAIRNESS.md` once run. Not built: coach pay, poaching, CEO and GM turnover (slice 5.5).
+
+## Trades, stage 1 (Ed 8.26, 2026-10-24)
+- **Built:** common public player list, private club valuation, trading block, three-round protocol with autopilot general managers, ledger dry-run, trade log; picks yes, no cash or cap space (`src/dfl/ledger/trading.py`, `data/characters/TRADING.csv`, `docs/TRADES.md`); 14 tests. Fairness re-measure: `docs/FAIRNESS.md` once run. Stages 2 to 4 (public market value, pluggable deciders, language-model agents) are proposals.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

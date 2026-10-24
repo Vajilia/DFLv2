@@ -16,7 +16,7 @@ from ..characters import Creator, load_tables
 from ..characters.creator import rng_for
 from ..characters import soul
 from ..characters.development import develop, retire_chance
-from . import coaching, gameday, rules as R
+from . import coaching, gameday, rules as R, trading
 from .contracts import Contract, ContractError, rookie_contract
 from .ledger import Ledger, Rejected
 from .positions import MINIMUMS, POSITIONS, shortfalls
@@ -56,6 +56,7 @@ class World:
         self.coach_rng = random.Random(f"{seed}|coach")
         self.coach_pool = []                                      # willing coaches, new or let go: one pool for every coaching post
         self.pool_years = {}                                      # coach id -> year turns spent in the pool
+        self.trade_log = []                                       # every proposal, counter, rejection and deal (the engine replays this)
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
         self.priority = list(priority)             # clubs that always shop first in free agency (a parity-test control only)
@@ -680,6 +681,11 @@ class World:
                 self.stats["forfeits"] += 1
 
     def trades(self):
+        """The trading step (Edition 8.26): blocks, proposals, the three-round protocol, ledger validation, the log."""
+        return trading.window(self)
+
+    def trades_random(self):
+        """The earlier stand-in: three random same-position swaps. Kept for comparison runs."""
         L, rng = self.L, self.rng
         cids = sorted(L.clubs)
         for _ in range(3):

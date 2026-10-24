@@ -1,0 +1,26 @@
+key,value,note
+attempts_per_call,6,"Clubs that get to propose each time the trading step runs (a random subset of the 48)"
+block_size,6,"Most players a club publishes on its trading block"
+block_max_value,20,"A player goes on the block only if she is worth no more than this to her own club (surplus depth, aging or overpaid players)"
+target_min,8,"A club only goes after a player it values at least this much"
+accept_margin,4,"Surplus (in salary units) a club must see in a deal before it accepts, before its general manager's traits"
+greed_effect,0.3,"General manager's greed above or below 50 changes the margin by this share"
+neg_effect,0.3,"General manager's negotiation rating above or below 50 changes the margin by this share"
+need_boost,0.25,"Value of a player at a position the club is short of is raised by this share"
+surplus_discount,0.30,"Value of a player at a position the club has more than enough of is cut by this share"
+years_cap,3,"Years of a contract's surplus that count toward a player's value"
+age_start,28,"Value falls with age beyond this"
+age_step,0.08,"Share of value lost per year past that"
+age_floor,0.3,"Age never cuts value below this share"
+max_players,3,"Most players one side gives in a trade"
+max_picks,3,"Most picks one side gives in a trade"
+pick_decay,0.85,"Share of its value a pick keeps for each draft year further away"
+pick_round_1,20,"Value of a first-round pick in the next draft, in salary units"
+pick_round_2,12,
+pick_round_3,8,
+pick_round_4,5,
+pick_round_5,3,
+pick_round_6,2,
+pick_round_7,1,
+pick_round_8,0.5,
+pick_round_9,0.5,
