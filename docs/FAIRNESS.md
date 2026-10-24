@@ -187,6 +187,26 @@ Reading it:
 - **Persistence recovered** to 0.197 from 0.179, so the dip seen with souls was noise, as suspected. Schedule push is +0.011 per point (still near zero).
 - **What this does not show**: payroll and cap pressure are not among the 15 bands. Demands cost about 4 percent over the market curve in a one-year check, and 36 percent of attempted deals were refused; long-run effects on club payroll and talent concentration should be looked at directly before the people layer is called done (planned with the coaches slice).
 
+## People layer slice 5.4: coaches on (Ed 8.25), six tight leagues of 36 seasons (seeds 1 to 6)
+
+Final design: one coach category, common pool, CEO over head coach, head coach over coordinators, leadership window, capped teaching, pool 0.7 weaker. **14 PASS, 1 UNCLEAR, 0 FAIL.**
+
+| band | + demands (6) | coaches, first design (6) | teaching-off control (6) | coaches, final design (6) | verdict now |
+| --- | --- | --- | --- | --- | --- |
+| win_pct_sd | 0.206 | 0.209 ± 0.003 | 0.210 ± 0.003 | 0.206 ± 0.004 | PASS |
+| year_to_year_corr | 0.197 | 0.204 | 0.191 | 0.187 ± 0.019 | PASS |
+| repeat_champion_rate | 0.083 | 0.083 | 0.083 | 0.071 ± 0.032 | PASS |
+| best_team_title_odds | 0.226 | 0.149 | 0.196 | 0.190 ± 0.035 | PASS |
+| returner_top3_in_3 | 0.810 | 0.802 | 0.807 | 0.810 ± 0.008 | PASS |
+| exile_effect | 0.083 | 0.450 | -0.083 | -0.134 ± 0.616 | UNCLEAR (interval wide; centre inside) |
+| other nine bands | PASS | PASS | PASS | PASS | PASS |
+
+Reading it:
+- **The win % spread move seen in the first coach design was noise, not teaching.** A control with the teaching effect switched off read 0.210, as high as the run with it on; the final design reads 0.206 again. The cap of half an attribute point a year therefore stays.
+- **Coach quality drifted up in the first design** (average coach 62.4 to 64.8 overall in 40 years) because clubs always take the best of four candidates from a pool only slightly weaker than the founders. Making the pool 0.7 talent deviations weaker holds the average near 62 over 60 years, with the dismissals, resignations and hiring of the final design running.
+- **Persistence** reads 0.187, inside its band; no trend has appeared across the people layer (0.196 before, 0.191, 0.179, 0.197, 0.204, 0.191, 0.187 across states, all inside their error bars).
+- The earlier worry about payroll and talent concentration is still to be measured directly.
+
 ## Parity test beds (src/dfl/parity.py): can the bands see unfairness?
 v1 defines two profiles: **tight** (the rules as written) and **none** (no salary or fairness regulation). Two 36-season leagues each (seeds 21, 22), compared with the tight result above. In v2 `none` removes the salary cap and the end-of-block rule for returners (the lottery stays: returners have no standing to draft by). I added a third bed, `rigged`, as a control rather than a design option: no cap, and two clubs always shop first in free agency.
 
