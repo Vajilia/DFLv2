@@ -168,6 +168,25 @@ Reading it:
 - **Slow drift in the persistence measure**: year-to-year correlation reads 0.196, 0.191, 0.179 across the three states. Each step is inside its error bar, so it is not a finding, but it points the opposite way from the expectation that people raise persistence. Souls' only live path is trait drift into work ethic, which reduces the spread of work ethic over time (the 15-year population check showed work ethic spread falling from 17.8 to 14.3), so a small flattening of development differences is the likely mechanism. Watch it; do not tune it.
 - **Watch list**: returner_top3_in_3 (floor 0.75, point estimate 0.785), repeat_champion_rate, exile_effect. Twelve or more leagues would settle them.
 
+## People layer slice 5.3: player demands on (Ed 8.23), six tight leagues of 36 seasons (seeds 1 to 6)
+
+12 PASS, 3 UNCLEAR, 0 FAIL.
+
+| band | pre-people (8) | scouting (6) | + souls (6) | + demands (6) | verdict now |
+| --- | --- | --- | --- | --- | --- |
+| win_pct_sd | 0.207 | 0.206 | 0.205 | 0.206 ± 0.002 | PASS |
+| year_to_year_corr | 0.196 | 0.191 | 0.179 | 0.197 ± 0.020 | PASS |
+| repeat_champion_rate | 0.062 | 0.101 | 0.083 | 0.083 ± 0.048 | UNCLEAR |
+| best_team_title_odds | 0.196 | 0.226 | 0.161 | 0.226 ± 0.057 | UNCLEAR (interval reaches 0.283 against a 0.25 ceiling) |
+| returner_top3_in_3 | 0.823 | 0.843 | 0.785 | 0.810 ± 0.023 | PASS |
+| exile_effect | -0.172 | 0.684 | 0.198 | 0.083 ± 0.603 | UNCLEAR (centre well inside; interval wide) |
+| other nine bands | PASS | PASS | PASS | PASS | PASS |
+
+Reading it:
+- **No band left its range with certainty.** The three unclear bands swap places from run to run (best_team_title_odds passed with souls and is unclear again; returner_top3_in_3 was unclear with souls and passes now), which is what noise on rare-event measures looks like. Six leagues cannot settle them; they need the 12-league run.
+- **Persistence recovered** to 0.197 from 0.179, so the dip seen with souls was noise, as suspected. Schedule push is +0.011 per point (still near zero).
+- **What this does not show**: payroll and cap pressure are not among the 15 bands. Demands cost about 4 percent over the market curve in a one-year check, and 36 percent of attempted deals were refused; long-run effects on club payroll and talent concentration should be looked at directly before the people layer is called done (planned with the coaches slice).
+
 ## Parity test beds (src/dfl/parity.py): can the bands see unfairness?
 v1 defines two profiles: **tight** (the rules as written) and **none** (no salary or fairness regulation). Two 36-season leagues each (seeds 21, 22), compared with the tight result above. In v2 `none` removes the salary cap and the end-of-block rule for returners (the lottery stays: returners have no standing to draft by). I added a third bed, `rigged`, as a control rather than a design option: no cap, and two clubs always shop first in free agency.
 

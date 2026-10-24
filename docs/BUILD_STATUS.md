@@ -82,7 +82,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Built:** fixed archetype per player (six placeholders), self-view bias, bounded yearly trait drift (`src/dfl/characters/soul.py`, `ARCHETYPES.csv`, `SOUL.csv`); 8 tests; full suite 183 pass. Fairness re-measure (six tight leagues, scouting and souls on): 12 PASS, 3 UNCLEAR, 0 FAIL, no band moved out of range; see `docs/FAIRNESS.md`.
 
 ## People layer, slice 5.3: player demands (Ed 8.23, 2026-10-23)
-- **Built:** free agents above the minimum bargain from self-view, greed, ambition, loyalty and time waited; clubs pay up to their own scouting view plus slack (`World.demand`, `willing`, `negotiate`; `data/characters/NEGOTIATION.csv`); 6 tests. Fairness re-measure: `docs/FAIRNESS.md` once run.
+- **Built:** free agents above the minimum bargain from self-view, greed, ambition, loyalty and time waited; clubs pay up to their own scouting view plus slack (`World.demand`, `willing`, `negotiate`; `data/characters/NEGOTIATION.csv`); 6 tests. Fairness re-measure (six tight leagues, scouting, souls and demands on): 12 PASS, 3 UNCLEAR, 0 FAIL; see `docs/FAIRNESS.md`.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).
