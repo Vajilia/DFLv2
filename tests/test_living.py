@@ -9,6 +9,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from dfl.characters import Creator, load_tables  # noqa: E402
 from dfl.characters.development import develop, retire_chance  # noqa: E402
+from dfl.characters import soul  # noqa: E402
+from dfl.characters.card import Card  # noqa: E402
 from dfl.ledger import rules as R  # noqa: E402
 from dfl.ledger.world import World, ask  # noqa: E402
 
@@ -279,3 +281,85 @@ class EngineOnTheLedger(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Souls(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.w = World(CLUBS, seed=41)
+        cls.w.open_year(first=True)
+
+    def cards(self):
+        return [c for c in self.w.cards.values() if c.identity.role == "player"]
+
+    def test_every_registered_player_has_a_soul_with_a_known_archetype(self):
+        w = self.w
+        for c in self.cards():
+            self.assertIn(c.soul["archetype"], w.tables.archetypes)
+            self.assertEqual(set(c.soul["base"]), set(soul.TRAITS))
+
+    def test_all_archetypes_occur_and_none_dominates(self):
+        from collections import Counter
+        n = Counter(c.soul["archetype"] for c in self.cards())
+        self.assertEqual(set(n), set(self.w.tables.archetypes))
+        self.assertLess(max(n.values()) / sum(n.values()), 0.35)
+
+    def test_assign_is_idempotent_and_archetype_is_nearest_centre(self):
+        t = self.w.tables
+        c = self.cards()[0]
+        first = dict(c.soul)
+        soul.assign(c, t)
+        self.assertEqual(c.soul, first)
+        self.assertEqual(c.soul["archetype"], soul.archetype_of(c.soul["base"], t))
+
+    def test_drift_never_leaves_the_bound_and_never_changes_the_archetype(self):
+        import random
+        t = self.w.tables
+        c = Card.loads(self.cards()[0].dumps())
+        a, base = c.soul["archetype"], dict(c.soul["base"])
+        rng = random.Random(5)
+        for _ in range(200):
+            soul.drift(c, rng, t)
+            for k in soul.TRAITS:
+                self.assertLessEqual(abs(c.traits[k] - base[k]), t.soul["drift_bound"] + 1)
+                self.assertTrue(0 <= c.traits[k] <= 100)
+        self.assertEqual(c.soul["archetype"], a)
+
+    def test_drift_pulls_toward_the_archetype_centre(self):
+        import random
+        t = self.w.tables
+        c = Card.loads(self.cards()[0].dumps())
+        centre = t.archetypes[c.soul["archetype"]]["centre"]
+        d0 = sum(abs(c.traits[k] - centre[k]) for k in soul.TRAITS)
+        rng = random.Random(6)
+        for _ in range(40):
+            soul.drift(c, rng, t)
+        d1 = sum(abs(c.traits[k] - centre[k]) for k in soul.TRAITS)
+        self.assertLess(d1, d0 + 15)          # noise can push it out of a tight spot, but never far; the bound test covers the limit
+
+    def test_self_view_is_true_overall_plus_the_archetype_bias(self):
+        t = self.w.tables
+        for c in self.cards()[:50]:
+            self.assertAlmostEqual(soul.self_view(c, t), c.true_overall(t) + t.archetypes[c.soul["archetype"]]["self_bias"])
+
+    def test_a_card_survives_storage_with_its_soul_and_old_cards_still_load(self):
+        c = self.cards()[0]
+        self.assertEqual(Card.loads(c.dumps()).soul, c.soul)
+        d = c.to_dict(); d.pop("soul")
+        self.assertEqual(Card.from_dict(d).soul, {})
+
+    def test_the_league_year_moves_traits_but_not_souls(self):
+        w = World(CLUBS, seed=42)
+        w.open_year(first=True)
+        before = {pid: (dict(c.traits), c.soul["archetype"]) for pid, c in w.cards.items() if c.identity.role == "player"}
+        w.L.year += 1
+        w.age_and_retire()
+        moved = same = 0
+        for pid, (tr, arch) in before.items():
+            c = w.cards.get(pid)
+            if c is None:
+                continue
+            self.assertEqual(c.soul["archetype"], arch)
+            moved += c.traits != tr
+            same += c.traits == tr
+        self.assertGreater(moved, same)

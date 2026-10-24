@@ -14,6 +14,7 @@ import math
 
 from ..characters import Creator, load_tables
 from ..characters.creator import rng_for
+from ..characters import soul
 from ..characters.development import develop, retire_chance
 from . import gameday, rules as R
 from .contracts import Contract, ContractError, rookie_contract
@@ -46,6 +47,7 @@ class World:
     def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False, priority=()):
         self.rng = random.Random(seed)
         self.dev_rng = random.Random(f"{seed}|develop")
+        self.soul_rng = random.Random(f"{seed}|soul")
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
         self.priority = list(priority)             # clubs that always shop first in free agency (a parity-test control only)
@@ -70,6 +72,7 @@ class World:
         p = self.L.new_player(card.identity.pos, int(round(o)), card.age(self.L.year), seasons, pid=card.identity.id)
         self.cards[p.pid] = card
         self.rating[p.pid] = o
+        soul.assign(card, self.tables)
         return p
 
     def view(self, cid, p):
@@ -366,6 +369,7 @@ class World:
             p.age = card.age(L.year)
             if p.where in ("roster", "ps", "ir"):
                 p.seasons += 1
+            soul.drift(card, self.soul_rng, self.tables)
             develop(card, L.year, self.dev_rng, self.tables)
             o = card.true_overall(self.tables)
             self.rating[pid], p.ovr = o, int(round(o))

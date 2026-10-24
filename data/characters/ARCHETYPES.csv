@@ -1,0 +1,7 @@
+code,name,AMB,LOY,WRK,TMP,GRE,LDR,self_bias,note
+LEA,Leader,60,60,55,60,35,85,1,"Moves the room; steady; middling greed"
+CMP,Competitor,80,40,70,35,50,55,4,"Wants the bigger role; overrates herself; short fuse"
+MER,Mercenary,65,20,35,45,85,40,3,"Follows the money; low loyalty"
+LOL,Loyalist,25,85,55,60,25,45,-1,"Stays and re-signs; modest about herself"
+FRE,Free spirit,40,35,30,30,55,35,2,"Inconsistent effort; restless"
+PRO,Quiet professional,30,60,55,70,50,40,0,"Even-tempered, reliable, sees herself accurately"

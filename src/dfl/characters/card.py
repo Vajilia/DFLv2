@@ -41,6 +41,7 @@ class Card:
     traits: dict                                   # 0-100: AMB LOY WRK TMP GRE LDR
     memory: list = field(default_factory=list)     # at most MEMORY_SLOTS detailed memories (people layer)
     relations: dict = field(default_factory=dict)  # other id -> directed summary, recorded only for actual contacts
+    soul: dict = field(default_factory=dict)       # archetype and the traits she was created with (people layer; empty until assigned)
 
     # ---- views
     def age(self, year):
@@ -75,7 +76,7 @@ class Card:
         i = dict(d["identity"])
         i["look"] = tuple(tuple(x) for x in i["look"])
         return cls(Identity(**i), dict(d["attrs"]), dict(d["growth"]), dict(d["traits"]),
-                   list(d.get("memory", [])), {int(k): v for k, v in d.get("relations", {}).items()})
+                   list(d.get("memory", [])), {int(k): v for k, v in d.get("relations", {}).items()}, dict(d.get("soul", {})))
 
     def dumps(self):
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))

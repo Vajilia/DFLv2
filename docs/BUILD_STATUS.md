@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.21.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.22.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -77,6 +77,9 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 ## People layer, slice 5.1: scouting views (Ed 8.21, 2026-10-23)
 - **Built:** every club decision about players (draft, free agency, releases, practice squad, waivers) uses a noisy club view instead of true ability; error shrinks with credited seasons and the club GM's evaluation rating, and is smaller for a club's own players. Data: `data/characters/SCOUTING.csv`, `SCOUTING_BIAS.csv` (placeholders). 5 tests in `tests/test_living.py`. Plan for the rest of the layer: `docs/PEOPLE.md`.
 - **Not yet:** game day and the engine still use true ability (spec item 22). Fairness re-measure with scouting on (six tight leagues): 12 PASS, 3 UNCLEAR, 0 FAIL; the core measures did not move (`docs/FAIRNESS.md`). Watch: exile effect, repeat champion rate.
+
+## People layer, slice 5.2: souls (Ed 8.22, 2026-10-23)
+- **Built:** fixed archetype per player (six placeholders), self-view bias, bounded yearly trait drift (`src/dfl/characters/soul.py`, `ARCHETYPES.csv`, `SOUL.csv`); 8 tests; full suite 183 pass. Fairness re-measure: `docs/FAIRNESS.md` once run.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

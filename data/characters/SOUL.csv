@@ -1,0 +1,4 @@
+key,value,note
+drift_pull,0.08,"Share of the gap to her archetype's centre that a trait closes each year"
+drift_noise,2.0,"Yearly random change in a trait, in trait points"
+drift_bound,15,"A trait never moves more than this from the value she was created with"
