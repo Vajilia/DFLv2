@@ -250,6 +250,35 @@ Schedule push toward average: opponents' mean strength per point of own strength
 - Governance rates (one 20-season league, seed 23, final parameters): 9 recalls in 20 seasons (about one every two seasons across 40 playing clubs), 276 term elections of which the sitting CEO lost about 8 percent, about 3 CEO and 2 GM retirements a year, about 6 GM hires a year. Averages hold: GM evaluation 60.0, CEO financial judgment 61.4 after 20 years.
 - Limits: sentiment effects reach the game only through CEO turnover, which in turn touches only temperament-scaled dismissals, so this measure cannot show what a stronger link (CEO spending, relationships) would do. Both are deliberately not built (spec item 27).
 
+## Meeting rooms, slice 5.6 on (Ed 8.29), six tight leagues of 36 seasons (seeds 1 to 6): 13 PASS, 2 UNCLEAR, 0 FAIL
+
+Fairness bands: 6 league(s), 36 seasons each, first 8 dropped as warm-up.
+
+| band | measured (mean ± 2 SE) | allowed | verdict |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.207 ± 0.002 | 0.13 to 0.21 | PASS |
+| year_to_year_corr | 0.205 ± 0.018 | 0.1 to 0.5 | PASS |
+| close_game_share | 0.424 ± 0.004 | 0.35 to 0.55 | PASS |
+| repeat_champion_rate | 0.089 ± 0.024 | 0.0 to 0.12 | PASS |
+| max_titles_in_20 | 2.870 ± 0.524 | 0.0 to 4.7 | PASS |
+| worst_league_titles | 4.000 ± 0.000 | 0.0 to 7.0 | PASS |
+| best_team_title_odds | 0.262 ± 0.048 | 0.08 to 0.25 | UNCLEAR |
+| returner_avg_finish | 3.072 ± 0.088 | 2.8 to 3.4 | PASS |
+| returner_win_div | 0.179 ± 0.026 | 0.1 to 0.3 | PASS |
+| returner_fifth_again | 0.207 ± 0.017 | 0.1 to 0.3 | PASS |
+| returner_top3_in_3 | 0.825 ± 0.027 | 0.75 to 0.97 | PASS |
+| returner_playoff_first | 0.320 ± 0.018 | 0.2 to 0.55 | PASS |
+| exile_effect | 0.289 ± 0.727 | -0.5 to 0.5 | UNCLEAR |
+| exile_double_early | 0.000 ± 0.000 | 0.0 to 0.1 | PASS |
+| stuck_at_bottom | 0.084 ± 0.009 | 0.0 to 0.1 | PASS |
+
+Schedule push toward average: opponents' mean strength per point of own strength, slope -0.017 (a schedule that ignores strength gives -0.026, because a club never plays herself), so the push is +0.009 per point; correlation -0.072; league slopes -0.017, -0.020, -0.010, -0.022, -0.022, -0.011. Positive push = stronger clubs face tougher schedules.
+
+**Reading it.**
+- No band fails. The two UNCLEAR bands are the noise-limited ones that have wavered before: exile_effect, and best_team_title_odds, which sits at 0.262 ± 0.048 against a 0.25 ceiling (it was 0.167 before this slice and has been UNCLEAR in earlier states). The rooms slice is the first to change it in the unclear direction, so it is worth a 12-league run before anyone concludes it is noise. Win % spread 0.207, persistence 0.205 and the schedule push (+0.009, none) did not move.
+- Per league over 36 seasons: about 10,800 contract rooms (350 refused), 350 trades, 3,300 interviews of which 350 were declined (10 percent; forced hires 0.2), 28.5 recalls (0.8 a year, a little under the one a year the owner asked for), 465 term elections, 127 CEOs replaced.
+- Limits: the GM negotiating rating moves what a club pays by a few percent, and good negotiators can concentrate talent slightly; this measure cannot separate that from noise at six leagues.
+
 ## The people layer's effect on payroll, quality and talent concentration (one 12-season league, seed 21; years 6 to 12)
 
 Measured directly, as promised when player demands were added. Baseline is the commit before the people layer began (random same-position swaps; clubs choose by true ability; no demands, souls or coaches); "people layer" is the Ed 8.26 code.

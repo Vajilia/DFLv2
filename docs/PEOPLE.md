@@ -12,7 +12,7 @@ Clubs today are stand-ins that choose by true ability, which makes year-to-year 
 | 5.3 | Player-side negotiation: demands from self-view, greed, loyalty, ambition (Ed 8.23); clubs pay up to their own view | built; measured, no band moved out of range |
 | 5.4 | Coaches (owner's structure, Ed 8.25): one category, posts held not born into, one common pool (new, fired, resigned), CEO over head coach, head coach over coordinators, leadership window, capped teaching effect | built; measured, no band moved out of range |
 | 5.5 | GMs, CEOs, fans: sentiment, recall ballots, CEO elections, GM hire and dismissal, hidden narrative-only discretion (Ed 8.27) | built; measured, no band moved out of range |
-| 5.6 | Meeting rooms: contract room, trade room, interviews (Ed 8.29) | built; measuring |
+| 5.6 | Meeting rooms: contract room, trade room, interviews (Ed 8.29) | built; measured, no band failed |
 | 5.7 | Analytics definitions (§20.1) and Hall of Fame | proposal only: blocked on per-player production recording (`docs/ANALYTICS_AND_HALL.md`) |
 
 ## Slice 5.1 rule (as built)

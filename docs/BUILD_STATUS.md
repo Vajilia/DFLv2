@@ -94,7 +94,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Built:** fan cards and sentiment, recall ballots, CEO term and vacancy elections, CEO and GM pools, GM dismissal and hire, hidden narrative-only GM discretion (`src/dfl/ledger/governance.py`, `data/characters/GOVERNANCE.csv`); 21 tests. Fairness re-measure (six tight leagues): 13 PASS, 2 UNCLEAR, 0 FAIL; see `docs/FAIRNESS.md`.
 
 ## Meeting rooms, slice 5.6 (Ed 8.29, 2026-10-24)
-- **Built:** contract room (rounds, GM negotiating rating), trade room, interviews with candidate consent; recall rate about one a year; numbering repair at the final cut (`src/dfl/ledger/rooms.py`, `data/characters/ROOMS.csv`); 16 new tests. Fairness re-measure pending below. Analytics definitions and the Hall of Fame are a proposal only (`docs/ANALYTICS_AND_HALL.md`).
+- **Built:** contract room (rounds, GM negotiating rating), trade room, interviews with candidate consent; recall rate about one a year; numbering repair at the final cut (`src/dfl/ledger/rooms.py`, `data/characters/ROOMS.csv`); 16 new tests. Fairness re-measure (six tight leagues): 13 PASS, 2 UNCLEAR (best_team_title_odds 0.262 against 0.25, exile_effect), 0 FAIL; see `docs/FAIRNESS.md`. Analytics definitions and the Hall of Fame are a proposal only (`docs/ANALYTICS_AND_HALL.md`).
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).
