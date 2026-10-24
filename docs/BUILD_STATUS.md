@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.26.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.27.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -89,6 +89,9 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 
 ## Trades, stage 1 (Ed 8.26, 2026-10-24)
 - **Built:** common public player list, private club valuation, trading block, three-round protocol with autopilot general managers, ledger dry-run, trade log; picks yes, no cash or cap space (`src/dfl/ledger/trading.py`, `data/characters/TRADING.csv`, `docs/TRADES.md`); 14 tests. Fairness re-measure (six tight leagues): 12 PASS, 3 UNCLEAR, 0 FAIL; the whole people layer leaves payroll, roster quality and talent concentration unchanged (`docs/FAIRNESS.md`). Trade volume is under 40 percent of the old stand-in's. Stages 2 to 4 (public market value, pluggable deciders, language-model agents) are proposals.
+
+## Governance, slice 5.5 (Ed 8.27, 2026-10-24)
+- **Built:** fan cards and sentiment, recall ballots, CEO term and vacancy elections, CEO and GM pools, GM dismissal and hire, hidden narrative-only GM discretion (`src/dfl/ledger/governance.py`, `data/characters/GOVERNANCE.csv`); 21 tests. Fairness re-measure: see `docs/FAIRNESS.md`.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

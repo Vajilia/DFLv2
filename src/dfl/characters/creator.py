@@ -54,6 +54,7 @@ def load_tables(path=DATA):
     t.negotiation = {r["key"]: float(r["value"]) for r in rd("NEGOTIATION.csv")}
     t.coaching = {r["key"]: float(r["value"]) for r in rd("COACHING.csv")}
     t.trading = {r["key"]: float(r["value"]) for r in rd("TRADING.csv")}
+    t.governance = {r["key"]: float(r["value"]) for r in rd("GOVERNANCE.csv")}
     t.archetypes = {r["code"]: {"name": r["name"], "self_bias": float(r["self_bias"]),
                                 "centre": {k: float(r[k]) for k in ("AMB", "LOY", "WRK", "TMP", "GRE", "LDR")}} for r in rd("ARCHETYPES.csv")}
     t.first, t.last = lines("FIRST_NAMES.txt"), lines("LAST_NAMES.txt")
@@ -147,7 +148,11 @@ class Creator:
         R = t.roles[role]
         age = clip(rng.gauss(R["age_mean"], R["age_sd"]), int(R["age_min"]), int(R["age_max"]))
         g = rng.gauss(shift, 1)
-        attrs = {a: clip(m + sd * (ld * g + math.sqrt(1 - ld * ld) * rng.gauss(0, 1))) for a, m, sd, ld, _ in t.profile[role]}
+        attrs = {a: clip(m + sd * (ld * g + math.sqrt(1 - ld * ld) * rng.gauss(0, 1))) for a, m, sd, ld, w in t.profile[role] if w}
+        hid = rng_for(self.seed, "hidden", cid)          # attributes that carry no weight (discretion) have a stream of their own, so adding one never shifts another card
+        for a, m, sd, ld, w in t.profile[role]:
+            if not w:
+                attrs[a] = clip(m + sd * (ld * g + math.sqrt(1 - ld * ld) * hid.gauss(0, 1)))
         growth = {"peak_age": 50, "ceiling": 0, "volatility": round(abs(rng.gauss(1.0, 0.35)), 2)}
         height = clip(rng.gauss(166, 7), 145, 190)
         weight = clip(rng.gauss(64, 9), 45, 130)

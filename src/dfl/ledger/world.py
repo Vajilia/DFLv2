@@ -16,7 +16,7 @@ from ..characters import Creator, load_tables
 from ..characters.creator import rng_for
 from ..characters import soul
 from ..characters.development import develop, retire_chance
-from . import coaching, gameday, rules as R, trading
+from . import coaching, gameday, governance, rules as R, trading
 from .contracts import Contract, ContractError, rookie_contract
 from .ledger import Ledger, Rejected
 from .positions import MINIMUMS, POSITIONS, shortfalls
@@ -56,6 +56,11 @@ class World:
         self.coach_rng = random.Random(f"{seed}|coach")
         self.coach_pool = []                                      # willing coaches, new or let go: one pool for every coaching post
         self.pool_years = {}                                      # coach id -> year turns spent in the pool
+        self.gov_rng = random.Random(f"{seed}|gov")
+        self.fans = {}                                            # club -> fan card (Edition 8.27)
+        self.ceo_pool, self.gm_pool = [], []                      # willing CEO candidates and general managers, new or let go
+        self.elected = {}                                         # club -> CEO elected after the last game, who takes office in the next offseason
+        self.gov_log = []                                         # recall ballots, elections, dismissals and hires (feeds the story layer)
         self.trade_log = []                                       # every proposal, counter, rejection and deal (the engine replays this)
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
@@ -64,7 +69,7 @@ class World:
         self.creator = Creator(seed, self.tables)
         self.cards = {}                  # player id -> Card, for everyone in the ledger (the id is the card id)
         self.rating = {}                 # player id -> hidden true overall (float), refreshed when the card develops
-        self.leaders = {}                # club -> {role: Card}; coaches hold posts and move through the pool (Edition 8.25); the CEO and GM do not move yet
+        self.leaders = {}                # club -> {role: Card}; coaches hold posts and move through the pool (Edition 8.25); the CEO and GM are elected and hired (Edition 8.27)
         self._views = {}                 # (club, player) -> that club's estimate this league year
         self.active = {}                 # club -> GameDay of its latest game
         self.active_week = {}
@@ -138,6 +143,7 @@ class World:
             lead = {c.identity.role: c for c in d["leaders"] if c.identity.role != "coach"}
             lead.update(zip(coaching.POSTS, [c for c in d["leaders"] if c.identity.role == "coach"]))     # the founding coaches take the four posts
             self.leaders[cid] = lead
+        governance.found(self)
         for card in f["pool"]:
             self.register(card, seasons=max(0, min(4, card.age(L.year) - 22)))
         self.top_up_pool()
@@ -424,6 +430,7 @@ class World:
             if p.where == "fa" and self.dev_rng.random() < retire_chance(card, L.year, o, self.tables):
                 L.retire(pid, "age")
         self.purge()
+        governance.turn_year(self)
         coaching.turn_year(self)
 
     def pre_draft_trim(self):

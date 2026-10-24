@@ -118,7 +118,7 @@ class CardWorld(unittest.TestCase):
         L = w.L
         self.assertEqual(set(w.cards), set(L.players))
         self.assertGreater(sum(L.retired.values()), 0)
-        taken = {c.identity.name for c in w.cards.values()} | {c.identity.name for d in w.leaders.values() for c in d.values()} | {c.identity.name for c in w.coach_pool}
+        taken = {c.identity.name for c in w.cards.values()} | {c.identity.name for d in w.leaders.values() for c in d.values()} | {c.identity.name for c in w.coach_pool} | {c.identity.name for c in w.ceo_pool + w.gm_pool}
         self.assertEqual(w.creator.taken, taken)                 # retired characters' names are free again
         for pid, p in L.players.items():
             self.assertEqual(p.age, w.cards[pid].age(L.year))

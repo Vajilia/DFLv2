@@ -14,7 +14,7 @@ import random
 
 from . import calendar as C
 from . import draft, league, parity, standings
-from .ledger import coaching
+from .ledger import coaching, governance
 from .ledger import rules as R
 from .ledger.world import World
 from .engine.ledger_engine import LedgerEngine
@@ -73,6 +73,7 @@ class Universe:
     def on_hiring_open(self, year, date, key):
         """The leadership window (Edition 8.25): dismissals, resignations and hires among the coaches, judged on last season's records."""
         if self.last_results:
+            governance.window(self.world, self.last_results)
             coaching.window(self.world, self.last_results)
 
     def on_hiring_close(self, year, date, key):
@@ -184,6 +185,7 @@ class Universe:
         result, self.state = self.run.handoff()
         self.draft_order = result["draft_order"]
         self.last_results = {c: (r.w / (r.w + r.l) if r.w + r.l else 0.5) for c, r in result["outcome"]["records"].items()}
+        governance.close_year(self.world, self.last_results)
         L = self.L
         self.reports.append({
             "year": year, "season": self.season, "winner": result["coronation_winner"], "venue": result["coronation_venue"],
