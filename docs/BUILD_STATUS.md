@@ -79,7 +79,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Not yet:** game day and the engine still use true ability (spec item 22). Fairness re-measure with scouting on (six tight leagues): 12 PASS, 3 UNCLEAR, 0 FAIL; the core measures did not move (`docs/FAIRNESS.md`). Watch: exile effect, repeat champion rate.
 
 ## People layer, slice 5.2: souls (Ed 8.22, 2026-10-23)
-- **Built:** fixed archetype per player (six placeholders), self-view bias, bounded yearly trait drift (`src/dfl/characters/soul.py`, `ARCHETYPES.csv`, `SOUL.csv`); 8 tests; full suite 183 pass. Fairness re-measure: `docs/FAIRNESS.md` once run.
+- **Built:** fixed archetype per player (six placeholders), self-view bias, bounded yearly trait drift (`src/dfl/characters/soul.py`, `ARCHETYPES.csv`, `SOUL.csv`); 8 tests; full suite 183 pass. Fairness re-measure (six tight leagues, scouting and souls on): 12 PASS, 3 UNCLEAR, 0 FAIL, no band moved out of range; see `docs/FAIRNESS.md`.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

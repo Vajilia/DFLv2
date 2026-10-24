@@ -149,6 +149,25 @@ Reading it honestly:
 - **The core measures did not move**: win % spread 0.206, year-to-year correlation 0.191 against 0.196, schedule push +0.004 per rating point (still none). Scouting error at the placeholder size is **close to inert** for competitive balance: clubs were already near-random choosers for other reasons (prices, cap, roster churn), and they were not far enough from the truth before to be hurt by an error of this size. Do not read it as proof that smarter clubs will be harmless. Persistence has not risen, so the test of "smarter clubs raise persistence" is still ahead (coaches, GMs, negotiation).
 - **Watch list**: exile_effect (point estimate 0.68 against a ceiling of 0.5, interval 0.19 to 1.18) and repeat_champion_rate (0.101 against 0.12). Next step is more leagues with scouting on (seeds 7 to 12) if either persists; if exile_effect stays above the ceiling with 12 leagues it becomes a real finding to report, not a thing to tune away.
 
+## People layer slice 5.2: souls on (Ed 8.22), six tight leagues of 36 seasons (seeds 1 to 6)
+
+12 PASS, 3 UNCLEAR, 0 FAIL. Scouting-only column is the 5.1 run above.
+
+| band | pre-people (8 leagues) | scouting only (6) | scouting + souls (6) | verdict now |
+| --- | --- | --- | --- | --- |
+| win_pct_sd | 0.207 | 0.206 | 0.205 ± 0.002 | PASS |
+| year_to_year_corr | 0.196 | 0.191 | 0.179 ± 0.019 | PASS |
+| repeat_champion_rate | 0.062 | 0.101 | 0.083 ± 0.057 | UNCLEAR |
+| best_team_title_odds | 0.196 | 0.226 | 0.161 ± 0.048 | PASS |
+| returner_top3_in_3 | 0.823 | 0.843 | 0.785 ± 0.039 | UNCLEAR (interval 0.746 to 0.824 against a 0.75 floor) |
+| exile_effect | -0.172 | 0.684 | 0.198 ± 0.367 | UNCLEAR (inside the band at the centre; interval wide) |
+| other nine bands | PASS | PASS | PASS | PASS |
+
+Reading it:
+- **Nothing moved outside a band with certainty**, and the scouting-run exile effect (0.68) came back to 0.20, which supports reading it as noise, not a real shift.
+- **Slow drift in the persistence measure**: year-to-year correlation reads 0.196, 0.191, 0.179 across the three states. Each step is inside its error bar, so it is not a finding, but it points the opposite way from the expectation that people raise persistence. Souls' only live path is trait drift into work ethic, which reduces the spread of work ethic over time (the 15-year population check showed work ethic spread falling from 17.8 to 14.3), so a small flattening of development differences is the likely mechanism. Watch it; do not tune it.
+- **Watch list**: returner_top3_in_3 (floor 0.75, point estimate 0.785), repeat_champion_rate, exile_effect. Twelve or more leagues would settle them.
+
 ## Parity test beds (src/dfl/parity.py): can the bands see unfairness?
 v1 defines two profiles: **tight** (the rules as written) and **none** (no salary or fairness regulation). Two 36-season leagues each (seeds 21, 22), compared with the tight result above. In v2 `none` removes the salary cap and the end-of-block rule for returners (the lottery stays: returners have no standing to draft by). I added a third bed, `rigged`, as a control rather than a design option: no cap, and two clubs always shop first in free agency.
 
