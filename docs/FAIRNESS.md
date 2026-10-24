@@ -207,6 +207,36 @@ Reading it:
 - **Persistence** reads 0.187, inside its band; no trend has appeared across the people layer (0.196 before, 0.191, 0.179, 0.197, 0.204, 0.191, 0.187 across states, all inside their error bars).
 - The earlier worry about payroll and talent concentration is still to be measured directly.
 
+## Trades stage 1 on (Ed 8.26), six tight leagues of 36 seasons (seeds 1 to 6): 12 PASS, 3 UNCLEAR, 0 FAIL
+
+| band | coaches final (6) | + trades (6) | verdict now |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.206 ± 0.004 | 0.209 ± 0.004 | UNCLEAR (interval 0.205 to 0.213 against a 0.21 ceiling) |
+| year_to_year_corr | 0.187 | 0.211 ± 0.024 | PASS |
+| repeat_champion_rate | 0.071 | 0.042 ± 0.012 | PASS |
+| best_team_title_odds | 0.190 | 0.220 ± 0.050 | UNCLEAR (interval reaches 0.27 against a 0.25 ceiling) |
+| exile_effect | -0.134 | 0.295 ± 0.314 | UNCLEAR (centre inside, wide interval) |
+| other ten bands | PASS | PASS | PASS |
+
+The win % spread reads 0.206 to 0.209 across the last several states and sits against the ceiling the owner set at 0.21 in Ed 8.20; it has been at 0.205 to 0.210 in every state since, with and without the people layer, so this is the league's own level rather than a people-layer effect, but it leaves no headroom. Persistence has risen a little (0.187 to 0.211, inside error bars) as clubs get smarter, as expected; schedule push is still about zero (+0.002 per rating point).
+
+## The people layer's effect on payroll, quality and talent concentration (one 12-season league, seed 21; years 6 to 12)
+
+Measured directly, as promised when player demands were added. Baseline is the commit before the people layer began (random same-position swaps; clubs choose by true ability; no demands, souls or coaches); "people layer" is the Ed 8.26 code.
+
+| measure | before the people layer | with scouting, souls, demands, coaches and trades |
+| --- | --- | --- |
+| average club payroll (cap number, of 1,000) | 934 | 926 |
+| spread of payroll between clubs (sd) | 24.6 | 27.8 |
+| average roster rating | 67.9 | 68.1 |
+| spread of roster rating between clubs (sd) | 1.03 | 1.13 |
+| share of the top 5 percent of players held by the 5 richest-in-talent clubs | 0.207 | 0.206 |
+| trades a year | 29.2 | 11.2 |
+
+- **Payroll, quality and concentration did not move.** Demands cost about 4 percent over the old price curve, but clubs end up at the cap either way, so payroll is set by the cap, not by prices. The concentration figure picks the top five clubs after the fact, so it reads above the even-spread 0.104 in both states; the comparison, not the level, is the finding.
+- **Trade volume fell to under 40 percent** of the stand-in's. Most deals are one-for-one swaps (2 players a trade) accepted in round 1; counters average 0.6 a year, so the second and third rounds, and with them the general manager's negotiation skill, are nearly unused. The real NFL makes more trades; raising the number of clubs that propose per run is the lever (`attempts_per_call`), and it is the owner's call.
+- **One league, one seed.** These are single-league figures; the pattern is consistent with the band results over six leagues, but treat the small differences (payroll spread, club spread) as unproven.
+
 ## Parity test beds (src/dfl/parity.py): can the bands see unfairness?
 v1 defines two profiles: **tight** (the rules as written) and **none** (no salary or fairness regulation). Two 36-season leagues each (seeds 21, 22), compared with the tight result above. In v2 `none` removes the salary cap and the end-of-block rule for returners (the lottery stays: returners have no standing to draft by). I added a third bed, `rigged`, as a control rather than a design option: no cap, and two clubs always shop first in free agency.
 
