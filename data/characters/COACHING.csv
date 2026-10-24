@@ -1,0 +1,9 @@
+key,value,note
+dev_cap,0.5,"Most a club's coaches can add to (or take from) any one attribute of a player in a year, in attribute points, before the kind scale"
+hc_share,0.4,"Weight of the head coach's teaching in a player's yearly development; the position group's coordinator takes the rest"
+retire_age_start,60,"Coaches never retire before this age"
+retire_p_start,0.10,"Chance of retiring at that age at a year turn"
+retire_p_step,0.15,"Added for each year past it; certain at the oldest coaching age (66)"
+pool_candidates,4,"Willing candidates the pool holds per coaching role (section 13)"
+pool_shift,-0.3,"Talent shift of pool candidates against the founding coaches"
+view_sd,5.0,"Spread of a club's error when it judges a coach, before its general manager's evaluation"

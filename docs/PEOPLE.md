@@ -10,7 +10,7 @@ Clubs today are stand-ins that choose by true ability, which makes year-to-year 
 | 5.1 | Scouting views: clubs see a noisy estimate, not true ability (Ed 8.21, §13) | built; measured below |
 | 5.2 | Souls: fixed archetypes, self-view bias, trait drift bounded by the archetype (Ed 8.22) | built; measured, no band moved out of range |
 | 5.3 | Player-side negotiation: demands from self-view, greed, loyalty, ambition (Ed 8.23); clubs pay up to their own view | built; measured, no band moved out of range |
-| 5.4 | Coaches: one pool for head coach and coordinators, small capped effects, development effect capped | planned |
+| 5.4 | Coaches: one market for the four coaching roles, capped teaching effect (half an attribute point a year), retirement, pool, hiring by the club's own view (Ed 8.24) | built; fairness re-measure pending |
 | 5.5 | GMs, CEOs, fans: recall, sentiment | planned |
 | 5.6 | Interactions and meeting rooms (contracts, trades, interviews); analytics definitions (§20.1); Hall of Fame | planned |
 
@@ -24,6 +24,9 @@ Archetype = nearest of six placeholder centres (`ARCHETYPES.csv`) to the traits 
 
 ## Slice 5.3 rule (as built)
 Above-minimum free agents bargain. Demand = price of her self-view overall x (1 + 0.20 greed + 0.08 ambition, each centred on 50) minus 0.15 loyalty for her last club only, minus 10 percent per year waited in the pool; floor the league minimum. A club pays up to the price of its own scouting view plus 10 percent slack. Deal at her demand if within that; otherwise no deal. In a one-year test about 36 percent of attempted deals were refused and deals averaged 4 percent over the market curve. Rookies keep the scale; contract shape is still the autopilot's.
+
+## Slice 5.4 rule (as built)
+Teaching: mix of head coach (40 percent) and the position group's coordinator (60 percent) teaching rating, centred on 50, scaled to at most half an attribute point a year, added to each attribute through the development kind scale. Coaches retire from 60 (10 percent, plus 15 a year, certain at 66). The pool holds at least four candidates per role (a little weaker than founders), four-year rule; each year turn vacancies are filled in random club order by each club's best-rated candidate (rating error shrinks with its GM's evaluation). Not built: dismissals, poaching, coach contracts and pay, cross-role moves (spec item 25). I read "one pool" as one shared market and rulebook; a card cannot change role.
 
 ## Owner decisions this layer needs
 1. The archetype list (a proposal will come with slice 5.2).

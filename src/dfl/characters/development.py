@@ -25,8 +25,9 @@ def kind_of(tables, attr):
     return tables.attrs[attr]["kind"] if attr in tables.attrs else "skill"
 
 
-def develop(card, year, rng, tables):
-    """Advance one card by one year. `year` is the year she turns (her new age is year - birth_year). Returns the change in true overall."""
+def develop(card, year, rng, tables, coach=0.0):
+    """Advance one card by one year. `year` is the year she turns (her new age is year - birth_year). Returns the change in true overall.
+    `coach` is the club's teaching effect in attribute points (already capped by the caller); it is scaled by attribute kind."""
     if card.identity.role != "player":
         return 0.0
     D = tables.development
@@ -48,7 +49,7 @@ def develop(card, year, rng, tables):
         else:
             r = 1 - (1 - r) * (1 - D["wrk_effect"] * wrk)
         noise = rng.gauss(0, D["noise_" + kind] * vol)
-        card.attrs[a] = clip(v * r + gain * (1 + D["wrk_effect"] * wrk) + noise)
+        card.attrs[a] = clip(v * r + gain * (1 + D["wrk_effect"] * wrk) + noise + coach * D["scale_" + kind])
     return card.true_overall(tables) - before
 
 

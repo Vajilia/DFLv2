@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from dfl.characters import Creator, load_tables  # noqa: E402
 from dfl.characters.development import develop, retire_chance  # noqa: E402
 from dfl.characters import soul  # noqa: E402
+from dfl.ledger import coaching  # noqa: E402
 from dfl.characters.card import Card  # noqa: E402
 from dfl.ledger import rules as R  # noqa: E402
 from dfl.ledger.world import World, ask  # noqa: E402
@@ -117,7 +118,7 @@ class CardWorld(unittest.TestCase):
         L = w.L
         self.assertEqual(set(w.cards), set(L.players))
         self.assertGreater(sum(L.retired.values()), 0)
-        taken = {c.identity.name for c in w.cards.values()} | {c.identity.name for d in w.leaders.values() for c in d.values()}
+        taken = {c.identity.name for c in w.cards.values()} | {c.identity.name for d in w.leaders.values() for c in d.values()} | {c.identity.name for cs in w.coach_pool.values() for c in cs}
         self.assertEqual(w.creator.taken, taken)                 # retired characters' names are free again
         for pid, p in L.players.items():
             self.assertEqual(p.age, w.cards[pid].age(L.year))
@@ -440,3 +441,98 @@ class Negotiation(unittest.TestCase):
         self.assertGreater(w.stats.get("deals", 0), 0)
         for cid in w.L.clubs:
             self.assertGreaterEqual(len(w.L.clubs[cid].roster), 46)
+
+
+class Coaches(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.w = World(CLUBS, seed=71)
+        cls.w.open_year(first=True)
+
+    def test_teaching_is_capped_signed_and_zero_for_an_average_staff(self):
+        w = self.w
+        cap = w.tables.coaching["dev_cap"]
+        lead = w.leaders["C01"]
+        for tch, sign in ((99, 1), (1, -1)):
+            for r in ("hc", "oc", "dc", "stc"):
+                lead[r].attrs["TCH"] = tch
+            e = coaching.teaching(w, "C01", "QB")
+            self.assertLessEqual(abs(e), cap)
+            self.assertEqual(e > 0, sign > 0)
+        for r in ("hc", "oc", "dc", "stc"):
+            lead[r].attrs["TCH"] = 50
+        self.assertEqual(coaching.teaching(w, "C01", "QB"), 0.0)
+
+    def test_only_the_position_groups_own_coordinator_counts(self):
+        w = self.w
+        lead = w.leaders["C02"]
+        for r in ("hc", "oc", "dc", "stc"):
+            lead[r].attrs["TCH"] = 50
+        lead["oc"].attrs["TCH"] = 99
+        self.assertGreater(coaching.teaching(w, "C02", "WR"), 0)
+        self.assertEqual(coaching.teaching(w, "C02", "CB"), coaching.teaching(w, "C02", "CB"))
+        self.assertEqual(coaching.teaching(w, "C02", "CB"), 0.0)
+
+    def test_a_teaching_effect_moves_development_the_right_way_and_by_little(self):
+        w = self.w
+        base = Card.loads(next(c for c in w.cards.values() if c.identity.pos == "WR").dumps())
+        outs = {}
+        for coach in (-0.5, 0.0, 0.5):
+            c = Card.loads(base.dumps())
+            develop(c, w.L.year, random.Random(9), w.tables, coach)
+            outs[coach] = c.true_overall(w.tables)
+        self.assertLess(outs[-0.5], outs[0.0])
+        self.assertLess(outs[0.0], outs[0.5])
+        self.assertLess(outs[0.5] - outs[-0.5], 1.5)          # a whole year of the best versus the worst staff is about a point
+
+    def test_a_coach_retires_for_certain_at_the_oldest_age_and_never_before_the_start_age(self):
+        w = self.w
+        card = w.leaders["C03"]["hc"]
+        top = w.tables.roles["hc"]["age_max"]
+        young = int(w.tables.coaching["retire_age_start"]) - 1
+        self.assertEqual(coaching.retire_chance(w, card, card.identity.birth_year + top), 1.0)
+        self.assertEqual(coaching.retire_chance(w, card, card.identity.birth_year + young), 0.0)
+
+    def test_twenty_five_years_every_club_always_has_its_coaches_and_the_pool_holds_its_minimum(self):
+        w = World(CLUBS, seed=72)
+        w.open_year(first=True)
+        top = w.tables.roles["hc"]["age_max"]
+        for _ in range(25):
+            w.L.year += 1
+            w.age_and_retire()
+            names = set()
+            for cid, lead in w.leaders.items():
+                self.assertTrue({"ceo", "gm", "hc", "oc", "dc", "stc"} <= set(lead))
+                for r in coaching.COACH_ROLES:
+                    self.assertLessEqual(lead[r].age(w.L.year), top)
+                names |= {c.identity.name for c in lead.values()}
+            for r in coaching.COACH_ROLES:
+                self.assertGreaterEqual(len(w.coach_pool[r]), int(w.tables.coaching["pool_candidates"]))
+                self.assertTrue(all(w.pool_years.get(c.identity.id, 0) < 4 for c in w.coach_pool[r]))
+        self.assertGreater(w.stats["coach_retirements"], 20)
+        self.assertEqual(w.stats["coach_hires"], w.stats["coach_retirements"] + 0)
+
+    def test_a_vacancy_goes_to_the_pool_candidate_the_club_rates_highest(self):
+        w = World(CLUBS, seed=74)
+        w.open_year(first=True)
+        w.L.year += 1
+        w.age_and_retire()                                    # builds the pool
+        for cid in ("C04", "C05"):
+            del w.leaders[cid]["oc"]
+            pool = list(w.coach_pool["oc"])
+            best = max(pool, key=lambda c: (coaching.view(w, cid, c), -c.identity.id))
+            got = coaching.hire(w, cid, "oc")
+            self.assertIs(got, best)
+            self.assertIs(w.leaders[cid]["oc"], best)
+            self.assertNotIn(best, w.coach_pool["oc"])
+            self.assertGreaterEqual(len(w.coach_pool["oc"]), int(w.tables.coaching["pool_candidates"]))
+
+    def test_hiring_is_repeatable(self):
+        def run():
+            w = World(CLUBS, seed=73)
+            w.open_year(first=True)
+            for _ in range(8):
+                w.L.year += 1
+                w.age_and_retire()
+            return sorted((cid, r, c.identity.id) for cid, lead in w.leaders.items() for r, c in lead.items())
+        self.assertEqual(run(), run())

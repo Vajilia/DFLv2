@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.23.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.24.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -83,6 +83,9 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 
 ## People layer, slice 5.3: player demands (Ed 8.23, 2026-10-23)
 - **Built:** free agents above the minimum bargain from self-view, greed, ambition, loyalty and time waited; clubs pay up to their own scouting view plus slack (`World.demand`, `willing`, `negotiate`; `data/characters/NEGOTIATION.csv`); 6 tests. Fairness re-measure (six tight leagues, scouting, souls and demands on): 12 PASS, 3 UNCLEAR, 0 FAIL; see `docs/FAIRNESS.md`.
+
+## People layer, slice 5.4: coaches (Ed 8.24, 2026-10-24)
+- **Built:** capped teaching effect on player development, coach retirement, one coaching pool and a yearly hiring pass (`src/dfl/ledger/coaching.py`, `data/characters/COACHING.csv`); 7 tests. Fairness re-measure: `docs/FAIRNESS.md` once run. Not built: dismissals, poaching, coach pay (spec item 25).
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

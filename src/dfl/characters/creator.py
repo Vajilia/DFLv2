@@ -52,6 +52,7 @@ def load_tables(path=DATA):
     t.development = {r["key"]: float(r["value"]) for r in rd("DEVELOPMENT.csv")}
     t.soul = {r["key"]: float(r["value"]) for r in rd("SOUL.csv")}
     t.negotiation = {r["key"]: float(r["value"]) for r in rd("NEGOTIATION.csv")}
+    t.coaching = {r["key"]: float(r["value"]) for r in rd("COACHING.csv")}
     t.archetypes = {r["code"]: {"name": r["name"], "self_bias": float(r["self_bias"]),
                                 "centre": {k: float(r[k]) for k in ("AMB", "LOY", "WRK", "TMP", "GRE", "LDR")}} for r in rd("ARCHETYPES.csv")}
     t.first, t.last = lines("FIRST_NAMES.txt"), lines("LAST_NAMES.txt")
@@ -137,14 +138,14 @@ class Creator:
                   "volatility": round(abs(rng.gauss(1.0, 0.35)), 2)}
         return self._finish(cid, rng, "player", pos, age, year, origin, attrs, growth, height, weight)
 
-    def leader(self, role, year, origin="founding"):
+    def leader(self, role, year, origin="founding", shift=0.0):
         t = self.t
         cid = self.next_id
         self.next_id += 1
         rng = rng_for(self.seed, "card", cid)
         R = t.roles[role]
         age = clip(rng.gauss(R["age_mean"], R["age_sd"]), int(R["age_min"]), int(R["age_max"]))
-        g = rng.gauss(0, 1)
+        g = rng.gauss(shift, 1)
         attrs = {a: clip(m + sd * (ld * g + math.sqrt(1 - ld * ld) * rng.gauss(0, 1))) for a, m, sd, ld, _ in t.profile[role]}
         growth = {"peak_age": 50, "ceiling": 0, "volatility": round(abs(rng.gauss(1.0, 0.35)), 2)}
         height = clip(rng.gauss(166, 7), 145, 190)

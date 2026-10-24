@@ -16,7 +16,7 @@ from ..characters import Creator, load_tables
 from ..characters.creator import rng_for
 from ..characters import soul
 from ..characters.development import develop, retire_chance
-from . import gameday, rules as R
+from . import coaching, gameday, rules as R
 from .contracts import Contract, ContractError, rookie_contract
 from .ledger import Ledger, Rejected
 from .positions import MINIMUMS, POSITIONS, shortfalls
@@ -53,6 +53,9 @@ class World:
         self.rng = random.Random(seed)
         self.dev_rng = random.Random(f"{seed}|develop")
         self.soul_rng = random.Random(f"{seed}|soul")
+        self.coach_rng = random.Random(f"{seed}|coach")
+        self.coach_pool = {r: [] for r in coaching.COACH_ROLES}   # willing coaching candidates, by role (one market for all four)
+        self.pool_years = {}                                      # coach id -> year turns spent in the pool
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
         self.priority = list(priority)             # clubs that always shop first in free agency (a parity-test control only)
@@ -60,7 +63,7 @@ class World:
         self.creator = Creator(seed, self.tables)
         self.cards = {}                  # player id -> Card, for everyone in the ledger (the id is the card id)
         self.rating = {}                 # player id -> hidden true overall (float), refreshed when the card develops
-        self.leaders = {}                # club -> {role: Card}; they do not age or move yet (people layer)
+        self.leaders = {}                # club -> {role: Card}; coaches retire and are hired (Edition 8.24); the CEO and GM do not move yet
         self._views = {}                 # (club, player) -> that club's estimate this league year
         self.active = {}                 # club -> GameDay of its latest game
         self.active_week = {}
@@ -397,13 +400,20 @@ class World:
         self.purge()                       # the pool rule (four years unsigned) already retired some at the league-year turn
         if skip:
             return
+        teach = {}
         for pid in sorted(L.players):
             p, card = L.players[pid], self.cards[pid]
             p.age = card.age(L.year)
             if p.where in ("roster", "ps", "ir"):
                 p.seasons += 1
             soul.drift(card, self.soul_rng, self.tables)
-            develop(card, L.year, self.dev_rng, self.tables)
+            if p.where in ("roster", "ps", "ir") and p.club in self.leaders:
+                coach = teach.get((p.club, p.pos))
+                if coach is None:
+                    coach = teach[(p.club, p.pos)] = coaching.teaching(self, p.club, p.pos)
+            else:
+                coach = 0.0
+            develop(card, L.year, self.dev_rng, self.tables, coach)
             o = card.true_overall(self.tables)
             self.rating[pid], p.ovr = o, int(round(o))
             p.elevations = 0
@@ -411,6 +421,7 @@ class World:
             if p.where == "fa" and self.dev_rng.random() < retire_chance(card, L.year, o, self.tables):
                 L.retire(pid, "age")
         self.purge()
+        coaching.turn_year(self)
 
     def pre_draft_trim(self):
         L = self.L
