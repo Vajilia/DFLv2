@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.29.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.30.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -95,6 +95,9 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 
 ## Meeting rooms, slice 5.6 (Ed 8.29, 2026-10-24)
 - **Built:** contract room (rounds, GM negotiating rating), trade room, interviews with candidate consent; recall rate about one a year; numbering repair at the final cut (`src/dfl/ledger/rooms.py`, `data/characters/ROOMS.csv`); 16 new tests. Fairness re-measure (six tight leagues): 13 PASS, 2 UNCLEAR (best_team_title_odds 0.262 against 0.25, exile_effect), 0 FAIL; see `docs/FAIRNESS.md`. Analytics definitions and the Hall of Fame are a proposal only (`docs/ANALYTICS_AND_HALL.md`).
+
+## Production, analytics and halls, slice 5.7 (Ed 8.30, 2026-10-24)
+- **Built:** EPA/WPA per-player recording (result-neutral, proven by a 240-game digest), the analytical score, Tiaras to the Coronation winner, 59 halls with All-Time registers and a yearly fan entrant (`src/dfl/engine/production.py`, `src/dfl/ledger/analytics.py`, `honours.py`, `data/analytics/`); 17 tests. Fairness re-check pending.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

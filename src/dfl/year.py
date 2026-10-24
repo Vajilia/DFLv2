@@ -14,7 +14,7 @@ import random
 
 from . import calendar as C
 from . import draft, league, parity, standings
-from .ledger import coaching, governance
+from .ledger import analytics, coaching, governance, honours
 from .ledger import rules as R
 from .ledger.world import World
 from .engine.ledger_engine import LedgerEngine
@@ -186,6 +186,10 @@ class Universe:
         self.draft_order = result["draft_order"]
         self.last_results = {c: (r.w / (r.w + r.l) if r.w + r.l else 0.5) for c, r in result["outcome"]["records"].items()}
         governance.close_year(self.world, self.last_results)
+        analytics.season_close(self.world, self.L.year)
+        honours.award_tiara(self.world, self.L.year, result["coronation_winner"])
+        honours.update(self.world, self.L.year, self.tpl.division_of)
+        honours.fan_entrant(self.world, self.L.year, self.clubs)
         L = self.L
         self.reports.append({
             "year": year, "season": self.season, "winner": result["coronation_winner"], "venue": result["coronation_venue"],

@@ -1,6 +1,6 @@
-# Analytics definitions and the Hall of Fame: proposal for owner review (not built)
+# Analytics definitions and the Hall of Fame
 
-Status: proposal, 2026-10-24. The Design Document is the authority (§15, §20 item 1). Builder's amendments are marked **(builder)**.
+Status: **built in Edition 8.30 (2026-10-24)** after the owner approved the definitions, the Coronation-winner reading of the Tiara and the engine recording work. What is built, and where it departs from the proposal below, is in the Design Document §15 and §20 item 29. Departures: the fan ballot's "runners-up" are the best eligible players outside the league hall (not the losing finalist's players), and the expected-points curve is a fixed data table, not refitted each season. Original proposal follows. The Design Document is the authority (§15, §20 item 1). Builder's amendments are marked **(builder)**.
 
 ## What blocks building this now
 The engine records team totals per game (plays, yards, sacks, points and so on) and which players played, but **no per-player production**. Every analytics term and the Hall's All-Time registers need production credited to people. So the order is: (1) per-player recording in the engine, (2) the definitions below, (3) the Hall. Recording is an engine task of its own (credit each play's result to the players who took part, by role) and should be measured against the engine's existing calibration, since it touches the play loop.

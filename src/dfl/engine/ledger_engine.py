@@ -62,5 +62,6 @@ class LedgerEngine:
             for pid, weeks in s.new_injuries:
                 self.w.injure(pid, weeks)
             self.injuries_seen += len(s.new_injuries)
+        self.w.record_game(res, home, away)
         self.games_played += 1
         return res.score[1], res.score[0]            # (away, home)

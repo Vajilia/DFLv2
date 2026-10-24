@@ -61,6 +61,14 @@ class World:
         self.ceo_pool, self.gm_pool = [], []                      # willing CEO candidates and general managers, new or let go
         self.elected = {}                                         # club -> CEO elected after the last game, who takes office in the next offseason
         self.gov_log = []                                         # recall ballots, elections, dismissals and hires (feeds the story layer)
+        self.production = {}                                      # league year -> card id -> opponent -> play type -> [opportunities, EPA, WPA] (Edition 8.30)
+        self.team_production = {}                                 # league year -> club -> "off"/"def" -> play type -> [plays, EPA] (EPA the unit made / allowed)
+        self.appearances = {}                                     # league year -> card ids that were on a game-day active list (section 15 credited seasons)
+        self.career = {}                                          # card id -> league year -> analytical season record (analytics.py)
+        self.credited = {}                                        # card id -> league years with an active-list or Tour appearance (section 15)
+        self.hall = {"reg": {}, "ever": {}, "fan": [], "log": []}       # section 15 halls (honours.py)
+        self.persona = {}                                         # card id -> (name, official position), kept for the halls after retirement
+        self.tiaras = {}                                          # card id -> league years of her Tiaras (honours.py)
         self.rooms, self.room_seq, self._tape = [], 0, None          # meeting-room transcripts of the last few league years (Edition 8.29)
         self.form = {}                                            # club -> win percentage of its last season (what candidates see)
         self.trade_log = []                                       # every proposal, counter, rejection and deal (the engine replays this)
@@ -80,6 +88,27 @@ class World:
                       "emergency_games": 0, "elevations": 0, "ir_moves": 0, "unsigned_picks": 0, "offseason_overage_max": F(0), "overage_max": F(0), "payroll_min": None,
                       "margin_min": None, "games": 0, "committed_max": F(0), "legal_move_failures": 0}
         self._found()
+
+    def record_game(self, res, home, away):
+        """File one game's per-player and per-unit production under the league year (Edition 8.30). Nothing reads it back into a game."""
+        y = self.L.year
+        prod, apps, team = self.production.setdefault(y, {}), self.appearances.setdefault(y, set()), self.team_production.setdefault(y, {})
+        for sq, opp in ((home, away), (away, home)):
+            apps.update(sq.cards)
+            for pid in sq.cards:
+                if pid in res.production:
+                    d = prod.setdefault(pid, {}).setdefault(opp.cid, {})
+                    for pt, (n, epa, wpa) in res.production[pid].items():
+                        x = d.setdefault(pt, [0, 0.0, 0.0])
+                        x[0] += n
+                        x[1] += epa
+                        x[2] += wpa
+        for k, (a, b) in enumerate(((home, away), (away, home))):
+            for pt, (n, epa) in res.team_production[k].items():
+                for club, side, sign in ((a.cid, "off", 1), (b.cid, "def", 1)):
+                    x = team.setdefault(club, {}).setdefault(side, {}).setdefault(pt, [0, 0.0])
+                    x[0] += n
+                    x[1] += epa
 
     # ---------- supply
     def register(self, card, seasons=0):

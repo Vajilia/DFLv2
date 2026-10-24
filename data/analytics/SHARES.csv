@@ -1,0 +1,25 @@
+play,side,group,share,note
+pass,off,qb,0.40,"Share of the play's expected points added that each group is credited; the defence receives the opposite"
+pass,off,target,0.30,
+pass,off,ol,0.20,"Split evenly among the five linemen"
+pass,off,rest,0.10,"Split among the other eligible receivers on the field (halfback, tight end, wide receivers) that were not the target"
+pass,def,dl,0.30,
+pass,def,lb,0.20,
+pass,def,db,0.50,
+run,off,carrier,0.50,
+run,off,ol,0.35,
+run,off,te,0.075,
+run,off,wr,0.075,"Blocking wide receivers, split evenly"
+run,def,dl,0.40,
+run,def,lb,0.40,
+run,def,db,0.20,
+sack,off,qb,0.30,
+sack,off,ol,0.70,
+sack,def,dl,0.60,
+sack,def,lb,0.30,
+sack,def,db,0.10,
+fg,off,k,0.75,"Field goal: the kicker, the long snapper and the holder (the punter)"
+fg,off,ls,0.125,
+fg,off,p,0.125,
+punt,off,p,0.85,
+punt,off,ls,0.15,

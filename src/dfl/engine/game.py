@@ -9,6 +9,7 @@ Coordinates: `yl` is the offense's yards from its own goal line (0-100). Teams a
 import math
 from dataclasses import dataclass, field
 
+from . import production
 from .params import P, PENALTIES, RULE_VERSION
 
 QUARTER = 900
@@ -39,6 +40,8 @@ class GameResult:
     injuries: dict
     plays: list = field(default_factory=list)
     rule_version: str = RULE_VERSION
+    team_production: list = field(default_factory=list)
+    production: dict = field(default_factory=dict)      # card id -> {play type: [opportunities, EPA, WPA]} (Edition 8.30)
 
 
 def new_stats():
@@ -57,6 +60,8 @@ class Game:
         self.score = [0, 0]
         self.st = (new_stats(), new_stats())
         self.pl = {}
+        self.prod = {}
+        self.team = [{}, {}]                 # offence k -> play type -> [plays, EPA] (Edition 8.30)
         self.period, self.t = 1, QUARTER
         self.to = [3, 3]
         self.poss = 0
@@ -175,7 +180,7 @@ class Game:
         win = None if tie else (h.cid if self.score[0] > self.score[1] else a.cid)
         inj = {h.cid: list(h.new_injuries), a.cid: list(a.new_injuries)}
         return GameResult(h.cid, a.cid, (self.score[0], self.score[1]), self.period, tie, win,
-                          [self.st[0], self.st[1]], self.pl, inj, self.log or [])
+                          [self.st[0], self.st[1]], self.pl, inj, self.log or [], production=self.prod, team_production=self.team)
 
     # ------------------------------------------------------------ kicking
     def kickoff(self, kicker, free_kick=False):
@@ -216,11 +221,10 @@ class Game:
         while not self.finished and self.next is None and not self.period_end:
             if self.down == 4:
                 act = self.fourth_down()
-                if act == "punt":
-                    self.punt()
-                    break
-                if act == "fg":
-                    self.field_goal()
+                if act in ("punt", "fg"):
+                    pre = production.State(self, k)
+                    self.punt() if act == "punt" else self.field_goal()
+                    production.credit_kick(self, k, pre, act)
                     break
             self.snap()
         if self.ot is not None and not self.finished:
@@ -386,12 +390,14 @@ class Game:
         if pen:
             self.apply_dead_ball_penalty(k, pen)
             return
+        pre = production.State(self, k)
         outcome = self.resolve_pass(k, uo, ud) if is_pass else self.resolve_run(k, uo, ud)
         live = self.draw_penalty("pass" if is_pass else "live", is_pass)
         if live:
             if self.apply_live_penalty(k, live, outcome):
                 return
         self.finish_play(k, outcome)
+        production.credit_scrimmage(self, k, outcome, pre, uo, ud)
         self.injuries(k)
 
     # ---- resolutions return a dict: kind, yards, turnover(None|'int'|'fumble'), td, stop(bool), oob(bool), pass(bool)

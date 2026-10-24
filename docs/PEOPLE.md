@@ -13,7 +13,7 @@ Clubs today are stand-ins that choose by true ability, which makes year-to-year 
 | 5.4 | Coaches (owner's structure, Ed 8.25): one category, posts held not born into, one common pool (new, fired, resigned), CEO over head coach, head coach over coordinators, leadership window, capped teaching effect | built; measured, no band moved out of range |
 | 5.5 | GMs, CEOs, fans: sentiment, recall ballots, CEO elections, GM hire and dismissal, hidden narrative-only discretion (Ed 8.27) | built; measured, no band moved out of range |
 | 5.6 | Meeting rooms: contract room, trade room, interviews (Ed 8.29) | built; measured, no band failed |
-| 5.7 | Analytics definitions (§20.1) and Hall of Fame | proposal only: blocked on per-player production recording (`docs/ANALYTICS_AND_HALL.md`) |
+| 5.7 | Per-player production recording, analytics score (§20.1), Tiaras and the 59 halls (Ed 8.30) | built; recording proven result-neutral; fairness re-check pending |
 
 ## Slice 5.1 rule (as built)
 View = true overall + position bias + error. Error sd = `base_sd / sqrt(1 + seasons_k * seasons)`, scaled by `1 - evl_effect * (GM EVL - 50) / 50`, times `own_factor` for the club's own players, floored at `min_sd`. Error is fixed per (club, player, league year). Prices still use the market rating, so overrating a player means overpaying. All numbers are placeholders in `data/characters/SCOUTING.csv` and `SCOUTING_BIAS.csv`.
@@ -38,6 +38,11 @@ Not built: CEO effect on spending (would be a fairness channel), GM-to-GM relati
 A room is a bounded, logged exchange (`src/dfl/ledger/rooms.py`, `data/characters/ROOMS.csv`; 14 tests in `tests/test_rooms.py`). Contract room: the player asks 6 percent above her demand, the GM counters taking back a share of the ask that rises with her NEG (60 percent more at 100, 60 percent less at 0; at 50 the deal is her demand), the player accepts down to 8 percent under her demand, otherwise holds there in round 3. Trade room: the 8.26 protocol recorded as a room. Interview: for each coach post and the GM post the club interviews candidates in order of first impression until three accept, then picks by its sharper post-interview rating (error x 0.6); a candidate declines with 5 percent, plus up to 30 points for the most ambitious against a club that lost every game. Recall rate raised to about one a year (gains 28, 21, 14). Also fixed: the final cut now repairs a rare jersey-numbering shortfall instead of halting (`tests/test_camp_repair.py`).
 
 Owner rulings 2026-10-24: recalls about once a year; the CEO's financial rating never moves spending; GM relationships stay narrative-only; viewpoint names kept.
+
+## Slice 5.7 rule (as built)
+The engine values every pass, run, scramble, sack, field goal and punt in expected points added (EPA) and win probability added (WPA) and shares each among the players on the field by role (`src/dfl/engine/production.py`, `data/analytics/`). A digest of 240 games proves recording changes no result. At each year close (`src/dfl/ledger/analytics.py`): within position, players above the opportunity threshold get role execution (EPA over the bench-level baseline), opponent-adjusted difficulty (opposing units judged by the clubs' public production) and leverage (WPA), standardised, weighted 60/25/15. Then (`src/dfl/ledger/honours.py`) the Coronation winner's final 53 and six leaders get Tiaras, players with a Tiara and five credited seasons are eligible, the 59 halls' All-Time registers are re-seated, and one fan entrant joins the league hall. 17 tests in `tests/test_production.py`.
+
+Owner rulings 2026-10-24: the analytics definitions, Tiara to the Coronation winner, the GM negotiating rating's payroll lever.
 
 ## Owner decisions this layer needs
 1. The archetype list (a proposal will come with slice 5.2).
