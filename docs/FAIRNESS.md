@@ -220,6 +220,36 @@ Reading it:
 
 The win % spread reads 0.206 to 0.209 across the last several states and sits against the ceiling the owner set at 0.21 in Ed 8.20; it has been at 0.205 to 0.210 in every state since, with and without the people layer, so this is the league's own level rather than a people-layer effect, but it leaves no headroom. Persistence has risen a little (0.187 to 0.211, inside error bars) as clubs get smarter, as expected; schedule push is still about zero (+0.002 per rating point).
 
+## Governance, slice 5.5 on (Ed 8.27), six tight leagues of 36 seasons (seeds 1 to 6): 13 PASS, 2 UNCLEAR, 0 FAIL
+
+Fairness bands: 6 league(s), 36 seasons each, first 8 dropped as warm-up.
+
+| band | measured (mean ± 2 SE) | allowed | verdict |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.206 ± 0.003 | 0.13 to 0.21 | PASS |
+| year_to_year_corr | 0.207 ± 0.023 | 0.1 to 0.5 | PASS |
+| close_game_share | 0.424 ± 0.005 | 0.35 to 0.55 | PASS |
+| repeat_champion_rate | 0.119 ± 0.035 | 0.0 to 0.12 | UNCLEAR |
+| max_titles_in_20 | 2.667 ± 0.422 | 0.0 to 4.7 | PASS |
+| worst_league_titles | 4.000 ± 0.000 | 0.0 to 7.0 | PASS |
+| best_team_title_odds | 0.167 ± 0.044 | 0.08 to 0.25 | PASS |
+| returner_avg_finish | 3.112 ± 0.089 | 2.8 to 3.4 | PASS |
+| returner_win_div | 0.196 ± 0.012 | 0.1 to 0.3 | PASS |
+| returner_fifth_again | 0.237 ± 0.031 | 0.1 to 0.3 | PASS |
+| returner_top3_in_3 | 0.835 ± 0.021 | 0.75 to 0.97 | PASS |
+| returner_playoff_first | 0.331 ± 0.019 | 0.2 to 0.55 | PASS |
+| exile_effect | 0.186 ± 0.371 | -0.5 to 0.5 | UNCLEAR |
+| exile_double_early | 0.000 ± 0.000 | 0.0 to 0.1 | PASS |
+| stuck_at_bottom | 0.080 ± 0.006 | 0.0 to 0.1 | PASS |
+
+Schedule push toward average: opponents' mean strength per point of own strength, slope -0.016 (a schedule that ignores strength gives -0.026, because a club never plays herself), so the push is +0.010 per point; correlation -0.066; league slopes -0.020, 0.001, -0.022, -0.025, -0.016, -0.015. Positive push = stronger clubs face tougher schedules.
+
+**Reading it.**
+- No band fails. The two UNCLEAR bands (repeat_champion_rate, exile_effect) are the noise-limited ones that have wavered in every state; repeat champions sit at the 0.12 ceiling (0.119 ± 0.035). Win % spread 0.206 and persistence 0.207 are where they were before the slice; the schedule push is +0.010 (none).
+- This slice adds no new lever on results: CEO and GM ratings reach the game only through paths that already existed (GM evaluation in scouting views, GM greed and negotiation in trade margins, CEO temperament in dismissals), so little movement was expected. The band check confirms it.
+- Governance rates (one 20-season league, seed 23, final parameters): 9 recalls in 20 seasons (about one every two seasons across 40 playing clubs), 276 term elections of which the sitting CEO lost about 8 percent, about 3 CEO and 2 GM retirements a year, about 6 GM hires a year. Averages hold: GM evaluation 60.0, CEO financial judgment 61.4 after 20 years.
+- Limits: sentiment effects reach the game only through CEO turnover, which in turn touches only temperament-scaled dismissals, so this measure cannot show what a stronger link (CEO spending, relationships) would do. Both are deliberately not built (spec item 27).
+
 ## The people layer's effect on payroll, quality and talent concentration (one 12-season league, seed 21; years 6 to 12)
 
 Measured directly, as promised when player demands were added. Baseline is the commit before the people layer began (random same-position swaps; clubs choose by true ability; no demands, souls or coaches); "people layer" is the Ed 8.26 code.
