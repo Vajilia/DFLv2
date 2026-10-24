@@ -97,7 +97,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Built:** contract room (rounds, GM negotiating rating), trade room, interviews with candidate consent; recall rate about one a year; numbering repair at the final cut (`src/dfl/ledger/rooms.py`, `data/characters/ROOMS.csv`); 16 new tests. Fairness re-measure (six tight leagues): 13 PASS, 2 UNCLEAR (best_team_title_odds 0.262 against 0.25, exile_effect), 0 FAIL; see `docs/FAIRNESS.md`. Analytics definitions and the Hall of Fame are a proposal only (`docs/ANALYTICS_AND_HALL.md`).
 
 ## Production, analytics and halls, slice 5.7 (Ed 8.30, 2026-10-24)
-- **Built:** EPA/WPA per-player recording (result-neutral, proven by a 240-game digest), the analytical score, Tiaras to the Coronation winner, 59 halls with All-Time registers and a yearly fan entrant (`src/dfl/engine/production.py`, `src/dfl/ledger/analytics.py`, `honours.py`, `data/analytics/`); 17 tests. Fairness re-check pending.
+- **Built:** EPA/WPA per-player recording (result-neutral, proven by a 240-game digest), the analytical score, Tiaras to the Coronation winner, 59 halls with All-Time registers and a yearly fan entrant (`src/dfl/engine/production.py`, `src/dfl/ledger/analytics.py`, `honours.py`, `data/analytics/`); 17 tests. Fairness: recording is result-neutral; twelve tight leagues 13 PASS, 2 UNCLEAR, 0 FAIL (`docs/FAIRNESS.md`).
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

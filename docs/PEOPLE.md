@@ -13,7 +13,7 @@ Clubs today are stand-ins that choose by true ability, which makes year-to-year 
 | 5.4 | Coaches (owner's structure, Ed 8.25): one category, posts held not born into, one common pool (new, fired, resigned), CEO over head coach, head coach over coordinators, leadership window, capped teaching effect | built; measured, no band moved out of range |
 | 5.5 | GMs, CEOs, fans: sentiment, recall ballots, CEO elections, GM hire and dismissal, hidden narrative-only discretion (Ed 8.27) | built; measured, no band moved out of range |
 | 5.6 | Meeting rooms: contract room, trade room, interviews (Ed 8.29) | built; measured, no band failed |
-| 5.7 | Per-player production recording, analytics score (§20.1), Tiaras and the 59 halls (Ed 8.30) | built; recording proven result-neutral; fairness re-check pending |
+| 5.7 | Per-player production recording, analytics score (§20.1), Tiaras and the 59 halls (Ed 8.30) | built; recording proven result-neutral; twelve leagues, no band failed |
 
 ## Slice 5.1 rule (as built)
 View = true overall + position bias + error. Error sd = `base_sd / sqrt(1 + seasons_k * seasons)`, scaled by `1 - evl_effect * (GM EVL - 50) / 50`, times `own_factor` for the club's own players, floored at `min_sd`. Error is fixed per (club, player, league year). Prices still use the market rating, so overrating a player means overpaying. All numbers are placeholders in `data/characters/SCOUTING.csv` and `SCOUTING_BIAS.csv`.
