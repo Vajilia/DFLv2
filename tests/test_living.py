@@ -62,7 +62,7 @@ class Development(unittest.TestCase):
         self.assertEqual([x.dumps() for x in a], [x.dumps() for x in b])
 
     def test_leaders_do_not_develop(self):
-        ld = Creator(3, T).leader("hc", 2000)
+        ld = Creator(3, T).leader("coach", 2000)
         before = dict(ld.attrs)
         self.assertEqual(develop(ld, 2001, random.Random(1), T), 0.0)
         self.assertEqual(ld.attrs, before)
@@ -118,7 +118,7 @@ class CardWorld(unittest.TestCase):
         L = w.L
         self.assertEqual(set(w.cards), set(L.players))
         self.assertGreater(sum(L.retired.values()), 0)
-        taken = {c.identity.name for c in w.cards.values()} | {c.identity.name for d in w.leaders.values() for c in d.values()} | {c.identity.name for cs in w.coach_pool.values() for c in cs}
+        taken = {c.identity.name for c in w.cards.values()} | {c.identity.name for d in w.leaders.values() for c in d.values()} | {c.identity.name for c in w.coach_pool}
         self.assertEqual(w.creator.taken, taken)                 # retired characters' names are free again
         for pid, p in L.players.items():
             self.assertEqual(p.age, w.cards[pid].age(L.year))
@@ -449,28 +449,37 @@ class Coaches(unittest.TestCase):
         cls.w = World(CLUBS, seed=71)
         cls.w.open_year(first=True)
 
+    def test_coaches_are_one_category_and_hold_posts(self):
+        w = self.w
+        for lead in w.leaders.values():
+            self.assertEqual({lead[p].identity.role for p in coaching.POSTS}, {"coach"})
+            self.assertEqual(len({lead[p].identity.id for p in coaching.POSTS}), 4)
+            for p in coaching.POSTS:
+                self.assertTrue({"MGT", "MOT", "TCH", "SCH", "ADJ"} <= set(lead[p].attrs))
+        c = w.leaders["C01"]["oc"]
+        self.assertNotEqual(coaching.fit(w, c, "hc"), coaching.fit(w, c, "oc"))      # the same coach fits different posts differently
+
     def test_teaching_is_capped_signed_and_zero_for_an_average_staff(self):
         w = self.w
         cap = w.tables.coaching["dev_cap"]
         lead = w.leaders["C01"]
         for tch, sign in ((99, 1), (1, -1)):
-            for r in ("hc", "oc", "dc", "stc"):
+            for r in coaching.POSTS:
                 lead[r].attrs["TCH"] = tch
             e = coaching.teaching(w, "C01", "QB")
             self.assertLessEqual(abs(e), cap)
             self.assertEqual(e > 0, sign > 0)
-        for r in ("hc", "oc", "dc", "stc"):
+        for r in coaching.POSTS:
             lead[r].attrs["TCH"] = 50
         self.assertEqual(coaching.teaching(w, "C01", "QB"), 0.0)
 
     def test_only_the_position_groups_own_coordinator_counts(self):
         w = self.w
         lead = w.leaders["C02"]
-        for r in ("hc", "oc", "dc", "stc"):
+        for r in coaching.POSTS:
             lead[r].attrs["TCH"] = 50
         lead["oc"].attrs["TCH"] = 99
         self.assertGreater(coaching.teaching(w, "C02", "WR"), 0)
-        self.assertEqual(coaching.teaching(w, "C02", "CB"), coaching.teaching(w, "C02", "CB"))
         self.assertEqual(coaching.teaching(w, "C02", "CB"), 0.0)
 
     def test_a_teaching_effect_moves_development_the_right_way_and_by_little(self):
@@ -483,56 +492,114 @@ class Coaches(unittest.TestCase):
             outs[coach] = c.true_overall(w.tables)
         self.assertLess(outs[-0.5], outs[0.0])
         self.assertLess(outs[0.0], outs[0.5])
-        self.assertLess(outs[0.5] - outs[-0.5], 1.5)          # a whole year of the best versus the worst staff is about a point
+        self.assertLess(outs[0.5] - outs[-0.5], 1.5)
 
     def test_a_coach_retires_for_certain_at_the_oldest_age_and_never_before_the_start_age(self):
         w = self.w
         card = w.leaders["C03"]["hc"]
-        top = w.tables.roles["hc"]["age_max"]
+        top = w.tables.roles["coach"]["age_max"]
         young = int(w.tables.coaching["retire_age_start"]) - 1
         self.assertEqual(coaching.retire_chance(w, card, card.identity.birth_year + top), 1.0)
         self.assertEqual(coaching.retire_chance(w, card, card.identity.birth_year + young), 0.0)
 
-    def test_twenty_five_years_every_club_always_has_its_coaches_and_the_pool_holds_its_minimum(self):
+    def test_twenty_five_years_every_club_has_its_four_posts_and_the_pool_holds_its_minimum(self):
         w = World(CLUBS, seed=72)
         w.open_year(first=True)
-        top = w.tables.roles["hc"]["age_max"]
+        top = w.tables.roles["coach"]["age_max"]
+        need = int(w.tables.coaching["pool_candidates"]) * len(coaching.POSTS)
         for _ in range(25):
             w.L.year += 1
             w.age_and_retire()
-            names = set()
+            ids = set()
             for cid, lead in w.leaders.items():
                 self.assertTrue({"ceo", "gm", "hc", "oc", "dc", "stc"} <= set(lead))
-                for r in coaching.COACH_ROLES:
+                for r in coaching.POSTS:
                     self.assertLessEqual(lead[r].age(w.L.year), top)
-                names |= {c.identity.name for c in lead.values()}
-            for r in coaching.COACH_ROLES:
-                self.assertGreaterEqual(len(w.coach_pool[r]), int(w.tables.coaching["pool_candidates"]))
-                self.assertTrue(all(w.pool_years.get(c.identity.id, 0) < 4 for c in w.coach_pool[r]))
+                    self.assertNotIn(lead[r].identity.id, ids)             # a coach holds one post, at one club
+                    ids.add(lead[r].identity.id)
+            self.assertGreaterEqual(len(w.coach_pool), need)
+            self.assertTrue(all(w.pool_years.get(c.identity.id, 0) < 4 for c in w.coach_pool))
+            self.assertFalse(ids & {c.identity.id for c in w.coach_pool})
         self.assertGreater(w.stats["coach_retirements"], 20)
-        self.assertEqual(w.stats["coach_hires"], w.stats["coach_retirements"] + 0)
 
-    def test_a_vacancy_goes_to_the_pool_candidate_the_club_rates_highest(self):
+    def test_a_vacancy_goes_to_the_pool_candidate_the_club_rates_highest_for_that_post(self):
         w = World(CLUBS, seed=74)
         w.open_year(first=True)
         w.L.year += 1
-        w.age_and_retire()                                    # builds the pool
-        for cid in ("C04", "C05"):
-            del w.leaders[cid]["oc"]
-            pool = list(w.coach_pool["oc"])
-            best = max(pool, key=lambda c: (coaching.view(w, cid, c), -c.identity.id))
-            got = coaching.hire(w, cid, "oc")
+        w.age_and_retire()
+        for cid, post in (("C04", "oc"), ("C05", "hc")):
+            del w.leaders[cid][post]
+            pool = list(w.coach_pool)
+            best = max(pool, key=lambda c: (coaching.view(w, cid, c, post), -c.identity.id))
+            got = coaching.hire(w, cid, post)
             self.assertIs(got, best)
-            self.assertIs(w.leaders[cid]["oc"], best)
-            self.assertNotIn(best, w.coach_pool["oc"])
-            self.assertGreaterEqual(len(w.coach_pool["oc"]), int(w.tables.coaching["pool_candidates"]))
+            self.assertIs(w.leaders[cid][post], best)
+            self.assertNotIn(best, w.coach_pool)
 
-    def test_hiring_is_repeatable(self):
+    def test_any_pool_coach_can_be_hired_to_any_post_and_a_fired_coach_rejoins_the_pool(self):
+        w = World(CLUBS, seed=75)
+        w.open_year(first=True)
+        w.L.year += 1
+        w.age_and_retire()
+        coord = w.leaders["C06"]["dc"]
+        coaching.vacate(w, "C06", "dc", "coach_fires_coord")
+        self.assertIn(coord, w.coach_pool)
+        self.assertEqual(w.pool_years[coord.identity.id], 0)
+        for a in ("MGT", "MOT", "TCH"):
+            coord.attrs[a] = 99                         # an outstanding head-coach fit, far above any other candidate
+        del w.leaders["C07"]["hc"]
+        got = coaching.hire(w, "C07", "hc")
+        self.assertIs(got, coord)                       # a coordinator let go by one club becomes another club's head coach
+        self.assertIs(w.leaders["C07"]["hc"], coord)
+        self.assertNotIn(coord, w.coach_pool)
+
+    def test_the_window_dismisses_after_bad_seasons_resigns_and_always_refills(self):
+        w = World(CLUBS, seed=76)
+        w.open_year(first=True)
+        w.L.year += 1
+        w.age_and_retire()
+        before = {cid: {p: lead[p].identity.id for p in coaching.POSTS} for cid, lead in w.leaders.items()}
+        results = {cid: (0.1 if i % 2 else 0.6) for i, cid in enumerate(sorted(w.leaders))}
+        for _ in range(3):
+            w.L.year += 1
+            w.age_and_retire()
+            coaching.window(w, results)
+        for cid, lead in w.leaders.items():
+            self.assertTrue(set(coaching.POSTS) <= set(lead))
+        self.assertGreater(w.stats.get("coach_fires_hc", 0), 0)
+        self.assertGreater(w.stats.get("coach_fires_coord", 0), 0)
+        self.assertGreater(w.stats.get("coach_resignations", 0), 0)
+        bad = [c for i, c in enumerate(sorted(w.leaders)) if i % 2]
+        good = [c for i, c in enumerate(sorted(w.leaders)) if not i % 2]
+        changed = lambda cs: sum(w.leaders[c][p].identity.id != before[c][p] for c in cs for p in coaching.POSTS)
+        self.assertGreater(changed(bad), changed(good))           # bad seasons cost coaches their posts
+
+    def test_the_window_never_rehires_the_coach_the_club_just_let_go(self):
+        w = World(CLUBS, seed=77)
+        w.open_year(first=True)
+        w.L.year += 1
+        w.age_and_retire()
+        w.tables.coaching["fire_hc_p"] = 1.0
+        w.tables.coaching["ceo_patience_effect"] = 0.0
+        try:
+            for cid in w.leaders:
+                w.leaders[cid]["ceo"].traits["TMP"] = 50
+            old = {cid: w.leaders[cid]["hc"].identity.id for cid in w.leaders}
+            coaching.window(w, {cid: 0.0 for cid in w.leaders})
+            for cid in w.leaders:
+                self.assertNotEqual(w.leaders[cid]["hc"].identity.id, old[cid])
+        finally:
+            w.tables.coaching["fire_hc_p"] = 0.35
+            w.tables.coaching["ceo_patience_effect"] = 0.5
+
+    def test_leadership_is_repeatable(self):
         def run():
             w = World(CLUBS, seed=73)
             w.open_year(first=True)
+            res = {cid: 0.2 + 0.05 * i % 7 / 10 for i, cid in enumerate(sorted(w.leaders))}
             for _ in range(8):
                 w.L.year += 1
                 w.age_and_retire()
+                coaching.window(w, res)
             return sorted((cid, r, c.identity.id) for cid, lead in w.leaders.items() for r, c in lead.items())
         self.assertEqual(run(), run())

@@ -26,5 +26,5 @@ for p in sorted(by):
 print()
 for pos in ("QB", "LT", "CB", "K"):
     print(max(by[pos], key=lambda c: c.true_overall(C.t)).describe(a.year, hidden=True), "\n")
-for role in ("ceo", "gm", "hc"):
+for role in ("ceo", "gm", "coach"):
     print(C.leader(role, a.year).describe(a.year, hidden=True), "\n")

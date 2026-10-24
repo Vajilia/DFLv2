@@ -20,7 +20,7 @@ DATA = os.path.join(ROOT, "data", "characters")
 ROUNDING_MIN, ROUNDING_MAX = 1, 99
 DRAFT_AGES = ((21, 30), (22, 45), (23, 25))              # age, weight
 CLASS_SIZE, CLASS_MIN_PER_POSITION = 672, 12
-LEADER_ROLES = ("ceo", "gm", "hc", "oc", "dc", "stc")
+LEADER_ROLES = ("ceo", "gm", "coach", "coach", "coach", "coach")     # coaches are one category; the head-coach and coordinator posts are held, not born into
 
 
 class Tables:

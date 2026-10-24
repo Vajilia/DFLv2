@@ -54,7 +54,7 @@ class World:
         self.dev_rng = random.Random(f"{seed}|develop")
         self.soul_rng = random.Random(f"{seed}|soul")
         self.coach_rng = random.Random(f"{seed}|coach")
-        self.coach_pool = {r: [] for r in coaching.COACH_ROLES}   # willing coaching candidates, by role (one market for all four)
+        self.coach_pool = []                                      # willing coaches, new or let go: one pool for every coaching post
         self.pool_years = {}                                      # coach id -> year turns spent in the pool
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
@@ -63,7 +63,7 @@ class World:
         self.creator = Creator(seed, self.tables)
         self.cards = {}                  # player id -> Card, for everyone in the ledger (the id is the card id)
         self.rating = {}                 # player id -> hidden true overall (float), refreshed when the card develops
-        self.leaders = {}                # club -> {role: Card}; coaches retire and are hired (Edition 8.24); the CEO and GM do not move yet
+        self.leaders = {}                # club -> {role: Card}; coaches hold posts and move through the pool (Edition 8.25); the CEO and GM do not move yet
         self._views = {}                 # (club, player) -> that club's estimate this league year
         self.active = {}                 # club -> GameDay of its latest game
         self.active_week = {}
@@ -134,7 +134,9 @@ class World:
                 L.sign(cid, self.register(card).pid, rookie_contract(L.year, self.rng.randint(1, 7)), "roster")
             for card in d["ps"]:
                 L.sign(cid, self.register(card).pid, rookie_contract(L.year, 7), "ps")
-            self.leaders[cid] = {c.identity.role: c for c in d["leaders"]}
+            lead = {c.identity.role: c for c in d["leaders"] if c.identity.role != "coach"}
+            lead.update(zip(coaching.POSTS, [c for c in d["leaders"] if c.identity.role == "coach"]))     # the founding coaches take the four posts
+            self.leaders[cid] = lead
         for card in f["pool"]:
             self.register(card, seasons=max(0, min(4, card.age(L.year) - 22)))
         self.top_up_pool()
