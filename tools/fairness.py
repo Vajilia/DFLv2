@@ -32,7 +32,9 @@ def run(a):
         print(f"seed {a.seed} {rep['year']} {time.time() - t0:.0f}s", flush=True)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as f:
-        json.dump({"seed": a.seed, "seasons": seasons}, f)
+        keys = ("recall_ballots", "recalls", "elections", "ceo_replaced", "ceo_retirements", "gm_retirements", "ceo_fires_gm", "gm_resignations", "gm_hires",
+                "coach_hires", "trades", "deals", "refusals", "interviews", "interview_declines", "forced_hires", "rooms")
+        json.dump({"seed": a.seed, "seasons": seasons, "events": {k: u.world.stats.get(k, 0) for k in keys}}, f)
 
 
 def report(a):

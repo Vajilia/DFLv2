@@ -431,7 +431,8 @@ class Negotiation(unittest.TestCase):
         self.assertIsNone(w.negotiate("C05", p))
         w._views[("C06", p.pid)] = float(p.ovr) + 10         # this one thinks she is much better
         got = w.negotiate("C06", p)
-        self.assertEqual(got, w.demand(p, "C06"))
+        d = w.demand(p, "C06")
+        self.assertTrue(0.9 * d <= got <= 1.07 * d)            # struck in the contract room around her demand
         self.assertLessEqual(got, w.willing("C06", p))
 
     def test_free_agency_refuses_some_deals_and_still_fills_the_rosters(self):

@@ -1,4 +1,4 @@
-"""Constants from Design Document 8.27, sections 0 and 11. Money is exact (Fraction), in the document's units."""
+"""Constants from Design Document 8.29, sections 0 and 11. Money is exact (Fraction), in the document's units."""
 from fractions import Fraction as F
 
 CAP, RESERVE, MIN_SALARY = F(1000), F(25), F(5)

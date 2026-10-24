@@ -1,0 +1,12 @@
+key,value,note
+max_rounds_contract,3,"A contract negotiation lapses after this many rounds"
+max_rounds_trade,3,"Same for a trade (owner's rule: at most three rounds)"
+max_rounds_interview,2,"An interview is an invitation and an answer"
+open_markup,0.06,"A player opens by asking this much above her demand; the general manager's negotiating takes it back"
+flex,0.08,"A player accepts down to this share below her demand (halved by the greedy, up to half again for the unambitious: see greed)"
+push_neg,0.6,"How far the general manager's negotiation rating scales the share she negotiates back (rating 100 raises it by this much)"
+interviews_per_hire,3,"A club interviews its top candidates until this many have accepted"
+interview_factor,0.6,"An interview shrinks the club's error in judging a candidate by this factor"
+decline_base,0.05,"Chance a candidate declines an interview, whatever the club"
+decline_fortune,0.30,"Extra chance, for the most ambitious candidate, to decline a club that won none of its games; scales with how far the club's last record was below .500"
+keep_years,2,"League years of room transcripts kept in memory (the trade log keeps everything)"

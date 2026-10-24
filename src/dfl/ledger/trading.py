@@ -11,6 +11,7 @@ All numbers are data (data/characters/TRADING.csv), placeholders.
 """
 from fractions import Fraction as F
 
+from . import rooms
 from . import rules as R
 from .ledger import Rejected
 from .positions import MINIMUMS
@@ -136,6 +137,10 @@ def _log(world, kind, a, b, gives_a, gives_b, picks_a, picks_b, **extra):
            "a_gives": sorted(gives_a), "b_gives": sorted(gives_b), "a_picks": sorted(picks_a), "b_picks": sorted(picks_b)}
     rec.update({k: round(v, 2) if isinstance(v, float) else v for k, v in extra.items()})
     world.trade_log.append(rec)
+    if kind == "propose":
+        world._tape = rooms.TradeTape(world, a, b)
+    if getattr(world, "_tape", None) is not None:
+        world._tape.note(kind, extra.get("round"), gives=sorted(gives_a), gets=sorted(gives_b), picks=sorted(picks_a), score=rec.get("score_a", rec.get("score_b")))
 
 
 def _assets(world, cid, used, taken_ids, taken_picks):
@@ -171,6 +176,16 @@ def _fits(world, cid, n_get, n_give):
 
 
 def negotiate(world, a, b, target, used):
+    """One negotiation, held as a meeting room (Edition 8.29) from the first proposal to the deal or the lapse."""
+    world._tape = None
+    ok = _negotiate(world, a, b, target, used)
+    tape, world._tape = world._tape, None
+    if tape is not None:
+        tape.finish("deal" if ok else "no_deal")
+    return ok
+
+
+def _negotiate(world, a, b, target, used):
     """Club `a` goes after `target` (on b's block). Round 1 a proposes, round 2 b accepts, rejects or counters, round 3 a answers a
     counter. Returns True if a deal went through the ledger."""
     T = world.tables.trading

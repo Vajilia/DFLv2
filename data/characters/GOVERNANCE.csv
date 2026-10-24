@@ -3,9 +3,9 @@ seed_low,20,"Each of a club's three fan viewpoints is seeded between this and th
 seed_high,50,
 sentiment_start,50,"A club's fans start at neutral"
 pull,0.15,"Share of the gap to 50 that sentiment closes each year (it returns gradually toward 50)"
-gain_results,24,"Points of sentiment a full result signal moves the Results viewpoint's share of the fans"
-gain_investment,18,"Same for the Investment viewpoint (spending toward the cap)"
-gain_stability,12,"Same for the Stability viewpoint (keeping last year's core)"
+gain_results,28,"Points of sentiment a full result signal moves the Results viewpoint's share of the fans"
+gain_investment,21,"Same for the Investment viewpoint (spending toward the cap)"
+gain_stability,14,"Same for the Stability viewpoint (keeping last year's core)"
 results_range,0.25,"Distance of a club's win percentage from .500 that moves the results signal from 0 to its full size"
 spend_ref,0.91,"Payroll share of the cap that fans regard as full investment"
 spend_range,0.04,"Payroll share that moves the investment signal from 0 to its full size"

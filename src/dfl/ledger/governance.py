@@ -14,7 +14,7 @@ CEO and GM ratings reach the game only through what already exists: the GM's eva
 CEO's temperament in dismissals. All numbers are data (GOVERNANCE.csv), placeholders.
 """
 from ..characters.creator import rng_for
-from . import coaching
+from . import coaching, rooms
 from . import rules as R
 
 VIEWS = ("results", "investment", "stability")
@@ -67,6 +67,7 @@ def close_year(world, results):
     for cid in sorted(world.fans):
         if cid not in results:
             continue
+        world.form[cid] = results[cid]
         card = world.fans[cid]
         sig = signals(world, cid, results[cid])
         gains = (g["gain_results"], g["gain_investment"], g["gain_stability"])
@@ -157,10 +158,10 @@ def hire_gm(world, cid, exclude=()):
     judge = float(ceo.attrs.get("GOV", 50)) if ceo is not None else 50.0
     sd = max(T.scouting["min_sd"], T.coaching["view_sd"] * (1 - T.scouting["evl_effect"] * (judge - 50) / 50))
 
-    def seen(c):
-        return coaching.fit(world, c, "gm") + sd * rng_for(world.creator.seed, "gmview", cid, c.identity.id, world.L.year).gauss(0, 1)
+    def seen(c, factor=1.0):
+        return coaching.fit(world, c, "gm") + sd * factor * rng_for(world.creator.seed, "gmview", cid, c.identity.id, world.L.year).gauss(0, 1)
     ok = [c for c in world.gm_pool if c.identity.id not in exclude]
-    best = max(ok, key=lambda c: (seen(c), -c.identity.id))
+    best = rooms.choose(world, cid, "gm", ok, seen)
     world.gm_pool.remove(best)
     world.pool_years.pop(best.identity.id, None)
     world.leaders[cid]["gm"] = best

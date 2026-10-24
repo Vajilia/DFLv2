@@ -54,4 +54,6 @@ The decision "propose / accept / reject / counter" sits behind one interface. Th
 ## Stage 1 as built
 `src/dfl/ledger/trading.py`, `data/characters/TRADING.csv`, `tests/test_trading.py` (14 tests). Entry points: `public_list` (the searchable list), `value` and `score` (a club's private valuation), `block`, `negotiate` (the three rounds), `window` (one run of the trading step, called from the offseason trading step and weekly through the last open paid week), and `World.trade_log`. Each deal is dry-run through the ledger before it is proposed. About 0.7 trades per club per year in an eight-club test world; mostly one-for-one swaps.
 
+Since Edition 8.29 each negotiation is also held as a meeting room (`rooms.TradeTape`): the same messages, round limit enforced by the ledger.
+
 Known limits: the market price still derives from the hidden overall (stage 2 fixes this); the proposer estimates the other club's valuation from that public price; counters add one asset only; no three-way trades; no relationship effects yet.

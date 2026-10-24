@@ -10,6 +10,7 @@ its players (and take as much away). The engine's game-day coach bonus is separa
 All numbers are data (COACHING.csv), placeholders.
 """
 from ..characters.creator import rng_for
+from . import rooms
 
 POSTS = ("hc", "oc", "dc", "stc")
 COACH_ROLES = POSTS                   # kept for callers that name the posts
@@ -45,12 +46,13 @@ def judge_rating(world, cid, post):
     return float(j.attrs.get(attr, 50)) if j is not None else 50.0
 
 
-def view(world, cid, card, post):
-    """A club's estimate of a candidate for a post: her true fit plus an error that shrinks with the judge's rating."""
+def view(world, cid, card, post, factor=1.0):
+    """A club's estimate of a candidate for a post: her true fit plus an error that shrinks with the judge's rating (and again, by
+    `factor`, once she has been interviewed)."""
     T, C = world.tables, world.tables.coaching
     sd = C["view_sd"] * (1 - T.scouting["evl_effect"] * (judge_rating(world, cid, post) - 50) / 50)
     z = rng_for(world.creator.seed, "coachview", cid, card.identity.id, post, world.L.year).gauss(0, 1)
-    return fit(world, card, post) + max(T.scouting["min_sd"], sd) * z
+    return fit(world, card, post) + max(T.scouting["min_sd"], sd) * factor * z
 
 
 def retire_chance(world, card, year):
@@ -81,7 +83,7 @@ def hire(world, cid, post, exclude=()):
     """Fill one post: the club takes the pool candidate it rates highest (never one it has just let go)."""
     top_up(world)
     ok = [c for c in world.coach_pool if c.identity.id not in exclude]
-    best = max(ok, key=lambda c: (view(world, cid, c, post), -c.identity.id))
+    best = rooms.choose(world, cid, post, ok, lambda c, f: view(world, cid, c, post, f))
     world.coach_pool.remove(best)
     world.pool_years.pop(best.identity.id, None)
     world.leaders[cid][post] = best

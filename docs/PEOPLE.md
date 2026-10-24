@@ -12,7 +12,8 @@ Clubs today are stand-ins that choose by true ability, which makes year-to-year 
 | 5.3 | Player-side negotiation: demands from self-view, greed, loyalty, ambition (Ed 8.23); clubs pay up to their own view | built; measured, no band moved out of range |
 | 5.4 | Coaches (owner's structure, Ed 8.25): one category, posts held not born into, one common pool (new, fired, resigned), CEO over head coach, head coach over coordinators, leadership window, capped teaching effect | built; measured, no band moved out of range |
 | 5.5 | GMs, CEOs, fans: sentiment, recall ballots, CEO elections, GM hire and dismissal, hidden narrative-only discretion (Ed 8.27) | built; measured, no band moved out of range |
-| 5.6 | Interactions and meeting rooms (contracts, trades, interviews); analytics definitions (§20.1); Hall of Fame | planned |
+| 5.6 | Meeting rooms: contract room, trade room, interviews (Ed 8.29) | built; measuring |
+| 5.7 | Analytics definitions (§20.1) and Hall of Fame | proposal only: blocked on per-player production recording (`docs/ANALYTICS_AND_HALL.md`) |
 
 ## Slice 5.1 rule (as built)
 View = true overall + position bias + error. Error sd = `base_sd / sqrt(1 + seasons_k * seasons)`, scaled by `1 - evl_effect * (GM EVL - 50) / 50`, times `own_factor` for the club's own players, floored at `min_sd`. Error is fixed per (club, player, league year). Prices still use the market rating, so overrating a player means overpaying. All numbers are placeholders in `data/characters/SCOUTING.csv` and `SCOUTING_BIAS.csv`.
@@ -33,10 +34,15 @@ Fan card per club: three viewpoints (results, investment, stability; the builder
 
 Not built: CEO effect on spending (would be a fairness channel), GM-to-GM relationships (recommended narrative-only for the same reason), contracts and pay for CEOs and GMs, poaching, the story layer that reads the governance log.
 
+## Slice 5.6 rule (as built)
+A room is a bounded, logged exchange (`src/dfl/ledger/rooms.py`, `data/characters/ROOMS.csv`; 14 tests in `tests/test_rooms.py`). Contract room: the player asks 6 percent above her demand, the GM counters taking back a share of the ask that rises with her NEG (60 percent more at 100, 60 percent less at 0; at 50 the deal is her demand), the player accepts down to 8 percent under her demand, otherwise holds there in round 3. Trade room: the 8.26 protocol recorded as a room. Interview: for each coach post and the GM post the club interviews candidates in order of first impression until three accept, then picks by its sharper post-interview rating (error x 0.6); a candidate declines with 5 percent, plus up to 30 points for the most ambitious against a club that lost every game. Recall rate raised to about one a year (gains 28, 21, 14). Also fixed: the final cut now repairs a rare jersey-numbering shortfall instead of halting (`tests/test_camp_repair.py`).
+
+Owner rulings 2026-10-24: recalls about once a year; the CEO's financial rating never moves spending; GM relationships stay narrative-only; viewpoint names kept.
+
 ## Owner decisions this layer needs
 1. The archetype list (a proposal will come with slice 5.2).
 2. The size cap on coach effects (default proposal: a head coach or coordinator moves any rating by at most one point).
 3. Scouting noise levels and position biases (placeholders now).
 4. Development and aging curve numbers (§20.3, still outstanding).
 5. Whether a player may retire under contract (§20.19, still outstanding).
-6. Slice 5.5: whether the CEO's financial rating should ever move spending, and whether GM relationships may shade trades (builder recommends no to both), the three viewpoint names, and how rare recalls should be.
+6. Slice 5.6: whether the GM's negotiating rating may move payroll by a few percent (it does now); whether candidates may weigh more than ambition and the club's last record; the analytics definitions in `docs/ANALYTICS_AND_HALL.md`.

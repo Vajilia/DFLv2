@@ -16,7 +16,7 @@ from ..characters import Creator, load_tables
 from ..characters.creator import rng_for
 from ..characters import soul
 from ..characters.development import develop, retire_chance
-from . import coaching, gameday, governance, rules as R, trading
+from . import coaching, gameday, governance, rooms, rules as R, trading
 from .contracts import Contract, ContractError, rookie_contract
 from .ledger import Ledger, Rejected
 from .positions import MINIMUMS, POSITIONS, shortfalls
@@ -61,6 +61,8 @@ class World:
         self.ceo_pool, self.gm_pool = [], []                      # willing CEO candidates and general managers, new or let go
         self.elected = {}                                         # club -> CEO elected after the last game, who takes office in the next offseason
         self.gov_log = []                                         # recall ballots, elections, dismissals and hires (feeds the story layer)
+        self.rooms, self.room_seq, self._tape = [], 0, None          # meeting-room transcripts of the last few league years (Edition 8.29)
+        self.form = {}                                            # club -> win percentage of its last season (what candidates see)
         self.trade_log = []                                       # every proposal, counter, rejection and deal (the engine replays this)
         self.L = Ledger(cids, year)
         self.reckless = set(reckless)
@@ -181,13 +183,7 @@ class World:
         the league minimum or less takes the minimum and does not bargain (section 13, market floor)."""
         if ask(p) <= R.MIN_SALARY or p.ovr < 56:
             return ask(p)
-        d = self.demand(p, cid)
-        if d > self.willing(cid, p):
-            self.stats["refusals"] = self.stats.get("refusals", 0) + 1
-            return None
-        self.stats["deals"] = self.stats.get("deals", 0) + 1
-        self.stats["paid_over_market"] = self.stats.get("paid_over_market", 0) + float(d - ask(p))
-        return d
+        return rooms.contract(self, cid, p)
 
     def offer(self, cid, p, rookie=False, value=None):
         r = self.rng
@@ -365,6 +361,7 @@ class World:
         if not first:
             self.L.new_year()
         self.age_and_retire(skip=first)
+        rooms.prune(self)
         self.top_up_pool()
 
     def free_agency_open(self):
@@ -582,11 +579,28 @@ class World:
         order = sorted(L.clubs)
         L.resolve_waivers(order, wants=lambda cid2, p: False)
         self.fill_squad(cid)
-        try:
-            L.cut_down(cid)
-        except Rejected as e:
-            self._reject("cut_down", e)
-            raise
+        for _ in range(30):
+            try:
+                L.cut_down(cid)
+                break
+            except Rejected as e:
+                # a squad signing can leave the greedy numbering short of a number for a position the club is deep at (the check before a signing
+                # looks at one more player, the plan numbers them all): shed the surplus at that position, restore the minimums, fill the squad
+                if "jersey" not in str(e):
+                    self._reject("cut_down", e)
+                    raise
+                self.stats["numbering_repairs"] = self.stats.get("numbering_repairs", 0) + 1
+                _, unnumbered = L.plan_numbers(cid)
+                pos = L.players[unnumbered[0]].pos
+                if not self.release_for_number(cid, pos):
+                    weakest = min((L.players[i] for i in c.roster + c.ps + c.ir if L.players[i].pos == pos),
+                                  key=lambda q: (q.out_weeks == 0, self.value(q, cid), q.pid))
+                    L.release(cid, weakest.pid)
+                if shortfalls(self.counts(cid, ("roster",))):
+                    self.fix_minimums(cid)
+        else:
+            self._reject("cut_down", Rejected(f"{cid}: numbering not repaired"))
+            raise Rejected(f"{cid}: numbering not repaired")
         pay = L.cap_number(cid)
         if self.stats["payroll_min"] is None or pay < self.stats["payroll_min"]:
             self.stats["payroll_min"] = pay
