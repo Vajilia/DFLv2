@@ -9,7 +9,7 @@ Clubs today are stand-ins that choose by true ability, which makes year-to-year 
 | --- | --- | --- |
 | 5.1 | Scouting views: clubs see a noisy estimate, not true ability (Ed 8.21, §13) | built; measured below |
 | 5.2 | Souls: fixed archetypes, self-view bias, trait drift bounded by the archetype (Ed 8.22) | built; measured, no band moved out of range |
-| 5.3 | Player-side negotiation: demands from self-view, greed, loyalty, ambition; replaces the placeholder market floor | planned |
+| 5.3 | Player-side negotiation: demands from self-view, greed, loyalty, ambition (Ed 8.23); clubs pay up to their own view | built; fairness re-measure pending |
 | 5.4 | Coaches: one pool for head coach and coordinators, small capped effects, development effect capped | planned |
 | 5.5 | GMs, CEOs, fans: recall, sentiment | planned |
 | 5.6 | Interactions and meeting rooms (contracts, trades, interviews); analytics definitions (§20.1); Hall of Fame | planned |
@@ -21,6 +21,9 @@ Open: game-day depth and the engine still use true ability (spec open item 22).
 
 ## Slice 5.2 rule (as built)
 Archetype = nearest of six placeholder centres (`ARCHETYPES.csv`) to the traits at creation; fixed for life. Self-view = true overall + archetype self-bias (read by slice 5.3). Yearly drift (`SOUL.csv`): each trait closes 8 percent of the gap to the archetype centre, plus noise of 2 points, and stays within 15 points of its creation value. Only players drift so far. Shares are uneven (spec item 23).
+
+## Slice 5.3 rule (as built)
+Above-minimum free agents bargain. Demand = price of her self-view overall x (1 + 0.20 greed + 0.08 ambition, each centred on 50) minus 0.15 loyalty for her last club only, minus 10 percent per year waited in the pool; floor the league minimum. A club pays up to the price of its own scouting view plus 10 percent slack. Deal at her demand if within that; otherwise no deal. In a one-year test about 36 percent of attempted deals were refused and deals averaged 4 percent over the market curve. Rookies keep the scale; contract shape is still the autopilot's.
 
 ## Owner decisions this layer needs
 1. The archetype list (a proposal will come with slice 5.2).

@@ -363,3 +363,80 @@ class Souls(unittest.TestCase):
             moved += c.traits != tr
             same += c.traits == tr
         self.assertGreater(moved, same)
+
+
+class Negotiation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.w = World(CLUBS, seed=51)
+        cls.w.open_year(first=True)
+
+    def star(self, **traits):
+        """A fresh free agent with a chosen soul and a market price above the minimum."""
+        w = self.w
+        for card in (w.creator.player("WR", 26, w.L.year, "pool", talent_mean=2.5) for _ in range(30)):
+            p = w.register(card, seasons=4)
+            if ask(p) > R.MIN_SALARY and p.ovr >= 60:
+                card.traits.update(traits)
+                card.soul["archetype"] = "PRO"           # a neutral self-view (bias 0) for the comparisons
+                return p, card
+        self.fail("no priced player made")
+
+    def test_greed_and_ambition_raise_the_demand_and_loyalty_lowers_it_for_her_last_club(self):
+        w = self.w
+        base = dict(GRE=50, AMB=50, LOY=50)
+        p, c = self.star(**base)
+        d0 = w.demand(p, "C01")
+        c.traits.update(GRE=100); d_gre = w.demand(p, "C01")
+        c.traits.update(GRE=50, AMB=100); d_amb = w.demand(p, "C01")
+        c.traits.update(AMB=50, LOY=100)
+        p.last_club = "C01"
+        d_home, d_away = w.demand(p, "C01"), w.demand(p, "C02")
+        self.assertGreater(d_gre, d0)
+        self.assertGreater(d_amb, d0)
+        self.assertLess(d_home, d0)
+        self.assertEqual(d_away, d0)
+
+    def test_a_competitor_asks_more_than_a_loyalist_of_the_same_ability(self):
+        w = self.w
+        p, c = self.star(GRE=50, AMB=50, LOY=50)
+        c.soul["archetype"] = "CMP"; hi = w.demand(p, "C01")
+        c.soul["archetype"] = "LOL"; lo = w.demand(p, "C01")
+        self.assertGreater(hi, lo)
+
+    def test_every_year_unsigned_lowers_the_price_and_it_stays_at_or_above_the_minimum(self):
+        w = self.w
+        p, c = self.star(GRE=50, AMB=50, LOY=50)
+        prev = w.demand(p, "C01")
+        for y in range(1, 4):
+            p.pool_years = y
+            d = w.demand(p, "C01")
+            self.assertLessEqual(d, prev)
+            prev = d
+        p.pool_years = 50                       # far beyond the four-year pool rule: her price bottoms out at 30 percent of her own valuation
+        self.assertGreaterEqual(w.demand(p, "C01"), R.MIN_SALARY)
+        self.assertLess(w.demand(p, "C01"), prev)
+
+    def test_players_priced_at_the_minimum_do_not_bargain(self):
+        w = self.w
+        cheap = next(p for p in w.L.players.values() if p.where == "fa" and ask(p) <= R.MIN_SALARY)
+        self.assertEqual(w.negotiate("C01", cheap), ask(cheap))
+
+    def test_no_deal_when_she_asks_more_than_the_club_will_pay_and_a_deal_at_her_price_otherwise(self):
+        w = self.w
+        p, c = self.star(GRE=100, AMB=100, LOY=50)
+        c.soul["archetype"] = "CMP"
+        w._views[("C05", p.pid)] = float(p.ovr) - 6          # this club thinks she is much worse than she thinks
+        self.assertIsNone(w.negotiate("C05", p))
+        w._views[("C06", p.pid)] = float(p.ovr) + 10         # this one thinks she is much better
+        got = w.negotiate("C06", p)
+        self.assertEqual(got, w.demand(p, "C06"))
+        self.assertLessEqual(got, w.willing("C06", p))
+
+    def test_free_agency_refuses_some_deals_and_still_fills_the_rosters(self):
+        w = World(CLUBS, seed=52)
+        w.step_year(first=True)
+        self.assertGreater(w.stats.get("refusals", 0), 0)
+        self.assertGreater(w.stats.get("deals", 0), 0)
+        for cid in w.L.clubs:
+            self.assertGreaterEqual(len(w.L.clubs[cid].roster), 46)

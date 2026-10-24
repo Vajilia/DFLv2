@@ -35,12 +35,17 @@ assert len(PS_TEMPLATE) == 16
 PRICE_BASE = 60          # PLACEHOLDER: overall at which a player is worth more than the minimum
 
 
-def ask(player):
-    """Market annual value of a player (placeholder price curve)."""
-    v = 5 + max(0, player.ovr - PRICE_BASE) * F(16, 10)
-    if player.pos == "QB":
+def price(ovr, pos):
+    """Annual value of a player of this overall (placeholder price curve)."""
+    v = 5 + max(0, ovr - PRICE_BASE) * F(16, 10)
+    if pos == "QB":
         v *= F(3, 2)
     return F(int(v))
+
+
+def ask(player):
+    """Market annual value of a player (placeholder price curve)."""
+    return price(player.ovr, player.pos)
 
 
 class World:
@@ -144,10 +149,38 @@ class World:
                 self.register(self.creator.player(pos, age, L.year, "pool", talent_mean=-0.6), seasons=min(4, age - 22))
 
     # ---------- contracts
-    def offer(self, cid, p, rookie=False):
+    def demand(self, p, cid):
+        """What she asks of this club (Edition 8.23): the price of the overall she believes she has, moved by her greed and ambition,
+        lowered for her last club by her loyalty and for every year she has waited unsigned. Never below the league minimum."""
+        N, card = self.tables.negotiation, self.cards[p.pid]
+        tr = card.traits
+        mult = 1 + N["greed_effect"] * (tr["GRE"] - 50) / 50 + N["ambition_effect"] * (tr["AMB"] - 50) / 50
+        if p.last_club == cid:
+            mult -= N["loyalty_effect"] * (tr["LOY"] - 50) / 50
+        mult -= N["pool_discount"] * p.pool_years
+        return max(R.MIN_SALARY, F(int(price(int(round(soul.self_view(card, self.tables))), p.pos) * max(0.3, mult))))
+
+    def willing(self, cid, p):
+        """The most this club will pay her: the price of the overall it believes she has, plus a little slack."""
+        return F(int(price(int(round(self.view(cid, p))), p.pos) * (1 + self.tables.negotiation["club_slack"])))
+
+    def negotiate(self, cid, p):
+        """The yearly price a deal would be struck at, or None if she asks more than the club will pay. A player whose market price is
+        the league minimum or less takes the minimum and does not bargain (section 13, market floor)."""
+        if ask(p) <= R.MIN_SALARY or p.ovr < 56:
+            return ask(p)
+        d = self.demand(p, cid)
+        if d > self.willing(cid, p):
+            self.stats["refusals"] = self.stats.get("refusals", 0) + 1
+            return None
+        self.stats["deals"] = self.stats.get("deals", 0) + 1
+        self.stats["paid_over_market"] = self.stats.get("paid_over_market", 0) + float(d - ask(p))
+        return d
+
+    def offer(self, cid, p, rookie=False, value=None):
         r = self.rng
         reck = cid in self.reckless
-        a = ask(p)
+        a = value if value is not None else ask(p)
         if a <= R.MIN_SALARY or p.ovr < 56:
             return Contract(self.L.year, (R.MIN_SALARY,) * r.choice((1, 1, 2)), (), (), self.L.week)
         n = r.choice((1, 2, 3, 4, 5)) if not reck else 5
@@ -169,8 +202,8 @@ class World:
         bonuses = ((bonus, 0, prorate),) if bonus > 0 else ()
         return Contract(self.L.year, tuple(ys), gs, bonuses, self.L.week, shape)
 
-    def try_sign(self, cid, p, slot="roster", rookie_c=None):
-        c = rookie_c or self.offer(cid, p)
+    def try_sign(self, cid, p, slot="roster", rookie_c=None, value=None):
+        c = rookie_c or self.offer(cid, p, value=value)
         tries = 0
         while True:
             try:
@@ -452,10 +485,17 @@ class World:
                 pool = [p for p in self.fas(pos, cid) if self.view(cid, p) > 60]
                 if not pool:
                     break
-                p = pool[0]
-                if cid not in self.reckless and L.cap_number(cid) + ask(p) > R.CAP - R.RESERVE:
+                p, v = None, None
+                for q in pool:
+                    v = self.negotiate(cid, q)
+                    if v is not None:
+                        p = q
+                        break
+                if p is None:
                     continue
-                self.try_sign(cid, p)
+                if cid not in self.reckless and L.cap_number(cid) + v > R.CAP - R.RESERVE:
+                    continue
+                self.try_sign(cid, p, value=v)
             self.fill_squad(cid)
 
     def fill_squad(self, cid):
