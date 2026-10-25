@@ -24,3 +24,8 @@ pick_round_6,2,
 pick_round_7,1,
 pick_round_8,0.5,
 pick_round_9,0.5,
+pub_years,3,"Latest seasons of a player's analytical scores that count toward her public price (section 15)"
+pub_slope,4.0,"Overall points one standard deviation of her average score adds to the public estimate, once she has many seasons"
+pub_k,2.0,"Seasons' worth of doubt: with n scored seasons the score counts n/(n+k) of its full size"
+pub_age_window,1,"The public prior for a player is the going level at her position among players within this many years of her age"
+pub_prior_min,8,"Fewest players a position-and-age group needs for its own level; otherwise the whole position's level"

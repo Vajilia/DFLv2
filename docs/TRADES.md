@@ -1,6 +1,6 @@
 # Trade mechanism: design for owner review (not built)
 
-Status: stage 1 built (Edition 8.26, 2026-10-24); stages 2 to 4 are proposals. The Design Document is the authority. Origin: the owner's idea of 48 persistent general-manager agents polled by a control agent, with a common searchable player list. Builder's amendments are marked **(builder)**.
+Status: stages 1 and 2 built (Editions 8.26 and 8.34); stages 3 and 4 are proposals. The Design Document is the authority. Origin: the owner's idea of 48 persistent general-manager agents polled by a control agent, with a common searchable player list. Builder's amendments are marked **(builder)**.
 
 ## What the owner proposed
 - 48 persistent agents, one per club, acting as that club's general manager and instructed to show no emotion.
@@ -56,4 +56,7 @@ The decision "propose / accept / reject / counter" sits behind one interface. Th
 
 Since Edition 8.29 each negotiation is also held as a meeting room (`rooms.TradeTape`): the same messages, round limit enforced by the ledger.
 
-Known limits: the market price still derives from the hidden overall (stage 2 fixes this); the proposer estimates the other club's valuation from that public price; counters add one asset only; no three-way trades; no relationship effects yet.
+Known limits: the proposer estimates the other club's valuation from that public price; counters add one asset only; no three-way trades; no relationship effects yet.
+
+## Stage 2 as built (Edition 8.34, 2026-10-25)
+The market price on the common list, and a proposer's estimate of what another club will pay, now come from `trading.public_ovr`: the going level at the player's position among players within a year of her age (her own rating excluded), moved by her analytical scores from her latest three scored seasons (4 overall points per standard deviation, times n/(n+2) for n seasons). It reads no hidden attribute of hers. Seven tests in `tests/test_trading.py` (`PublicPrice`). Accuracy over eight seasons: the public estimate correlates 0.34 to 0.48 with true overall within a position; a club's own scouting view 0.64 to 0.72. Not changed: signing and free-agent prices still use `ask` (the rounded true overall), which is the larger step.

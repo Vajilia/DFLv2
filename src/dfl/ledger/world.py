@@ -62,6 +62,7 @@ class World:
         self.ceo_pool, self.gm_pool = [], []                      # willing CEO candidates and general managers, new or let go
         self.elected = {}                                         # club -> CEO elected after the last game, who takes office in the next offseason
         self.gov_log = []                                         # recall ballots, elections, dismissals and hires (feeds the story layer)
+        self.pub_prior = {}                                       # the going level at each position and age for the public trade price, per league year (Edition 8.34)
         self.ep_curve = None                                      # the expected-points table refit from past seasons; None is the data table (Edition 8.32)
         self.ep_acc = {}                                          # league year -> a season's sums over its plays (production.new_acc)
         self.production = {}                                      # league year -> card id -> opponent -> play type -> [opportunities, EPA, WPA] (Edition 8.30)

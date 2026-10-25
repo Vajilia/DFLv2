@@ -17,6 +17,47 @@ from .ledger import Rejected
 from .positions import MINIMUMS
 
 
+# ---------------------------------------------------------------- the public price (Edition 8.34)
+def _prior(world, pos, age, skip=None):
+    """The going level at a position for players of about this age: the market knows how good starters at a position are at each age,
+    not how good any one of them is. Cached for the league year."""
+    T = world.tables.trading
+    cache = world.pub_prior
+    if cache.get("year") != world.L.year:
+        cache.clear()
+        cache["year"] = world.L.year
+        groups = {}
+        for cid in world.L.clubs:
+            for pid in world.L.clubs[cid].roster + world.L.clubs[cid].ir:
+                p = world.L.players[pid]
+                groups.setdefault(p.pos, []).append((p.age, world.rating[pid], pid))
+        cache["groups"] = groups
+    rows = cache["groups"].get(pos, [])
+    rows = [(a, r) for a, r, i in rows if i != skip]               # never her own rating
+    near = [r for a, r in rows if abs(a - age) <= T["pub_age_window"]]
+    use = near if len(near) >= T["pub_prior_min"] else [r for _, r in rows]
+    return sum(use) / len(use) if use else float(world.tables.trading.get("pub_default", 60))
+
+
+def public_ovr(world, p):
+    """What anyone can estimate of a player's overall from public evidence: the going level for her position and age, moved by her
+    recent analytical scores (section 15), which count more the more seasons she has. Reads no hidden attribute of hers."""
+    T = world.tables.trading
+    yrs = sorted(world.career.get(p.pid, {}).items())[-int(T["pub_years"]):]
+    scores = [r["score"] for _, r in yrs if "score" in r]
+    est = _prior(world, p.pos, p.age, p.pid)
+    if scores:
+        n = len(scores)
+        est += T["pub_slope"] * (sum(scores) / n) * n / (n + T["pub_k"])
+    return est
+
+
+def public_market(world, p):
+    """The public market price: the price curve at the public estimate of her overall."""
+    from .world import price
+    return float(price(int(round(public_ovr(world, p))), p.pos))
+
+
 # ---------------------------------------------------------------- the common public list
 def years_left(world, p):
     k = p.contract
@@ -25,10 +66,9 @@ def years_left(world, p):
 
 def public_row(world, p):
     """Public facts only: no hidden attributes, no true overall, no club's private valuation."""
-    from .world import ask
     return {"pid": p.pid, "club": p.club, "pos": p.pos, "age": p.age, "seasons": p.seasons, "slot": p.where,
             "cap_hit": float(p.contract.cap_hit(world.L.year)), "years_left": years_left(world, p), "out_weeks": p.out_weeks,
-            "market": float(ask(p))}        # PLACEHOLDER: the market price still derives from the hidden overall (docs/TRADES.md)
+            "market": public_market(world, p)}        # from public evidence only (Edition 8.34)
 
 
 def public_list(world, pos=None, club=None, min_age=None, max_age=None, max_cap=None, min_years=None, sort="cap_hit", limit=None):
@@ -99,10 +139,9 @@ def margin(world, cid):
 
 def _public_value(world, pid):
     """What anyone can estimate of a player's worth from public facts (the common list): market price less cap hit over the counted years."""
-    from .world import ask
     T = world.tables.trading
     p = world.L.players[pid]
-    return float(ask(p) - p.contract.cap_hit(world.L.year)) * max(1, min(years_left(world, p), int(T["years_cap"])))
+    return float(public_market(world, p) - p.contract.cap_hit(world.L.year)) * max(1, min(years_left(world, p), int(T["years_cap"])))
 
 
 # ---------------------------------------------------------------- the trading block

@@ -167,3 +167,53 @@ class Protocol(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PublicPrice(unittest.TestCase):
+    """Trades, stage 2 (Edition 8.34): the market price comes from public evidence, never from a player's own hidden rating."""
+
+    def setUp(self):
+        self.w = fresh(131)
+        self.p = next(p for p in (self.w.L.players[i] for i in self.w.L.clubs["C03"].roster) if p.pos == "QB")
+
+    def test_her_own_hidden_rating_does_not_move_her_public_estimate(self):
+        w, p = self.w, self.p
+        before = trading.public_ovr(w, p)
+        w.rating[p.pid] += 25
+        w.pub_prior.clear()
+        self.assertEqual(trading.public_ovr(w, p), before)
+
+    def test_with_no_production_the_estimate_is_the_going_level_for_her_position_and_age(self):
+        w, p = self.w, self.p
+        w.career.pop(p.pid, None)
+        self.assertEqual(trading.public_ovr(w, p), trading._prior(w, p.pos, p.age, p.pid))
+
+    def test_better_scores_raise_it_and_more_seasons_count_for_more(self):
+        w, p = self.w, self.p
+        base = trading.public_ovr(w, p)
+        w.career[p.pid] = {1990: {"score": 1.0}}
+        one = trading.public_ovr(w, p)
+        w.career[p.pid] = {1990: {"score": 1.0}, 1991: {"score": 1.0}, 1992: {"score": 1.0}}
+        three = trading.public_ovr(w, p)
+        w.career[p.pid] = {1990: {"score": -1.0}, 1991: {"score": -1.0}, 1992: {"score": -1.0}}
+        bad = trading.public_ovr(w, p)
+        self.assertGreater(one, base)
+        self.assertGreater(three, one)
+        self.assertLess(bad, base)
+        T = w.tables.trading
+        self.assertAlmostEqual(three - base, T["pub_slope"] * 3 / (3 + T["pub_k"]), places=6)
+
+    def test_only_the_latest_seasons_count_and_unscored_seasons_are_skipped(self):
+        w, p = self.w, self.p
+        T = w.tables.trading
+        w.career[p.pid] = {1980: {"score": 5.0}, 1990: {"score": 1.0}, 1991: {"pos": "QB"}, 1992: {"score": 1.0}, 1993: {"score": 1.0}}
+        got = trading.public_ovr(w, p) - trading._prior(w, p.pos, p.age, p.pid)
+        self.assertAlmostEqual(got, T["pub_slope"] * 1.0 * 2 / (2 + T["pub_k"]), places=6)       # 1991 unscored; 1980 outside the three latest records
+
+    def test_the_listed_market_price_and_the_negotiators_estimate_both_use_it(self):
+        w, p = self.w, self.p
+        w.career[p.pid] = {1990: {"score": 2.0}}
+        row = next(r for r in trading.public_list(w, club="C03") if r["pid"] == p.pid)
+        self.assertEqual(row["market"], trading.public_market(w, p))
+        years = max(1, min(trading.years_left(w, p), int(w.tables.trading["years_cap"])))
+        self.assertAlmostEqual(trading._public_value(w, p.pid), (trading.public_market(w, p) - float(p.contract.cap_hit(w.L.year))) * years)
