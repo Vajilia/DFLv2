@@ -418,3 +418,17 @@ Recalls a year across the league, by league: 1.81, 1.92, 1.92, 2.00, 2.06, 1.44 
 ## Ed 8.32: expected-points table refit each season (2026-10-25)
 
 Not a fairness change: the refit is read only when a play is valued. Proof: four seasons of seed 7 played with the refit and with it switched off give the same league digest every year. The refit table after four seasons rose above the data table by about 0.6 points at midfield (2.33 against 1.7 at the 50), the same as on 1,600 sampled games. The 268 earlier tests and the 240-game digest still pass, and seven new tests cover the refit.
+
+## Ed 8.33: CEO tenure and the refit costs (2026-10-25)
+
+Six leagues, 36 seasons each (seeds 1 to 6), first 8 dropped. Settings: incumbent bonus 20, mood weight 25, CEO retirement from 74 (certain at 82), CEO mean age 46, recall threshold 25.5. Three earlier six-league runs tuned these (threshold 25 gave 1.6 recalls a year, 26 and 27 gave 2.4).
+
+**Result: 13 PASS, 2 UNCLEAR, 0 FAIL.** Unclear: `win_pct_sd` (0.208 ± 0.002 against a ceiling of 0.21) and `repeat_champion_rate` (0.113 ± 0.057 against 0.12). The cost refit and CEO changes do not touch games, so these drift only through the random streams.
+
+| measure | result |
+| --- | --- |
+| recalls a year, league | 2.10 (leagues 1.61 to 2.47) |
+| CEO turnover | 9.8% of clubs a year = 5.3 recall + 1.5 lost term election + 3.3 retirement (was about 21%) |
+| head coach / coordinators / GM | 25% / 32 to 34% / 21% (unchanged) |
+
+Accountability, term elections by the club's fan sentiment that year: sitting CEO lost 19% under 35, 7% at 35 to 45, 4% at 45 to 55, 1% above 55. The CEO is now the longest-tenured post (about 10 years against about 5 for a general manager and 4 for a head coach). Retirement runs high in this window because all founding CEOs are of similar age; it should settle lower in a longer league.
