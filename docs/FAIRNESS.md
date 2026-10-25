@@ -395,3 +395,22 @@ Schedule push toward average: opponents' mean strength per point of own strength
 - Win % spread above the bands while year-to-year correlation is low means single seasons are more lopsided than the NFL's but the lopsidedness does not last.
   That is a different shape from the bands' intent and worth discussing, not just a number to move.
 - Six leagues give tight bounds on the large-sample bands and loose ones on rare events (title concentration, exile effect).
+
+## Ed 8.31: recalls about twice a year; coaching and GM turnover toward NFL rates (2026-10-24)
+
+Six leagues, 36 seasons each (seeds 1 to 6), first 8 seasons dropped. Recall threshold 25 (a first try at 23 gave 1.47 recalls a year, too few; its fairness was 12 pass, 3 unclear, 0 fail).
+
+**Result: 13 PASS, 2 UNCLEAR, 0 FAIL.** The unclear bands are `repeat_champion_rate` (0.119 ± 0.048 against a ceiling of 0.12; the first try gave 0.048, so this reads as noise, not drift) and `exile_effect` (-0.102 ± 0.466, as in every earlier measurement, too few exiles to decide). Win-percentage spread 0.209 (ceiling 0.21), year-to-year persistence 0.184, schedule push +0.003.
+
+Front-office turnover, share of playing clubs changing the post in a year (about 40 playing clubs a year assumed):
+
+| post | measured | NFL benchmark |
+| --- | --- | --- |
+| head coach | 25.0% | about 21% (6.8 changes a year, 2004 to 2013) |
+| offensive coordinator | 33.9% | about 30 to 35% (10 to 18 of 32 clubs a year, 2017 to 2019) |
+| defensive coordinator | 33.5% | assumed like the offensive side |
+| special-teams coordinator | 32.8% | assumed like the offensive side |
+| general manager | 20.9% | about 15 to 20% (about 14% fired a year, plus exits) |
+| CEO (replaced or retired) | 20.6% | no NFL comparison (DFL has recalls and elections) |
+
+Recalls a year across the league, by league: 1.81, 1.92, 1.92, 2.00, 2.06, 1.44 (mean 1.86). Head coach turnover is about four points above the NFL figure; left as is, within the builder's five-point reading of "close to". The benchmarks are press counts, not a census. Settings: COACHING.csv and GOVERNANCE.csv, Design Document Ed 8.31 item 30.
