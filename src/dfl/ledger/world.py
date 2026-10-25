@@ -63,7 +63,7 @@ class World:
         self.elected = {}                                         # club -> CEO elected after the last game, who takes office in the next offseason
         self.gov_log = []                                         # recall ballots, elections, dismissals and hires (feeds the story layer)
         self.ep_curve = None                                      # the expected-points table refit from past seasons; None is the data table (Edition 8.32)
-        self.ep_acc = {}                                          # league year -> ([plays by yard line], [sum of estimates by yard line])
+        self.ep_acc = {}                                          # league year -> a season's sums over its plays (production.new_acc)
         self.production = {}                                      # league year -> card id -> opponent -> play type -> [opportunities, EPA, WPA] (Edition 8.30)
         self.team_production = {}                                 # league year -> club -> "off"/"def" -> play type -> [plays, EPA] (EPA the unit made / allowed)
         self.appearances = {}                                     # league year -> card ids that were on a game-day active list (section 15 credited seasons)
@@ -96,7 +96,7 @@ class World:
         """File one game's per-player and per-unit production under the league year (Edition 8.30). Nothing reads it back into a game."""
         y = self.L.year
         if res.fit:
-            production.accumulate(self.ep_acc.setdefault(y, ([0] * 100, [0.0] * 100)), res.fit)
+            production.accumulate(self.ep_acc.setdefault(y, production.new_acc()), res.fit)
         prod, apps, team = self.production.setdefault(y, {}), self.appearances.setdefault(y, set()), self.team_production.setdefault(y, {})
         for sq, opp in ((home, away), (away, home)):
             apps.update(sq.cards)

@@ -37,17 +37,17 @@ def tables():
 
 
 def ep(yl, down=1, dist=10, curve=None):
-    """Expected points for the team with the ball. `curve` is the season's refit table (Edition 8.32); None means the data table."""
+    """Expected points for the team with the ball. `curve` is the season's refit table (Edition 8.32, with its own down and distance costs,
+    Edition 8.33): (points by yard line, down cost, distance cost); None means the data tables."""
     T = tables()
-    pts = curve or T["ep"]
+    pts, dcost, xcost = curve if curve else (T["ep"], T["a"]["down_cost"], T["a"]["dist_cost"])
     yl = max(pts[0][0], min(pts[-1][0], yl))
     base = pts[-1][1]
     for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
         if x0 <= yl <= x1:
             base = y0 + (y1 - y0) * (yl - x0) / (x1 - x0)
             break
-    a = T["a"]
-    return base - a["down_cost"] * (down - 1) - a["dist_cost"] * (dist - 10)
+    return base - dcost * (down - 1) - xcost * (dist - 10)
 
 
 def wp(margin, secs):
@@ -176,32 +176,75 @@ def labels(plays):
     return out
 
 
+def new_acc():
+    """A season's sums over its plays, by yard line: count, value, (down - 1), (distance - 10); and by ten-yard band their products."""
+    return {"n": [0] * 100, "y": [0.0] * 100, "d": [0] * 100, "x": [0] * 100,
+            "dd": [0] * 10, "xx": [0] * 10, "dx": [0] * 10, "dy": [0.0] * 10, "xy": [0.0] * 10}
+
+
 def accumulate(acc, plays):
-    """Add one game's plays to a season's (count, sum) arrays by yard line. Down and distance are taken out with the table's own costs,
-    so each play estimates the first-and-ten value at its yard line."""
-    a = tables()["a"]
-    cnt, tot = acc
+    """Add one game's plays to a season's sums."""
     for yl, down, dist, v in labels(plays):
         i = max(1, min(99, int(yl)))
-        cnt[i] += 1
-        tot[i] += v + a["down_cost"] * (down - 1) + a["dist_cost"] * (dist - 10)
+        b, d, x = (i - 1) // 10, down - 1, dist - 10
+        acc["n"][i] += 1
+        acc["y"][i] += v
+        acc["d"][i] += d
+        acc["x"][i] += x
+        acc["dd"][b] += d * d
+        acc["xx"][b] += x * x
+        acc["dx"][b] += d * x
+        acc["dy"][b] += d * v
+        acc["xy"][b] += x * v
+
+
+def fit_costs(accs):
+    """The cost of each down after the first and of each yard to go beyond ten: the least-squares slopes of a play's next-score value on
+    them within ten-yard bands, pulled toward the data costs by `ep_prior_n` plays' worth of weight and held to a sane range."""
+    a = tables()["a"]
+    S = {k: 0.0 for k in ("dd", "xx", "dx", "dy", "xy")}
+    N = 0
+    for acc in accs:
+        for b in range(10):
+            ys = range(b * 10 + 1, min(b * 10 + 11, 100))
+            n = sum(acc["n"][i] for i in ys)
+            if not n:
+                continue
+            sd, sx, sy = (sum(acc[k][i] for i in ys) for k in ("d", "x", "y"))
+            S["dd"] += acc["dd"][b] - sd * sd / n
+            S["xx"] += acc["xx"][b] - sx * sx / n
+            S["dx"] += acc["dx"][b] - sd * sx / n
+            S["dy"] += acc["dy"][b] - sd * sy / n
+            S["xy"] += acc["xy"][b] - sx * sy / n
+            N += n
+    det = S["dd"] * S["xx"] - S["dx"] ** 2
+    if N == 0 or det <= 1e-9:
+        return a["down_cost"], a["dist_cost"]
+    b1 = (S["dy"] * S["xx"] - S["xy"] * S["dx"]) / det
+    b2 = (S["xy"] * S["dd"] - S["dy"] * S["dx"]) / det
+    m = a["ep_prior_n"]
+    c1 = (-b1 * N + a["down_cost"] * m) / (N + m)
+    c2 = (-b2 * N + a["dist_cost"] * m) / (N + m)
+    return max(0.0, min(2.0, c1)), max(0.0, min(0.3, c2))
 
 
 def fit_curve(accs):
-    """The refit table: at each yard line of the data table, the kernel-weighted mean of the seasons' estimates, pulled toward the data
-    table by `ep_prior_n` plays' worth of weight, then made non-decreasing in yards gained. `accs` are the seasons' (count, sum) arrays."""
+    """The refit tables: the down and distance costs, then at each yard line of the data table the kernel-weighted mean of the seasons'
+    first-and-ten estimates (each play's value with those costs taken back out), pulled toward the data table by `ep_prior_n` plays'
+    worth of weight and made non-decreasing in yards gained. Returns (points, down cost, distance cost)."""
     T = tables()
     a, prior = T["a"], T["ep"]
     bw, n0 = a["ep_bandwidth"], a["ep_prior_n"]
+    c1, c2 = fit_costs(accs)
     vals = []
     for x, p in prior:
         n = s = 0.0
         for acc in accs:
             for i in range(1, 100):
-                if acc[0][i]:
+                if acc["n"][i]:
                     w = math.exp(-0.5 * ((i - x) / bw) ** 2)
-                    n += w * acc[0][i]
-                    s += w * acc[1][i]
+                    n += w * acc["n"][i]
+                    s += w * (acc["y"][i] + c1 * acc["d"][i] + c2 * acc["x"][i])
         vals.append([(s + n0 * p) / (n + n0), 1])
     out = []                                                    # pool adjacent violators
     for v in vals:
@@ -210,4 +253,4 @@ def fit_curve(accs):
             (v1, w1), (v2, w2) = out[-2], out[-1]
             out[-2:] = [[(v1 * w1 + v2 * w2) / (w1 + w2), w1 + w2]]
     flat = [v for v, w in out for _ in range(w)]
-    return [(x, y) for (x, _), y in zip(prior, flat)]
+    return [(x, y) for (x, _), y in zip(prior, flat)], c1, c2

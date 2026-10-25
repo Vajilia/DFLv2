@@ -232,22 +232,26 @@ class Refit(unittest.TestCase):
 
     def test_with_no_plays_the_refit_is_the_data_table(self):
         T = Pr.tables()["ep"]
-        got = Pr.fit_curve([([0] * 100, [0.0] * 100)])
-        for (x, p), (x2, q) in zip(T, got):
+        pts, dcost, xcost = Pr.fit_curve([Pr.new_acc()])
+        for (x, p), (x2, q) in zip(T, pts):
             self.assertEqual(x, x2)
             self.assertAlmostEqual(p, q)
+        a = Pr.tables()["a"]
+        self.assertEqual((dcost, xcost), (a["down_cost"], a["dist_cost"]))
 
     def test_plenty_of_plays_move_the_table_to_the_data_and_it_never_falls_with_yards_gained(self):
-        cnt, tot = [0] + [100000] * 99, [0.0] + [100000 * 2.0] * 99               # every yard line is worth 2 points
-        got = Pr.fit_curve([(cnt, tot)])
-        for (x, q) in got:
+        acc = Pr.new_acc()
+        acc["n"] = [0] + [100000] * 99
+        acc["y"] = [0.0] + [100000 * 2.0] * 99                                    # every yard line is worth 2 points
+        for x, q in Pr.fit_curve([acc])[0]:
             self.assertAlmostEqual(q, 2.0, delta=0.02)
-        cnt, tot = [0] + [1000] * 99, [0.0] + [1000 * (5.0 - i / 20) for i in range(1, 100)]   # a falling signal is flattened
-        ys = [q for _, q in Pr.fit_curve([(cnt, tot)])]
+        acc["n"] = [0] + [1000] * 99
+        acc["y"] = [0.0] + [1000 * (5.0 - i / 20) for i in range(1, 100)]         # a falling signal is flattened
+        ys = [q for _, q in Pr.fit_curve([acc])[0]]
         self.assertTrue(all(b >= a - 1e-9 for a, b in zip(ys, ys[1:])))
 
     def test_the_curve_changes_the_values_recorded_but_never_a_result(self):
-        flat = [(1, 1.0), (99, 1.0)]
+        flat = ([(1, 1.0), (99, 1.0)], 0.55, 0.05)
         a = TE.play("C00", "C01", seed=5)
         r = TE.play("C00", "C01", seed=5)
         from dfl.engine.game import play_game
@@ -264,11 +268,13 @@ class Refit(unittest.TestCase):
         self.assertIsNone(w.ep_curve)
         y = w.L.year
         for k in range(5):
-            w.ep_acc[y - 4 + k] = ([0] + [10] * 99, [0.0] + [20.0] * 99)
+            acc = Pr.new_acc()
+            acc["n"], acc["y"] = [0] + [10] * 99, [0.0] + [20.0] * 99
+            w.ep_acc[y - 4 + k] = acc
         analytics.season_close(w, y)
         self.assertEqual(sorted(w.ep_acc), [y - 2, y - 1, y])
         self.assertIsNotNone(w.ep_curve)
-        self.assertEqual([x for x, _ in w.ep_curve], [x for x, _ in Pr.tables()["ep"]])
+        self.assertEqual([x for x, _ in w.ep_curve[0]], [x for x, _ in Pr.tables()["ep"]])
 
     def test_games_filed_in_the_world_feed_the_season_totals(self):
         w = world_with_production(seed=73)
@@ -277,5 +283,25 @@ class Refit(unittest.TestCase):
         class S:
             def __init__(s, cid): s.cid, s.cards = cid, []
         w.record_game(r, S(a), S(b))
-        cnt, tot = w.ep_acc[w.L.year]
-        self.assertEqual(sum(cnt), len(r.fit))
+        self.assertEqual(sum(w.ep_acc[w.L.year]["n"]), len(r.fit))
+
+    def test_the_down_and_distance_costs_are_read_from_the_plays(self):
+        """Plays worth 1.0 less per down and 0.1 less per yard to go, at every yard line, give those costs back."""
+        acc = Pr.new_acc()
+        for i in range(1, 100):
+            b = (i - 1) // 10
+            for down in (1, 2, 3, 4):
+                for dist in (3, 7, 10, 14):
+                    v, d, x, n = 3.0 - 1.0 * (down - 1) - 0.1 * (dist - 10), down - 1, dist - 10, 40
+                    acc["n"][i] += n
+                    acc["y"][i] += n * v
+                    acc["d"][i] += n * d
+                    acc["x"][i] += n * x
+                    acc["dd"][b] += n * d * d
+                    acc["xx"][b] += n * x * x
+                    acc["dx"][b] += n * d * x
+                    acc["dy"][b] += n * d * v
+                    acc["xy"][b] += n * x * v
+        c1, c2 = Pr.fit_costs([acc])
+        self.assertAlmostEqual(c1, 1.0, delta=0.02)
+        self.assertAlmostEqual(c2, 0.1, delta=0.01)

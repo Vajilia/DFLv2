@@ -93,7 +93,10 @@ def close_year(world, results):
             winner = election(world, cid, incumbent=None if recalled else ceo, exclude={ceo.identity.id} if recalled else set())
             if winner is not ceo:
                 world.elected[cid] = winner
-            world.gov_log.append({"year": year, "club": cid, "kind": "election", "cause": "recall" if recalled else "term", "winner": winner.identity.id, "incumbent_won": winner is ceo})
+                if not recalled:
+                    world.stats["term_losses"] = world.stats.get("term_losses", 0) + 1
+            world.gov_log.append({"year": year, "club": cid, "kind": "election", "cause": "recall" if recalled else "term", "winner": winner.identity.id, "incumbent_won": winner is ceo,
+                                  "sentiment": round(card["sentiment"], 1)})
 
 
 # ---------------------------------------------------------------- elections
@@ -136,7 +139,7 @@ def retire_chance(world, card, role):
     age, top = card.age(world.L.year), world.tables.roles[role]["age_max"]
     if age >= top:
         return 1.0
-    past = age - g["retire_age_start"]
+    past = age - g["ceo_retire_age_start" if role == "ceo" else "retire_age_start"]
     return 0.0 if past < 0 else min(1.0, g["retire_p_start"] + g["retire_p_step"] * past)
 
 

@@ -32,9 +32,10 @@ def run(a):
         print(f"seed {a.seed} {rep['year']} {time.time() - t0:.0f}s", flush=True)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as f:
-        keys = ("recall_ballots", "recalls", "elections", "ceo_replaced", "ceo_retirements", "gm_retirements", "ceo_fires_gm", "gm_resignations", "gm_hires",
+        keys = ("recall_ballots", "recalls", "term_losses", "elections", "ceo_replaced", "ceo_retirements", "gm_retirements", "ceo_fires_gm", "gm_resignations", "gm_hires",
                 "coach_hires", "hires_hc", "hires_oc", "hires_dc", "hires_stc", "coach_fires_hc", "coach_fires_coord", "coach_resignations", "trades", "deals", "refusals", "interviews", "interview_declines", "forced_hires", "rooms")
-        json.dump({"seed": a.seed, "seasons": seasons, "events": {k: u.world.stats.get(k, 0) for k in keys}}, f)
+        term = [[e["sentiment"], int(e["incumbent_won"])] for e in u.world.gov_log if e["kind"] == "election" and e["cause"] == "term"]
+        json.dump({"seed": a.seed, "seasons": seasons, "events": {k: u.world.stats.get(k, 0) for k in keys}, "term_elections": term}, f)
 
 
 def report(a):
