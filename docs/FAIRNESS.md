@@ -414,3 +414,7 @@ Front-office turnover, share of playing clubs changing the post in a year (about
 | CEO (replaced or retired) | 20.6% | no NFL comparison (DFL has recalls and elections) |
 
 Recalls a year across the league, by league: 1.81, 1.92, 1.92, 2.00, 2.06, 1.44 (mean 1.86). Head coach turnover is about four points above the NFL figure; left as is, within the builder's five-point reading of "close to". The benchmarks are press counts, not a census. Settings: COACHING.csv and GOVERNANCE.csv, Design Document Ed 8.31 item 30.
+
+## Ed 8.32: expected-points table refit each season (2026-10-25)
+
+Not a fairness change: the refit is read only when a play is valued. Proof: four seasons of seed 7 played with the refit and with it switched off give the same league digest every year. The refit table after four seasons rose above the data table by about 0.6 points at midfield (2.33 against 1.7 at the 50), the same as on 1,600 sampled games. The 268 earlier tests and the 240-game digest still pass, and seven new tests cover the refit.

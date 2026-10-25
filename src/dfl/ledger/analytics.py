@@ -11,7 +11,7 @@ Everything here reads recorded production only; nothing reads it back into a gam
 """
 import statistics as st
 
-from ..engine.production import tables
+from ..engine.production import fit_curve, tables
 
 # players needed per club by official position (the engine's formation and kicking game)
 SLOTS = {"QB": 1, "HB": 1, "TE": 1, "WR": 3, "LT": 1, "LG": 1, "C": 1, "RG": 1, "RT": 1, "LE": 1, "RE": 1, "DT": 2, "ROLB": 1, "MLB": 1, "LOLB": 1,
@@ -43,6 +43,10 @@ def unit_quality(team):
 def season_close(world, year):
     """Score the season and file it under `world.career`; credited seasons are recorded; the bulky production is then dropped."""
     A = tables()["a"]
+    keep = [y for y in sorted(world.ep_acc) if y > year - int(A["ep_window"])]       # refit for next season (Edition 8.32)
+    world.ep_acc = {y: world.ep_acc[y] for y in keep}
+    if keep:
+        world.ep_curve = fit_curve([world.ep_acc[y] for y in keep])
     prod = world.production.pop(year, {})
     team = world.team_production.pop(year, {})
     for pid in world.appearances.pop(year, set()):

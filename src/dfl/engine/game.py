@@ -42,6 +42,7 @@ class GameResult:
     rule_version: str = RULE_VERSION
     team_production: list = field(default_factory=list)
     production: dict = field(default_factory=dict)      # card id -> {play type: [opportunities, EPA, WPA]} (Edition 8.30)
+    fit: list = field(default_factory=list)             # (offence, yard line, down, distance, points scored, half) per play (Edition 8.32)
 
 
 def new_stats():
@@ -52,8 +53,10 @@ def new_stats():
 
 
 class Game:
-    def __init__(self, home, away, rng, decisive=False, log=False):
+    def __init__(self, home, away, rng, decisive=False, log=False, curve=None):
         self.sq = (home, away)
+        self.curve = curve                   # the season's expected-points table; None is the data table (Edition 8.32)
+        self.fit = []
         self.rng = rng
         self.decisive = decisive
         self.log = [] if log else None
@@ -180,7 +183,7 @@ class Game:
         win = None if tie else (h.cid if self.score[0] > self.score[1] else a.cid)
         inj = {h.cid: list(h.new_injuries), a.cid: list(a.new_injuries)}
         return GameResult(h.cid, a.cid, (self.score[0], self.score[1]), self.period, tie, win,
-                          [self.st[0], self.st[1]], self.pl, inj, self.log or [], production=self.prod, team_production=self.team)
+                          [self.st[0], self.st[1]], self.pl, inj, self.log or [], production=self.prod, team_production=self.team, fit=self.fit)
 
     # ------------------------------------------------------------ kicking
     def kickoff(self, kicker, free_kick=False):
@@ -719,7 +722,7 @@ def rng_gauss(rng, m, s):
     return rng.gauss(m, s)
 
 
-def play_game(home, away, rng, decisive=False, log=False):
+def play_game(home, away, rng, decisive=False, log=False, curve=None):
     """Play one game between two `Squad`s. `decisive` forbids a tie (postseason, Coronation)."""
-    g = Game(home, away, rng, decisive, log)
+    g = Game(home, away, rng, decisive, log, curve)
     return g.run()

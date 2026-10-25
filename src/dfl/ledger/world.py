@@ -18,6 +18,7 @@ from ..characters import soul
 from ..characters.development import develop, retire_chance
 from . import coaching, gameday, governance, rooms, rules as R, trading
 from .contracts import Contract, ContractError, rookie_contract
+from ..engine import production
 from .ledger import Ledger, Rejected
 from .positions import MINIMUMS, POSITIONS, shortfalls
 
@@ -61,6 +62,8 @@ class World:
         self.ceo_pool, self.gm_pool = [], []                      # willing CEO candidates and general managers, new or let go
         self.elected = {}                                         # club -> CEO elected after the last game, who takes office in the next offseason
         self.gov_log = []                                         # recall ballots, elections, dismissals and hires (feeds the story layer)
+        self.ep_curve = None                                      # the expected-points table refit from past seasons; None is the data table (Edition 8.32)
+        self.ep_acc = {}                                          # league year -> ([plays by yard line], [sum of estimates by yard line])
         self.production = {}                                      # league year -> card id -> opponent -> play type -> [opportunities, EPA, WPA] (Edition 8.30)
         self.team_production = {}                                 # league year -> club -> "off"/"def" -> play type -> [plays, EPA] (EPA the unit made / allowed)
         self.appearances = {}                                     # league year -> card ids that were on a game-day active list (section 15 credited seasons)
@@ -92,6 +95,8 @@ class World:
     def record_game(self, res, home, away):
         """File one game's per-player and per-unit production under the league year (Edition 8.30). Nothing reads it back into a game."""
         y = self.L.year
+        if res.fit:
+            production.accumulate(self.ep_acc.setdefault(y, ([0] * 100, [0.0] * 100)), res.fit)
         prod, apps, team = self.production.setdefault(y, {}), self.appearances.setdefault(y, set()), self.team_production.setdefault(y, {})
         for sq, opp in ((home, away), (away, home)):
             apps.update(sq.cards)

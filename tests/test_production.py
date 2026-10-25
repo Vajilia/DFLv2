@@ -215,3 +215,67 @@ class Honours(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Refit(unittest.TestCase):
+    """The season refit of the expected-points table (Edition 8.32)."""
+
+    def test_a_play_is_worth_the_next_score_in_its_half_from_its_own_side(self):
+        plays = [(0, 20, 1, 10, 0, 0), (0, 45, 1, 10, 0, 0), (1, 30, 1, 10, 6, 0),     # team 1 scores 6 in the first half
+                 (1, 25, 1, 10, 0, 1), (0, 50, 1, 10, 3, 1), (1, 30, 1, 10, 0, 1)]      # team 0 kicks a field goal in the second
+        got = [v for _, _, _, v in Pr.labels(plays)][::-1]
+        self.assertEqual(got, [-6, -6, 6, -3, 3, 0])
+
+    def test_no_score_in_the_half_is_worth_nothing_and_a_defensive_score_counts_against_the_offence(self):
+        self.assertEqual([v for *_, v in Pr.labels([(0, 20, 1, 10, 0, 0)])], [0])
+        self.assertEqual([v for *_, v in Pr.labels([(0, 20, 1, 10, -6, 0)])], [-6])
+
+    def test_with_no_plays_the_refit_is_the_data_table(self):
+        T = Pr.tables()["ep"]
+        got = Pr.fit_curve([([0] * 100, [0.0] * 100)])
+        for (x, p), (x2, q) in zip(T, got):
+            self.assertEqual(x, x2)
+            self.assertAlmostEqual(p, q)
+
+    def test_plenty_of_plays_move_the_table_to_the_data_and_it_never_falls_with_yards_gained(self):
+        cnt, tot = [0] + [100000] * 99, [0.0] + [100000 * 2.0] * 99               # every yard line is worth 2 points
+        got = Pr.fit_curve([(cnt, tot)])
+        for (x, q) in got:
+            self.assertAlmostEqual(q, 2.0, delta=0.02)
+        cnt, tot = [0] + [1000] * 99, [0.0] + [1000 * (5.0 - i / 20) for i in range(1, 100)]   # a falling signal is flattened
+        ys = [q for _, q in Pr.fit_curve([(cnt, tot)])]
+        self.assertTrue(all(b >= a - 1e-9 for a, b in zip(ys, ys[1:])))
+
+    def test_the_curve_changes_the_values_recorded_but_never_a_result(self):
+        flat = [(1, 1.0), (99, 1.0)]
+        a = TE.play("C00", "C01", seed=5)
+        r = TE.play("C00", "C01", seed=5)
+        from dfl.engine.game import play_game
+        s0, s1 = TE.squad("C00"), TE.squad("C01")
+        import random
+        r2 = play_game(s0, s1, random.Random(5), False, False, curve=flat)
+        self.assertEqual((list(a.score), a.periods), (list(r.score), r.periods))
+        self.assertEqual(list(r2.score), list(a.score))
+        self.assertNotEqual(sum(v[1] for p in a.production.values() for v in p.values()),
+                            sum(v[1] for p in r2.production.values() for v in p.values()))
+
+    def test_a_season_close_refits_the_table_for_the_next_season_from_a_window_of_seasons(self):
+        w = world_with_production(seed=72)
+        self.assertIsNone(w.ep_curve)
+        y = w.L.year
+        for k in range(5):
+            w.ep_acc[y - 4 + k] = ([0] + [10] * 99, [0.0] + [20.0] * 99)
+        analytics.season_close(w, y)
+        self.assertEqual(sorted(w.ep_acc), [y - 2, y - 1, y])
+        self.assertIsNotNone(w.ep_curve)
+        self.assertEqual([x for x, _ in w.ep_curve], [x for x, _ in Pr.tables()["ep"]])
+
+    def test_games_filed_in_the_world_feed_the_season_totals(self):
+        w = world_with_production(seed=73)
+        r = TE.play("C00", "C01", seed=3)
+        a, b = [x for x in sorted(w.L.clubs)][:2]
+        class S:
+            def __init__(s, cid): s.cid, s.cards = cid, []
+        w.record_game(r, S(a), S(b))
+        cnt, tot = w.ep_acc[w.L.year]
+        self.assertEqual(sum(cnt), len(r.fit))
