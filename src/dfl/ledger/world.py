@@ -209,6 +209,11 @@ class World:
         mult -= N["pool_discount"] * p.pool_years
         return max(R.MIN_SALARY, F(int(price(int(round(soul.self_view(card, self.tables))), p.pos) * max(0.3, mult))))
 
+    def quote(self, cid, p):
+        """The market price of a player as this club reads it, from its own view of her overall (Edition 8.35); the true-overall price
+        only when no club is asking (the league's own bookkeeping)."""
+        return ask(p) if cid is None else price(int(round(self.view(cid, p))), p.pos)
+
     def willing(self, cid, p):
         """The most this club will pay her: the price of the overall it believes she has, plus a little slack."""
         return F(int(price(int(round(self.view(cid, p))), p.pos) * (1 + self.tables.negotiation["club_slack"])))
@@ -216,15 +221,16 @@ class World:
     def negotiate(self, cid, p):
         """The yearly price a deal would be struck at, or None if she asks more than the club will pay. A player whose market price is
         the league minimum or less takes the minimum and does not bargain (section 13, market floor)."""
-        if ask(p) <= R.MIN_SALARY or p.ovr < 56:
-            return ask(p)
+        q = self.quote(cid, p)
+        if q <= R.MIN_SALARY or round(self.view(cid, p)) < 56:
+            return q
         return rooms.contract(self, cid, p)
 
     def offer(self, cid, p, rookie=False, value=None):
         r = self.rng
         reck = cid in self.reckless
-        a = value if value is not None else ask(p)
-        if a <= R.MIN_SALARY or p.ovr < 56:
+        a = value if value is not None else self.quote(cid, p)
+        if a <= R.MIN_SALARY or round(self.view(cid, p)) < 56:
             return Contract(self.L.year, (R.MIN_SALARY,) * r.choice((1, 1, 2)), (), (), self.L.week)
         n = r.choice((1, 2, 3, 4, 5)) if not reck else 5
         bf = F(r.randint(30, 60), 100) if reck else F(r.randint(0, 20), 100)
@@ -255,9 +261,9 @@ class World:
             except (Rejected, ContractError) as e:
                 self._reject("sign", e)
                 tries += 1
-                if tries > 2 or rookie_c is not None or ask(p) > 2 * R.MIN_SALARY:      # nobody takes far less than her price
+                if tries > 2 or rookie_c is not None or self.quote(cid, p) > 2 * R.MIN_SALARY:      # nobody takes far less than her price
                     return False
-                c = Contract(self.L.year, (max(R.MIN_SALARY, ask(p) / 2),) * 1, (), (), self.L.week) if tries == 1 else \
+                c = Contract(self.L.year, (max(R.MIN_SALARY, self.quote(cid, p) / 2),) * 1, (), (), self.L.week) if tries == 1 else \
                     Contract(self.L.year, (R.MIN_SALARY,), (), (), self.L.week)
 
     # ---------- autopilot helpers
@@ -279,7 +285,7 @@ class World:
         """Free agents who would sign for the league minimum, best first (a market price at or under the minimum). If nobody at that
         position is that cheap, the lowest-rated free agents. The autopilot may not buy a star at the minimum: nobody sells one."""
         pool = self.fas(pos, cid)
-        ok = [p for p in pool if ask(p) <= R.MIN_SALARY]
+        ok = [p for p in pool if self.quote(cid, p) <= R.MIN_SALARY]
         return ok or pool[::-1]
 
     def value(self, p, cid=None):
@@ -561,7 +567,7 @@ class World:
                 if pos not in room:
                     room[pos] = L.number_room(cid, pos)
                 return room[pos]
-            pool = [p for p in self.cheap(None, cid) if ask(p) <= R.MIN_SALARY and not (vets and p.veteran) and numbered(p.pos)]
+            pool = [p for p in self.cheap(None, cid) if self.quote(cid, p) <= R.MIN_SALARY and not (vets and p.veteran) and numbered(p.pos)]
             if not pool:
                 break
             if not self.try_sign(cid, pool[0], "ps", Contract(L.year, (R.MIN_SALARY,), (), (), L.week)):

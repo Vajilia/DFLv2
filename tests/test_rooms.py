@@ -64,8 +64,9 @@ class ContractRoom(unittest.TestCase):
     def test_players_at_the_minimum_do_not_bargain_and_open_no_room(self):
         w = self.w
         cheap = next(p for p in w.L.players.values() if p.where == "fa" and ask(p) <= R.MIN_SALARY)
+        w._views[("C01", cheap.pid)] = 50.0
         n = len(w.rooms)
-        self.assertEqual(w.negotiate("C01", cheap), ask(cheap))
+        self.assertEqual(w.negotiate("C01", cheap), w.quote("C01", cheap))
         self.assertEqual(len(w.rooms), n)
 
     def test_a_deal_has_three_rounds_at_most_and_is_inside_the_two_ceilings(self):
@@ -94,7 +95,8 @@ class ContractRoom(unittest.TestCase):
 
     def test_a_club_that_cannot_reach_her_least_price_has_no_deal(self):
         w, p = self.w, self.p
-        w._views[("C02", p.pid)] = float(p.ovr) - 20
+        w._views[("C02", p.pid)] = 61.0              # a club that thinks her worth bargaining over, but far below what she asks
+        self.assertGreater(w.quote("C02", p), R.MIN_SALARY)
         self.assertIsNone(w.negotiate("C02", p))
         self.assertEqual(w.rooms[-1]["outcome"], "no_deal")
 

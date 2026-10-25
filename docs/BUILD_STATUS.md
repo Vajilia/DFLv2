@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.34.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.35.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -103,7 +103,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Built:** the expected-points table is refit after every season from the league's own plays (next-score value, three-season window, smoothed, pulled toward the data table, never falling with yards gained) and used for the next season's valuation. Result-neutral (four seasons identical with and without it). Only the yard-line curve is refit; the down and distance costs are still data (spec item 31).
 
 ## Trades stage 2 (Ed 8.34, 2026-10-25)
-- **Built:** the public trade price comes from public production, age and the going level at the position, not from the hidden overall (spec item 33). Signing and free-agent prices still use the rounded true overall.
+- **Built:** the public trade price comes from public production, age and the going level at the position, not from the hidden overall (spec item 33). Edition 8.35 also moved the bargain-or-minimum test for free agents to each club's own view (spec item 34).
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

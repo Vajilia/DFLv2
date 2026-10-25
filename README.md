@@ -27,7 +27,7 @@ The prepared package in the ChatGPT conversation is named `DFL-vBeta_source_snap
 ```
 python3 -I -m unittest discover -s tests          # 24 tests
 python3 -I tools/run_seasons.py --seasons 100     # multi-season run, validates every season's tables
-python3 tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.34.md
+python3 tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.35.md
 ```
 The specification lives in `docs/spec/` and wins over any v1 behaviour.
 

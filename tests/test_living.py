@@ -221,6 +221,41 @@ class Scouting(unittest.TestCase):
         self.assertEqual(views, sorted(views, reverse=True))
 
 
+class ClubPrices(unittest.TestCase):
+    """Clubs price a free agent by their own view of her overall, never by the true figure (Edition 8.35)."""
+
+    def setUp(self):
+        self.w = World(CLUBS, seed=33)
+        self.w.open_year(first=True)
+        self.p = next(p for p in sorted(self.w.L.players.values(), key=lambda q: q.pid) if p.where == "fa" and p.pos == "WR")
+
+    def test_a_clubs_quote_follows_its_view_and_two_clubs_can_differ(self):
+        w, p = self.w, self.p
+        w._views[("C01", p.pid)], w._views[("C02", p.pid)] = 80.0, 62.0
+        self.assertEqual(w.quote("C01", p), World.quote(w, "C01", p))
+        self.assertGreater(w.quote("C01", p), w.quote("C02", p))
+        from dfl.ledger.world import price
+        self.assertEqual(w.quote("C01", p), price(80, p.pos))
+        self.assertEqual(w.quote(None, p), ask(p))               # no club asking: the league's own bookkeeping
+
+    def test_a_player_a_club_takes_for_a_scrub_signs_at_the_minimum_whatever_she_really_is(self):
+        w, p = self.w, self.p
+        w.rating[p.pid], p.ovr = 85.0, 85
+        w._views[("C01", p.pid)] = 50.0
+        self.assertEqual(w.negotiate("C01", p), w.quote("C01", p))
+        self.assertLessEqual(w.quote("C01", p), R.MIN_SALARY)
+        self.assertEqual(w.offer("C01", p).cap_hit(w.L.year), R.MIN_SALARY)
+        self.assertIn(p, w.cheap(p.pos, "C01"))
+
+    def test_a_star_by_the_clubs_own_view_is_negotiated_not_handed_over_at_the_minimum(self):
+        w, p = self.w, self.p
+        w.rating[p.pid], p.ovr = 55.0, 55
+        w._views[("C01", p.pid)] = 85.0
+        self.assertGreater(w.quote("C01", p), R.MIN_SALARY)
+        v = w.negotiate("C01", p)
+        self.assertTrue(v is None or v > R.MIN_SALARY)
+
+
 class EngineOnTheLedger(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
