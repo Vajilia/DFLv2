@@ -12,7 +12,7 @@ spend_range,0.04,"Payroll share that moves the investment signal from 0 to its f
 core_size,22,"How many of last year's best-paid players count as the core"
 core_ref,0.65,"Share of the core kept that fans regard as stable"
 core_range,0.2,"Share of the core that moves the stability signal from 0 to its full size"
-recall_threshold,26,"Sentiment at or below this after a club's last game triggers a recall ballot"
+recall_threshold,27,"Sentiment at or below this after a club's last game triggers a recall ballot"
 election_cycle,3,"Seasons between CEO elections (staggered across clubs)"
 candidates,4,"Willing candidates the CEO pool and the GM pool each hold (section 13)"
 ceo_pool_shift,-1.3,"Talent shift of new CEO candidates against the founding leaders"
