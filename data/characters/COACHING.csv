@@ -15,3 +15,8 @@ new_hc_fire_p,0.75,"Chance a newly hired head coach dismisses each coordinator h
 resign_base,0.05,"Chance a coach resigns her post in a year"
 resign_amb,0.04,"Added per unit of ambition above 50 (an ambitious coach looks for a bigger post)"
 resign_loy,0.03,"Taken off per unit of loyalty above 50"
+judge_base_sd,3.5,"A coach's error (rating points, one standard deviation) in judging one of her own players with no seasons of evidence; the error is as likely to flatter a player as to wrong her (Edition 8.36)"
+judge_seasons_k,0.7,"Evidence: the error shrinks by 1/sqrt(1 + k x credited seasons)"
+judge_effect,0.5,"A coaching staff's judgement rating of 100 cuts the error by this fraction, a rating of 0 raises it by the same"
+judge_min_sd,0.8,"The error never falls below this"
+judge_hc_share,0.5,"Share of the staff's judgement rating that is the head coach's game management; the rest is the position group's coordinator's adjustments"

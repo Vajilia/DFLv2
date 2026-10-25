@@ -55,6 +55,36 @@ def view(world, cid, card, post, factor=1.0):
     return fit(world, card, post) + max(T.scouting["min_sd"], sd) * factor * z
 
 
+def staff_judgement(world, cid, pos):
+    """How good the staff is at judging the club's own players at this position: the head coach's game management and the position
+    group's coordinator's adjustments, mixed by `judge_hc_share`; 50 for a post that is empty."""
+    C = world.tables.coaching
+    lead = world.leaders.get(cid, {})
+    hc, co = lead.get("hc"), lead.get(SIDE[world.tables.positions[pos]["group"]])
+    h = float(hc.attrs.get("MGT", 50)) if hc is not None else 50.0
+    c = float(co.attrs.get("ADJ", 50)) if co is not None else 50.0
+    return C["judge_hc_share"] * h + (1 - C["judge_hc_share"]) * c
+
+
+def judged(world, cid, p):
+    """The club's coaches' estimate of one of her players' overall (Edition 8.36): her true overall plus an error that is as likely to
+    be too kind as too harsh (no bias). It is fixed for the staff, the player and the league year; it shrinks with the player's seasons
+    of evidence and with the staff's judgement. Starters are chosen by this, never by the true figure."""
+    C = world.tables.coaching
+    lead = world.leaders.get(cid, {})
+    group = world.tables.positions[p.pos]["group"]
+    key = (cid, p.pid)
+    v = world._judged.get(key)
+    if v is None:
+        sd = C["judge_base_sd"] / (1 + C["judge_seasons_k"] * p.seasons) ** 0.5
+        sd *= 1 - C["judge_effect"] * (staff_judgement(world, cid, p.pos) - 50) / 50
+        sd = max(C["judge_min_sd"], sd)
+        who = tuple(c.identity.id if c is not None else 0 for c in (lead.get("hc"), lead.get(SIDE[group])))
+        z = rng_for(world.creator.seed, "judge", cid, who, p.pid, world.L.year).gauss(0, 1)
+        v = world._judged[key] = world.rating[p.pid] + sd * z
+    return v
+
+
 def retire_chance(world, card, year):
     C = world.tables.coaching
     age, top = card.age(year), world.tables.roles["coach"]["age_max"]

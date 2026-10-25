@@ -6,7 +6,7 @@ management (injured reserve, replacements, waivers) reacts to them. Nothing here
 """
 import random
 
-from ..ledger import gameday
+from ..ledger import coaching, gameday
 from .game import play_game
 from .squad import Squad, Staff
 
@@ -33,9 +33,10 @@ class LedgerEngine:
         w = self.w
         gd = w.active.get(cid)
         if gd is None or w.active_week.get(cid) != w.L.week or w.L.phase != "season":
-            gd = gameday.build(w.L, cid, elevate=False)
+            gd = gameday.build(w.L, cid, elevate=False, judge=lambda q: coaching.judged(w, cid, q))
         cards = [w.cards[pid] for pid in gd.active]
-        return Squad(cid, cards, self.staff(cid), w.rating)
+        seen = {pid: coaching.judged(w, cid, w.L.players[pid]) for pid in gd.active}      # her coaches choose starters by what they judge, not the truth
+        return Squad(cid, cards, self.staff(cid), seen)
 
     def all_star_side(self, name, clubs):
         """A composite squad: the best healthy player at each position across `clubs` (the people layer will pick All-Stars by vote)."""

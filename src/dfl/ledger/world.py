@@ -85,6 +85,7 @@ class World:
         self.rating = {}                 # player id -> hidden true overall (float), refreshed when the card develops
         self.leaders = {}                # club -> {role: Card}; coaches hold posts and move through the pool (Edition 8.25); the CEO and GM are elected and hired (Edition 8.27)
         self._views = {}                 # (club, player) -> that club's estimate this league year
+        self._judged = {}                # (club, player) -> that club's coaches' estimate of her own player this league year (Edition 8.36)
         self.active = {}                 # club -> GameDay of its latest game
         self.active_week = {}
         self.engine_injuries = engine_injuries     # True: the engine injures players who play; the random model keeps to the rest
@@ -444,6 +445,7 @@ class World:
         """The year turns: every card is a year older and develops; injuries heal over the offseason; free agents may retire."""
         L, D = self.L, self.tables.development
         self._views.clear()                # clubs re-judge everyone each league year
+        self._judged.clear()               # and so do coaches
         self.purge()                       # the pool rule (four years unsigned) already retired some at the league-year turn
         if skip:
             return
@@ -729,7 +731,7 @@ class World:
         L = self.L
         for cid in (sorted(L.clubs) if playing is None else sorted(playing)):
             before = sum(p.elevations for p in L.players.values() if p.club == cid and p.where == "ps")
-            gd = gameday.build(L, cid)
+            gd = gameday.build(L, cid, judge=lambda q, c=cid: coaching.judged(self, c, q))
             self.active[cid], self.active_week[cid] = gd, L.week
             after = sum(p.elevations for p in L.players.values() if p.club == cid and p.where == "ps")
             self.stats["elevations"] += after - before

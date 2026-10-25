@@ -274,7 +274,8 @@ class EngineOnTheLedger(unittest.TestCase):
         u = self.u
         cid = sorted(u.L.clubs)[0]
         sq = u.resolver.club_squad(cid)
-        gd = gameday.build(u.L, cid, elevate=False)
+        from dfl.ledger import coaching
+        gd = gameday.build(u.L, cid, elevate=False, judge=lambda q: coaching.judged(u.resolver.w, cid, q))
         self.assertEqual(sorted(sq.cards), sorted(gd.active))
         on_club = set(u.L.clubs[cid].roster) | set(u.L.clubs[cid].ps)
         self.assertTrue(set(sq.cards) <= on_club)
@@ -639,3 +640,68 @@ class Coaches(unittest.TestCase):
                 coaching.window(w, res)
             return sorted((cid, r, c.identity.id) for cid, lead in w.leaders.items() for r, c in lead.items())
         self.assertEqual(run(), run())
+
+
+class CoachJudgement(unittest.TestCase):
+    """Coaches choose starters by their own estimate of a player, with an error as likely to flatter as to wrong her (Edition 8.36)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.w = World(CLUBS, seed=41)
+        cls.w.open_year(first=True)
+
+    def _errors(self, w):
+        from dfl.ledger import coaching
+        out = []
+        for cid in sorted(w.L.clubs)[:8]:
+            for pid in w.L.clubs[cid].roster:
+                p = w.L.players[pid]
+                out.append(coaching.judged(w, cid, p) - w.rating[pid])
+        return out
+
+    def test_the_error_has_no_lean_either_way(self):
+        e = self._errors(self.w)
+        mean = sum(e) / len(e)
+        sd = (sum((x - mean) ** 2 for x in e) / len(e)) ** 0.5
+        self.assertLess(abs(mean), 3 * sd / len(e) ** 0.5)
+        self.assertLess(abs(sum(1 for x in e if x > 0) / len(e) - 0.5), 0.07)
+
+    def test_it_is_fixed_within_the_year(self):
+        from dfl.ledger import coaching
+        cid = sorted(self.w.L.clubs)[0]
+        p = self.w.L.players[self.w.L.clubs[cid].roster[0]]
+        a = coaching.judged(self.w, cid, p)
+        self.w._judged.clear()
+        self.assertEqual(a, coaching.judged(self.w, cid, p))
+
+    def test_a_better_staff_and_more_evidence_cut_the_error(self):
+        from dfl.ledger import coaching
+        w = World(CLUBS, seed=41)
+        w.open_year(first=True)
+        cid = sorted(w.L.clubs)[0]
+        lead = w.leaders[cid]
+        pos = w.L.players[w.L.clubs[cid].roster[0]].pos
+
+        def spread(attr_value, seasons):
+            for post, key in (("hc", "MGT"), ("oc", "ADJ"), ("dc", "ADJ"), ("stc", "ADJ")):
+                lead[post].attrs[key] = attr_value
+            xs = []
+            for pid in w.L.clubs[cid].roster:
+                p = w.L.players[pid]
+                p.seasons = seasons
+                w._judged.clear()
+                xs.append(coaching.judged(w, cid, p) - w.rating[pid])
+            return (sum(x * x for x in xs) / len(xs)) ** 0.5
+        self.assertLess(spread(90, 0), spread(30, 0))
+        self.assertLess(spread(50, 8), spread(50, 0))
+
+    def test_judging_changes_who_dresses_but_not_how_many(self):
+        from dfl.ledger import coaching, gameday
+        w = self.w
+        differ = 0
+        for cid in sorted(w.L.clubs):
+            true = gameday.build(w.L, cid, elevate=False)
+            seen = gameday.build(w.L, cid, elevate=False, judge=lambda q, c=cid: coaching.judged(w, c, q))
+            self.assertEqual(len(true.active), len(seen.active))
+            differ += set(true.active) != set(seen.active)
+        self.assertGreater(differ, 0)

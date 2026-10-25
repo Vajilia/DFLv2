@@ -26,13 +26,15 @@ class GameDay:
     can_field: bool = True
 
 
-def build(ledger, cid, elevate=True):
-    """Choose the active list for one game for `cid`. Elevations are counted against the players. Nothing is signed."""
+def build(ledger, cid, elevate=True, judge=None):
+    """Choose the active list for one game for `cid`. Elevations are counted against the players. Nothing is signed.
+    `judge(player)` is how good her coaches think a player is (Edition 8.36); without it the true overall is used."""
+    est = judge or (lambda q: q.ovr)
     c = ledger.clubs[cid]
     P = ledger.players
     healthy = [p for p in (P[i] for i in c.roster) if p.out_weeks == 0]
     by_pos = {}
-    for p in sorted(healthy, key=lambda q: (-q.ovr, q.pid)):
+    for p in sorted(healthy, key=lambda q: (-est(q), q.pid)):
         by_pos.setdefault(p.pos, []).append(p)
     chosen = []
     # 1. league minimums first, best players at each position
@@ -42,7 +44,7 @@ def build(ledger, cid, elevate=True):
     chosen += hb[:3] if len(hb) >= 3 or not fb else hb[:2] + fb[:1]
     # 2. fill to the limit with the best of the rest
     ids = {p.pid for p in chosen}
-    rest = [p for p in sorted(healthy, key=lambda q: (-q.ovr, q.pid)) if p.pid not in ids]
+    rest = [p for p in sorted(healthy, key=lambda q: (-est(q), q.pid)) if p.pid not in ids]
 
     for p in rest:
         n_ol_now = sum(1 for q in chosen if q.pos in OL)
@@ -60,7 +62,7 @@ def build(ledger, cid, elevate=True):
         counts[p.pos] = counts.get(p.pos, 0) + 1
     if elevate:
         pool = [p for p in (P[i] for i in c.ps) if p.out_weeks == 0 and p.elevations < R.ELEVATIONS_PER_PLAYER]
-        pool.sort(key=lambda q: (-q.ovr, q.pid))
+        pool.sort(key=lambda q: (-est(q), q.pid))
         while len(elevated) < R.ELEVATIONS_PER_GAME:
             gaps = shortfalls(counts)
             pick = None
@@ -86,15 +88,15 @@ def build(ledger, cid, elevate=True):
     for pos in MINIMUMS:
         if counts.get(pos, 0) == 0:
             for n in NEIGHBOURS[pos]:
-                cand = next((p for p in sorted(active, key=lambda q: (-q.ovr, q.pid)) if p.pos == n), None)
+                cand = next((p for p in sorted(active, key=lambda q: (-est(q), q.pid)) if p.pos == n), None)
                 if cand:
                     gd.emergency[pos] = cand.pid
                     break
             else:
-                best = next(iter(sorted(active, key=lambda q: (-q.ovr, q.pid))), None)
+                best = next(iter(sorted(active, key=lambda q: (-est(q), q.pid))), None)
                 if best:
                     gd.emergency[pos] = best.pid
     if counts.get("HB", 0) + counts.get("FB", 0) == 0 and active:
-        gd.emergency["HB"] = sorted(active, key=lambda q: (-q.ovr, q.pid))[0].pid
+        gd.emergency["HB"] = sorted(active, key=lambda q: (-est(q), q.pid))[0].pid
     gd.can_field = len(active) >= 11
     return gd
