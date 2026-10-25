@@ -105,6 +105,8 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 ## Trades stage 2 (Ed 8.34, 2026-10-25)
 - **Built:** the public trade price comes from public production, age and the going level at the position, not from the hidden overall (spec item 33). Edition 8.35 also moved the bargain-or-minimum test for free agents to each club's own view (spec item 34).
 
+## Coach judgement (Ed 8.36, 2026-10-25)
+- **Built:** game-day starters are chosen by the coaches' judged overall (true overall plus an error with no lean, shrinking with the player's seasons and with the head coach's game management and the coordinator's adjustments), fixed per staff, player and league year (`coaching.judged`, data keys `judge_*` in `COACHING.csv`; spec item 22 closed, item 35). The engine still reads true cards; only who dresses and starts changes. Still reading true ability: the all-star sides, `ledger.py` year-roll ranking, and the market-rating sort when no club asks.
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).
 2. Fairness bands and parity profiles, then the people layer, persistence and pacing, presentation (see ROADMAP).

@@ -44,6 +44,8 @@ The engine values every pass, run, scramble, sack, field goal and punt in expect
 
 Owner rulings 2026-10-24: the analytics definitions, Tiara to the Coronation winner, the GM negotiating rating's payroll lever.
 
+Owner ruling 2026-10-25 (Ed 8.36): a coach's judgement has the same potential for failure as for success. Starters follow `coaching.judged`: the true overall plus a zero-mean error, smaller with more seasons of evidence and a better head coach and coordinator.
+
 ## Owner decisions this layer needs
 1. The archetype list (a proposal will come with slice 5.2).
 2. The size cap on coach effects (default proposal: a head coach or coordinator moves any rating by at most one point).
