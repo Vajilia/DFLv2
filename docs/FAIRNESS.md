@@ -442,3 +442,7 @@ Six leagues, 36 seasons each (seeds 1 to 6), first 8 dropped; the run before it 
 Trade activity barely moved: trades 2,126 against 2,045 (36 seasons x 6 leagues), refusals 2,377 against 2,299, deals 64,773 against 65,004. Schedule push +0.015 per point (was +0.004), correlation -0.043; positive means stronger clubs face tougher schedules, so the direction is the intended one, but the league slopes now spread wider (-0.003 to -0.021).
 
 Public estimate accuracy over eight seasons (seed 3): correlation with true overall within a position 0.48, 0.41 and 0.34 after seasons 1, 3 and 8, against 0.72, 0.69 and 0.64 for a club's own scouting view.
+
+## Ed 8.35: clubs price free agents by their own view (2026-10-25), first run at recall threshold 25.5
+
+Six leagues, 36 seasons each, first 8 dropped. **12 PASS, 3 UNCLEAR, 0 FAIL** (unclear: `repeat_champion_rate` 0.089 ± 0.048, `best_team_title_odds` 0.226 ± 0.054, `exile_effect` 0.435 ± 0.345). The league became more even: win-percentage spread 0.195 (was 0.208 to 0.210, ceiling 0.21), now passing outright. Trades 2,312 (was 2,126), refusals 2,032 (was 2,377), deals 64,132 (was 64,773). Recalls fell to 341 in 216 league-seasons, 1.58 a year, because fewer clubs sink to the recall line when the league is more even; the threshold was raised from 25.5 to 26 and the leagues rerun (next section). Schedule push +0.022 per point, correlation -0.018, league slopes -0.028 to +0.026 (wide).
