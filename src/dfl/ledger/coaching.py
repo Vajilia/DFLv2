@@ -88,6 +88,7 @@ def hire(world, cid, post, exclude=()):
     world.pool_years.pop(best.identity.id, None)
     world.leaders[cid][post] = best
     world.stats["coach_hires"] = world.stats.get("coach_hires", 0) + 1
+    world.stats["hires_" + post] = world.stats.get("hires_" + post, 0) + 1          # one hire per vacancy: the post's turnover
     top_up(world)
     return best
 
