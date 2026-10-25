@@ -197,7 +197,7 @@ def turn_year(world):
                 world.creator.release_name(card)
                 del world.leaders[cid][role]
                 world.stats[role + "_retirements"] = world.stats.get(role + "_retirements", 0) + 1
-                world.gov_log.append({"year": L.year, "club": cid, "kind": role + "_retired", "id": card.identity.id})
+                world.gov_log.append({"year": L.year, "club": cid, "kind": role + "_retired", "id": card.identity.id, "age": card.age(L.year)})
     for role in ("ceo", "gm"):
         keep = []
         for card in pool(world, role):
