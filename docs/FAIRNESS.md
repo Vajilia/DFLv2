@@ -432,3 +432,13 @@ Six leagues, 36 seasons each (seeds 1 to 6), first 8 dropped. Settings: incumben
 | head coach / coordinators / GM | 25% / 32 to 34% / 21% (unchanged) |
 
 Accountability, term elections by the club's fan sentiment that year: sitting CEO lost 19% under 35, 7% at 35 to 45, 4% at 45 to 55, 1% above 55. The CEO is now the longest-tenured post (about 10 years against about 5 for a general manager and 4 for a head coach). Retirement runs high in this window because all founding CEOs are of similar age; it should settle lower in a longer league.
+
+## Ed 8.34: trades stage 2, the public trade price (2026-10-25)
+
+Six leagues, 36 seasons each (seeds 1 to 6), first 8 dropped; the run before it (Ed 8.33, same seeds) is the comparison.
+
+**Result: 11 PASS, 4 UNCLEAR, 0 FAIL.** Unclear: `win_pct_sd` (0.210 ± 0.002 against a ceiling of 0.21; 0.208 before), `repeat_champion_rate` (0.095 ± 0.035), `best_team_title_odds` (0.220 ± 0.072) and `exile_effect` (0.285 ± 0.574, too few exiles to decide). The first three straddle their limits on error bars alone; none was outside its limit in the last run except through noise, and the change touches trading, not games.
+
+Trade activity barely moved: trades 2,126 against 2,045 (36 seasons x 6 leagues), refusals 2,377 against 2,299, deals 64,773 against 65,004. Schedule push +0.015 per point (was +0.004), correlation -0.043; positive means stronger clubs face tougher schedules, so the direction is the intended one, but the league slopes now spread wider (-0.003 to -0.021).
+
+Public estimate accuracy over eight seasons (seed 3): correlation with true overall within a position 0.48, 0.41 and 0.34 after seasons 1, 3 and 8, against 0.72, 0.69 and 0.64 for a club's own scouting view.
