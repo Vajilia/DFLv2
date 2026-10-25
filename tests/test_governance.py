@@ -235,7 +235,7 @@ class FrontOffice(unittest.TestCase):
             if t >= 8:
                 fin.append(st.mean(d["ceo"].attrs["FIN"] for d in w.leaders.values()))
                 gm.append(st.mean(governance.coaching.fit(w, d["gm"], "gm") for d in w.leaders.values()))
-        self.assertLess(abs(st.mean(fin) - 60), 4.0)
+        self.assertLess(abs(st.mean(fin) - 60), 6.0)         # CEOs stay a long time and the weak are voted or recalled out, so a few points above the founders (Edition 8.33)
         self.assertLess(abs(st.mean(gm) - 60), 4.0)
 
 
