@@ -34,6 +34,20 @@ def fill(L, cid, spec=None, ovr=60, contract=None, slot="roster"):
     return out
 
 
+class SpecNumbers(unittest.TestCase):
+    """The rule constants are pinned to the numbers in the Design Document (sections 0 and 11), so a test written in terms of a
+    constant cannot follow a wrong constant (found by breaking each on purpose in the Phase 1 close)."""
+
+    def test_the_constants_are_the_documents_numbers(self):
+        self.assertEqual((R.CAP, R.RESERVE, R.MIN_SALARY, R.REQUIRED_PLACES), (1000, 25, 5, 48))
+        self.assertEqual((R.ROSTER_MAX, R.PS_MAX, R.PS_VETERANS_MAX, R.PS_VETERAN_AFTER), (53, 16, 6, 2))
+        self.assertEqual((R.IR_MIN_GAMES, R.IR_RETURNS_MAX), (4, 8))
+        self.assertEqual((R.ELEVATIONS_PER_GAME, R.ELEVATIONS_PER_PLAYER), (2, 3))
+        self.assertEqual((R.ACTIVE_LIMIT, R.ACTIVE_LIMIT_FEW_OL, R.OL_FOR_FULL), (48, 47, 8))
+        self.assertEqual((R.VESTED_SEASONS, R.POOL_YEARS_MAX, R.PRESEASON_CEILING, R.PAID_WEEKS), (4, 4, 90, 22))
+        self.assertEqual(R.VIABILITY_MAX_COMMITTED, 735)
+
+
 class ContractMath(unittest.TestCase):
     def test_rules_of_a_contract(self):
         with self.assertRaises(ContractError):
