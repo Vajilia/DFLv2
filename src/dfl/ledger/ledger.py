@@ -1,6 +1,6 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.36, sections 11, 12, 17)
+Principles (Design Document 8.37, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
   * Cap timing (Ed 8.9): the cap is enforced all year. Until the final cut a club's cap number counts only its 69 highest
@@ -54,7 +54,7 @@ class Player:
     elevations: int = 0
     ir_since: int = None
     prev_club: str = None          # club whose contract just expired (free-agent movement tracking)
-    snap_top: bool = False         # top quarter of her club's snaps last year (PLACEHOLDER: ranked by rating until the engine exists)
+    snap_top: bool = False         # top quarter of her club's snaps last year (PLACEHOLDER: ranked by her coaches' judged overall, Edition 8.37, until snaps are counted)
     number: int = None             # jersey number while with a club (Ed 8.15)
     last_club: str = None          # club and number she last held, so a same-club re-signing can take it back
     last_number: int = None
@@ -581,9 +581,14 @@ class Ledger:
         del self.players[pid]
         self.retired[reason] = self.retired.get(reason, 0) + 1
 
-    def new_year(self):
+    def new_year(self, rank=None):
         """League year rolls over. Contracts that have run out release their players to the free-agent pool; elevations and
         IR returns reset; old dead money drops off; nothing is banked."""
+        rank = rank or (lambda cid, p: p.ovr)       # how good her club thinks she is; without a club view, the true overall
+        tops = {}
+        for c in self.clubs.values():       # the club's top quarter by her coaches' judgement (Edition 8.37), taken before the year turns
+            ranked = sorted(c.all_pids(), key=lambda i: (-rank(c.cid, self.players[i]), i))
+            tops[c.cid] = set(ranked[:max(1, len(ranked) // 4)])
         self.year += 1
         self.week, self.phase = 0, "offseason"
         self.fa_moves = []
@@ -594,8 +599,7 @@ class Ledger:
                 if p.pool_years >= R.POOL_YEARS_MAX:
                     self.retire(pid, "pool")
         for c in self.clubs.values():
-            ranked = sorted(c.all_pids(), key=lambda i: (-self.players[i].ovr, i))
-            top = set(ranked[:max(1, len(ranked) // 4)])
+            top = tops[c.cid]
             for pid in list(c.all_pids()):
                 p = self.players[pid]
                 p.snap_top = pid in top

@@ -401,7 +401,7 @@ class World:
     def open_year(self, first=False):
         """Offseason opens: the league year turns, contracts expire, retirements take effect."""
         if not first:
-            self.L.new_year()
+            self.L.new_year(rank=lambda cid, p: coaching.judged(self, cid, p))
         self.age_and_retire(skip=first)
         rooms.prune(self)
         self.top_up_pool()

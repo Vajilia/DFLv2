@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.36.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.37.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -106,7 +106,8 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Built:** the public trade price comes from public production, age and the going level at the position, not from the hidden overall (spec item 33). Edition 8.35 also moved the bargain-or-minimum test for free agents to each club's own view (spec item 34).
 
 ## Coach judgement (Ed 8.36, 2026-10-25)
-- **Built:** game-day starters are chosen by the coaches' judged overall (true overall plus an error with no lean, shrinking with the player's seasons and with the head coach's game management and the coordinator's adjustments), fixed per staff, player and league year (`coaching.judged`, data keys `judge_*` in `COACHING.csv`; spec item 22 closed, item 35). The engine still reads true cards; only who dresses and starts changes. Still reading true ability: the all-star sides, `ledger.py` year-roll ranking, and the market-rating sort when no club asks.
+- **Built:** game-day starters are chosen by the coaches' judged overall (true overall plus an error with no lean, shrinking with the player's seasons and with the head coach's game management and the coordinator's adjustments), fixed per staff, player and league year (`coaching.judged`, data keys `judge_*` in `COACHING.csv`; spec item 22 closed, item 35). The engine still reads true cards; only who dresses and starts changes. Still reading true ability: the all-star sides, `ledger.py` year-roll ranking, and the market-rating sort when no club asks.- **Ed 8.37:** the year-end top-quarter ranking that feeds compensatory picks now follows the coaches' judged overall (`Ledger.new_year(rank=...)`, taken before the year turns; spec item 36). Only the all-star sides and the market-rating sort with no club asking still read true ability.
+
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).
 2. Fairness bands and parity profiles, then the people layer, persistence and pacing, presentation (see ROADMAP).

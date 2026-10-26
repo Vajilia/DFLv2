@@ -705,3 +705,26 @@ class CoachJudgement(unittest.TestCase):
             self.assertEqual(len(true.active), len(seen.active))
             differ += set(true.active) != set(seen.active)
         self.assertGreater(differ, 0)
+
+
+class SnapRanking(unittest.TestCase):
+    """The year-end top-quarter flag follows the club's coaches' judged overall (Edition 8.37)."""
+
+    def test_the_flag_follows_the_ranking_it_is_given(self):
+        w = World(CLUBS, seed=43)
+        w.open_year(first=True)
+        cid = sorted(w.L.clubs)[0]
+        pids = sorted(w.L.clubs[cid].all_pids())
+        low = pids[0]
+        w.L.new_year(rank=lambda c, p: 1000.0 if p.pid == low else 0.0)
+        self.assertTrue(w.L.players[low].snap_top)
+
+    def test_the_world_ranks_by_judgement_not_truth(self):
+        from dfl.ledger import coaching
+        w = World(CLUBS, seed=43)
+        w.open_year(first=True)
+        seen = []
+        orig = w.L.new_year
+        w.L.new_year = lambda rank=None: (seen.append(rank), orig(rank=rank))[1]
+        w.open_year()
+        self.assertTrue(seen and seen[0] is not None)
