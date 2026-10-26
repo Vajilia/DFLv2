@@ -51,6 +51,7 @@ class Squad:
         self.staff = staff or Staff()
         self.out = set()                 # ids injured in this game
         self.new_injuries = []           # (id, weeks)
+        self.ejected = []                # ids ejected in this game (two unsportsmanlike fouls, section 10)
         self._units = None
         self._rating = {}
 
@@ -87,6 +88,11 @@ class Squad:
     def injure(self, cid, weeks):
         self.out.add(cid)
         self.new_injuries.append((cid, weeks))
+        self._units = None
+
+    def eject(self, cid):
+        self.out.add(cid)
+        self.ejected.append(cid)
         self._units = None
 
     # ---- unit ratings (0-99 scale) and z-scores

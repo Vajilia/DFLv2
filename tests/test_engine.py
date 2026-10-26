@@ -86,17 +86,85 @@ class Rules(unittest.TestCase):
             self.assertTrue(1 <= down <= 5, row)
             self.assertGreaterEqual(t, -2)
 
-    def test_penalties_are_the_rulebook_ones(self):
+    def test_penalties_come_from_the_catalogue(self):
         names = {p["name"] for p in PENALTIES}
-        self.assertEqual(names, {"false start", "delay of game", "offside", "offensive holding", "defensive holding", "illegal contact",
-                                 "defensive pass interference", "offensive pass interference", "personal foul", "unsportsmanlike conduct"})
+        self.assertGreaterEqual(len(names), 40)
+        for base in ("false start", "delay of game", "offensive holding", "defensive holding", "illegal contact", "defensive pass interference",
+                     "offensive pass interference", "unsportsmanlike conduct", "roughing the passer", "intentional grounding"):
+            self.assertIn(base, names)                                       # the section 10 list is all there
         seen = set()
         for seed in range(80):
             for row in play(seed=seed, log=True).plays:
                 if row[6] == "penalty":
                     seen.add(row[7])
         self.assertTrue(seen <= names)
-        self.assertGreaterEqual(len(seen), 8)
+        self.assertGreaterEqual(len(seen), 25)
+
+    def test_catalogue_rows_are_well_formed(self):
+        for p in PENALTIES:
+            self.assertIn(p["side"], ("off", "def", "either"))
+            self.assertIn(p["when"], ("pre", "live", "pass", "kick"))
+            self.assertTrue(0 < p["rate"] < 0.1, p["name"])
+            self.assertGreater(p["nfl"], 0)
+            if p["when"] == "kick":
+                self.assertIn(p["effect"], ("replay_back", "replay_fwd", "rough", "ret_back", "cov_fwd", "oob"))
+                self.assertTrue(p["kinds"] and set(p["kinds"]) <= set("pfk"))
+            else:
+                self.assertEqual(p["effect"], "")
+
+    def test_penalty_counts_stay_near_the_nfl(self):
+        pens = yds = 0
+        n = 300
+        for seed in range(n):
+            r = play(h=f"C0{seed % 3}", a=f"C0{3 + seed % 3}", seed=seed)
+            pens += sum(s["penalties"] for s in r.stats)
+            yds += sum(s["pen_yds"] for s in r.stats)
+            self.assertEqual(sum(c for d in r.pen_types for c, _ in d.values()), sum(s["penalties"] for s in r.stats))
+        self.assertTrue(4.5 <= pens / n / 2 <= 7.5, pens / n / 2)
+        self.assertTrue(40 <= yds / n / 2 <= 65, yds / n / 2)
+
+    def test_two_minute_warning_stops_the_clock_at_two_minutes(self):
+        warned = 0
+        for seed in range(60):
+            r = play(seed=seed, log=True)
+            rows = [row for row in r.plays if row[6] == "two-minute warning"]
+            periods = [row[0] for row in rows]
+            self.assertEqual(len(periods), len(set(periods)))               # at most once a period
+            self.assertTrue(set(periods) <= {2, 4})                         # second and fourth quarters only, never overtime
+            for row in rows:
+                self.assertEqual(row[1], 120)
+            warned += len(rows)
+        self.assertGreater(warned, 90)
+
+    def test_a_second_unsportsmanlike_foul_ejects_the_player(self):
+        from dfl.engine.game import Game
+        g = Game(squad("C00"), squad("C01"), random.Random(1), log=True)
+        pen = next(p for p in PENALTIES if p["name"] == "unsportsmanlike conduct")
+        u = g.sq[0].units()
+        card = u["off"][3]
+        g.charge(0, dict(pen, side="off"), 15, card)
+        self.assertNotIn(card.identity.id, g.sq[0].out)
+        g.charge(0, dict(pen, side="off"), 15, card)
+        self.assertIn(card.identity.id, g.sq[0].out)
+        self.assertEqual(g.sq[0].ejected, [card.identity.id])
+        self.assertNotIn(card.identity.id, {c.identity.id for c in g.sq[0].units()["off"]})   # she is replaced on the field
+
+    def test_loss_of_down_and_half_the_distance(self):
+        from dfl.engine.game import Game
+        g = Game(squad("C00"), squad("C01"), random.Random(1), log=True)
+        g.poss, g.yl, g.down, g.dist = 0, 40, 2, 10
+        pen = dict(next(p for p in PENALTIES if p["name"] == "intentional grounding"), side="off")
+        g.assess(0, pen, 12)
+        self.assertEqual((g.yl, g.down, g.dist), (28, 3, 22))                # ten yards or the spot, and the down is lost
+        g.yl, g.down, g.dist = 6, 4, 8
+        g.assess(0, pen, 12)
+        self.assertEqual(g.yl, 3)                                            # half the distance to the goal
+        self.assertEqual(g.next[:2], ("ball", 1))                            # a lost fourth down is a turnover on downs
+        g = Game(squad("C00"), squad("C01"), random.Random(1), log=True)
+        g.poss, g.yl, g.down, g.dist = 0, 96, 2, 4
+        dpi = dict(next(p for p in PENALTIES if p["name"] == "defensive pass interference"), side="def")
+        g.assess(0, dpi, 30)
+        self.assertEqual((g.yl, g.down, g.dist), (99, 1, 1))                 # a spot foul in the end zone puts the ball on the one
 
     def test_kickoffs_follow_the_rulebook(self):
         r = play(seed=9, log=True)
@@ -116,7 +184,7 @@ class Model(unittest.TestCase):
             h, a = squad("C00"), squad("C01")
             r = play_game(h, a, random.Random(seed), False, True)
             for sq in (h, a):
-                self.assertEqual({i for i, _ in sq.new_injuries}, sq.out)
+                self.assertEqual({i for i, _ in sq.new_injuries} | set(sq.ejected), sq.out)
             if r.injuries["C00"] or r.injuries["C01"]:
                 found = True
                 self.assertTrue(all(1 <= w <= 30 for lst in r.injuries.values() for _, w in lst))

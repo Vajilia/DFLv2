@@ -1,0 +1,21 @@
+# Implementation coverage register (Design Document section 10)
+
+Authority: Design Document Ed 8.46, section 10: "Uncommon penalties may be implemented partially; gaps are recorded in an implementation coverage register." This is that register. It lists, for the game engine, what the rules say, what is built, and what is knowingly left out. Update it in the same edition as any engine change.
+
+## Penalties (Edition 8.46)
+The catalogue is `data/engine/PENALTIES.csv`: 46 fouls, each with the side that commits it, when it can happen (before the snap, any scrimmage play, pass plays only, kicking plays), its yardage, whether it gives an automatic first down or costs the down, and the position groups of the player who commits it. Draw rates are calibrated by `tools/calibrate_penalties.py` to the NFL's accepted penalties per game by type in 2023 (Pro Football Reference, 272 games, 3,109 accepted fouls): over 2,500 games the engine gives 5.94 per team per game (NFL 5.94) and 50 yards (NFL 49).
+
+Built: false start, delay of game, illegal formation, illegal shift, illegal motion, too many men (both sides), offside (both sides), neutral zone infraction, encroachment, offensive and defensive holding, illegal contact, defensive and offensive pass interference, illegal use of hands (both sides), illegal block above the waist, blindside block, chop block, other illegal blocks (low block, clipping, crackback, leaping, peelback, leverage, double-team), tripping, face mask (both sides), unnecessary roughness (both sides), horse collar, personal foul, unsportsmanlike conduct, taunting, roughing the passer, intentional grounding, ineligible player downfield, illegal forward pass, and on kicking plays: holding and blocks in the back on returns, roughing and running into the kicker, offside on a kick, fair catch and kick catch interference, ineligible downfield on a kick, illegal touch of a kick, out of bounds on a kick.
+
+Enforcement built: dead-ball fouls from the previous spot with the down replayed; live-ball fouls accepted or declined by the side they do not hurt, by comparing the foul with the play's result; half the distance to the goal; spot fouls (pass interference) to the one-yard line; loss of down (intentional grounding, illegal forward pass); automatic first downs; fouls after the play (face mask, unnecessary roughness, horse collar, roughing the passer, personal fouls) added to where the play ended; ejection for a second unsportsmanlike foul; kicking-play fouls that replay the kick, move the receiving team's starting spot or give the kicking team a first down.
+
+Left out on purpose (fewer than about two a season in the NFL, or not distinguishable in a play-level engine): illegal substitution, illegal bat, illegal kick or kicking a loose ball, kick-out-of-bounds by the receiving team, delay of kickoff, illegal touch of a forward pass. Disqualification other than for two unsportsmanlike fouls is not modeled. Offsetting fouls are not modeled: at most one foul is flagged on a snap. A foul after a scoring play is dropped rather than enforced on the try or the kickoff. Fouls on tries (extra points and two-point attempts) are not modeled.
+
+## Clock and administration
+- Built: 15-minute quarters, 40-second play clock, 25 seconds after stoppages (modeled as a shorter gap after a first down), three timeouts a half, first downs stop the clock briefly, no coin toss, overtime periods, two-minute warning (Edition 8.46).
+- Two-minute warning: not in section 10; added in Edition 8.46 by the owner's rule that unspecified rules follow the NFL. At the first time the clock passes 2:00 in the second or fourth quarter it stops at 2:00 and no timeout is charged. Not given in overtime.
+- Not built: challenges and replay (Edition 8.5x), the officials' error model that feeds them.
+
+## Plays and players
+- Built (play-level): runs, passes, sacks, scrambles, interceptions, fumbles, punts, field goals, kickoffs, onside kicks, extra points, two-point tries, kneel-downs, injuries.
+- Not built until the spatial engine (see `docs/ENGINE.md`): formations, personnel groupings, blocking, coverage, ball flight, fatigue and substitution, returns as plays on the field.

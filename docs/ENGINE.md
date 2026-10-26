@@ -1,9 +1,9 @@
-# Game engine (Phase 3, slice 1)
+# Game engine (Phase 3)
 
-Authority: Design Document Ed 8.16, section 10 (rules) and 17 (determinism). Code in `src/dfl/engine/`, parameters in `data/engine/`, tests in `tests/test_engine.py`, calibration in `tools/calibrate_engine.py`.
+Authority: Design Document Ed 8.46, section 10 (rules) and 17 (determinism). Code in `src/dfl/engine/`, parameters in `data/engine/`, tests in `tests/test_engine.py`, calibration in `tools/calibrate_engine.py`.
 
 ## What it is
-A **play-level** engine. The rules core is exact to section 10 (four 15-minute quarters, 40-second play clock, three timeouts a half, no coin toss, kickoffs from the 35 with touchbacks to the 25, free kick after a safety, scoring, the ten rulebook penalties, overtime of one 10-minute period with a possession for each side and a defensive score ending it, successive 15-minute periods in the postseason). How a play *turns out* is a statistical model driven by the hidden attributes of the 22 players on the field. It is **not** the spatial engine of section 10 (positions, routes, ball flight); that replaces the play resolver later behind the same interface, and the calibration bands below are what it must keep meeting.
+A **play-level** engine. The rules core is exact to section 10 (four 15-minute quarters, 40-second play clock, three timeouts a half, no coin toss, kickoffs from the 35 with touchbacks to the 25, free kick after a safety, scoring, the 46-foul penalty catalogue (Edition 8.46), the two-minute warning, overtime of one 10-minute period with a possession for each side and a defensive score ending it, successive 15-minute periods in the postseason). How a play *turns out* is a statistical model driven by the hidden attributes of the 22 players on the field. It is **not** the spatial engine of section 10 (positions, routes, ball flight); that replaces the play resolver later behind the same interface, and the calibration bands below are what it must keep meeting.
 
 Players come from character cards (`dfl.characters`). A `Squad` picks the best available player at each position (4-3 defense; QB, HB, TE, 3 WR, 5 OL), turns their attributes into unit ratings (quarterback, pass protection, receivers, back, run blocking, pass rush, coverage, run defense, kicker, punter), and the play model reads the matchups as z-scores against a league baseline stored in `PARAMS.csv`. Coaches (OC, DC, head coach) add a small capped effect. Nothing hidden leaves the engine: the result carries stats and a play log only.
 
@@ -12,7 +12,9 @@ Players come from character cards (`dfl.characters`). A `Squad` picks the best a
 - Fourth down: punt, field goal (about 55 yards, kicker-dependent) or go; going more often when trailing late.
 - Extra point by default; a two-point try when down 2 after the touchdown, and sometimes late when down 5, 8 or up 1. No tries in overtime.
 - A first down briefly stops the clock (section 10); the model gives the next snap 26-34 s instead of 30-40 s.
-- Penalties: accept or decline by whichever is better for the other side; offensive penalties repeat the down; half-the-distance rule near the goal.
+- Penalties (Edition 8.46): 46 fouls from `data/engine/PENALTIES.csv`, rates fitted to the NFL's 2023 accepted counts by type (`tools/calibrate_penalties.py`; 5.94 a team a game, 50 yards). A live-ball foul is accepted or declined by whichever side it does not hurt; dead-ball fouls repeat the down; fouls after the play (face mask, unnecessary roughness, roughing the passer) are added to where the play ended; intentional grounding costs the down; the half-the-distance rule near the goal; each foul is charged to a player (position-weighted draw) and a second unsportsmanlike foul ejects her. Kicking-play fouls move the receiving team's spot, replay the kick or give a first down. What is left out is in `docs/ENGINE_COVERAGE.md`.
+- Between-play delays moved one second longer in Edition 8.46 (31 to 41 seconds, 27 to 35 after a first down) because the extra dead-ball fouls squeezed plays per team to the top of its band (68.0 against 60 to 68); they are now 66.8.
+- Two-minute warning: the clock stops at 2:00 in the second and fourth quarters, no timeout charged (the NFL's rule; section 10 is silent).
 - Overtime possession guarantee applies in each postseason period (the spec's wording is "the same possession guarantee").
 - Timeouts: taken late in a half by a side that is behind (or the tied side at the end of the first half).
 - Injuries: a small per-snap rate weighted by durability; injured players are out for the rest of the game; weeks are drawn from a table. A short position is filled by the best leftover player (the out-of-position penalty is still open).

@@ -13,9 +13,25 @@ from . import production
 from .params import P, PENALTIES, RULE_VERSION
 
 QUARTER = 900
+TWO_MINUTE = 120
 OT_REGULAR = 600
 OT_POST = 900
 INJURY_WEEKS = ((1, 55), (2, 12), (3, 8), (4, 6), (6, 6), (8, 5), (12, 5), (18, 2), (30, 1))
+
+
+GROUPS = {"OL": ("LT", "LG", "C", "RG", "RT"), "WR": ("WR",), "TE": ("TE",), "HB": ("HB", "FB"), "QB": ("QB",),
+          "DL": ("LE", "RE", "DT"), "LB": ("ROLB", "MLB", "LOLB"), "DB": ("CB", "FS", "SS")}
+PEN_PRE = [p for p in PENALTIES if p["when"] == "pre"]
+PEN_RUN = [p for p in PENALTIES if p["when"] == "live"]
+PEN_PASS = [p for p in PENALTIES if p["when"] in ("live", "pass")]
+PEN_KICK = [p for p in PENALTIES if p["when"] == "kick"]
+UNSPORTSMANLIKE = ("unsportsmanlike conduct", "taunting")           # two of these eject a player (section 10)
+# fouls that need a pass thrown at someone, and the plays they can ride on
+NEEDS_TARGET = ("defensive pass interference", "offensive pass interference", "illegal contact", "ineligible downfield pass",
+                "illegal forward pass")
+# dead-ball and after-the-play fouls: the play stands and the yards are added to where it ended
+AFTER_PLAY = ("face mask, defense", "face mask, offense", "unnecessary roughness, defense", "unnecessary roughness, offense", "horse collar tackle",
+              "roughing the passer", "personal foul", "unsportsmanlike conduct", "taunting")
 
 
 def clamp(x, lo, hi):
@@ -43,6 +59,7 @@ class GameResult:
     team_production: list = field(default_factory=list)
     production: dict = field(default_factory=dict)      # card id -> {play type: [opportunities, EPA, WPA]} (Edition 8.30)
     fit: list = field(default_factory=list)             # (offence, yard line, down, distance, points scored, half) per play (Edition 8.32)
+    pen_types: list = field(default_factory=list)       # per team: penalty name -> [accepted, yards] (Edition 8.46)
 
 
 def new_stats():
@@ -73,6 +90,9 @@ class Game:
         self.ot = None                       # overtime bookkeeping
         self.next = None
         self.winner_now = None
+        self.pen_by = [{}, {}]               # per team: penalty name -> [accepted, yards]
+        self.uns = {}                        # unsportsmanlike fouls per player; the second ejects her
+        self.warned = set()                  # periods whose two-minute warning has been given
 
     # ------------------------------------------------------------ helpers
     def other(self, k):
@@ -101,6 +121,14 @@ class Game:
         """Run the clock. Quarters 1 and 3 roll over here. The end of a half, of regulation or of an overtime period sets
         `period_end`; the drive stops after the current play and `run` applies the transition."""
         if self.period_end:
+            return
+        if self.ot is None and self.period in (2, 4) and self.period not in self.warned and self.t > TWO_MINUTE >= self.t - secs:
+            secs = self.t - TWO_MINUTE                     # the two-minute warning stops the clock at 2:00 (no timeout is charged)
+            self.warned.add(self.period)
+            if team_with_ball is not None:
+                self.st[team_with_ball]["top"] += secs
+            self.t = TWO_MINUTE
+            self.record("two-minute warning")
             return
         if team_with_ball is not None:
             self.st[team_with_ball]["top"] += min(secs, max(self.t, 0))
@@ -183,7 +211,8 @@ class Game:
         win = None if tie else (h.cid if self.score[0] > self.score[1] else a.cid)
         inj = {h.cid: list(h.new_injuries), a.cid: list(a.new_injuries)}
         return GameResult(h.cid, a.cid, (self.score[0], self.score[1]), self.period, tie, win,
-                          [self.st[0], self.st[1]], self.pl, inj, self.log or [], production=self.prod, team_production=self.team, fit=self.fit)
+                          [self.st[0], self.st[1]], self.pl, inj, self.log or [], production=self.prod, team_production=self.team, fit=self.fit,
+                          pen_types=self.pen_by)
 
     # ------------------------------------------------------------ kicking
     def kickoff(self, kicker, free_kick=False):
@@ -200,12 +229,20 @@ class Game:
                 self.record("onside", "failed")
             self.tick(rng.uniform(4, 8))
             return
+        flag = self.kick_flag("k")
+        returned = False
         if free_kick:
             start = int(clamp(rng.gauss(36, 7), 15, 60))
+            returned = True
         elif rng.random() < P["kickoff_touchback"]:
             start = 25
         else:
             start = int(clamp(rng.gauss(P["kickoff_return_mean"], 6), 8, 55))
+            returned = True
+        if flag:
+            if flag["effect"] in ("replay_back", "oob") or returned:       # a foul before the kick, or one on the return or coverage
+                start = self.kick_spot(kicker, flag, start)
+        if returned and not free_kick:
             if rng.random() < 0.006:
                 self.record("kickoff", "return touchdown")
                 self.poss = recv
@@ -226,7 +263,9 @@ class Game:
                 act = self.fourth_down()
                 if act in ("punt", "fg"):
                     pre = production.State(self, k)
-                    self.punt() if act == "punt" else self.field_goal()
+                    done = self.punt() if act == "punt" else self.field_goal()
+                    if not done:
+                        continue                                        # a foul nullified the kick: the drive goes on
                     production.credit_kick(self, k, pre, act)
                     break
             self.snap()
@@ -260,8 +299,13 @@ class Game:
         return "punt"
 
     def punt(self):
+        """True when the punt was made; False when a foul sent it back or gave the kicking team a first down (the drive goes on)."""
         k, rng = self.poss, self.rng
         o = self.other(k)
+        flag = self.kick_flag("p")
+        if flag and flag["effect"] in ("replay_back", "replay_fwd", "rough"):
+            self.kick_replay(k, flag)
+            return False
         u = self.sq[k].units()
         self.st[k]["punts"] += 1
         dist = clamp(rng.gauss(P["punt_mean"] + 2.0 * u["z"]["punt"], P["punt_sd"]), 20, 72)
@@ -272,14 +316,21 @@ class Game:
             self.next = ("ball", o, 20)
         else:
             ret = max(0, round(rng.gauss(P["punt_return_mean"], 5)))
-            spot = 100 - land + ret
-            self.next = ("ball", o, int(clamp(spot, 1, 99)))
+            spot = int(clamp(100 - land + ret, 1, 99))
+            if flag:                                    # a foul in the coverage or on the return moves the receiving team's spot
+                spot = self.kick_spot(k, flag, spot)
+            self.next = ("ball", o, spot)
         self.tick(elapsed + 3, None)
         self.poss = k
+        return True
 
     def field_goal(self):
         k, rng = self.poss, self.rng
         o = self.other(k)
+        flag = self.kick_flag("f")
+        if flag and flag["effect"] in ("replay_back", "replay_fwd", "rough"):
+            self.kick_replay(k, flag)
+            return False
         dist = 100 - self.yl + 17
         z = self.sq[k].units()["z"]["kick"]
         p = 0.99 / (1 + math.exp((dist - (P["fg_mid"] + 1.5 * z)) / P["fg_scale"]))
@@ -295,6 +346,7 @@ class Game:
             self.record("field goal", "missed", dist)
             self.next = ("ball", o, int(clamp(100 - (self.yl - 7), 20, 99)))
         self.tick(elapsed + 3, None)
+        return True
 
     # ------------------------------------------------------------ scoring
     def score_td(self, k, defensive=False):
@@ -389,13 +441,13 @@ class Game:
         is_pass = rng.random() < self.pass_prob(k)
         self.last_is_pass = is_pass
         # pre-snap penalties
-        pen = self.draw_penalty("pre", is_pass)
+        pen = self.draw_penalty(PEN_PRE, "pre")
         if pen:
             self.apply_dead_ball_penalty(k, pen)
             return
         pre = production.State(self, k)
         outcome = self.resolve_pass(k, uo, ud) if is_pass else self.resolve_run(k, uo, ud)
-        live = self.draw_penalty("pass" if is_pass else "live", is_pass)
+        live = self.draw_penalty(PEN_PASS if is_pass else PEN_RUN, "live")
         if live:
             if self.apply_live_penalty(k, live, outcome):
                 return
@@ -467,18 +519,12 @@ class Game:
         return cands[0]
 
     # ------------------------------------------------------------ penalties
-    def draw_penalty(self, when, is_pass):
+    def draw_penalty(self, cands, phase):
+        """At most one foul on a snap, drawn from the catalogue rows that can happen in this phase (`cands`)."""
         rng = self.rng
         u = rng.random()
         acc = 0.0
-        for pen in PENALTIES:
-            ok = pen["when"] == when or (when == "pass" and pen["when"] == "live") or (when == "live" and pen["when"] == "live")
-            if when == "pre" and pen["when"] != "pre":
-                ok = False
-            if not ok:
-                continue
-            if pen["when"] == "pass" and not is_pass:
-                continue
+        for pen in cands:
             acc += pen["rate"]
             if u < acc:
                 side = pen["side"]
@@ -488,56 +534,197 @@ class Game:
         return None
 
     def penalty_yards(self, pen, k):
-        if pen["yards"] == "spot":
-            return int(clamp(round(rng_gauss(self.rng, 13, 8)), 1, 60))
-        return pen["yards"]
+        y = pen["yards"]
+        if isinstance(y, tuple):
+            _, mean, sd = y
+            if pen["loss_down"]:
+                return int(clamp(round(rng_gauss(self.rng, mean, sd)), 10, 40))     # grounding: 10 yards or the spot, whichever is more
+            return int(clamp(round(gamma_yards(self.rng, mean, sd)), 1, 60))
+        return y
+
+    def culprit(self, team, pen, unit=None):
+        """The player who committed the foul: drawn from her side's players on the field by the position groups of the foul."""
+        sq = self.sq[team]
+        if unit is None:
+            u = sq.units()
+            unit = u["off"] if team == self.poss else u["def"]
+        groups = []
+        for g, w in pen["who"]:
+            cs = [c for c in unit if g in ("ANYOFF", "ANYDEF", "ANY") or c.identity.pos in GROUPS.get(g, ())]
+            if cs:
+                groups.append((w, cs))
+        if not groups:
+            groups = [(1.0, list(unit))]
+        r = self.rng.random() * sum(w for w, _ in groups)
+        for w, cs in groups:
+            r -= w
+            if r <= 0:
+                return self.rng.choice(cs)
+        return self.rng.choice(groups[-1][1])
+
+    def kick_unit(self, team):
+        sq = self.sq[team]
+        return [c for c in sq.cards.values() if c.identity.id not in sq.out]
+
+    def charge(self, team, pen, yards, card=None):
+        """Book an accepted foul against its team and player; a second unsportsmanlike foul ejects her."""
+        st = self.st[team]
+        st["penalties"] += 1
+        st["pen_yds"] += yards
+        d = self.pen_by[team].setdefault(pen["name"], [0, 0])
+        d[0] += 1
+        d[1] += yards
+        if card is None:
+            return
+        self.pstat(card, "pen")
+        self.pstat(card, "pen_yds", yards)
+        if pen["name"] in UNSPORTSMANLIKE:
+            n = self.uns[card.identity.id] = self.uns.get(card.identity.id, 0) + 1
+            if n >= 2:
+                self.sq[team].eject(card.identity.id)
+                self.record("ejection", card.identity.id)
 
     def apply_dead_ball_penalty(self, k, pen):
         yards = self.penalty_yards(pen, k)
-        self.assess(k, pen, yards, replay=True)
+        team = k if pen["side"] == "off" else self.other(k)
+        self.assess(k, pen, yards, self.culprit(team, pen))
         self.tick(self.rng.uniform(2, 5), None)
 
-    def assess(self, k, pen, yards, replay=True):
+    def assess(self, k, pen, yards, card=None):
+        """Enforce an accepted foul from the previous spot: the down is replayed (or lost, for a foul that costs the down);
+        a defensive foul can give the offense a first down. Half the distance to the goal, never more."""
         o = self.other(k)
         team = k if pen["side"] == "off" else o
-        self.st[team]["penalties"] += 1
-        self.st[team]["pen_yds"] += yards
+        spot = isinstance(pen["yards"], tuple) and not pen["loss_down"]
         if pen["side"] == "off":
-            yards = min(yards, self.yl // 2 if self.yl > 1 else 0) if self.yl - yards < 1 else yards
+            if self.yl - yards < 1:
+                yards = self.yl // 2
+            self.charge(team, pen, yards, card)
             self.yl -= yards
             self.dist += yards
             if self.yl <= 0:
                 self.yl = 1
-        else:
-            yards = min(yards, (100 - self.yl) // 2) if self.yl + yards >= 100 else yards
-            yards = max(yards, 1) if 100 - self.yl > 1 else 0
-            self.yl += yards
-            if pen["auto_first"] or yards >= self.dist:
-                self.down, self.dist = 1, min(10, 100 - self.yl)
-                self.st[k]["first_downs"] += 1
-                self.record("penalty", pen["name"], yards, "first down")
-                return
-            self.dist -= yards
-        self.record("penalty", pen["name"], yards)
+            self.record("penalty", pen["name"], yards, card.identity.id if card else None)
+            if pen["loss_down"]:
+                self.down += 1
+                if self.down > 4:
+                    self.next = ("ball", o, int(clamp(100 - self.yl, 1, 99)))
+            return
+        if self.yl + yards >= 100:
+            yards = max(0, 99 - self.yl) if spot else (100 - self.yl) // 2
+        self.charge(team, pen, yards, card)
+        self.yl += yards
+        if pen["auto_first"] or yards >= self.dist:
+            self.down, self.dist = 1, min(10, 100 - self.yl)
+            self.st[k]["first_downs"] += 1
+            self.record("penalty", pen["name"], yards, card.identity.id if card else None, "first down")
+            return
+        self.dist -= yards
+        self.record("penalty", pen["name"], yards, card.identity.id if card else None)
+
+    def penalty_applies(self, pen, outcome):
+        kind = outcome["kind"]
+        n = pen["name"]
+        if n in ("defensive pass interference", "offensive pass interference", "illegal contact", "ineligible downfield pass"):
+            return kind in ("complete", "incomplete", "int")
+        if n == "illegal forward pass":
+            return kind == "incomplete"
+        if n == "intentional grounding":
+            return kind in ("incomplete", "sack")
+        return True
 
     def apply_live_penalty(self, k, pen, outcome):
-        """True if the penalty is accepted (the play is replayed with the penalty applied); False if declined (the play stands)."""
+        """True if the foul is accepted and the play is void (replayed with the foul applied). False if it is declined, or if it is
+        added after the play: then the yards ride on `outcome` (`pen_yds`, `auto_first`) and the play's own result stands."""
+        if not self.penalty_applies(pen, outcome):
+            return False
+        o = self.other(k)
         yards = self.penalty_yards(pen, k)
         gain = outcome["yards"]
+        team = k if pen["side"] == "off" else o
+        card = self.culprit(team, pen)
+        scores = self.yl + gain >= 100 and outcome["turnover"] is None and outcome["kind"] in ("run", "scramble", "complete")
+        if pen["name"] in AFTER_PLAY and pen["side"] == "off" or pen["name"] in AFTER_PLAY and not outcome["turnover"]:
+            if scores or (pen["side"] == "off" and outcome["turnover"]):
+                return False                                        # enforced on the try or the kickoff; the engine does not model that
+            end = self.yl + gain
+            if pen["side"] == "off":
+                yards = min(yards, max(0, end // 2))
+                outcome["pen_yds"] = -yards
+            else:
+                yards = min(yards, max(0, (100 - end) // 2))
+                outcome["pen_yds"] = yards
+                outcome["auto_first"] = pen["auto_first"]
+            self.charge(team, pen, yards, card)
+            outcome["pen"] = True
+            self.record("penalty", pen["name"], yards, card.identity.id, "after the play")
+            return False
         if pen["side"] == "off":
-            # the defense takes the penalty unless the play was better for it
-            if outcome["turnover"] or gain <= -yards:
+            # the defense takes the foul unless the play was worse for the offense
+            if outcome["turnover"] or gain <= -(yards + (3 if pen["loss_down"] else 0)):
                 return False
-            self.assess(k, pen, yards)
-            self.tick(self.rng.uniform(3, 6), None)
+            self.assess(k, pen, yards, card)
+            self.tick(self.rng.uniform(6, 10), None)                # the play was run, then the flag is administered
             return True
         value = yards + (self.dist * 0.5 if pen["auto_first"] else 0)
         play_value = gain + (4 if gain >= self.dist else 0)
         if outcome["turnover"] or value > play_value:
-            self.assess(k, pen, yards)
-            self.tick(self.rng.uniform(3, 6), None)
+            self.assess(k, pen, yards, card)
+            self.tick(self.rng.uniform(6, 10), None)
             return True
         return False
+
+    # ---- fouls on kicking plays (effects: replay_back, replay_fwd, rough, ret_back, cov_fwd, oob)
+    def kick_flag(self, kind):
+        u = self.rng.random()
+        acc = 0.0
+        for pen in PEN_KICK:
+            if kind in pen["kinds"]:
+                acc += pen["rate"]
+                if u < acc:
+                    return pen
+        return None
+
+    def kick_replay(self, k, pen):
+        """A foul that sends the kick back: the kicking team's (5 yards back, replay), the receiving team's before or at the kick
+        (5 forward, replay) or on the kicker (15 and a first down). Returns after moving the ball; the caller replays."""
+        o = self.other(k)
+        team = k if pen["side"] == "off" else o
+        yards = pen["yards"]
+        card = self.culprit(team, pen, self.kick_unit(team))
+        if pen["effect"] == "replay_back":
+            yards = min(yards, self.yl // 2)
+            self.yl -= yards
+            self.dist += yards
+        else:
+            yards = min(yards, (100 - self.yl) // 2)
+            self.yl += yards
+            if pen["effect"] == "rough" or yards >= self.dist:
+                self.down, self.dist = 1, min(10, 100 - self.yl)
+                self.st[k]["first_downs"] += 1
+            else:
+                self.dist -= yards
+        self.charge(team, pen, yards, card)
+        self.record("penalty", pen["name"], yards, card.identity.id, "kick")
+        self.tick(self.rng.uniform(3, 6), None)
+
+    def kick_spot(self, k, pen, spot):
+        """A foul during the return or the coverage moves the receiving team's starting spot."""
+        o = self.other(k)
+        team = k if pen["side"] == "off" else o
+        card = self.culprit(team, pen, self.kick_unit(team))
+        yards = pen["yards"]
+        if pen["effect"] == "ret_back":
+            yards = min(yards, max(0, spot // 2))
+            spot -= yards
+        elif pen["effect"] == "cov_fwd":
+            yards = min(yards, max(0, (100 - spot) // 2))
+            spot += yards
+        elif pen["effect"] == "oob":                                # the receiving team takes the ball at the 40
+            spot = 40                                               # (replay_back fouls only cost the yardage booked)
+        self.charge(team, pen, yards, card)
+        self.record("penalty", pen["name"], yards, card.identity.id, "kick")
+        return int(clamp(spot, 1, 99))
 
     # ------------------------------------------------------------ completing a play
     def play_result_kneel(self, k):
@@ -630,10 +817,11 @@ class Game:
             self.tick(rng.uniform(4, 7), k)
             self.safety(self.other(k))
             return
-        self.yl = new_yl
-        stop = kind == "incomplete" or o["oob"]
-        made = yards >= self.dist
-        self.advance_after(k, yards, stop, first=made)
+        pen_yds = o.get("pen_yds", 0)
+        self.yl = new_yl + pen_yds
+        stop = kind == "incomplete" or o["oob"] or bool(o.get("pen"))
+        made = yards >= self.dist or bool(o.get("auto_first"))
+        self.advance_after(k, yards + pen_yds, stop, first=made)
 
     def advance_after(self, k, yards, stop, first=False, kneel=False):
         """Update downs, run the clock for the play and the time before the next snap, manage timeouts."""

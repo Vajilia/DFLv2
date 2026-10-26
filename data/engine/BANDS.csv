@@ -10,7 +10,7 @@ rush_att,24,30,rushes per team (includes scrambles)
 ypc,4.0,4.8,yards per rush
 fumbles_lost,0.35,0.7,fumbles lost per team
 third_pct,0.36,0.44,third-down conversion rate
-penalties,4.5,7.5,accepted penalties per team (the engine models the ten rulebook penalties only)
+penalties,4.5,7.5,accepted penalties per team (46 fouls at the NFL's 2023 rates by type, Edition 8.46)
 pen_yds,40,65,penalty yards per team
 punts,3.4,5.0,punts per team
 fg_att,1.4,2.3,field-goal attempts per team

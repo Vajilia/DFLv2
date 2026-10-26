@@ -42,12 +42,12 @@ big_play_run,0.035,chance of a long run
 # --- clock
 play_time_run,5.5,seconds
 play_time_pass,5.0,seconds
-delay_normal_lo,30,between-play seconds when the clock runs (lo)
-delay_normal_hi,40,between-play seconds when the clock runs (hi)
+delay_normal_lo,31,between-play seconds when the clock runs (lo)
+delay_normal_hi,41,between-play seconds when the clock runs (hi)
 delay_hurry_lo,10,hurry-up (lo)
 delay_hurry_hi,18,hurry-up (hi)
-delay_chains_lo,26,after a first down the clock is stopped to reset the chains (lo)
-delay_chains_hi,34,after a first down (hi)
+delay_chains_lo,27,after a first down the clock is stopped to reset the chains (lo)
+delay_chains_hi,35,after a first down (hi)
 oob_run,0.11,run out of bounds
 oob_pass,0.17,completion out of bounds
 oob_hurry_mult,2.5,out-of-bounds multiplier in a hurry-up
