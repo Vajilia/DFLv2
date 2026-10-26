@@ -130,6 +130,8 @@ class Creator:
         curve = t.age_curve
         delta = max(min(age - peak, max(curve)), min(curve))
         mult = curve[delta]
+        if delta > 0 and mult < 1:
+            mult = max(0.3, 1 - P["decline"] * (1 - mult))          # a position's own rate of decline (Edition 8.38)
         attrs = {}
         for a, mean, sd, load, _ in t.profile[pos]:
             v = mean + sd * (load * g + math.sqrt(1 - load * load) * rng.gauss(0, 1))

@@ -14,3 +14,6 @@ retire_floor_overall,48,"Below this true overall a free agent past her peak may 
 retire_floor_p,0.35,"Chance per year when below the floor"
 retire_hard_age,40,"A free agent this old retires"
 heal_offseason_weeks,26,"Weeks of injury that heal between seasons"
+retire_c_age_start,24,"Age at which a player under contract may retire (Edition 8.38)"
+retire_c_p_base,0.02,"Chance per year at that age, before the position's decline rate"
+retire_c_p_step,0.014,"Added for each further year of age"

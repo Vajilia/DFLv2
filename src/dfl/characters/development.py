@@ -16,9 +16,12 @@ import math
 from .creator import clip
 
 
-def curve(tables, delta):
+def curve(tables, delta, decline=1.0):
+    """The age multiplier at `delta` years from a player's own peak. `decline` (a position's, Edition 8.38) stretches how far it falls
+    below 1 after the peak: a running back falls faster than a long snapper. Before the peak it is unchanged."""
     c = tables.age_curve
-    return c[max(min(delta, max(c)), min(c))]
+    m = c[max(min(delta, max(c)), min(c))]
+    return max(0.3, 1 - decline * (1 - m)) if delta > 0 and m < 1 else m
 
 
 def kind_of(tables, attr):
@@ -34,7 +37,8 @@ def develop(card, year, rng, tables, coach=0.0):
     before = card.true_overall(tables)
     age = card.age(year)
     peak = card.growth["peak_age"]
-    ratio = curve(tables, age - peak) / curve(tables, age - 1 - peak)
+    dec = tables.positions[card.identity.pos]["decline"]
+    ratio = curve(tables, age - peak, dec) / curve(tables, age - 1 - peak, dec)
     wrk = (card.traits["WRK"] - 50) / 50.0
     vol = card.growth["volatility"]
     gain = 0.0
@@ -51,6 +55,23 @@ def develop(card, year, rng, tables, coach=0.0):
         noise = rng.gauss(0, D["noise_" + kind] * vol)
         card.attrs[a] = clip(v * r + gain * (1 + D["wrk_effect"] * wrk) + noise + coach * D["scale_" + kind])
     return card.true_overall(tables) - before
+
+
+def retire_chance_contracted(card, year, tables):
+    """Probability that a player retires from wear at this year turn, whether or not she is still under contract (Edition 8.38): wear, injury and life take players out
+    of the game at every age, more as the years pass and more at the positions that decline fastest. `retire_c_p_base` plus
+    `retire_c_p_step` for each year past `retire_c_age_start`, times her position's decline rate; at the hard age she retires. Her
+    contract ends with her and leaves no dead money (the NFL treatment of a retiring player's unpaid salary)."""
+    if card.identity.role != "player":
+        return 0.0
+    D = tables.development
+    age = card.age(year)
+    if age >= D["retire_hard_age"]:
+        return 1.0
+    if age < D["retire_c_age_start"]:
+        return 0.0
+    wear = D["retire_c_p_base"] + D["retire_c_p_step"] * (age - D["retire_c_age_start"])
+    return min(1.0, wear * tables.positions[card.identity.pos]["decline"])
 
 
 def retire_chance(card, year, overall, tables):

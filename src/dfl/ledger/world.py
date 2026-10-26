@@ -15,7 +15,7 @@ import math
 from ..characters import Creator, load_tables
 from ..characters.creator import rng_for
 from ..characters import soul
-from ..characters.development import develop, retire_chance
+from ..characters.development import develop, retire_chance, retire_chance_contracted
 from . import coaching, gameday, governance, rooms, rules as R, trading
 from .contracts import Contract, ContractError, rookie_contract
 from ..engine import production
@@ -467,8 +467,11 @@ class World:
             self.rating[pid], p.ovr = o, int(round(o))
             p.elevations = 0
             p.out_weeks = max(0, p.out_weeks - int(D["heal_offseason_weeks"]))
-            if p.where == "fa" and self.dev_rng.random() < retire_chance(card, L.year, o, self.tables):
+            wear = retire_chance_contracted(card, L.year, self.tables)          # wear and life take players at every age, signed or not (Edition 8.38)
+            if p.where == "fa" and self.dev_rng.random() < 1 - (1 - retire_chance(card, L.year, o, self.tables)) * (1 - wear):
                 L.retire(pid, "age")
+            elif p.where in ("roster", "ps", "ir") and self.dev_rng.random() < wear:
+                L.retire_contracted(pid)
         self.purge()
         governance.turn_year(self)
         coaching.turn_year(self)

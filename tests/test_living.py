@@ -8,7 +8,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from dfl.characters import Creator, load_tables  # noqa: E402
-from dfl.characters.development import develop, retire_chance  # noqa: E402
+from dfl.characters.development import curve, develop, retire_chance, retire_chance_contracted  # noqa: E402
 from dfl.characters import soul  # noqa: E402
 from dfl.ledger import coaching  # noqa: E402
 from dfl.characters.card import Card  # noqa: E402
@@ -74,6 +74,32 @@ class Development(unittest.TestCase):
         self.assertGreater(retire_chance(c, 2000 + (peak + 7 - 22), 70, T), 0.0)
         self.assertGreater(retire_chance(c, 2000 + (peak + 7 - 22), 30, T), retire_chance(c, 2000 + (peak + 7 - 22), 70, T))
         self.assertEqual(retire_chance(c, 2000 + (int(T.development["retire_hard_age"]) - 22), 70, T), 1.0)
+
+
+    def test_a_position_declines_at_its_own_rate_after_the_peak_only(self):
+        for delta in (-3, 0):
+            self.assertEqual(curve(T, delta, 2.2), curve(T, delta, 0.5))
+        self.assertLess(curve(T, 6, 2.2), curve(T, 6, 1.0))
+        self.assertLess(curve(T, 6, 1.0), curve(T, 6, 0.5))
+        self.assertGreaterEqual(curve(T, 10, 3.0), 0.3)
+        P = T.positions
+        self.assertGreater(P["HB"]["decline"], P["OL" if "OL" in P else "LT"]["decline"])
+        self.assertLess(P["K"]["decline"], P["QB"]["decline"] + 1)
+        self.assertLess(P["QB"]["decline"], P["HB"]["decline"])
+
+    def test_contracted_retirement_waits_then_climbs_and_is_certain_at_the_hard_age(self):
+        c = Creator(3, T).player("WR", 22, 2000)
+        peak = c.growth["peak_age"]
+        D = T.development
+        at = lambda age: retire_chance_contracted(c, 2000 + (age - 22), T)
+        self.assertEqual(at(int(D["retire_c_age_start"]) - 1), 0.0)
+        self.assertGreater(at(int(D["retire_c_age_start"])), 0.0)
+        self.assertGreater(at(32), at(28))
+        hb, k = Creator(3, T).player("HB", 22, 2000), Creator(3, T).player("K", 22, 2000)
+        self.assertGreater(retire_chance_contracted(hb, 2008, T), retire_chance_contracted(k, 2008, T))
+        self.assertEqual(retire_chance_contracted(c, 2000 + (int(D["retire_hard_age"]) - 22), T), 1.0)
+        ld = Creator(3, T).leader("coach", 2000)
+        self.assertEqual(retire_chance_contracted(ld, 2040, T), 0.0)
 
 
 class CardWorld(unittest.TestCase):
@@ -728,3 +754,37 @@ class SnapRanking(unittest.TestCase):
         w.L.new_year = lambda rank=None: (seen.append(rank), orig(rank=rank))[1]
         w.open_year()
         self.assertTrue(seen and seen[0] is not None)
+
+
+class RetireUnderContract(unittest.TestCase):
+    """A player under contract may retire; her contract and its charges go with her (Edition 8.38)."""
+
+    def test_she_leaves_the_club_and_leaves_no_dead_money(self):
+        w = World(CLUBS, seed=47)
+        w.open_year(first=True)
+        L = w.L
+        cid = sorted(L.clubs)[0]
+        pid = L.clubs[cid].roster[0]
+        cap_before = L.cap_number(cid)
+        dead_before = dict(L.clubs[cid].dead)
+        L.retire_contracted(pid)
+        self.assertNotIn(pid, L.players)
+        self.assertNotIn(pid, L.clubs[cid].roster)
+        self.assertEqual(L.clubs[cid].dead, dead_before)
+        self.assertLess(L.cap_number(cid), cap_before)
+        self.assertEqual(L.retired.get("contract"), 1)
+
+    def test_only_a_player_on_a_club_list_can(self):
+        from dfl.ledger.ledger import Rejected
+        w = World(CLUBS, seed=47)
+        w.open_year(first=True)
+        fa = next(p for p in w.L.players.values() if p.where == "fa")
+        with self.assertRaises(Rejected):
+            w.L.retire_contracted(fa.pid)
+
+    def test_the_year_turn_retires_some_veterans_under_contract(self):
+        w = World(CLUBS, seed=47)
+        w.step_year(first=True)
+        for _ in range(9):
+            w.step_year()
+        self.assertGreater(w.L.retired.get("contract", 0), 0)

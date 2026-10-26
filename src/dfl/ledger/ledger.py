@@ -1,6 +1,6 @@
 """League ledger: every club's roster lists, contracts, dead money, picks and the legal transactions between them.
 
-Principles (Design Document 8.37, sections 11, 12, 17)
+Principles (Design Document 8.38, sections 11, 12, 17)
   * Reserve/commit: every transaction is applied to a snapshot-protected copy of the clubs and players it touches and
     rolled back whole if any rule fails, so money, picks, roster places and contracts are never assigned twice.
   * Cap timing (Ed 8.9): the cap is enforced all year. Until the final cut a club's cap number counts only its 69 highest
@@ -580,6 +580,19 @@ class Ledger:
             raise Rejected(f"player {pid} is not in the pool")
         del self.players[pid]
         self.retired[reason] = self.retired.get(reason, 0) + 1
+
+    def retire_contracted(self, pid):
+        """A player under contract retires (Edition 8.38): her contract ends with her, nothing is charged to the club, and she is gone."""
+        p = self.players[pid]
+        if p.where not in ("roster", "ps", "ir"):
+            raise Rejected(f"player {pid} is not on a club's lists")
+        cid = p.club
+        self._lists(cid)[p.where].remove(pid)
+        self._release_number(p, cid)
+        self.clubs[cid]._cmap = None
+        del self.players[pid]
+        self.retired["contract"] = self.retired.get("contract", 0) + 1
+        self.log("retire_contract", club=cid, pid=pid)
 
     def new_year(self, rank=None):
         """League year rolls over. Contracts that have run out release their players to the free-agent pool; elevations and
