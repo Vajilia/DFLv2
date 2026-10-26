@@ -311,7 +311,7 @@ def window(world):
     used, made = set(), 0
     for a in order[:int(T["attempts_per_call"])]:
         have = _have(world, a)
-        best = None
+        targets = []
         for b in cids:
             if b == a:
                 continue
@@ -319,8 +319,11 @@ def window(world):
                 if pid in used:
                     continue
                 v = value(world, a, pid, +1, have)
-                if v >= T["target_min"] and (best is None or v > best[0]):
-                    best = (v, b, pid)
-        if best is not None and negotiate(world, a, best[1], best[2], used):
-            made += 1
+                if v >= T["target_min"]:
+                    targets.append((-v, b, pid))
+        targets.sort()
+        for _, b, pid in targets[:int(T["tries_per_club"])]:       # her best targets in turn until one deal is struck (Edition 8.42)
+            if pid not in used and negotiate(world, a, b, pid, used):
+                made += 1
+                break
     return made

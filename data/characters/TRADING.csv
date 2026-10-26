@@ -1,5 +1,5 @@
 key,value,note
-attempts_per_call,6,"Clubs that get to propose each time the trading step runs (a random subset of the 48)"
+attempts_per_call,48,"Clubs that get to propose each time the trading step runs (a random subset of the 48; 48 means all)"
 block_size,6,"Most players a club publishes on its trading block"
 block_max_value,20,"A player goes on the block only if she is worth no more than this to her own club (surplus depth, aging or overpaid players)"
 target_min,8,"A club only goes after a player it values at least this much"
@@ -29,3 +29,4 @@ pub_slope,4.0,"Overall points one standard deviation of her average score adds t
 pub_k,2.0,"Seasons' worth of doubt: with n scored seasons the score counts n/(n+k) of its full size"
 pub_age_window,1,"The public prior for a player is the going level at her position among players within this many years of her age"
 pub_prior_min,8,"Fewest players a position-and-age group needs for its own level; otherwise the whole position's level"
+tries_per_club,4,"A proposing club goes after her best targets in turn, up to this many, until one deal is struck (Edition 8.42)"

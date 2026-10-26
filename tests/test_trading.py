@@ -217,3 +217,25 @@ class PublicPrice(unittest.TestCase):
         self.assertEqual(row["market"], trading.public_market(w, p))
         years = max(1, min(trading.years_left(w, p), int(w.tables.trading["years_cap"])))
         self.assertAlmostEqual(trading._public_value(w, p.pid), (trading.public_market(w, p) - float(p.contract.cap_hit(w.L.year))) * years)
+
+
+class TriesPerClub(unittest.TestCase):
+    """A proposing club goes after her next-best target when the first falls through (Edition 8.42)."""
+
+    def _made(self, tries):
+        w = World(CLUBS, seed=61)
+        w.open_year(first=True)
+        w.tables.trading["tries_per_club"] = tries
+        w.tables.trading["attempts_per_call"] = len(CLUBS)
+        return sum(trading.window(w) for _ in range(3))
+
+    def test_more_tries_never_make_fewer_deals_than_one(self):
+        one, many = self._made(1), self._made(6)
+        self.assertGreaterEqual(many, one)
+
+    def test_a_club_makes_at_most_one_deal_a_run(self):
+        w = World(CLUBS, seed=61)
+        w.open_year(first=True)
+        w.tables.trading["tries_per_club"] = 6
+        w.tables.trading["attempts_per_call"] = len(CLUBS)
+        self.assertLessEqual(trading.window(w), len(CLUBS))
