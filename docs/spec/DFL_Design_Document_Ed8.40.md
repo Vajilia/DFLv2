@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.39 · 2026-10-26** (amends Edition 8.38; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `37b2789b95f126915201e8588b32652d5bd25a7505965fee76e771321efe6c2f`
+**Edition 8.40 · 2026-10-26** (amends Edition 8.39; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `087a31811c2c6a85edece1a198664314401dde49d315bba6a5062604ad17ed4b`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -30,7 +30,7 @@ Single source. Nothing below repeats a figure that appears here.
 | Draft class size · pool floor per position · leadership candidates per role | 672 · 8 · 4 |
 | Real time: offseason · per competitive week block · year | 45 min · 120 min · ≈55 h |
 | Season length target | about 50 hours of real time; a target, and missing it is not a defect |
-| Recall threshold · CEO election cycle | sentiment 27 · every 3 seasons |
+| Recall threshold · CEO election cycle | sentiment 33 · every 3 seasons |
 | Tiara recipients · Hall credited seasons · starting memories | 53 + 6 staff · 5 · 32 |
 | Physics timestep · decision interval | 0.05 s · ≤0.10 s |
 | International venue pool · venues drawn per season | 50 (minimum 8) · 8 (7 Tour rounds + the Bowl) |
@@ -758,7 +758,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 
 ## §14 Fans, governance, expectations
 - Each club has a fan card representing one million fans. Three viewpoints are seeded between 20 and 50 percent and normalised.
-- Sentiment returns gradually toward 50. After a club's last game, sentiment at or below 27 triggers a recall ballot; a fan majority removes the CEO. No midseason automatic dismissal.
+- Sentiment returns gradually toward 50. After a club's last game, sentiment at or below 33 triggers a recall ballot; a fan majority removes the CEO. No midseason automatic dismissal.
 - CEO elections occur every three seasons and after recall or vacancy. Elected successors take office in the next offseason.
 - Leadership dismissals are permitted only after a club's last game. Poaching is allowed only inside the leadership window, with candidate consent, at most three hiring passes, one appointment per candidate per window.
 - No club may start a season short of its six designated leaders; fallback appointments come from pre-consenting reserves and close before the window ends.
@@ -814,7 +814,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.39 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37 and 8.38 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.40 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37, 8.38 and 8.39 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -898,6 +898,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-26 | §11, §20 | compensatory-pick top-quarter ranking follows the coaches' judged overall, not the true overall; items 22 and 36 | builder's recommendation, owner's go-ahead of 2026-10-26 | 8.37 |
 | 2026-10-26 | §13, §20 | aging: each position has its own rate of decline after the peak; players retire from wear at any age, under contract or not, and a retiring player's contract ends with no dead money (items 3, 19 closed or reframed, 37, 38) | owner's go-ahead and rulings of 2026-10-26 (rates follow the NFL) | 8.38 |
 | 2026-10-26 | §11, §20 | upgrade signings at camp: a club signs a clearly better free agent over her weakest starter, at most three a camp; item 38 built; a candidate can win only one club's CEO election a year; item 39 | owner's ruling of 2026-10-26 that rates follow the NFL's; builder's recommendation | 8.39 |
+| 2026-10-26 | §0, §13, §20 | recall threshold 27 to 33 so recalls stay at about two a year after the aging changes; item 40 | owner's ruling of 2026-10-24, re-tuned by the builder | 8.40 |
 
 ## §20 Open items
 1. Analytics definitions: approved by the owner on 2026-10-24 and built in Edition 8.30 (§15); every number is a placeholder (item 29).
@@ -939,3 +940,4 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 37. Aging against the NFL (Edition 8.38, owner's rulings of 2026-10-26: league rates follow the NFL's except where the DFL differs by design, and work does not stop to ask about questions the NFL settles). Measured over 18 league years, 48 clubs: the share of rostered players aged 30 or more fell from 25 percent to 15 percent after this edition (the NFL's is about 11 percent for offensive linemen, 21 percent for defensive linemen, 8 percent for defensive backs and under 5 percent for running backs; the DFL's are 17, 20, 10 and 8 with upgrade signings in place). The average age of a rostered player is 26.0 (NFL 26.6) and the average career 5.2 years on a roster (NFL 3.3 by a different count). Quarterbacks still run young (25.3 against the NFL's 28.4); upgrade signings did not close it, because the best free-agent quarterbacks are not 5 points better than the club's starter and the older ones cost more than the drafted rookies who fill the backup slots. The quarterback age gap, the offensive line's older-than-NFL profile and the shorter-than-NFL age of running backs are left as measured gaps to tune once the owner sees them (item 39). The decline rates, the wear numbers, the long snapper's peak of 31 and the NFL benchmarks are placeholders.
 38. Upgrade signings (built in Edition 8.39): free agency alone fills only template shortfalls, so at positions the draft oversupplies (quarterback above all) better veterans stayed in the pool while younger, lower-rated players started. Camp now has the upgrade step in §11. The margin, the limit of three and the starters counted are placeholders; the result is measured in Edition 8.39's record in `docs/FAIRNESS.md`.
 39. Gaps against the NFL after Edition 8.39, for the builder's next pass (no owner decision needed, rates follow the NFL by ruling): quarterback age (25.3 against 28.4), offensive line 30-plus share (17 percent against 11), running back 30-plus share (8 percent against under 5), long-snapper age (27.7 against 30.7). Also fixed in this edition: two clubs could elect the same CEO candidate in one year, which left duplicate cards in the candidate pool and, in one league, an empty election.
+40. Recall rate re-tuned (Edition 8.40, owner's ruling of 2026-10-24: about two recalls a year): the aging and upgrade changes of Editions 8.38 and 8.39 moved the league to 1.1 recalls a year at the old threshold of 27 (more roster turnover steadies the clubs' results). On one league the threshold gave 1.08 a year at 27, 1.72 at 31 and 2.97 at 36, so 33 was chosen for about 2.1. The threshold is a placeholder and interacts with parity: re-check it whenever club results change.
