@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.44 · 2026-10-26** (amends Edition 8.43; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `fd21a6479a499dfb68237f6466d76f55c20e160f60faa2090a7b43f95efdf62a`
+**Edition 8.45 · 2026-10-26** (amends Edition 8.44; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `d0fdf940547775e09a25ff2b091dd255b9eb7bee83026d04dd6563ebd8381004`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -694,6 +694,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Cap $1,000, emergency reserve $25, minimum salary $5, comp qualifying threshold $75.
 - **No salary floor.** A club may spend as little as it likes; unused room is lost (no banking). Chronic underspending is answered by fan sentiment and the recall ballot (§14), not by a payment rule.
 - **Upgrade signings (Edition 8.39, NFL practice).** At camp, before the cut to 53, a club signs a free agent who is clearly better than her weakest starter at that position: by the club's own view with age counted, at least `upgrade_margin` (5) points higher, for a price that fits under the cap, at most `upgrade_max` (3) a camp, the biggest gap first. Starters counted: one at kicker, punter, quarterback, running back, tight end, each offensive line spot, each defensive end, each linebacker spot, each safety and the long snapper; two at defensive tackle; three at wide receiver and cornerback. The cut then sheds whoever the club values least, so a veteran can replace a drafted rookie, as in the NFL.
+- **Legal-move enumerator (Phase 1 close, Edition 8.45).** The ledger can list every single transaction a club may legally make at any moment (`Ledger.legal_moves`): signing a free agent at the league minimum to the 53 or the practice squad, releasing a player from any list, placing an injured player on injured reserve, returning one, and promoting a practice-squad player. Each entry is proved by a dry run that is rolled back, so listing changes nothing. The test that a club always has a legal move (§11 forfeit rule) is the first entry of that list. Trades and waiver claims involve other clubs and are enumerated by their own steps.
 - **Cap timing (adapted from the NFL's top-51 rule).** The cap is enforced all year. From the start of the league year until the final cut to 53 and 16, a club's cap number is dead money plus its highest cap hits, counting only the §0 number of contracts; the extra camp bodies do not count. From the final cut until the league year closes every contract counts. A signing, claim, trade or restructure that leaves a club over the cap and raises its cap number is rejected. A release is never blocked by the cap (its accelerated bonus may carry a club over; it then cannot add cap until it is back under). At the final cut every club must be at or under the cap, a cut that leaves a club over is refused, and the season cannot begin with any club over. The viability invariant binds at all times, which is what keeps the final cut reachable.
 - Practice-squad salaries count against the cap like any other salary.
 - Dead money counts against the cap. Release or trade immediately accelerates every uncharged bonus onto the original club's current cap.
@@ -814,7 +815,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.44 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37, 8.38, 8.39, 8.40, 8.41, 8.42 and 8.43 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.45 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37, 8.38, 8.39, 8.40, 8.41, 8.42, 8.43 and 8.44 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -903,6 +904,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-26 | §13, §20 | trade volume to the NFL's rate: every club proposes each window and tries her best targets in turn; item 41 | owner's ruling that rates follow the NFL | 8.42 |
 | 2026-10-26 | §0, §13, §20 | recall threshold 33 to 30 after trade volume rose; item 42 | owner's ruling of 2026-10-24 (about two recalls a year; CEO turnover 5 to 10 percent) | 8.43 |
 | 2026-10-26 | §0, §13, §20 | recall threshold 30 to 32 (30 gave 1.56 recalls a year, 33 gave 2.53); item 42 | owner's ruling of 2026-10-24 (about two recalls a year) | 8.44 |
+| 2026-10-26 | §11 | Phase 1 closed: the legal-move enumerator; a 100-year ledger soak and a 100-year full-league soak on the current rules, both passing with no forfeit and no club without a legal move; 15 rule breaks all caught by tests | owner's go-ahead of 2026-10-26 to complete Phase 1 | 8.45 |
 
 ## §20 Open items
 1. Analytics definitions: approved by the owner on 2026-10-24 and built in Edition 8.30 (§15); every number is a placeholder (item 29).

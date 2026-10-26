@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.44.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.45.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -26,14 +26,18 @@ The placeholder resolver can exercise structure, standings and rotation. It is *
 | Snapshot zip import and gap analysis | cancelled: no snapshot exists; DFLv2 is rebuilt from the spec |
 | Owner decisions (cap banking, practice squad size, last-place wild card, IR returns, season length) | done: Edition 8.7 |
 
-## Phase 1: roster and cap ledger (built; `docs/LEDGER.md`)
+## Phase 1: roster and cap ledger (closed 2026-10-26, Ed 8.45; `docs/LEDGER.md`)
 | Piece | Status |
 | --- | --- |
 | Contracts, bonuses, release/split/trade/waiver arithmetic, rookie scale | `src/dfl/ledger/contracts.py`; unit-tested |
 | Rosters, practice squad, IR, cut to 53, floor supplement, viability gate, rollback | `src/dfl/ledger/ledger.py`; unit-tested |
 | Game day: active 48/47, elevations, emergency list, forfeit test | `src/dfl/ledger/gameday.py`; unit-tested |
 | Determinism (same seed, same digest across hash seeds) | tested |
-| 100-year soak, 48 clubs (2 bonus-heavy), seed 1, placeholder world, Ed 8.8 rules | **PASS** in 1,619 s: 86,400 games, 0 forfeits, 0 legal-move failures; 642 short-handed games (0.7%, up from 32 under Ed 8.7 because the cap now binds in season) and 142 emergency lists; 2,324 trades (76 refused), 895 claims; lowest payroll at the cut 509. Final digest `96fec3c8c0dd...`. CI runs a 3-year version. |
+| Legal-move enumerator: every single transaction a club may legally make (`Ledger.legal_moves`), proved by rolled-back dry runs | `src/dfl/ledger/ledger.py`; 6 tests (listing changes nothing, every move can be made, kinds filter, lazy) |
+| Mutation check: 15 rules broken on purpose (roster 53, practice-squad veterans, IR minimum and returns, vesting, elevations, active list, viability gate, cap check, dead money, rollback, retirement under contract, the enumerator) | all 15 caught by tests; three constants needed a new test pinning the spec's numbers (`SpecNumbers`) |
+| 100-year ledger soak, 48 clubs (2 bonus-heavy), seed 1, current rules (Ed 8.45) | **PASS** in 7,186 s: 105,600 games, 0 forfeits, 0 legal-move failures, 5 short-handed games, 1 emergency list; 7,354 trades, 4,009 claims; lowest payroll at the cut 655. Final digest `8ec677b8a579...`. CI runs a 3-year version. |
+| 100-year full-league soak (`tools/run_universe_soak.py`: real calendar, engine, draft, free agency, upgrade signings, trades, waivers, retirement, governance), seed 1, Ed 8.45 | **PASS** in 5,446 s: 77,600 games, 0 forfeits, 0 legal-move failures, 6 short-handed games, 5 emergency lists; 6,629 trades, 2,305 claims, 9,899 upgrade signings; retirements 12,530 pool, 41,461 age, 11,113 under contract; lowest payroll at the cut 660. Final digest `5236c7e526c7...`. CI runs a 3-year version. |
+| Earlier 100-year ledger soak at Ed 8.8 (superseded) | PASS in 1,619 s: 86,400 games, 0 forfeits; 642 short-handed games (5 and 6 in the current soaks; the cause of the drop was not isolated) |
 
 Read the soak honestly: "invariant never violated" means every club is inside the limit at each season start and at each year-end audit, and no move ever worsened an over-limit year. Within a season clubs drift over the limit as earned salary accrues (peak committed 1,422 against a 735 limit, margin minimum -447; in-season overage peak 66; the pre-cut overage peak of 358 is allowed by Ed 8.8). The world driving the soak is a placeholder, so rates (supplements, trades, injuries) say nothing about realism.
 

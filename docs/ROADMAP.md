@@ -26,11 +26,12 @@ Reason for the order: people-and-agents is the most expensive and least testable
 - **Exit test:** every divergence is a ticket marked adopt, reject or ask; CI is green.
 - **Needs from the owner:** the zip; the cap decision (spec says $1,000 with an $800 floor and no banking; v1 says $100M, banking to $125M, 90% floor); approval to merge Milestone 1.
 
-## Phase 1 — Roster and cap ledger
+## Phase 1 — Roster and cap ledger (closed 2026-10-26, Ed 8.45)
 - **Goal:** money, contracts and rosters that can never become illegal or stuck.
 - **Work:** contracts (steady, rising, declining), dead money, the viability invariant, the cut to 53, practice squad, injured reserve, elevations, emergency lists, waivers, the legal-option enumerator that every decision point uses.
 - **Exit test:** a 100-season soak under autopilot in which the invariant is never violated, every club always has at least one legal transaction, and no club is forced into forfeit by the rules themselves.
 - **Needs from the owner:** open items on market mechanics (§20.3) as they come up.
+- **Closed on the current rules (2026-10-26):** the ledger was first soaked at Ed 8.8; since then retirement under contract, upgrade signings, a 7-fold increase in trades and the living league all landed, so Phase 1 was re-closed. Added the legal-move enumerator (`Ledger.legal_moves`); ran a 100-year ledger soak and a 100-year full-league soak (real calendar, engine, free agency, draft, trades, waivers, governance): both pass with 0 forfeits and 0 clubs without a legal move; broke 15 rules on purpose and every one is caught by a test (three needed a new test that pins the spec's numbers). Results in `docs/BUILD_STATUS.md`.
 
 ## Phase 2 — Full calendar (done 2026-10-23)
 - **Goal:** the whole year, not just the 18 games.
