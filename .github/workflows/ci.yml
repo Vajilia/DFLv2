@@ -18,3 +18,5 @@ jobs:
         run: python3 -I tools/run_seasons.py --seasons 30 --seed 1 --out runs/ci
       - name: Ledger soak (3 league years, 48 clubs; the 100-year soak is run by hand)
         run: python3 -I tools/run_ledger_soak.py --years 3 --seed 1
+      - name: Full-league soak (3 league years, real calendar and engine; the 100-year soak is run by hand)
+        run: python3 -I tools/run_universe_soak.py --years 3 --seed 1

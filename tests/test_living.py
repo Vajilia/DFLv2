@@ -830,3 +830,56 @@ class UpgradeSignings(unittest.TestCase):
         w.L.phase = "camp"
         w.upgrade(self.cid)
         self.assertLessEqual(w.stats["upgrades"], int(w.tables.negotiation["upgrade_max"]))
+
+
+class LegalMoves(unittest.TestCase):
+    """The ledger can list every legal single transaction for a club, and listing changes nothing (Phase 1 enumerator)."""
+
+    def setUp(self):
+        self.w = World(CLUBS, seed=71)
+        self.w.open_year(first=True)
+        self.cid = sorted(self.w.L.clubs)[0]
+
+    def test_listing_changes_nothing(self):
+        before = self.w.L.digest()
+        moves = list(self.w.L.legal_moves(self.cid))
+        self.assertTrue(moves)
+        self.assertEqual(self.w.L.digest(), before)
+
+    def test_every_listed_move_can_really_be_made(self):
+        from dfl.ledger.contracts import Contract
+        L = self.w.L
+        moves = list(L.legal_moves(self.cid))
+        seen = set()
+        for kind, pid, slot in moves:
+            if kind in seen:
+                continue
+            seen.add(kind)
+            if kind == "sign_min":
+                L.sign(self.cid, pid, Contract(L.year, (R.MIN_SALARY,), (), (), L.week), slot)
+                self.assertEqual(L.players[pid].club, self.cid)
+            elif kind == "release":
+                L.release(self.cid, pid)
+                self.assertNotIn(pid, getattr(L.clubs[self.cid], slot))
+            elif kind == "promote":
+                L.promote(self.cid, pid)
+                self.assertEqual(L.players[pid].where, "roster")
+            break
+        self.assertTrue(seen)
+
+    def test_kinds_filter_and_laziness(self):
+        L = self.w.L
+        only = list(L.legal_moves(self.cid, kinds=["release"]))
+        self.assertTrue(only and all(k == "release" for k, _, _ in only))
+        gen = L.legal_moves(self.cid)
+        self.assertIsNotNone(next(gen, None))
+
+    def test_injured_players_can_be_placed_on_reserve_when_eligible(self):
+        L = self.w.L
+        pid = L.clubs[self.cid].roster[0]
+        L.players[pid].out_weeks = R.IR_MIN_GAMES + 2
+        kinds = {(k, p) for k, p, _ in L.legal_moves(self.cid, kinds=["ir"])}
+        self.assertIn(("ir", pid), kinds)
+
+    def test_the_world_check_agrees(self):
+        self.assertTrue(self.w.legal_move_exists(self.cid))

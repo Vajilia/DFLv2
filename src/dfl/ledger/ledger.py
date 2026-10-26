@@ -555,6 +555,30 @@ class Ledger:
             return False
         return True
 
+    def legal_moves(self, cid, kinds=None):
+        """Every single transaction this club could legally make right now, one at a time, as `(kind, pid, slot)` (Phase 1's enumerator).
+        Each is proved by a dry run that is rolled back, so nothing changes. It is lazy: take the first to learn that a move exists, or
+        read it all for a decision point. Kinds: `sign_min` (a free agent at the league minimum, to `roster` or `ps`), `release`,
+        `ir` (place an injured player on injured reserve), `ir_return`, `promote` (practice squad to the 53). Trades and waiver claims
+        involve other clubs and are enumerated by their own steps."""
+        want = set(kinds) if kinds else {"sign_min", "release", "ir", "ir_return", "promote"}
+        c = self.clubs[cid]
+        if "sign_min" in want:
+            for p in sorted((q for q in self.players.values() if q.where == "fa" and q.out_weeks == 0), key=lambda q: q.pid):
+                for slot in ("roster", "ps"):
+                    if self.room(cid, slot) and self.probe([cid], [p.pid], lambda p=p, slot=slot: self.sign(cid, p.pid, Contract(self.year, (R.MIN_SALARY,), (), (), self.week), slot)):
+                        yield ("sign_min", p.pid, slot)
+        if "release" in want:
+            for slot in ("roster", "ps", "ir"):
+                for pid in list(getattr(c, slot)):
+                    if self.probe([cid], [pid], lambda pid=pid: self.release(cid, pid)):
+                        yield ("release", pid, slot)
+        for kind, slot, op in (("ir", "roster", self.place_on_ir), ("ir_return", "ir", self.return_from_ir), ("promote", "ps", self.promote)):
+            if kind in want:
+                for pid in list(getattr(c, slot)):
+                    if self.probe([cid], [pid], lambda pid=pid, op=op: op(cid, pid)):
+                        yield (kind, pid, slot)
+
     def begin_season(self):
         over = [c for c in self.clubs if self.overage(c) > 0]
         if over:

@@ -800,17 +800,8 @@ class World:
                 self._reject("trade", e)
 
     def legal_move_exists(self, cid):
-        """A club can always do something: sign a minimum-salary player or release one."""
-        L = self.L
-        if L.room(cid, "roster") and self.fas():
-            p = self.fas()[0]
-            if L.probe([cid], [p.pid], lambda: L.sign(cid, p.pid, Contract(L.year, (R.MIN_SALARY,), (), (), L.week), "roster")):
-                return True
-        c = L.clubs[cid]
-        for pid in c.roster + c.ps:
-            if L.probe([cid], [pid], lambda pid=pid: L.release(cid, pid)):
-                return True
-        return False
+        """A club can always do something: the ledger's enumerator (`Ledger.legal_moves`) yields at least one legal transaction."""
+        return next(iter(self.L.legal_moves(cid)), None) is not None
 
     # ---------- audit
     def audit(self, strict_current=False):
