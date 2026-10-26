@@ -7,6 +7,7 @@ data/engine/BANDS.csv and is meant to be replaced, behind the same interface, by
 Coordinates: `yl` is the offense's yards from its own goal line (0-100). Teams are indexed 0 = home, 1 = away.
 """
 import math
+import random
 from dataclasses import dataclass, field
 
 from . import production
@@ -25,6 +26,12 @@ PEN_PRE = [p for p in PENALTIES if p["when"] == "pre"]
 PEN_RUN = [p for p in PENALTIES if p["when"] == "live"]
 PEN_PASS = [p for p in PENALTIES if p["when"] in ("live", "pass")]
 PEN_KICK = [p for p in PENALTIES if p["when"] == "kick"]
+# who makes a tackle, a sack, an interception or breaks up a pass, by position group (builder's split; see docs/BOX_SCORES.md)
+RUN_W = {"DL": 0.27, "LB": 0.50, "DB": 0.23}
+PASS_W = {"DL": 0.04, "LB": 0.36, "DB": 0.60}
+RUSH_W = {"DL": 0.72, "LB": 0.22, "DB": 0.06}
+INT_W = {"DL": 0.02, "LB": 0.18, "DB": 0.80}
+PD_W = {"DL": 0.06, "LB": 0.24, "DB": 0.70}
 UNSPORTSMANLIKE = ("unsportsmanlike conduct", "taunting")           # two of these eject a player (section 10)
 # fouls that need a pass thrown at someone, and the plays they can ride on
 NEEDS_TARGET = ("defensive pass interference", "offensive pass interference", "illegal contact", "ineligible downfield pass",
@@ -60,13 +67,14 @@ class GameResult:
     production: dict = field(default_factory=dict)      # card id -> {play type: [opportunities, EPA, WPA]} (Edition 8.30)
     fit: list = field(default_factory=list)             # (offence, yard line, down, distance, points scored, half) per play (Edition 8.32)
     pen_types: list = field(default_factory=list)       # per team: penalty name -> [accepted, yards] (Edition 8.46)
+    table: list = field(default_factory=list)           # the structured play table: one dict per event, players by id (Edition 8.47)
 
 
 def new_stats():
     return dict(plays=0, pass_att=0, comp=0, pass_yds=0, sacks=0, ints=0, rush_att=0, rush_yds=0, fumbles_lost=0,
                 penalties=0, pen_yds=0, first_downs=0, third_att=0, third_conv=0, fourth_att=0, fourth_conv=0,
                 punts=0, fg_att=0, fg_made=0, pat_att=0, pat_made=0, two_att=0, two_made=0, td=0, top=0.0,
-                drives=0, points=0, kickoffs=0, safeties=0)
+                drives=0, points=0, kickoffs=0, safeties=0, sack_yds=0)
 
 
 class Game:
@@ -90,6 +98,9 @@ class Game:
         self.ot = None                       # overtime bookkeeping
         self.next = None
         self.winner_now = None
+        self.arng = random.Random(rng.getrandbits(64))   # a stream of its own for crediting tackles, sacks and the like: recording never moves the game's
+        self.ptab = [] if log else None                  # the structured play table (Edition 8.47)
+        self.td_by = None                                # id of the player who scored the touchdown being booked
         self.pen_by = [{}, {}]               # per team: penalty name -> [accepted, yards]
         self.uns = {}                        # unsportsmanlike fouls per player; the second ejects her
         self.warned = set()                  # periods whose two-minute warning has been given
@@ -112,9 +123,97 @@ class Game:
         self.score[k] += pts
         self.st[k]["points"] += pts
 
-    def record(self, *row):
+    def record(self, *row, **info):
+        """Add a row to the play log (tuple, for the tests and the old consumers) and an entry to the structured play table (a dict
+        with the state, the event and the ids of the players in it)."""
         if self.log is not None:
-            self.log.append((self.period, round(self.t), self.poss, self.down, self.dist, self.yl) + row)
+            base = (self.period, round(self.t), self.poss, self.down, self.dist, self.yl)
+            self.log.append(base + row)
+            e = dict(info)
+            e.update(i=len(self.ptab), period=base[0], clock=base[1], off=base[2], down=base[3], dist=base[4], yl=base[5], kind=row[0],
+                     detail=row[1:])
+            self.ptab.append(e)
+
+    def tag(self, **kw):
+        """Add facts to the entry just recorded (a first down, a score)."""
+        if self.ptab:
+            self.ptab[-1].update(kw)
+
+    def pick_defender(self, ud, wts, attr, exclude=None):
+        pool = ud["def"]
+        ws = []
+        for c in pool:
+            pos = c.identity.pos
+            g = "DL" if pos in GROUPS["DL"] else ("LB" if pos in GROUPS["LB"] else "DB")
+            w = wts[g] * (0.4 + c.attrs.get(attr, 50) / 100.0) / (4 if g in ("DL", "DB") else 3)
+            ws.append(0.0 if exclude is not None and c.identity.id == exclude else w)
+        r = self.arng.random() * sum(ws)
+        for c, w in zip(pool, ws):
+            r -= w
+            if r <= 0 < w:
+                return c
+        return pool[-1]
+
+    def credit_defense(self, k, o, scores=False):
+        """Who made the play on defense (tackle and assist, sack, tackle for loss, interception, pass defended). Drawn on the arng
+        stream by position group and the defender's skill; the spatial engine will name them from what happens on the field."""
+        ud = self.sq[1 - k].units()
+        kind, a = o["kind"], self.arng
+        info = {}
+        if kind in ("run", "scramble") and not scores:
+            t = self.pick_defender(ud, RUN_W, "TAK")
+            self.pstat(t, "tkl")
+            info["tkl"] = t.identity.id
+            if o["yards"] <= 0:
+                self.pstat(t, "tfl")
+            if a.random() < 0.3:
+                b = self.pick_defender(ud, RUN_W, "TAK", t.identity.id)
+                self.pstat(b, "ast")
+                info["ast"] = b.identity.id
+        elif kind == "sack":
+            t = self.pick_defender(ud, RUSH_W, "PRU")
+            half = a.random() < 0.12
+            self.pstat(t, "sack", 0.5 if half else 1)
+            self.pstat(t, "tfl", 0.5 if half else 1)
+            info["sack"] = [t.identity.id]
+            if half:
+                b = self.pick_defender(ud, RUSH_W, "PRU", t.identity.id)
+                self.pstat(b, "sack", 0.5)
+                self.pstat(b, "tfl", 0.5)
+                info["sack"].append(b.identity.id)
+            self.pstat(o["qb"], "sacked")
+            self.pstat(o["qb"], "sack_yds", -o["yards"])
+        elif kind == "complete" and not scores:
+            t = self.pick_defender(ud, PASS_W, "TAK")
+            self.pstat(t, "tkl")
+            info["tkl"] = t.identity.id
+            if a.random() < 0.2:
+                b = self.pick_defender(ud, PASS_W, "TAK", t.identity.id)
+                self.pstat(b, "ast")
+                info["ast"] = b.identity.id
+        elif kind == "incomplete" and a.random() < 0.3:
+            t = self.pick_defender(ud, PD_W, "COV")
+            self.pstat(t, "pd")
+            info["pd"] = t.identity.id
+        elif kind == "int":
+            t = self.pick_defender(ud, INT_W, "BAL")
+            self.pstat(t, "def_int")
+            info["int_by"] = t.identity.id
+        if o["turnover"] == "fumble":
+            f = self.pick_defender(ud, RUN_W, "TAK")
+            self.pstat(f, "ff")
+            r = self.pick_defender(ud, RUN_W, "AWR")
+            self.pstat(r, "fr")
+            info["ff"], info["fr"] = f.identity.id, r.identity.id
+        return info
+
+    @staticmethod
+    def ids(o):
+        d = {}
+        for key, name in (("qb", "qb"), ("carrier", "car"), ("target", "tgt")):
+            if o.get(key) is not None:
+                d[name] = o[key].identity.id
+        return d
 
     # ------------------------------------------------------------ clock
     def tick(self, secs, team_with_ball=None):
@@ -212,7 +311,7 @@ class Game:
         inj = {h.cid: list(h.new_injuries), a.cid: list(a.new_injuries)}
         return GameResult(h.cid, a.cid, (self.score[0], self.score[1]), self.period, tie, win,
                           [self.st[0], self.st[1]], self.pl, inj, self.log or [], production=self.prod, team_production=self.team, fit=self.fit,
-                          pen_types=self.pen_by)
+                          pen_types=self.pen_by, table=self.ptab or [])
 
     # ------------------------------------------------------------ kicking
     def kickoff(self, kicker, free_kick=False):
@@ -242,14 +341,28 @@ class Game:
         if flag:
             if flag["effect"] in ("replay_back", "oob") or returned:       # a foul before the kick, or one on the return or coverage
                 start = self.kick_spot(kicker, flag, start)
+        kicker_card = self.sq[kicker].units()["kicker"]
+        rtn = self.sq[recv].units()["returner"] if returned else None
         if returned and not free_kick:
             if rng.random() < 0.006:
-                self.record("kickoff", "return touchdown")
+                self.pstat(kicker_card, "ko")
+                if rtn is not None:
+                    self.pstat(rtn, "kr")
+                    self.pstat(rtn, "kr_yds", 100)
+                self.record("kickoff", "return touchdown", kicker=kicker_card.identity.id)
                 self.poss = recv
+                self.td_by = rtn.identity.id if rtn is not None else None
                 self.score_td(recv, defensive=True)
                 return
+        self.pstat(kicker_card, "ko")
+        if returned:
+            if rtn is not None:
+                self.pstat(rtn, "kr")
+                self.pstat(rtn, "kr_yds", start + 5)
+        else:
+            self.pstat(kicker_card, "ko_tb")
         self.next = ("ball", recv, start)
-        self.record("kickoff", start)
+        self.record("kickoff", start, kicker=kicker_card.identity.id)
         self.tick(rng.uniform(5, 9))
 
     # ------------------------------------------------------------ drive
@@ -310,15 +423,25 @@ class Game:
         self.st[k]["punts"] += 1
         dist = clamp(rng.gauss(P["punt_mean"] + 2.0 * u["z"]["punt"], P["punt_sd"]), 20, 72)
         land = self.yl + dist
-        self.record("punt", round(dist))
+        punter = u["punter"]
+        self.pstat(punter, "punts")
+        self.pstat(punter, "punt_yds", round(dist))
+        self.record("punt", round(dist), punter=punter.identity.id)
         elapsed = rng.uniform(5, 7)
         if land >= 100:
+            self.pstat(punter, "punt_tb")
             self.next = ("ball", o, 20)
         else:
             ret = max(0, round(rng.gauss(P["punt_return_mean"], 5)))
             spot = int(clamp(100 - land + ret, 1, 99))
+            rtn = self.sq[o].units()["returner"]
+            if rtn is not None and ret > 0:
+                self.pstat(rtn, "pr")
+                self.pstat(rtn, "pr_yds", ret)
             if flag:                                    # a foul in the coverage or on the return moves the receiving team's spot
                 spot = self.kick_spot(k, flag, spot)
+            if spot <= 20:
+                self.pstat(punter, "punt_in20")
             self.next = ("ball", o, spot)
         self.tick(elapsed + 3, None)
         self.poss = k
@@ -335,15 +458,20 @@ class Game:
         z = self.sq[k].units()["z"]["kick"]
         p = 0.99 / (1 + math.exp((dist - (P["fg_mid"] + 1.5 * z)) / P["fg_scale"]))
         self.st[k]["fg_att"] += 1
+        kicker = self.sq[k].units()["kicker"]
+        self.pstat(kicker, "fg_att")
         elapsed = rng.uniform(4, 6)
         if rng.random() < p:
             self.st[k]["fg_made"] += 1
+            self.pstat(kicker, "fg_made")
+            d = self.pl.setdefault(kicker.identity.id, {})
+            d["fg_long"] = max(d.get("fg_long", 0), dist)
             self.add_points(k, 3)
-            self.record("field goal", "good", dist)
+            self.record("field goal", "good", dist, team=k, pts=3, kicker=kicker.identity.id)
             self.next = ("kickoff", k)
             self.ot_sudden_score()
         else:
-            self.record("field goal", "missed", dist)
+            self.record("field goal", "missed", dist, team=k, pts=0, kicker=kicker.identity.id)
             self.next = ("ball", o, int(clamp(100 - (self.yl - 7), 20, 99)))
         self.tick(elapsed + 3, None)
         return True
@@ -353,7 +481,8 @@ class Game:
         rng = self.rng
         self.st[k]["td"] += 1
         self.add_points(k, 6)
-        self.record("touchdown", "defense" if defensive else "offense")
+        self.record("touchdown", "defense" if defensive else "offense", team=k, pts=6, scorer=self.td_by)
+        self.td_by = None
         if self.ot is not None and defensive:
             self.finished = True                         # a defensive score ends overtime
             return
@@ -371,25 +500,30 @@ class Game:
         go_two = d in (-2,) or (self.period >= 4 and self.t <= 600 and d in (-5, -8, 1) and rng.random() < 0.5)
         if self.ot is not None:
             go_two = False
+        kicker = self.sq[k].units()["kicker"]
         if go_two:
             self.st[k]["two_att"] += 1
-            if rng.random() < P["two_prob"]:
+            good = rng.random() < P["two_prob"]
+            if good:
                 self.st[k]["two_made"] += 1
                 self.add_points(k, 2)
-            self.record("two-point try")
+            self.record("two-point try", team=k, pts=2 if good else 0, good=good)
         else:
             self.st[k]["pat_att"] += 1
-            if rng.random() < P["pat_prob"]:
+            good = rng.random() < P["pat_prob"]
+            self.pstat(kicker, "xp_att")
+            if good:
                 self.st[k]["pat_made"] += 1
+                self.pstat(kicker, "xp_made")
                 self.add_points(k, 1)
-            self.record("extra point")
+            self.record("extra point", team=k, pts=1 if good else 0, good=good, kicker=kicker.identity.id)
         self.tick(5, None)
 
     def safety(self, defending):
         """`defending` is the team awarded two points; the offense that gave it up kicks a free kick from its 20."""
         self.st[defending]["safeties"] += 1
         self.add_points(defending, 2)
-        self.record("safety")
+        self.record("safety", team=defending, pts=2)
         self.next = ("kickoff", self.other(defending), True)
         if self.ot is not None:
             self.finished = True
@@ -597,30 +731,32 @@ class Game:
         team = k if pen["side"] == "off" else o
         spot = isinstance(pen["yards"], tuple) and not pen["loss_down"]
         if pen["side"] == "off":
-            if self.yl - yards < 1:
-                yards = self.yl // 2
+            if yards > self.yl // 2:
+                yards = self.yl // 2                              # half the distance to the goal
             self.charge(team, pen, yards, card)
             self.yl -= yards
             self.dist += yards
             if self.yl <= 0:
                 self.yl = 1
-            self.record("penalty", pen["name"], yards, card.identity.id if card else None)
+            self.record("penalty", pen["name"], yards, card.identity.id if card else None, team=team, player=(card.identity.id if card else None))
             if pen["loss_down"]:
                 self.down += 1
                 if self.down > 4:
                     self.next = ("ball", o, int(clamp(100 - self.yl, 1, 99)))
             return
-        if self.yl + yards >= 100:
-            yards = max(0, 99 - self.yl) if spot else (100 - self.yl) // 2
+        if self.yl + yards >= 100 and spot:
+            yards = max(0, 99 - self.yl)                          # a spot foul in the end zone puts the ball on the one
+        elif yards > (100 - self.yl) // 2:
+            yards = (100 - self.yl) // 2                          # half the distance to the goal
         self.charge(team, pen, yards, card)
         self.yl += yards
         if pen["auto_first"] or yards >= self.dist:
             self.down, self.dist = 1, min(10, 100 - self.yl)
             self.st[k]["first_downs"] += 1
-            self.record("penalty", pen["name"], yards, card.identity.id if card else None, "first down")
+            self.record("penalty", pen["name"], yards, card.identity.id if card else None, "first down", team=team, player=(card.identity.id if card else None))
             return
         self.dist -= yards
-        self.record("penalty", pen["name"], yards, card.identity.id if card else None)
+        self.record("penalty", pen["name"], yards, card.identity.id if card else None, team=team, player=(card.identity.id if card else None))
 
     def penalty_applies(self, pen, outcome):
         kind = outcome["kind"]
@@ -657,7 +793,7 @@ class Game:
                 outcome["auto_first"] = pen["auto_first"]
             self.charge(team, pen, yards, card)
             outcome["pen"] = True
-            self.record("penalty", pen["name"], yards, card.identity.id, "after the play")
+            self.record("penalty", pen["name"], yards, card.identity.id, "after the play", team=team, player=(card.identity.id if card else None))
             return False
         if pen["side"] == "off":
             # the defense takes the foul unless the play was worse for the offense
@@ -705,7 +841,7 @@ class Game:
             else:
                 self.dist -= yards
         self.charge(team, pen, yards, card)
-        self.record("penalty", pen["name"], yards, card.identity.id, "kick")
+        self.record("penalty", pen["name"], yards, card.identity.id, "kick", team=team, player=(card.identity.id if card else None))
         self.tick(self.rng.uniform(3, 6), None)
 
     def kick_spot(self, k, pen, spot):
@@ -723,14 +859,18 @@ class Game:
         elif pen["effect"] == "oob":                                # the receiving team takes the ball at the 40
             spot = 40                                               # (replay_back fouls only cost the yardage booked)
         self.charge(team, pen, yards, card)
-        self.record("penalty", pen["name"], yards, card.identity.id, "kick")
+        self.record("penalty", pen["name"], yards, card.identity.id, "kick", team=team, player=(card.identity.id if card else None))
         return int(clamp(spot, 1, 99))
 
     # ------------------------------------------------------------ completing a play
     def play_result_kneel(self, k):
-        self.record("kneel", -1)
+        qb = self.sq[k].units()["qb"]
+        self.record("kneel", -1, car=qb.identity.id)
         self.st[k]["plays"] += 1
         self.st[k]["rush_att"] += 1
+        self.st[k]["rush_yds"] -= 1
+        self.pstat(qb, "car")
+        self.pstat(qb, "rush_yds", -1)
         self.yl = max(1, self.yl - 1)
         self.dist += 1
         self.down += 1
@@ -742,6 +882,8 @@ class Game:
         rng = self.rng
         s = self.st[k]
         kind, yards = o["kind"], o["yards"]
+        if o["turnover"] is None and kind in ("run", "scramble", "complete") and self.yl + yards > 100:
+            yards = o["yards"] = 100 - self.yl                    # a touchdown counts the yards to the goal line, not past it
         s["plays"] += 1
         if kind in ("run", "scramble"):
             s["rush_att"] += 1
@@ -752,6 +894,7 @@ class Game:
             s["sacks"] += 0
             self.st[self.other(k)]["sacks"] += 1
             s["pass_yds"] += 0
+            s["sack_yds"] += -yards
         elif kind in ("complete", "incomplete", "int"):
             s["pass_att"] += 1
             self.pstat(o["qb"], "att")
@@ -767,15 +910,19 @@ class Game:
             s["third_att"] += 1
         if self.down == 4:
             s["fourth_att"] += 1
+        scores = o["turnover"] is None and self.yl + yards >= 100
+        info = self.ids(o)
+        info.update(self.credit_defense(k, o, scores))
         # turnovers
         if o["turnover"] == "int":
             s["ints"] += 1
             self.pstat(o["qb"], "int")
             spot = int(clamp(self.yl + o["air"], 2, 99))
-            self.record("interception", o["air"])
+            self.record("interception", o["air"], **info)
             self.tick(rng.uniform(5, 8), k)
             if rng.random() < 0.03:
                 self.poss = self.other(k)
+                self.td_by = info.get("int_by")
                 self.score_td(self.poss, defensive=True)
                 return
             ret = max(0, round(abs(rng.gauss(6, 8))))
@@ -786,19 +933,20 @@ class Game:
         new_yl = self.yl + yards
         if fumble and o["turnover"] == "fumble":
             s["fumbles_lost"] += 1
-            self.record("fumble lost", yards)
+            self.record("fumble lost", yards, **info)
             self.tick(rng.uniform(5, 8), k)
             if new_yl <= 0:
                 self.safety(self.other(k))
                 return
             if rng.random() < 0.03:
                 self.poss = self.other(k)
+                self.td_by = info.get("fr")
                 self.score_td(self.poss, defensive=True)
                 return
             self.next = ("ball", self.other(k), int(clamp(100 - new_yl, 1, 99)))
             return
         # ordinary result
-        self.record(kind, yards)
+        self.record(kind, yards, **info)
         if new_yl >= 100:
             self.tick(rng.uniform(4, 7), k)
             if kind == "complete":
@@ -806,6 +954,7 @@ class Game:
                 self.pstat(o["qb"], "pass_td")
             elif kind in ("run", "scramble"):
                 self.pstat(o["carrier"], "rush_td")
+            self.td_by = info.get("tgt") if kind == "complete" else info.get("car")
             if self.down == 3:
                 s["third_conv"] += 1
             if self.down == 4:
@@ -836,6 +985,7 @@ class Game:
                 s["fourth_conv"] += 1
             s["first_downs"] += 1
             self.down, self.dist = 1, min(10, 100 - self.yl)
+            self.tag(first=True)
         elif not kneel:
             self.dist -= yards
             self.down += 1
@@ -871,9 +1021,11 @@ class Game:
         rng = self.rng
         if self.to[k] > 0 and (self.behind(k) or (self.period == 2 and self.lead(k) == 0)) and rng.random() < 0.85:
             self.to[k] -= 1
+            self.record("timeout", team=k, left=self.to[k])
             return True
         if self.to[o] > 0 and self.behind(o) and rng.random() < 0.85:
             self.to[o] -= 1
+            self.record("timeout", team=o, left=self.to[o])
             return True
         return False
 

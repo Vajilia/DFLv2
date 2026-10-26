@@ -126,9 +126,12 @@ class Squad:
         k, p = self.available("K") or [legs({"KPW": 40, "KAC": 60})], self.available("P") or [legs({"KPW": 60, "KAC": 40})]
         u["kick"] = wmean(k[0], {"KPW": 40, "KAC": 60})
         u["punt"] = wmean(p[0], {"KPW": 60, "KAC": 40})
+        runners = [c for c in self.cards.values() if c.identity.pos in ("HB", "WR", "CB") and c.identity.id not in self.out]
+        returner = max(runners, key=lambda c: (wmean(c, {"SPD": 40, "ELU": 40, "BSE": 20}), -c.identity.id)) if runners else None
         z = {n: (u[n] - P.get("mean_" + n, P["mean_kick"] if n == "punt" else 70)) / P.get("sd_" + n, P["sd_kick"] if n == "punt" else 5) for n in u}
         st = self.staff
         z["off_coach"] = st.bonus(st.oc, "SCH") + 0.5 * st.bonus(st.hc, "MGT")
         z["def_coach"] = st.bonus(st.dc, "SCH") + 0.5 * st.bonus(st.hc, "MGT")
-        self._units = {"raw": u, "z": z, "off": o, "def": d, "qb": qb, "hb": hb, "wr": wr, "te": te[0]}
+        self._units = {"raw": u, "z": z, "off": o, "def": d, "qb": qb, "hb": hb, "wr": wr, "te": te[0], "kicker": k[0], "punter": p[0],
+                       "returner": returner}
         return self._units

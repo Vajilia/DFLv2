@@ -1,0 +1,49 @@
+name,value,note
+# --- movement (yards and seconds); PLACEHOLDER until calibrated (Edition 8.48)
+vmax_base,5.2,top speed at SPD 0
+vmax_per_spd,0.052,top speed per point of SPD
+acc_base,6.0,acceleration yd/s2 at ACC 0
+acc_per_acc,0.07,acceleration per point of ACC
+agi_acc_gain,0.25,share by which AGI scales acceleration (0.25 = +-12 percent over 50 points)
+dec_mult,1.5,deceleration over acceleration
+backpedal,0.72,share of top speed moving backwards or sideways in coverage
+sep_radius,0.85,players closer than this and not engaged are pushed apart
+sep_push,3.0,push speed yd/s
+# --- blocking engagements (leverage)
+eng_range,1.15,distance at which a blocker and her man are engaged
+eng_gain_run,1.3,leverage per second per 30 points of rating difference (run)
+eng_gain_pass,1.1,leverage per second per 30 points of rating difference (pass)
+eng_noise,0.45,leverage noise per sqrt(second)
+eng_win,1.0,leverage at which the engagement is decided
+eng_drive_run,1.6,yd/s the pair is driven at full leverage in a run block
+eng_back_pass,0.9,yd/s the pocket gives at full negative leverage
+eng_size,0.35,rating points per kg of weight above 80 kg
+eng_shed_stun,0.35,seconds a beaten blocker stays stunned
+eng_double_gain,0.65,share of a second blocker's rating added to a double team
+# --- ball carrier
+carry_horizon,1.2,seconds a carrier looks ahead
+carry_hold,0.35,leverage a carrier needs to change heading
+tackle_reach,0.95,reach of a tackler yd
+tackle_base,0.62,tackle probability at equal rating
+tackle_gain,0.012,per point of tackling minus carrier elusiveness
+tackle_speed,0.02,per yd/s of closing speed
+tackle_gang,0.10,added per extra tackler
+tackle_miss_stun,0.6,seconds a defender who missed is out
+tackle_miss_slow,0.88,carrier speed multiplier after breaking a tackle
+fall_forward,0.8,yards a carrier gains after first contact at equal strength
+fumble_base,0.012,fumble chance per tackle
+# --- passing
+ball_speed_base,19.0,horizontal ball speed yd/s at THP 0
+ball_speed_per_thp,0.115,per point of THP
+release_delay,0.25,seconds from decision to release
+acc_err_base,0.28,aim error sd yd (near)
+acc_err_dist,0.021,aim error sd per yd of throw
+acc_err_tha,0.016,aim error scales as (1.9 - this*THA)
+acc_err_press,0.6,added share of error under pressure
+catch_radius,1.25,reach radius for a catch yd
+catch_height,3.0,highest ball a player can reach yd
+open_margin,1.0,yards of separation a quarterback needs by default
+prog_dt,0.42,seconds per step of the quarterback's progression
+qb_perception,0.85,sd of the quarterback's error in judging separation (scaled by awareness)
+pocket_time,2.9,seconds before the quarterback leaves the pocket
+sack_prob,0.84,chance a rusher in reach brings down the quarterback

@@ -1,0 +1,23 @@
+{
+  "_note": "Numeric route landmarks (Edition 8.48). Each waypoint is [yards downfield, yards toward the sideline] from the receiver's alignment; a negative second number is toward the middle. speed is the share of top speed on the stem; a route ends at its last waypoint and the receiver then settles.",
+  "go":       {"wps": [[38, 0]], "speed": 1.0},
+  "seam":     {"wps": [[34, -2]], "speed": 1.0},
+  "post":     {"wps": [[11, 0], [24, -11], [34, -13]], "speed": 1.0},
+  "corner":   {"wps": [[11, 0], [23, 10], [33, 12]], "speed": 1.0},
+  "out":      {"wps": [[9, 0], [9, 7], [9, 13]], "speed": 1.0},
+  "out_short":{"wps": [[5, 0], [5, 6], [5, 12]], "speed": 1.0},
+  "dig":      {"wps": [[12, 0], [12, -9], [12, -17]], "speed": 1.0},
+  "curl":     {"wps": [[11, 0], [9, -1.5]], "speed": 1.0},
+  "comeback": {"wps": [[15, 0], [11.5, 2.5]], "speed": 1.0},
+  "hitch":    {"wps": [[6, 0], [4.8, 0]], "speed": 1.0},
+  "slant":    {"wps": [[1.5, 0], [6, -4.5], [13, -8.5]], "speed": 1.0},
+  "flat":     {"wps": [[1.2, 3], [1.5, 9]], "speed": 0.9},
+  "wheel":    {"wps": [[1.5, 5], [5, 9], [28, 10]], "speed": 1.0},
+  "drag":     {"wps": [[2, -3], [2.5, -15]], "speed": 0.9},
+  "cross":    {"wps": [[7, -4], [9, -17], [10, -28]], "speed": 1.0},
+  "sit":      {"wps": [[5, 0], [4.6, -0.5]], "speed": 1.0},
+  "stick":    {"wps": [[4, 0], [4.5, 1.5]], "speed": 0.9},
+  "check":    {"wps": [[2.5, 3], [4, 5]], "speed": 0.85},
+  "swing":    {"wps": [[-1.5, 4], [-1, 9]], "speed": 0.95},
+  "block":    {"wps": [], "speed": 0.0}
+}

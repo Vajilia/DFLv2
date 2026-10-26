@@ -1,0 +1,9 @@
+{
+  "_note": "Offensive formations (Edition 8.48): [yards from the line of scrimmage (negative is behind it), yards left of the ball (negative is right)]. The offensive line is fixed: LT 2.5, LG 1.25, C 0, RG -1.25, RT -2.5 at -0.5. 'mirror' flips left and right. te/x/z/s are the tight end and three receivers; hb is the back.",
+  "gun_2x2":    {"gun": true,  "qb": [-5.0, 0.0], "hb": [-5.0, -2.4], "te": [-1.0, -8.0], "x": [0.0, 19.5], "s": [-1.0, 9.0], "z": [0.0, -19.5]},
+  "gun_trips":  {"gun": true,  "qb": [-5.0, 0.0], "hb": [-5.0, 2.4],  "te": [0.0, 3.9],  "x": [-1.0, -8.0], "s": [-1.0, -13.0], "z": [0.0, -19.5]},
+  "gun_ace":    {"gun": true,  "qb": [-5.0, 0.0], "hb": [-5.0, 2.4],  "te": [0.0, -3.9], "x": [0.0, 19.5], "s": [-1.0, 10.0], "z": [0.0, -19.5]},
+  "gun_empty":  {"gun": true,  "qb": [-5.0, 0.0], "hb": [-1.0, 8.5],  "te": [0.0, -3.9], "x": [0.0, 19.5], "s": [-1.0, 12.0], "z": [0.0, -19.5]},
+  "single_back":{"gun": false, "qb": [-1.1, 0.0], "hb": [-6.5, 0.0],  "te": [0.0, -3.9], "x": [0.0, 19.5], "s": [-1.0, 10.0], "z": [0.0, -19.5]},
+  "split_back": {"gun": true,  "qb": [-5.0, 0.0], "hb": [-5.0, 2.4],  "te": [0.0, 3.9],  "x": [0.0, 19.5], "s": [-1.0, -9.0], "z": [0.0, -19.5]}
+}

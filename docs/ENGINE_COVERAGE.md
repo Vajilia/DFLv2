@@ -18,4 +18,6 @@ Left out on purpose (fewer than about two a season in the NFL, or not distinguis
 
 ## Plays and players
 - Built (play-level): runs, passes, sacks, scrambles, interceptions, fumbles, punts, field goals, kickoffs, onside kicks, extra points, two-point tries, kneel-downs, injuries.
+- Built (Edition 8.47): box score, scoring summary, structured play table, play-by-play text, individual defensive, kicking, punting and return statistics (`dfl.engine.boxscore`).
+- Not in the box score: longest plays, red-zone and per-quarter splits.
 - Not built until the spatial engine (see `docs/ENGINE.md`): formations, personnel groupings, blocking, coverage, ball flight, fatigue and substitution, returns as plays on the field.
