@@ -108,7 +108,10 @@ def election(world, cid, incumbent=None, exclude=()):
     """The fans choose a CEO. Each viewpoint votes for the candidate it rates highest (public standing plus its own error, plus credit or
     blame for the incumbent by its mood); the candidate with most fans behind him wins. Pool candidates stay in the pool until they take office."""
     g, year = G(world), world.L.year
+    exclude = set(exclude) | {c.identity.id for c in world.elected.values()}          # one candidate cannot win two clubs in a year (Edition 8.39)
     topup(world, "ceo")
+    while sum(1 for c in world.ceo_pool if c.identity.id not in exclude) < int(g["candidates"]):
+        world.ceo_pool.append(world.creator.leader("ceo", year, "hire", shift=g["ceo_pool_shift"]))
     cands = [c for c in world.ceo_pool if c.identity.id not in exclude]
     if incumbent is not None:
         cands = [incumbent] + cands
@@ -145,7 +148,8 @@ def retire_chance(world, card, role):
 
 def vacate(world, cid, role, why):
     card = world.leaders[cid].pop(role)
-    pool(world, role).append(card)
+    if card not in pool(world, role):
+        pool(world, role).append(card)
     world.pool_years[card.identity.id] = 0
     world.stats[why] = world.stats.get(why, 0) + 1
     world.gov_log.append({"year": world.L.year, "club": cid, "kind": why, "id": card.identity.id})

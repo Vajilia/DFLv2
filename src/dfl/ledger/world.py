@@ -25,6 +25,7 @@ from .positions import MINIMUMS, POSITIONS, shortfalls
 # a 53-man template: the 48 required places (backfield as 3 HB) plus five extras
 EXTRAS = ("WR", "CB", "DT", "MLB", "C")
 TEMPLATE = dict(MINIMUMS, HB=3)
+STARTERS = dict(K=1, P=1, QB=1, HB=1, WR=3, TE=1, LT=1, LG=1, C=1, RG=1, RT=1, LE=1, RE=1, DT=2, ROLB=1, MLB=1, LOLB=1, CB=3, FS=1, SS=1, LS=1)     # who a club upgrades (Edition 8.39)
 for _p in EXTRAS:
     TEMPLATE[_p] = TEMPLATE.get(_p, 0) + 1
 assert sum(TEMPLATE.values()) == 53
@@ -580,10 +581,34 @@ class World:
             if len(L.clubs[cid].roster) + len(L.clubs[cid].ps) >= R.PRESEASON_CEILING:
                 break
 
+    def upgrade(self, cid):
+        """Upgrade signings (Edition 8.39): before the cut, a club signs a free agent who is clearly better, by her own view and with age
+        counted, than her weakest starter at that position, at most `upgrade_max` times, biggest gap first, if the price fits under the cap.
+        The cut then sheds whoever the club now values least. This is how a veteran replaces a rookie in the NFL."""
+        L, N = self.L, self.tables.negotiation
+        gaps = []
+        for pos, n in STARTERS.items():
+            mine = sorted((self.value(L.players[i], cid) for i in L.clubs[cid].roster if L.players[i].pos == pos and L.players[i].out_weeks == 0), reverse=True)
+            if len(mine) < n:
+                continue            # short of a starter: the minimums rule fills it
+            best = next(iter(self.fas(pos, cid)), None)
+            if best is not None and self.value(best, cid) >= mine[n - 1] + N["upgrade_margin"]:
+                gaps.append((mine[n - 1] - self.value(best, cid), pos, best))
+        done = 0
+        for _, pos, best in sorted(gaps, key=lambda g: (g[0], g[1])):
+            if done >= N["upgrade_max"] or not L.room(cid, "roster"):
+                break
+            v = self.negotiate(cid, best)
+            if v is None or (cid not in self.reckless and L.cap_number(cid) + v > R.CAP - R.RESERVE):
+                continue
+            done += self.try_sign(cid, best, value=v)
+        self.stats["upgrades"] = self.stats.get("upgrades", 0) + done
+
     def camp(self, cid):
         """Cut to 53 and 16, clear any overage (the cap binds from the final cut), make sure the minimums hold."""
         L = self.L
         c = L.clubs[cid]
+        self.upgrade(cid)
         for _ in range(200):
             # sizes
             while len(c.roster) > R.ROSTER_MAX:

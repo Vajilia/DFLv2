@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.38.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.39.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -110,6 +110,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 
 ## Aging against the NFL (Ed 8.38, 2026-10-26)
 - **Built:** each position has its own decline rate after its peak (`decline` in `POSITIONS.csv`), and players retire from wear at any age, signed or not (`retire_chance_contracted`, `Ledger.retire_contracted`); a retiring player's contract ends with no dead money (spec items 19, 37, 38). Rostered players aged 30+ fell from 25% to 15%. Quarterbacks still run young because free agency makes no upgrade signings (item 38). The golden engine digest was re-based because founding cards are scaled by the new decline.
+- **Ed 8.39:** upgrade signings at camp (`World.upgrade`: a free agent 5 points better by the club's own view than her weakest starter, at most 3 a camp), and a CEO candidate can win only one club's election a year (an older latent bug that left duplicate pool cards). Measured gaps against the NFL are in spec item 39.
 
 ## Not built yet (next)
 1. The real game engine behind the `Resolver` interface (spec open item 2).

@@ -285,3 +285,25 @@ class Discretion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OneWinnerOneClub(unittest.TestCase):
+    """A pool candidate who has won one club's election cannot win another's in the same year (Edition 8.39)."""
+
+    def test_an_elected_candidate_is_not_a_candidate_elsewhere(self):
+        from dfl.ledger import governance
+        w = World(["C01", "C02", "C03", "C04"], seed=9)
+        w.open_year(first=True)
+        first = governance.election(w, "C01", incumbent=None, exclude=set())
+        w.elected["C01"] = first
+        for cid in ("C02", "C03", "C04"):
+            again = governance.election(w, cid, incumbent=None, exclude=set())
+            self.assertIsNot(again, first)
+
+    def test_the_election_always_has_candidates(self):
+        from dfl.ledger import governance
+        w = World(["C01", "C02"], seed=9)
+        w.open_year(first=True)
+        everyone = {c.identity.id for c in w.ceo_pool}
+        winner = governance.election(w, "C01", incumbent=None, exclude=everyone)
+        self.assertNotIn(winner.identity.id, everyone)

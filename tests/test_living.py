@@ -788,3 +788,45 @@ class RetireUnderContract(unittest.TestCase):
         for _ in range(9):
             w.step_year()
         self.assertGreater(w.L.retired.get("contract", 0), 0)
+
+
+class UpgradeSignings(unittest.TestCase):
+    """At camp a club signs a free agent who is clearly better than her weakest starter (Edition 8.39)."""
+
+    def setUp(self):
+        self.w = World(CLUBS, seed=51)
+        self.w.open_year(first=True)
+        self.cid = sorted(self.w.L.clubs)[0]
+        self.fa = next(p for p in sorted(self.w.L.players.values(), key=lambda q: q.pid) if p.where == "fa" and p.pos == "WR" and p.out_weeks == 0)
+
+    def _views(self, mine, hers):
+        w = self.w
+        for pid in w.L.clubs[self.cid].roster:
+            if w.L.players[pid].pos == "WR":
+                w._views[(self.cid, pid)] = mine
+        for q in w.L.players.values():
+            if q.where == "fa" and q.pos == "WR":
+                w._views[(self.cid, q.pid)] = 30.0
+        w._views[(self.cid, self.fa.pid)] = hers
+
+    def test_a_clearly_better_free_agent_is_signed(self):
+        self._views(50.0, 75.0)
+        w = self.w
+        w.L.phase = "camp"
+        w.upgrade(self.cid)
+        self.assertEqual(w.L.players[self.fa.pid].club, self.cid)
+        self.assertGreaterEqual(w.stats["upgrades"], 1)
+
+    def test_a_slightly_better_one_is_not(self):
+        self._views(60.0, 62.0)
+        w = self.w
+        w.L.phase = "camp"
+        w.upgrade(self.cid)
+        self.assertEqual(w.L.players[self.fa.pid].where, "fa")
+
+    def test_no_more_than_the_limit_per_camp(self):
+        self._views(40.0, 90.0)
+        w = self.w
+        w.L.phase = "camp"
+        w.upgrade(self.cid)
+        self.assertLessEqual(w.stats["upgrades"], int(w.tables.negotiation["upgrade_max"]))
