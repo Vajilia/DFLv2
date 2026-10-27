@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.49.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.50.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -124,7 +124,7 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 | Box scores, scoring summary, play-by-play, structured play table (Ed 8.47) | built, tested (`tests/test_boxscore.py`) |
 | 22-player (spatial) engine with per-snap traces for the 2D view (Ed 8.48, 8.49) | built, tested (`tests/test_spatial.py`: determinism, trace fidelity, outcome shapes, integration), calibrated; **opt-in**: 17 of 24 game bands pass, seven drive-efficiency bands miss (spec §20 item 46) |
 | Spatial extensions (other personnel, nickel/dime, fatigue and substitution, on-field kicking, challenges and replay, contact injuries) | **not built**, listed in spec §20 item 47 |
-| Owner question | whether the spatial engine becomes the default only at 24 of 24 bands (recommended) or earlier: spec §20 item 48 |
+| Owner ruling (Ed 8.50) | the spatial engine becomes the default only at 24 of 24 bands; the animation is a read-only window onto its trace (spec §16, §20 item 48) |
 
 ## Not built yet (next)
 1. The spatial engine's remaining gap to the bands, and its extensions (spec §20 items 46 and 47). The play-level engine behind the `Resolver` interface is built.

@@ -1,4 +1,4 @@
-"""Season loop (Design Document 8.49, sections 3, 6, 7).
+"""Season loop (Design Document 8.50, sections 3, 6, 7).
 
 Season 1 tables are the template. Every later season is the template relabelled by (bed, seed): which division
 holds which bed comes from the eight-season rotation (`schedule_bed_rotation`), which club holds which seed comes

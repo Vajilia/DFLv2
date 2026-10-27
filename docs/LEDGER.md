@@ -2,7 +2,7 @@
 
 Code: `src/dfl/ledger/` (`rules`, `positions`, `contracts`, `ledger`, `gameday`, and a **placeholder** `world` used only to drive the soak).
 Tests: `tests/test_ledger.py`, `tests/test_ledger_determinism.py`, `tests/test_living.py` (class `LegalMoves`). Soaks: `tools/run_ledger_soak.py` (the ledger alone) and `tools/run_universe_soak.py` (the whole living league). Legal-move enumerator: `Ledger.legal_moves(cid)`.
-Authority: Design Document Ed 8.49, sections 11, 12, 17. Where the document was silent, the interpretation below is the builder's; the owner delegated two of them (A1, A7) and ruled on the rest.
+Authority: Design Document Ed 8.50, sections 11, 12, 17. Where the document was silent, the interpretation below is the builder's; the owner delegated two of them (A1, A7) and ruled on the rest.
 
 ## What is enforced
 - Money is exact (`Fraction`). Cap $1,000, reserve $25, minimum salary $5. **No salary floor** (Ed 8.8). **No banking.**
