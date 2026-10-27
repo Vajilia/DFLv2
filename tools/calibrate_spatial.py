@@ -17,12 +17,12 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 RUN_COV = {"cover3": 0.34, "cover1": 0.18, "cover2": 0.16, "cover4": 0.14, "cover0": 0.02, "cover1_blitz": 0.08, "cover3_blitz": 0.08}
 # name: (nfl, low, high). Rates are per play unless noted.
 RUN_T = {"ypc": (4.35, 4.0, 4.7), "loss": (0.105, 0.07, 0.14), "stuff1": (0.27, 0.2, 0.34), "p10": (0.11, 0.08, 0.14), "p20": (0.032, 0.015, 0.05),
-         "fumble": (0.0125, 0.006, 0.02), "secs": (4.6, 3.9, 5.4),
+         "fumble": (0.0125, 0.006, 0.02), "secs": (4.6, 3.9, 5.4), "succ": (0.43, 0.39, 0.47),
          "h_0": (0.08, 0.04, 0.12), "h_1_2": (0.21, 0.15, 0.27), "h_3_4": (0.19, 0.13, 0.25), "h_5_9": (0.24, 0.17, 0.31)}
 PASS_T = {"sack": (0.065, 0.045, 0.085), "scramble": (0.02, 0.008, 0.035), "comp_pct": (0.645, 0.615, 0.675), "int_pct": (0.023, 0.015, 0.032),
           "ypa": (7.0, 6.4, 7.6), "ypc": (10.9, 9.5, 12.0), "pd": (0.085, 0.05, 0.12), "throwaway": (0.03, 0.01, 0.05), "secs": (4.9, 4.1, 5.7),
           "air": (8.0, 6.5, 9.5), "yac": (5.2, 4.0, 6.5),
-          "conv3": (0.37, 0.30, 0.44), "c_0": (0.05, 0.02, 0.09), "c_1_5": (0.27, 0.20, 0.34), "c_6_10": (0.27, 0.20, 0.34), "c_11_20": (0.26, 0.19, 0.33),
+          "conv3": (0.37, 0.30, 0.44), "succ": (0.47, 0.43, 0.51), "c_0": (0.05, 0.02, 0.09), "c_1_5": (0.27, 0.20, 0.34), "c_6_10": (0.27, 0.20, 0.34), "c_11_20": (0.26, 0.19, 0.33),
           "c_21_30": (0.09, 0.05, 0.13), "c_31": (0.07, 0.04, 0.10), "d_behind": (0.12, 0.06, 0.18), "d_0_5": (0.27, 0.19, 0.35), "d_5_10": (0.27, 0.19, 0.35), "d_10_15": (0.15, 0.09, 0.21),
           "d_15_20": (0.09, 0.04, 0.14), "d_20": (0.10, 0.05, 0.15)}     # the depth shares are of throws at a receiver, by yards past the line
 
@@ -101,6 +101,13 @@ def run(kind, n, seed, overrides, procs):
     return res
 
 
+
+def success(r):
+    """The NFL's success-rate test: a play is a success if it gains 40% of the distance on first down, 60% on second, all of it on third and fourth."""
+    need = (0.0, 0.4, 0.6, 1.0, 1.0)[min(4, r["down"])] * r["dist"]
+    return r["yards"] >= need and r["kind"] in ("run", "scramble", "complete") or bool(r["td"])
+
+
 def report(kind, res):
     n = len(res)
     m = {}
@@ -112,6 +119,7 @@ def report(kind, res):
         m["p10"] = sum(y >= 10 for y in ys) / n
         m["p20"] = sum(y >= 20 for y in ys) / n
         m["fumble"] = sum(r["fumble"] for r in res) / n
+        m["succ"] = sum(success(r) for r in res) / n
         m["secs"] = sum(r["secs"] for r in res) / n
         tgt = RUN_T
         hist = Counter("<0" if y < 0 else "0" if y == 0 else "1-2" if y <= 2 else "3-4" if y <= 4 else "5-9" if y <= 9 else "10-19" if y <= 19 else "20+" for y in ys)
@@ -129,6 +137,7 @@ def report(kind, res):
         m["ypc"] = sum(r["yards"] for r in comp) / max(1, len(comp))
         m["pd"] = sum(r["pd"] for r in att) / max(1, len(att))
         m["throwaway"] = sum(r["thrown_away"] for r in att) / max(1, len(att))
+        m["succ"] = sum(success(r) for r in res) / n
         m["secs"] = sum(r["secs"] for r in res) / n
         aims = [r["aim"] for r in att if "aim" in r]
         m["air"] = sum(aims) / max(1, len(aims))

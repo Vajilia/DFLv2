@@ -29,7 +29,7 @@ PARAMS = {
     "catch_contested": (0.4, 0.85, PASS), "contest_gain": (0.002, 0.012, PASS), "yac_block": (0.0, 1.0, PASS),
     "press_near": (4.0, 10.0, PASS), "press_go": (2.5, 8.0, PASS), "press_min": (0.4, 3.0, PASS), "press_bail": (0.0, 0.8, PASS), "perc_close": (0.1, 0.9, PASS), "check_pen": (0.0, 3.0, PASS), "scramble_base": (0.1, 0.7, PASS), "stick_pen": (0.0, 3.0, PASS),
 }
-WEIGHT = {"scramble": 0.5, "throwaway": 0.5, "fumble": 0.3, "secs": 0.5, "h_0": 0.3, "h_1_2": 0.3, "h_3_4": 0.3, "h_5_9": 0.3,
+WEIGHT = {"succ": 2.0, "scramble": 0.5, "throwaway": 0.5, "fumble": 0.3, "secs": 0.5, "h_0": 0.3, "h_1_2": 0.3, "h_3_4": 0.3, "h_5_9": 0.3,
           "c_0": 0.7, "c_1_5": 0.7, "c_6_10": 0.7, "c_11_20": 1.0, "c_21_30": 0.7, "c_31": 0.7, "d_behind": 0.7, "d_0_5": 0.7, "d_5_10": 0.7, "d_10_15": 0.8, "d_15_20": 0.8, "d_20": 0.7}
 
 
