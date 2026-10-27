@@ -17,11 +17,12 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 RUN_COV = {"cover3": 0.34, "cover1": 0.18, "cover2": 0.16, "cover4": 0.14, "cover0": 0.02, "cover1_blitz": 0.08, "cover3_blitz": 0.08}
 # name: (nfl, low, high). Rates are per play unless noted.
 RUN_T = {"ypc": (4.35, 4.0, 4.7), "loss": (0.105, 0.07, 0.14), "stuff1": (0.27, 0.2, 0.34), "p10": (0.11, 0.08, 0.14), "p20": (0.032, 0.015, 0.05),
-         "fumble": (0.0125, 0.006, 0.02), "secs": (4.6, 3.9, 5.4)}
+         "fumble": (0.0125, 0.006, 0.02), "secs": (4.6, 3.9, 5.4),
+         "h_0": (0.08, 0.04, 0.12), "h_1_2": (0.21, 0.15, 0.27), "h_3_4": (0.19, 0.13, 0.25), "h_5_9": (0.24, 0.17, 0.31)}
 PASS_T = {"sack": (0.065, 0.045, 0.085), "scramble": (0.02, 0.008, 0.035), "comp_pct": (0.645, 0.61, 0.68), "int_pct": (0.023, 0.015, 0.032),
           "ypa": (7.0, 6.2, 7.8), "ypc": (10.9, 9.5, 12.0), "pd": (0.085, 0.05, 0.12), "throwaway": (0.03, 0.01, 0.05), "secs": (4.9, 4.1, 5.7),
           "air": (8.0, 6.5, 9.5), "yac": (5.2, 4.0, 6.5),
-          "d_behind": (0.12, 0.06, 0.18), "d_0_5": (0.27, 0.19, 0.35), "d_5_10": (0.27, 0.19, 0.35), "d_10_15": (0.15, 0.09, 0.21),
+          "conv3": (0.37, 0.30, 0.44), "d_behind": (0.12, 0.06, 0.18), "d_0_5": (0.27, 0.19, 0.35), "d_5_10": (0.27, 0.19, 0.35), "d_10_15": (0.15, 0.09, 0.21),
           "d_15_20": (0.09, 0.04, 0.14), "d_20": (0.10, 0.05, 0.15)}     # the depth shares are of throws at a receiver, by yards past the line
 
 
@@ -48,23 +49,42 @@ def pick(rng, table):
     return k
 
 
+def situations(clubs, sq, rng, kind, n):
+    """(down, distance, yards from own goal line) of n real scrimmage snaps of the given kind, taken from play-level games, so that the
+    spatial engine is measured in the spots where games put it (third and long, the red zone, backed up) and not only on first and ten."""
+    from dfl.engine.game import play_game
+    out = []
+    want = ("run", "scramble") if kind == "run" else ("complete", "incomplete", "sack", "interception")
+    while len(out) < n:
+        a, b = rng.sample(clubs, 2)
+        r = play_game(sq[a], sq[b], random.Random(rng.random()), False, True)
+        for x in r.table:
+            if x["kind"] in want and x.get("down") and x.get("dist"):
+                out.append((x["down"], x["dist"], x["yl"], x["off"]))
+    rng.shuffle(out)
+    return out[:n]
+
+
 def work(args):
     kind, n, seed, overrides = args
-    from dfl.engine.spatial.core import PASSES, RUNS
+    from dfl.engine.spatial import calls
     from dfl.engine.spatial.sim import PlaySim
     clubs, sq = setup(overrides)
     rng = random.Random(seed)
     out = []
-    for _ in range(n):
+    for down, dist, yl, _ in situations(clubs, sq, rng, kind, n):
         a, b = rng.sample(clubs, 2)
-        plays = {k: v["weight"] for k, v in (RUNS if kind == "run" else PASSES).items() if v["weight"] > 0}
-        play = pick(rng, plays)
-        cov = pick(rng, RUN_COV if kind == "run" else {"cover3": 0.32, "cover1": 0.18, "cover2": 0.16, "cover4": 0.13, "cover0": 0.02,
-                                                       "cover1_blitz": 0.10, "cover3_blitz": 0.09})
-        los = rng.uniform(25, 70)
-        o = PlaySim(sq[a].units(), sq[b].units(), kind, play, cov, los, 26.67 + rng.choice((-3, 0, 3)), random.Random(rng.random())).run()
+        if kind == "run":
+            play = calls.run_call(rng, down, dist, yl)
+        else:
+            play = calls.pass_call(rng, down, dist, yl)
+        cov = calls.coverage_call(rng, down, dist, yl, kind == "pass")
+        los = float(min(99, max(1, yl)))
+        o = PlaySim(sq[a].units(), sq[b].units(), kind, play, cov, los, 26.67 + rng.choice((-3, 0, 3)), random.Random(rng.random()),
+                    down=down, dist=dist).run()
         o["los"] = los
-        out.append({"play": play, "cov": cov} | {k: o[k] for k in ("kind", "yards", "turnover", "secs", "td", "end", "los") + (("air",) if "air" in o else ()) + (("aim",) if "aim" in o else ()) + (("yac",) if "yac" in o else ())} |
+        o["down"], o["dist"] = down, dist
+        out.append({"play": play, "cov": cov, "down": down, "dist": dist} | {k: o[k] for k in ("kind", "yards", "turnover", "secs", "td", "end", "los") + (("air",) if "air" in o else ()) + (("aim",) if "aim" in o else ()) + (("yac",) if "yac" in o else ())} |
                    {"fumble": bool(o.get("fumble")) or o["turnover"] == "fumble", "pd": "pd" in o, "thrown_away": o["end"] == "incomplete" and o["kind"] == "incomplete" and o.get("target") is None})
     return out
 
@@ -93,6 +113,8 @@ def report(kind, res):
         m["secs"] = sum(r["secs"] for r in res) / n
         tgt = RUN_T
         hist = Counter("<0" if y < 0 else "0" if y == 0 else "1-2" if y <= 2 else "3-4" if y <= 4 else "5-9" if y <= 9 else "10-19" if y <= 19 else "20+" for y in ys)
+        for key, lo_, hi_ in (("h_0", 0, 1), ("h_1_2", 1, 3), ("h_3_4", 3, 5), ("h_5_9", 5, 10)):
+            m[key] = sum(lo_ <= y < hi_ for y in ys) / n
         extra = "  ".join(f"{k}:{hist[k] / n:.3f}" for k in ("<0", "0", "1-2", "3-4", "5-9", "10-19", "20+"))
     else:
         att = [r for r in res if r["kind"] in ("complete", "incomplete", "int")]
@@ -108,6 +130,8 @@ def report(kind, res):
         m["secs"] = sum(r["secs"] for r in res) / n
         aims = [r["aim"] for r in att if "aim" in r]
         m["air"] = sum(aims) / max(1, len(aims))
+        t3 = [r for r in res if r["down"] == 3]
+        m["conv3"] = sum(r["yards"] >= r["dist"] and r["kind"] in ("complete", "scramble") or r["td"] for r in t3) / max(1, len(t3))
         for key, lo_, hi_ in (("d_behind", -99, 0), ("d_0_5", 0, 5), ("d_5_10", 5, 10), ("d_10_15", 10, 15), ("d_15_20", 15, 20), ("d_20", 20, 99)):
             m[key] = sum(lo_ <= x < hi_ for x in aims) / max(1, len(aims))
         m["yac"] = sum(r["yac"] for r in comp if "yac" in r) / max(1, len(comp))

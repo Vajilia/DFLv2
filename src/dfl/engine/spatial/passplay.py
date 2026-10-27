@@ -161,6 +161,10 @@ class PassMixin:
         if self.P[r].state in ("route", "settle"):
             s, T, ax, ay = self.open_est(r)
             need = margin * (1.0 + max(0.0, ax - self.px[i]) / S["depth_risk"]) * (1.0 + (S["check_pen"] if role == "hb" else 0.0))
+            if self.down >= 3 and self.togo > 2.0:
+                short = self.togo - (ax - self.los)                       # how far short of the sticks the catch would be
+                if short > 1.0:
+                    need += S["stick_pen"] * short
             if s >= need and self.lane_ok(r):
                 self.decision = (t, role, s, "read")
                 self.begin_throw(r, T, ax, ay)

@@ -78,9 +78,9 @@ class DefMixin:
                 elif role == "fs":
                     p.zone = (self.los + 8.0, self.by, 6.0)
                 elif role == "ss":
-                    p.zone = (self.los + 4.5, self.by + gx[role] * (1.0 if self.py[i] > self.by else -1.0), 3.0)
+                    p.zone = (self.los + 4.5 + self.rng.gauss(0.0, S["fill_sd"]), self.by + gx[role] * (1.0 if self.py[i] > self.by else -1.0), 3.0)
                 else:
-                    p.zone = (self.los + S["fill_depth"], self.by + gx[role], S["gap_w"])
+                    p.zone = (self.los + S["fill_depth"] + self.rng.gauss(0.0, S["fill_sd"]), self.by + gx[role] + self.rng.gauss(0.0, 0.5 * S["fill_sd"]), S["gap_w"])
             if role in DL:
                 p.state = "dlrun"
                 p.read_t = 0.14 + 0.0025 * (100.0 - a) + (0.7 if fake else 0.0)

@@ -20,14 +20,14 @@ import calibrate_spatial as C  # noqa: E402
 # name: (low, high, kinds affected)
 RUN, PASS, BOTH = ("run",), ("pass",), ("run", "pass")
 PARAMS = {
-    "fill_depth": (1.2, 3.8, RUN), "eng_bias_run": (0.1, 1.2, RUN), "eng_bias_perim": (0.0, 1.6, RUN), "run_read_extra": (-0.2, 0.5, RUN),
+    "fill_depth": (1.2, 5.0, RUN), "eng_noise": (0.2, 1.4, BOTH), "fill_sd": (0.0, 3.0, RUN), "eng_arm_p": (0.0, 1.0, RUN), "gap_lb": (1.5, 5.0, RUN), "gap_w": (1.0, 4.0, RUN), "eng_win": (0.6, 1.6, BOTH), "eng_drive_run": (0.8, 3.0, RUN), "carry_horizon": (0.7, 1.8, RUN), "eng_bias_run": (0.1, 1.2, RUN), "eng_bias_perim": (0.0, 1.6, RUN), "run_read_extra": (-0.2, 0.5, RUN),
     "tackle_base": (0.72, 0.97, BOTH), "tackle_reach": (0.95, 1.7, BOTH), "tackle_behind": (0.5, 1.0, BOTH), "carry_f": (0.8, 0.99, BOTH),
     "pursuit_pred": (0.6, 1.0, BOTH),
     "catch_slow": (0.3, 0.95, PASS), "touch_lane": (0.08, 0.5, PASS), "int_lane": (0.08, 0.4, PASS), "int_contested": (0.15, 0.5, PASS),
     "open_margin": (0.5, 3.5, PASS), "depth_risk": (4.0, 40.0, PASS), "acc_err_dist": (0.02, 0.09, PASS), "adjust": (0.1, 0.7, PASS),
     "ball_react": (0.05, 0.4, PASS), "ball_lead": (0.2, 1.4, PASS), "eng_bias_pass": (-0.3, 0.7, PASS), "catch_free": (0.85, 0.99, PASS),
     "catch_contested": (0.4, 0.85, PASS), "contest_gain": (0.002, 0.012, PASS), "yac_block": (0.0, 1.0, PASS),
-    "press_near": (4.0, 10.0, PASS), "press_go": (2.5, 8.0, PASS), "press_min": (0.4, 3.0, PASS), "press_bail": (0.0, 0.8, PASS), "perc_close": (0.1, 0.9, PASS), "check_pen": (0.0, 3.0, PASS),
+    "press_near": (4.0, 10.0, PASS), "press_go": (2.5, 8.0, PASS), "press_min": (0.4, 3.0, PASS), "press_bail": (0.0, 0.8, PASS), "perc_close": (0.1, 0.9, PASS), "check_pen": (0.0, 3.0, PASS), "scramble_base": (0.1, 0.7, PASS), "stick_pen": (0.0, 3.0, PASS),
 }
 WEIGHT = {"scramble": 0.5, "throwaway": 0.5, "fumble": 0.3, "secs": 0.5}
 

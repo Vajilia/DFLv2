@@ -72,10 +72,13 @@ class CarryMixin:
         near = []
         for j in opp:
             q = self.P[j]
-            if q.eng is not None or q.stun > 0.0 or q.cd > 0.0:
+            if q.stun > 0.0 or q.cd > 0.0:
                 continue
+            arm = q.eng is not None
+            if arm and not (self.kind == "run" and q.eng.kind == "run" and q.eng.lev <= S["eng_arm_lev"] and ph.state != "carry_oob"):
+                continue                                          # an engaged run defender can only reach out for a carrier who runs by
             dd = math.hypot(self.px[j] - hx, self.py[j] - hy)
-            if dd <= reach:
+            if dd <= (S["eng_arm_reach"] if arm else reach):
                 near.append((dd, j))
         if not near:
             return
@@ -96,6 +99,8 @@ class CarryMixin:
                       - 0.003 * (ph.prof.wt - q.prof.wt) + S["tackle_gang"] * k + 0.04 * (len(near) - 1 - k))
                 if (self.px[j] - hx) * self.vx[h] + (self.py[j] - hy) * self.vy[h] < 0.0:
                     pq *= S["tackle_behind"]                              # from behind she is harder to bring down
+                if q.eng is not None:
+                    pq *= S["eng_arm_p"]
             if rng.random() < max(0.08, min(0.97, pq)):
                 self.tackled(h, j, [m for (_, m) in near if m != j], sack)
                 return
