@@ -13,15 +13,15 @@ sep_push,3.0,push speed yd/s
 eng_range,1.15,distance at which a blocker and her man are engaged
 eng_gain_run,1.3,leverage per second per 30 points of rating difference (run)
 eng_gain_pass,1.1,leverage per second per 30 points of rating difference (pass)
-eng_noise,0.45,leverage noise per sqrt(second)
-eng_win,1.0,leverage at which the engagement is decided
-eng_drive_run,1.6,yd/s the pair is driven at full leverage in a run block
+eng_noise,0.21,leverage noise per sqrt(second)
+eng_win,1.11,leverage at which the engagement is decided
+eng_drive_run,1.402,yd/s the pair is driven at full leverage in a run block
 eng_back_pass,0.9,yd/s the pocket gives at full negative leverage
 eng_size,0.35,rating points per kg of weight above 80 kg
 eng_shed_stun,0.35,seconds a beaten blocker stays stunned
 eng_double_gain,0.65,share of a second blocker's rating added to a double team
 # --- ball carrier
-carry_horizon,1.2,seconds a carrier looks ahead
+carry_horizon,0.98,seconds a carrier looks ahead
 carry_hold,0.35,leverage a carrier needs to change heading
 tackle_reach,1.085,reach of a tackler yd
 tackle_base,0.8197,tackle probability at equal rating
@@ -37,7 +37,7 @@ ball_speed_base,19.0,horizontal ball speed yd/s at THP 0
 ball_speed_per_thp,0.115,per point of THP
 release_delay,0.25,seconds from decision to release
 acc_err_base,0.28,aim error sd yd (near)
-acc_err_dist,0.09,aim error sd per yd of throw
+acc_err_dist,0.076,aim error sd per yd of throw
 acc_err_tha,0.016,aim error scales as (1.9 - this*THA)
 acc_err_press,0.6,added share of error under pressure
 catch_radius,1.25,reach radius for a catch yd
@@ -47,16 +47,16 @@ prog_dt,0.42,seconds per step of the quarterback's progression
 qb_perception,0.85,sd of the quarterback's error in judging separation (scaled by awareness)
 pocket_time,2.9,seconds before the quarterback leaves the pocket
 sack_prob,0.84,chance a rusher in reach brings down the quarterback
-catch_free,0.99,catch probability with no defender in reach (before skill)
-catch_contested,0.85,catch probability for a receiver who wins a contested ball
+catch_free,0.9815,catch probability with no defender in reach (before skill)
+catch_contested,0.7377,catch probability for a receiver who wins a contested ball
 touch_lane,0.1982,chance a defender in the flight path gets a hand on the ball
-int_lane,0.0958,share of those touches that are interceptions
-int_contested,0.2915,interception chance for a defender who wins a contested ball
+int_lane,0.131,share of those touches that are interceptions
+int_contested,0.3615,interception chance for a defender who wins a contested ball
 contest_gain,0.0063,receiver win probability per point of skill difference
-eng_bias_run,0.5334,leverage per second the run defender gains at equal ratings
-eng_bias_pass,0.01,leverage per second the pass rusher gains at equal ratings
+eng_bias_run,0.7534,leverage per second the run defender gains at equal ratings
+eng_bias_pass,-0.08,leverage per second the pass rusher gains at equal ratings
 climb_lev,0.5,leverage at which a combination blocker leaves the lineman for the backer
-fill_depth,3.8,yards beyond the line at which run defenders other than the linemen hold until the carrier crosses it
+fill_depth,5.0,yards beyond the line at which run defenders other than the linemen hold until the carrier crosses it
 run_read_extra,-0.1128,seconds added to the backers' and backs' read of a run
 gap_lb,3.2,yards from the ball of an outside backer's gap
 gap_w,2.2,how far a backer may shift across the field from his gap before the carrier crosses the line
@@ -65,12 +65,12 @@ eng_bias_perim,1.1832,extra leverage per second the defender gains against a rec
 tail_run,2.0,seconds from the whistle's cause to the whistle on a running play (wrap-up, pile, dead ball): added to the sim clock
 tail_pass,1.6,the same for a pass
 ball_react,0.05,base seconds for a defender to react to the ball being thrown
-ball_lead,1.0992,seconds ahead of the ball's present position that a defender runs to
-tackle_behind,0.9147,tackle probability multiplier when the tackler is behind the carrier
-catch_slow,0.3,share of her speed a receiver keeps through the catch
+ball_lead,1.2312,seconds ahead of the ball's present position that a defender runs to
+tackle_behind,0.9449,tackle probability multiplier when the tackler is behind the carrier
+catch_slow,0.3715,share of her speed a receiver keeps through the catch
 pursuit_pred,0.7942,share of her top speed that defenders assume a runner will reach
 lane_width,1.1,yards either side of a flat throw's line that a defender must be clear of
-adjust,0.366,share of a mis-thrown ball's error that a receiver runs to correct
+adjust,0.246,share of a mis-thrown ball's error that a receiver runs to correct
 zone_reach,6.0,yards beyond his zone's half width within which a zone defender picks up a receiver
 under_off,0.4,yards deeper than her that an underneath zone defender plays a receiver
 depth_risk,12.72,yards of throw depth that double the separation a quarterback asks for
@@ -80,16 +80,16 @@ band_deep,9.0,yards short of his landmark that a deep zone defender will take a 
 carry_f,0.99,share of top speed a ball carrier runs at
 press_near,8.474,yards from the nearest free rusher at which the quarterback feels the heat
 press_go,4.59,yards at which a quarterback under heat throws the best option or gets rid of it
-press_min,1.3287,yards of separation the best option needs for a quarterback under heat to throw to her
+press_min,1.8487,yards of separation the best option needs for a quarterback under heat to throw to her
 perc_close,0.9,share of her top speed a free defender is credited with closing on the throw point in the quarterback's estimate
-press_bail,0.7024,chance a quarterback who feels the heat gets rid of it or runs instead of throwing to a covered or open receiver
-check_pen,1.13,extra separation a quarterback wants before he checks the ball down to the back, as a share of the usual margin
-scramble_base,0.486,chance a quarterback with no one to throw to and no speed runs rather than throws it away
+press_bail,0.8,chance a quarterback who feels the heat gets rid of it or runs instead of throwing to a covered or open receiver
+check_pen,2.2415,extra separation a quarterback wants before he checks the ball down to the back, as a share of the usual margin
+scramble_base,0.606,chance a quarterback with no one to throw to and no speed runs rather than throws it away
 eng_snap,0.3,most a player is moved to the engagement's geometry in one step, in yards
 edge_eng,0.3,share of the offense's blocking rating gained per z of coaching and home-field edge
 edge_perc,0.3,share of the quarterback's read error removed per z of coaching and home-field edge
-stick_pen,0.6,extra yards of separation a quarterback wants on third or fourth down for each yard a catch would be short of the first-down marker
+stick_pen,0.0,extra yards of separation a quarterback wants on third or fourth down for each yard a catch would be short of the first-down marker
 fill_sd,1.4,spread in yards of where a run defender fills the gap from play to play
 eng_arm_lev,0.3,leverage at or below which an engaged run defender can still reach a carrier who runs by
 eng_arm_reach,0.95,yards within which an engaged run defender can reach a passing carrier
-eng_arm_p,0.5,share of a free defender's tackle chance an engaged defender has
+eng_arm_p,0.5295,share of a free defender's tackle chance an engaged defender has

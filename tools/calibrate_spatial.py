@@ -26,18 +26,19 @@ PASS_T = {"sack": (0.065, 0.045, 0.085), "scramble": (0.02, 0.008, 0.035), "comp
           "d_15_20": (0.09, 0.04, 0.14), "d_20": (0.10, 0.05, 0.15)}     # the depth shares are of throws at a receiver, by yards past the line
 
 
-def setup(overrides):
+def setup(overrides, pop_seed=1):
     from dfl.characters import Creator
     from dfl.engine.squad import Squad
     from dfl.engine.spatial import core
     for k, v in overrides.items():
         core.S[k] = v
     clubs = [f"C{i:02d}" for i in range(48)]
-    pop = Creator(1).founding(2001, clubs)
+    pop = Creator(pop_seed).founding(2001, clubs)
     return clubs, {c: Squad(c, pop["clubs"][c]["roster"] + pop["clubs"][c]["ps"]) for c in clubs}
 
 
 DETAIL = False
+POPS = (1, 10, 7, 8)                                 # the founding leagues the squads come from, so the result is not one league's luck
 
 
 def pick(rng, table):
@@ -66,10 +67,10 @@ def situations(clubs, sq, rng, kind, n):
 
 
 def work(args):
-    kind, n, seed, overrides = args
+    kind, n, seed, overrides, pop_seed = args
     from dfl.engine.spatial import calls
     from dfl.engine.spatial.sim import PlaySim
-    clubs, sq = setup(overrides)
+    clubs, sq = setup(overrides, pop_seed)
     rng = random.Random(seed)
     out = []
     for down, dist, yl, _ in situations(clubs, sq, rng, kind, n):
@@ -90,12 +91,12 @@ def work(args):
 
 
 def run(kind, n, seed, overrides, procs):
-    chunks = [(kind, n // procs, seed * 1000 + i, overrides) for i in range(procs)]
+    chunks = [(kind, n // len(POPS), seed * 1000 + i, overrides, ps) for i, ps in enumerate(POPS)]
     if procs > 1:
         with mp.Pool(procs) as pool:
             res = [r for part in pool.map(work, chunks) for r in part]
     else:
-        res = work(chunks[0])
+        res = [r for ch in chunks for r in work(ch)]
     return res
 
 
@@ -180,9 +181,12 @@ if __name__ == "__main__":
     ap.add_argument("--procs", type=int, default=max(1, min(8, os.cpu_count() or 1)))
     ap.add_argument("--set", nargs="*", default=[])
     ap.add_argument("--detail", action="store_true")
+    ap.add_argument("--pop", default="")
     a = ap.parse_args()
     ov = {k: float(v) for k, v in (s.split("=") for s in a.set)}
     DETAIL = a.detail
+    if a.pop:
+        POPS = tuple(int(x) for x in a.pop.split(','))
     bad = 0
     for kind in (["run", "pass"] if a.kind == "both" else [a.kind]):
         bad += report(kind, run(kind, a.n, a.seed, ov, a.procs))
