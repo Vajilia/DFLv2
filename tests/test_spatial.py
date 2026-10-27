@@ -8,6 +8,10 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
+try:
+    import numpy  # noqa: F401
+except ImportError:                                               # the 22-player engine is opt-in and the only part that needs numpy
+    raise unittest.SkipTest("numpy is not installed")
 import test_engine as TE  # noqa: E402
 from dfl.engine.boxscore import box_score  # noqa: E402
 from dfl.engine.game import play_game  # noqa: E402

@@ -10,6 +10,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install the one optional dependency (numpy, for the 22-player engine)
+        run: python3 -m pip install -r requirements.txt
       - name: Unit and property tests
         run: python3 -I -m unittest discover -s tests -v
       - name: Specification hash and Season 1 tables
