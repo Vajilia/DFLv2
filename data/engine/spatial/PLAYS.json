@@ -18,6 +18,6 @@
     "play_action":  {"drop": 5, "routes": {"x": "post", "z": "cross", "s": "dig", "te": "flat", "hb": "block"}, "progression": ["x", "te", "s", "z"], "formations": ["single_back", "split_back"], "fake": true, "weight": 1.3},
     "flood":        {"drop": 5, "routes": {"x": "drag", "z": "corner", "s": "out", "te": "flat", "hb": "check"}, "progression": ["z", "s", "te", "hb"], "formations": ["gun_trips", "gun_2x2", "gun_ace"], "weight": 1.1},
     "screen":       {"drop": 3, "routes": {"x": "go", "z": "go", "s": "block", "te": "block", "hb": "swing"}, "progression": ["hb"], "formations": ["gun_2x2", "gun_ace"], "screen": true, "weight": 0.5},
-    "empty_levels": {"drop": 5, "routes": {"x": "dig", "z": "out", "s": "curl", "te": "seam", "hb": "out_short"}, "progression": ["s", "z", "x", "te", "hb"], "formations": ["gun_empty"], "weight": 1.0}
+    "empty_levels": {"drop": 5, "routes": {"x": "dig", "z": "out", "s": "curl", "te": "cross", "hb": "out_short"}, "progression": ["s", "z", "x", "te", "hb"], "formations": ["gun_empty"], "weight": 1.0}
   }
 }
