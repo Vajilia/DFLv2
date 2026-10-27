@@ -27,6 +27,11 @@ def pass_call(rng, down, dist, yl, hurry=False):
     elif dist >= 8 or down >= 3 and dist >= 5:
         for k, m in (("deep_shot", 1.6), ("four_verts", 1.5), ("flood", 1.4), ("smash", 1.3), ("mesh", 1.2), ("quick_slants", 0.7), ("stick", 0.6)):
             w[k] *= m
+    if down >= 3 and dist >= 5:
+        # on third and long the concepts that run to the sticks replace the ones that check down short of them
+        for k, m in (("quick_slants", 0.5), ("curl_flat", 0.6), ("stick", 0.4), ("mesh", 0.7), ("screen", 0.3), ("play_action", 0.5),
+                     ("smash", 1.4), ("flood", 1.5), ("empty_levels", 1.3)):
+            w[k] *= m
     if yl >= 80:
         for k in ("four_verts", "deep_shot", "play_action"):
             w[k] *= 0.4 if yl < 90 else 0.15
