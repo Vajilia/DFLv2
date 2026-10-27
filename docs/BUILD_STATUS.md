@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.48.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.49.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -117,8 +117,17 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 - **Ed 8.39:** upgrade signings at camp (`World.upgrade`: a free agent 5 points better by the club's own view than her weakest starter, at most 3 a camp), and a CEO candidate can win only one club's election a year (an older latent bug that left duplicate pool cards). Measured gaps against the NFL are in spec item 39.
 - **Ed 8.42:** trade volume to the NFL's rate: every club proposes in each trading window and tries her best targets in turn (`tries_per_club`), about 70 trades a year for 48 clubs (spec item 41). Pick-for-pick trades are not built.
 
+## Phase 3: game engine (built 2026-10-27, Ed 8.49)
+| Piece | Status |
+| --- | --- |
+| Play-level engine: runs, passes, drives, kicking, overtime, ties, injuries, penalties | built, default; passes all 24 game bands over thousands of games; tie rate measured (1.4 to 1.8 percent) |
+| Box scores, scoring summary, play-by-play, structured play table (Ed 8.47) | built, tested (`tests/test_boxscore.py`) |
+| 22-player (spatial) engine with per-snap traces for the 2D view (Ed 8.48, 8.49) | built, tested (`tests/test_spatial.py`: determinism, trace fidelity, outcome shapes, integration), calibrated; **opt-in**: 17 of 24 game bands pass, seven drive-efficiency bands miss (spec §20 item 46) |
+| Spatial extensions (other personnel, nickel/dime, fatigue and substitution, on-field kicking, challenges and replay, contact injuries) | **not built**, listed in spec §20 item 47 |
+| Owner question | whether the spatial engine becomes the default only at 24 of 24 bands (recommended) or earlier: spec §20 item 48 |
+
 ## Not built yet (next)
-1. The real game engine behind the `Resolver` interface (spec open item 2).
+1. The spatial engine's remaining gap to the bands, and its extensions (spec §20 items 46 and 47). The play-level engine behind the `Resolver` interface is built.
 2. Fairness bands and parity profiles, then the people layer, persistence and pacing, presentation (see ROADMAP).
 3. Everything in spec section 20.
 

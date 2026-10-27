@@ -19,7 +19,7 @@ Players come from character cards (`dfl.characters`). A `Squad` picks the best a
 - Timeouts: taken late in a half by a side that is behind (or the tied side at the end of the first half).
 - Injuries: a small per-snap rate weighted by durability; injured players are out for the rest of the game; weeks are drawn from a table. A short position is filled by the best leftover player (the out-of-position penalty is still open).
 
-## Not modeled yet
+## Not modeled yet (play-level; the spatial engine is described at the end)
 Challenges and replay, fatigue and substitution patterns, nickel and dime packages, playbooks and game plans, special-teams returns beyond a distribution, the two-minute warning, formations as such, weather, individual defensive stats, All-Star composite squads (the Ambassador Bowl needs them; the people layer decides who is on them).
 
 ## Calibration (Ed 8.16 parameters, 10,000 games per seed, 48 founding-league clubs)
@@ -39,3 +39,16 @@ Speed: about 290 games per second, so a 1,056-game season takes about four secon
 
 ## Box scores and the play table (Ed 8.47)
 `dfl.engine.boxscore` turns a finished game into a box score (`box_score`, `format_box`), a scoring summary and play-by-play text (`play_by_play`). Try it with `python3 tools/show_game.py --seed 4 --pbp`. Play with `log=True` to get the structured play table (`GameResult.table`, one dict per event, players by id; the older tuple log `GameResult.plays` is unchanged). Individual defensive credit (tackles, assists, sacks, tackles for loss, passes defended, interceptions, forced and recovered fumbles) is drawn on its own random stream, by position group and the defender's skill, so keeping or dropping the table or the credit never changes a score (tested); the spatial engine will name the player who actually made the play. Kicking (field goals with long, extra points, kickoffs, touchbacks), punting (average, inside the 20, touchbacks) and returns (kickoff and punt) are credited to the kicker, punter and the squad's returner. Conventions: a touchdown run or catch counts the yards to the goal line only, a kneel-down is a one-yard loss rush, the half-the-distance rule is applied to every foul that would carry the ball more than half the way to the goal.
+
+## The 22-player (spatial) engine (Ed 8.48 and 8.49)
+Opt-in: `play_game(..., spatial=True)` plays every run and pass snap with 22 players moving on a 100-yard field plus end zones, 20 times a second; `trace=True` also keeps each snap's compressed trace in the play table for the 2D view. The league's default stays the play-level engine (it passes all 24 bands and its golden digest is unchanged). Penalties, injuries, the clock, kicking and the box score are shared code.
+
+Code (`src/dfl/engine/spatial/`): `core.py` (field, data files, player physical profiles), `align.py` (formations and defensive alignments), `calls.py` (play and coverage calls from the situation only), `sim.py` (the step loop, movement, blocking engagements, contact), `runplay.py`, `passplay.py`, `defense.py`, `carry.py` (ball carrier, tackles, fumbles, the outcome), `trace.py` (decode a trace; `to_json` for a viewer). Every number is data in `data/engine/spatial/` (`PHYSICS.csv`, `PLAYS.json`, `ROUTES.json`, `FORMATIONS.json`, `COVERAGES.json`). Speed: about 1.2 games a second on one core (a play-level game is about 290 a second).
+
+Tools: `tools/calibrate_spatial.py` (snap level: draws game situations from play-level games, uses the real play calling, reports run and pass targets, `--detail` for the breakdown), `tools/fit_spatial.py` (coordinate-descent fit of the physics over four founding leagues), `tools/calibrate_engine.py --spatial --procs 2` (the 24 game bands), `tools/show_game.py --spatial --traces DIR` (one game with every snap's 2D trace written as JSON).
+
+**Measured (Ed 8.49):** at snap level everything is inside its band except pass success rate, the share of 3-4 yard runs and completions of 11 to 20 yards. At game level 17 of 24 bands pass over 1,500 games (tie rate 0.9 percent). The seven misses (first downs, third-down conversion, punts, passing yards per attempt, plays per game, margin spread, injuries) share one cause: the spatial engine's yardage is more boom-and-bust than the NFL's, so yards per play are right but first downs are too few. See spec section 20 items 46 to 48.
+
+The engine is sensitive to the league's average ratings (a point or two on receivers, quarterbacks or pass rushers moves passing yards per attempt by 0.3 to 0.7), which is why the fit uses four founding leagues.
+
+Not built (item 47): other personnel groupings, nickel and dime, fatigue and substitution, on-field kicking and returns, challenges and replay, contact injuries, penalties tied to the players' positions.

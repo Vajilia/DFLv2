@@ -44,8 +44,9 @@ Reason for the order: people-and-agents is the most expensive and least testable
 - **Wired to the ledger (Ed 8.18, 2026-10-23):** the ledger world's players are cards (founding league, draft classes, pool top-ups from the Creator), cards develop and age yearly and free agents retire by age and rating (placeholder curves in `data/characters/DEVELOPMENT.csv` and `AGE_CURVE.csv`). The real attribute list still waits for the engine's needs (Phase 3).
 - **Needs from the owner:** nothing now; the attribute set is revisited when the engine is specified.
 
-## Phase 3 — Game engine (the big one) — slice 1 built 2026-10-23
-- **Slice 1 (done):** rules core and a play-level resolver, injuries, calibration harness and bands. See `docs/ENGINE.md`. The spatial engine and the remaining slices below are not started.
+## Phase 3 — Game engine (the big one) — built 2026-10-27 (Ed 8.49)
+- **Done:** all six slices: run and pass plays with a drive model, penalties (Ed 8.46), injuries at NFL frequency, overtime and ties (measured: 1.4 to 1.8 percent play-level, 0.9 percent spatial), box scores and play-by-play (Ed 8.47), the play table and, for the 2D view, the per-snap trace table (Ed 8.48 and 8.49). The play-level engine passes all 24 game bands and is the league default. The 22-player engine is built, tested and calibrated but opt-in: 17 of 24 game bands pass and seven drive-efficiency bands do not (spec §20 item 46); other extensions are deferred (item 47). See `docs/ENGINE.md`.
+- **Exit test:** met by the play-level engine (bands over thousands of games, tie frequency measured). Open for the spatial engine only if the owner wants it as the default (item 48).
 - **Goal:** replace the placeholder resolver with real football.
 - **Work, in slices, spec before code:** (1) run and pass plays and a drive model, (2) penalties from the ~20 most common NFL penalties, (3) injuries at NFL-average frequency, (4) overtime and ties, (5) box scores, (6) play log and the second per-play table for the 2D view. Each slice has calibration bands (scoring, plays per game, penalties, injuries, tie rate).
 - **Exit test:** engine output sits inside the accepted football-reasonable bands over thousands of games, and tie frequency is measured, not assumed.
