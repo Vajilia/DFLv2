@@ -176,7 +176,7 @@ class PassMixin:
                 if self.P[ri].state not in ("route", "settle"):
                     continue
                 s, T, ax, ay = self.open_est(ri)
-                if best is None or s > best[0]:
+                if best is None or s - (S["check_forced"] if rr == "hb" else 0.0) > best[0] - (S["check_forced"] if self.P[best[1]].role == "hb" else 0.0):
                     best = (s, ri, T, ax, ay)
             if best is not None and best[0] > 0.45:
                 self.decision = (t, self.P[best[1]].role, best[0], "forced")

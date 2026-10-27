@@ -8,15 +8,15 @@
     "sneak":        {"scheme": "sneak", "aim": 0.0, "handoff": 0.0, "formations": ["single_back"], "weight": 0.0}
   },
   "passes": {
-    "quick_slants": {"drop": 3, "routes": {"x": "slant", "z": "slant", "s": "hitch", "te": "out_short", "hb": "check"}, "progression": ["x", "z", "te", "s", "hb"], "formations": ["gun_2x2", "gun_trips", "gun_ace"], "weight": 2.0},
-    "curl_flat":    {"drop": 5, "routes": {"x": "curl", "z": "curl", "s": "flat", "te": "sit", "hb": "check"}, "progression": ["x", "te", "s", "z", "hb"], "formations": ["gun_2x2", "gun_ace", "single_back"], "weight": 1.8},
+    "quick_slants": {"drop": 3, "routes": {"x": "slant", "z": "slant", "s": "hitch", "te": "out_short", "hb": "check"}, "progression": ["x", "z", "s", "te", "hb"], "formations": ["gun_2x2", "gun_trips", "gun_ace"], "weight": 2.0},
+    "curl_flat":    {"drop": 5, "routes": {"x": "curl", "z": "curl", "s": "flat", "te": "sit", "hb": "check"}, "progression": ["x", "s", "te", "z", "hb"], "formations": ["gun_2x2", "gun_ace", "single_back"], "weight": 1.8},
     "stick":        {"drop": 3, "routes": {"x": "go", "z": "hitch", "s": "sit", "te": "stick", "hb": "flat"}, "progression": ["te", "s", "hb", "z"], "formations": ["gun_ace", "gun_2x2", "split_back"], "weight": 1.2},
-    "mesh":         {"drop": 5, "routes": {"x": "post", "z": "drag", "s": "drag", "te": "cross", "hb": "check"}, "progression": ["z", "s", "te", "hb"], "formations": ["gun_2x2", "gun_trips"], "weight": 1.0},
-    "smash":        {"drop": 5, "routes": {"x": "hitch", "z": "hitch", "s": "corner", "te": "seam", "hb": "flat"}, "progression": ["s", "te", "x", "hb"], "formations": ["gun_2x2", "gun_ace"], "weight": 2.0},
+    "mesh":         {"drop": 5, "routes": {"x": "post", "z": "drag", "s": "drag", "te": "cross", "hb": "check"}, "progression": ["z", "s", "x", "te", "hb"], "formations": ["gun_2x2", "gun_trips"], "weight": 1.0},
+    "smash":        {"drop": 5, "routes": {"x": "hitch", "z": "hitch", "s": "corner", "te": "seam", "hb": "flat"}, "progression": ["s", "x", "te", "hb"], "formations": ["gun_2x2", "gun_ace"], "weight": 2.0},
     "four_verts":   {"drop": 7, "routes": {"x": "go", "z": "go", "s": "seam", "te": "seam", "hb": "check"}, "progression": ["s", "x", "te", "z", "hb"], "formations": ["gun_2x2", "gun_trips", "gun_ace"], "weight": 0.3},
     "deep_shot":    {"drop": 7, "routes": {"x": "post", "z": "go", "s": "dig", "te": "out", "hb": "check"}, "progression": ["x", "s", "z", "te", "hb"], "formations": ["gun_2x2", "single_back", "gun_ace"], "weight": 0.6},
-    "play_action":  {"drop": 5, "routes": {"x": "post", "z": "cross", "s": "dig", "te": "flat", "hb": "block"}, "progression": ["x", "te", "s", "z"], "formations": ["single_back", "split_back"], "fake": true, "weight": 1.5},
-    "flood":        {"drop": 5, "routes": {"x": "drag", "z": "corner", "s": "out", "te": "flat", "hb": "check"}, "progression": ["z", "s", "te", "hb"], "formations": ["gun_trips", "gun_2x2", "gun_ace"], "weight": 1.5},
+    "play_action":  {"drop": 5, "routes": {"x": "post", "z": "cross", "s": "dig", "te": "flat", "hb": "block"}, "progression": ["x", "s", "te", "z"], "formations": ["single_back", "split_back"], "fake": true, "weight": 1.5},
+    "flood":        {"drop": 5, "routes": {"x": "drag", "z": "corner", "s": "out", "te": "flat", "hb": "check"}, "progression": ["z", "s", "x", "te", "hb"], "formations": ["gun_trips", "gun_2x2", "gun_ace"], "weight": 1.5},
     "screen":       {"drop": 3, "routes": {"x": "go", "z": "go", "s": "block", "te": "block", "hb": "swing"}, "progression": ["hb"], "formations": ["gun_2x2", "gun_ace"], "screen": true, "weight": 0.5},
     "empty_levels": {"drop": 5, "routes": {"x": "dig", "z": "out", "s": "curl", "te": "cross", "hb": "out_short"}, "progression": ["s", "z", "x", "te", "hb"], "formations": ["gun_empty"], "weight": 1.3}
   }
