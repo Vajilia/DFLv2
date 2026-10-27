@@ -78,8 +78,13 @@ def new_stats():
 
 
 class Game:
-    def __init__(self, home, away, rng, decisive=False, log=False, curve=None):
+    def __init__(self, home, away, rng, decisive=False, log=False, curve=None, spatial=False, trace=False):
         self.sq = (home, away)
+        self.spatial = spatial               # plays are played out by 22 players on the field (Edition 8.48); False is the play-level resolver
+        self.trace = trace                   # keep each spatial play's compressed trace in the play table
+        self.sim_secs = None                 # seconds the last spatial play took
+        self.ball_y = None
+        self.ball_team = None
         self.curve = curve                   # the season's expected-points table; None is the data table (Edition 8.32)
         self.fit = []
         self.rng = rng
@@ -157,6 +162,8 @@ class Game:
     def credit_defense(self, k, o, scores=False):
         """Who made the play on defense (tackle and assist, sack, tackle for loss, interception, pass defended). Drawn on the arng
         stream by position group and the defender's skill; the spatial engine will name them from what happens on the field."""
+        if o.get("spatial"):
+            return self.credit_spatial(k, o, scores)
         ud = self.sq[1 - k].units()
         kind, a = o["kind"], self.arng
         info = {}
@@ -580,12 +587,20 @@ class Game:
             self.apply_dead_ball_penalty(k, pen)
             return
         pre = production.State(self, k)
-        outcome = self.resolve_pass(k, uo, ud) if is_pass else self.resolve_run(k, uo, ud)
+        if self.spatial:
+            outcome = self.resolve_spatial(k, uo, ud, is_pass)
+        else:
+            outcome = self.resolve_pass(k, uo, ud) if is_pass else self.resolve_run(k, uo, ud)
         live = self.draw_penalty(PEN_PASS if is_pass else PEN_RUN, "live")
         if live:
             if self.apply_live_penalty(k, live, outcome):
                 return
+        before = len(self.ptab) if self.ptab is not None else 0
         self.finish_play(k, outcome)
+        if self.spatial and self.ptab is not None and len(self.ptab) > before:
+            self.ptab[before]["call"] = outcome.get("call")                  # the play and coverage called and the formation
+            if outcome.get("trace"):
+                self.ptab[before]["trace"] = outcome["trace"]
         production.credit_scrimmage(self, k, outcome, pre, uo, ud)
         self.injuries(k)
 
@@ -639,6 +654,50 @@ class Game:
                     "oob": rng.random() < P["oob_pass"] * (P["oob_hurry_mult"] if self.hurry(k) else 1), "qb": qb, "target": target,
                     "fumble": rng.random() < 0.006}
         return {"kind": "incomplete", "yards": 0, "turnover": None, "pass": True, "oob": False, "qb": qb, "target": target}
+
+    def resolve_spatial(self, k, uo, ud, is_pass):
+        """Play the snap out on the field (Edition 8.48): the situation picks the calls, 22 players move, and what happens is read off the
+        trace. Nothing about the clubs enters the calls, so the situation is the same for everyone."""
+        from .spatial import calls
+        from .spatial.core import HASH_L, HASH_R, MID
+        from .spatial.sim import PlaySim
+        rng = self.rng
+        down, dist, yl = self.down, self.dist, self.yl
+        play = calls.pass_call(rng, down, dist, yl, self.hurry(k)) if is_pass else calls.run_call(rng, down, dist, yl, self.lead(k))
+        cov = calls.coverage_call(rng, down, dist, yl, is_pass, self.lead(k))
+        if self.ball_team != k or self.ball_y is None:
+            self.ball_y = MID
+        by = max(HASH_R, min(HASH_L, self.ball_y))
+        zo, zd = uo["z"], ud["z"]
+        edge = zo["off_coach"] - zd["def_coach"] + (P["home_edge"] if k == 0 else -P["home_edge"])
+        sim = PlaySim(uo, ud, "pass" if is_pass else "run", play, cov, yl, by, random.Random(rng.getrandbits(64)), staff=(edge, 0.0),
+                      trace=self.trace, down=down, dist=dist)
+        o = sim.run()
+        o["call"] = (play, cov, sim.formation)
+        self.sim_secs = o["secs"]
+        self.ball_team = k
+        spot = getattr(sim, "spot", None)
+        self.ball_y = spot[1] if spot else MID
+        return o
+
+    def credit_spatial(self, k, o, scores):
+        """Book what the field play showed: who tackled, sacked, defended the pass, intercepted, forced and recovered (no draws)."""
+        info = {}
+        for card, key, amt in o.get("credits", ()):
+            self.pstat(card, key, amt)
+        if o["kind"] == "sack":
+            self.pstat(o["qb"], "sacked")
+            self.pstat(o["qb"], "sack_yds", -o["yards"])
+        if o.get("tackler") is not None:
+            info["tkl"] = o["tackler"]
+        if o.get("assist") is not None:
+            info["ast"] = o["assist"]
+        if o.get("sacker"):
+            info["sack"] = list(o["sacker"])
+        for key in ("pd", "int_by", "ff", "fr"):
+            if o.get(key) is not None:
+                info[key] = o[key]
+        return info
 
     def pick_target(self, uo):
         rng = self.rng
@@ -898,7 +957,8 @@ class Game:
         elif kind in ("complete", "incomplete", "int"):
             s["pass_att"] += 1
             self.pstat(o["qb"], "att")
-            self.pstat(o["target"], "tgt")
+            if o.get("target") is not None:
+                self.pstat(o["target"], "tgt")
             if kind == "complete":
                 s["comp"] += 1
                 s["pass_yds"] += yards
@@ -918,6 +978,17 @@ class Game:
             s["ints"] += 1
             self.pstat(o["qb"], "int")
             spot = int(clamp(self.yl + o["air"], 2, 99))
+            if o.get("spatial"):
+                self.record("interception", o["air"], **info)
+                self.tick(o["secs"], k)
+                if o["ret_td"]:
+                    self.poss = self.other(k)
+                    self.td_by = info.get("int_by")
+                    self.score_td(self.poss, defensive=True)
+                    return
+                ex = o["ret_x"]
+                self.next = ("ball", self.other(k), 20 if self.yl + o["air"] >= 100 else int(clamp(100 - round(ex), 1, 99)))
+                return
             self.record("interception", o["air"], **info)
             self.tick(rng.uniform(5, 8), k)
             if rng.random() < 0.03:
@@ -1007,7 +1078,10 @@ class Game:
             delay = max(delay, 36)
         if delay > 8 and self.timeout_wanted(k):
             delay = 4
-        play_t = max(2.0, rng.gauss(play_t, 1.2)) if not kneel else play_t
+        if self.spatial and not kneel and self.sim_secs is not None:
+            play_t = self.sim_secs
+        else:
+            play_t = max(2.0, rng.gauss(play_t, 1.2)) if not kneel else play_t
         self.tick(play_t + delay, k)
 
     last_is_pass = False
@@ -1062,7 +1136,8 @@ def rng_gauss(rng, m, s):
     return rng.gauss(m, s)
 
 
-def play_game(home, away, rng, decisive=False, log=False, curve=None):
-    """Play one game between two `Squad`s. `decisive` forbids a tie (postseason, Coronation)."""
-    g = Game(home, away, rng, decisive, log, curve)
+def play_game(home, away, rng, decisive=False, log=False, curve=None, spatial=False, trace=False):
+    """Play one game between two `Squad`s. `decisive` forbids a tie (postseason, Coronation). `spatial` plays every scrimmage snap out with
+    22 players on the field (Edition 8.48) instead of resolving it at the play level."""
+    g = Game(home, away, rng, decisive, log, curve, spatial, trace)
     return g.run()

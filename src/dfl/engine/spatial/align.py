@@ -138,9 +138,7 @@ def build_defense(sim, cards, cov):
 
 
 def rushers_for(cov, rng, play_is_run):
-    """Defensive roles that rush the passer: the four linemen plus the coverage's extra rushers."""
+    """Defensive roles that rush the passer: the four linemen plus the coverage's extra rushers (taken from the backers, then the safeties)."""
     base = ["de_l", "dt_l", "dt_r", "de_r"]
-    n = cov["rush"]
-    pool = [r for r in EXTRA_RUSHERS if r not in cov.get("deep", []) and r not in cov["man"] or r in ("lb_l", "lb_r", "mlb")]
-    pool = [r for r in ("lb_l", "lb_r", "mlb", "ss", "fs") if r not in cov.get("deep", [])]
-    return base, pool[:n]
+    pool = [r for r in ("lb_l", "lb_r", "mlb", "ss", "fs") if r not in cov.get("deep", []) and r not in cov["man"] and r != cov.get("spy")]
+    return base, pool[:cov["rush"]]

@@ -1,5 +1,6 @@
 """Calibration harness for the game engine: plays many games between founding-league clubs and compares the averages with
-data/engine/BANDS.csv.  Usage: calibrate_engine.py [--games N] [--seed S] [--baseline]
+data/engine/BANDS.csv.  Usage: calibrate_engine.py [--games N] [--seed S] [--baseline] [--spatial] [--procs P]
+--spatial plays every scrimmage snap with the 22-player engine (Edition 8.48); --procs spreads the games over worker processes.
 --baseline prints the unit means and spreads of the 48 founding squads (to set data/engine/PARAMS.csv).  Exit code = bands failed."""
 import argparse
 import csv
@@ -19,6 +20,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--games", type=int, default=1000)
 ap.add_argument("--seed", type=int, default=1)
 ap.add_argument("--baseline", action="store_true")
+ap.add_argument("--spatial", action="store_true")
+ap.add_argument("--procs", type=int, default=1)
 a = ap.parse_args()
 
 clubs = [f"C{i:02d}" for i in range(48)]
@@ -41,24 +44,40 @@ ot = ties = homewins = 0
 home_top = 0.0
 margins, inj = [], 0
 t0 = time.time()
-for g in range(a.games):
-    h, w = rng.sample(clubs, 2)
+
+
+def one(job):
+    h, w, seed = job
     for s in (squads[h], squads[w]):
         s.out.clear(); s.new_injuries.clear(); s._units = None
-    r = play_game(squads[h], squads[w], random.Random(rng.random()))
+    r = play_game(squads[h], squads[w], random.Random(seed), spatial=a.spatial)
+    return dict(stats=[{k: r.stats[i].get(k, 0) for k in S if k != "points"} for i in (0, 1)], score=list(r.score), periods=r.periods,
+                tie=r.tie, top=r.stats[0]["top"], inj=sum(len(v) for v in r.injuries.values()))
+
+
+jobs = []
+for g in range(a.games):
+    h, w = rng.sample(clubs, 2)
+    jobs.append((h, w, rng.random()))
+if a.procs > 1:
+    import multiprocessing as mp
+    with mp.get_context("fork").Pool(a.procs) as pool:
+        results = pool.map(one, jobs, chunksize=4)
+else:
+    results = map(one, jobs)
+for r in results:
     for i in (0, 1):
-        st = r.stats[i]
-        S["points"] += r.score[i]
+        S["points"] += r["score"][i]
         for k in S:
             if k != "points":
-                S[k] += st.get({"pass_att": "pass_att"}.get(k, k), 0)
+                S[k] += r["stats"][i][k]
         n_team += 1
-    home_top += r.stats[0]["top"]
-    ot += r.periods > 4
-    ties += r.tie
-    homewins += r.score[0] > r.score[1]
-    margins.append(r.score[0] - r.score[1])
-    inj += sum(len(v) for v in r.injuries.values())
+    home_top += r["top"]
+    ot += r["periods"] > 4
+    ties += r["tie"]
+    homewins += r["score"][0] > r["score"][1]
+    margins.append(r["score"][0] - r["score"][1])
+    inj += r["inj"]
 per = lambda k: S[k] / n_team
 m = {
     "points": per("points"), "plays": per("plays"), "pass_att": per("pass_att"),
