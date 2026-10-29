@@ -95,7 +95,7 @@ class Loop(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for r in rs:
                 d = f"{tmp}/s{r['season']}"
-                league.write_tables(tpl, d, r["teams"], r["schedule"], r["tour"])
+                league.write_tables(tpl, d, r["teams"], r["schedule"], r["tour"], year=r["year"])
                 p = subprocess.run([sys.executable, "-I", os.path.join(ROOT, "tools", "validate.py"), d, "--season", str(r["season"])],
                                    capture_output=True, text=True)
                 self.assertEqual(p.returncode, 0, p.stdout[-800:])

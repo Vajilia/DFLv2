@@ -48,7 +48,7 @@ def main():
         out = res["outcome"]
         if season % a.validate_every == 0:
             d = f"{a.out}/tables/s{season:03d}"
-            league.write_tables(tpl, d, res["teams"], res["schedule"], res["tour"])
+            league.write_tables(tpl, d, res["teams"], res["schedule"], res["tour"], year=res["year"])
             p = subprocess.run([sys.executable, "-I", f"{ROOT}/tools/validate.py", d, "--season", str(season)],
                                capture_output=True, text=True)
             if p.returncode:

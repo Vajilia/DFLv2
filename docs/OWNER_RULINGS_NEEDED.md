@@ -8,20 +8,29 @@ How to answer: for each item say **Approve** (the recommended default becomes th
 
 ## Item 4. What happens when an Ambassador Bowl roster is short at a position?
 
-**Exact question.** §7 says the Bowl rosters are 53 places per conference chosen by ranked ballots from that conference's four Tour clubs, that rosters lock one simulated hour before kickoff, and that "a shortfall is a validation failure repaired before play." It does not say how. When a position is below its required minimum at the lock (a selected player is injured or unavailable, or the four clubs between them cannot supply the minimum), what fills the place?
+**Exact question.** §7 says the Bowl rosters are 53 places per conference chosen by ranked ballots (Droop quota, seeded ties), "drawn from that conference's four clubs", that rosters lock one simulated hour before kickoff, and that "a shortfall is a validation failure repaired before play." It does not say how. When a position is below its required minimum at the lock (a selected player is injured or otherwise unavailable, or the four clubs between them cannot supply the minimum), what fills the place?
 
-**What the code does today.** The ballots, the Droop count, the 53-place roster and the lock are not built (people layer, later). The Bowl side is a composite: the best healthy players at each position across the conference's four Tour clubs, up to four a position, chosen at game time (`all_star_side`). So no shortfall can arise yet, and nothing needs repairing, but the Bowl roster is not the spec's roster either.
+**Ambassador eligibility the spec already fixes (any repair must keep all of it).**
+- Only the 8 ambassador clubs take part (§3, §7): one per division, so each conference has exactly four. The Western All-Stars come from the four Western ambassadors and the Eastern All-Stars from the four Eastern ones. No active club (there are 40) supplies a player.
+- Each side has 53 places, of which 48 are the required positional minimums (§11: K1 P1 QB3 HB3 or HB2+FB1 WR5 TE2 LT2 LG2 C1 RG2 RT2 LE2 RE2 DT3 ROLB2 MLB3 LOLB2 CB5 FS2 SS2 LS1) and 5 are discretionary (§11).
+- Each side's head coach and three coordinators come from the conference's best Tour club (§7). Repair concerns players only.
+- Players are ranked by ballot; every candidate is ranked (§7), so a full order exists for every position.
+- Tour Rings go to "the winners' final 53 present at kickoff" and the four Bowl coaches (§7).
+- §11 also says a club must field 11 medically available legal players or forfeit, and that when no medically available player remains at a position the emergency list (at least one name for every position, including K, P, LS and QB, filed before kickoff) supplies a dressed player who plays out of position.
+
+**What the code does today.** The ballots, the Droop count, the 53-place roster and the lock are not built (people layer, later). The Bowl side is a composite: the best healthy players at each position across the conference's four ambassador clubs, up to four a position, chosen at game time (`all_star_side`). So no shortfall can arise yet, and nothing needs repairing, but the Bowl roster is not the spec's roster either.
 
 **Options.**
-- **A (recommended).** Take the next-ranked healthy candidate for that position from the same conference's four clubs, using the final order of the count that chose the roster (§7 ranks all candidates, so the order exists). The count is not rerun. If the position's ballot is exhausted, use the emergency list rule of §11: a dressed player from a neighbouring position plays out of position.
-- **B.** Sign free agents or draw players from outside the four clubs. Fills any gap, but breaks "drawn from that conference's four clubs" and creates cap and contract questions for a one-game roster.
+- **A (recommended).** The replacement for an unavailable selected player is the next-ranked candidate at that position, from the final order of the count that chose the roster, who is (1) under contract to one of that conference's four ambassador clubs at the lock, (2) medically available at the lock, (3) not already one of the 53. The count is not rerun. Repair runs once, at the lock, position for position, so each side stays at 53 and the 48 required minimums are restored first. If the ballot order for a position is exhausted, a dressed player from a neighbouring position, from the same four clubs, goes on the emergency list for it (§11) and plays out of position. If a side still cannot field 11 medically available legal players, it forfeits.
+- **B.** Sign free agents or draw players from outside the four clubs. Fills any gap, but breaks "drawn from that conference's four clubs" and the ambassador-only eligibility above, and raises cap and contract questions for a one-game roster.
 - **C.** Play short, and forfeit only if fewer than 11 legal players. Simplest, but a Bowl with no kicker or no quarterback decides itself.
 
 **Recommended default: A.**
 
 **Gameplay consequences of A.**
-- The Bowl is always played by people from that conference's four Tour clubs, which is what the Bowl is for. No outside money or talent enters.
+- The Bowl is always played by people from that conference's four ambassador clubs, which is what the Bowl is for. No active-club player, free agent or outside money enters.
 - A replacement is by construction a player the voters ranked lower, so an injury at the lock makes the side slightly weaker at that position, never stronger than the vote intended. Several injuries at one position (say, three at quarterback in a four-club pool) can reach the emergency list.
+- An injury after the lock (during the final simulated hour or the game) is not repaired: it is handled as in any game, by the emergency list.
 - Until the out-of-position penalty exists (§20 item 2 is open; the engine today lets an emergency player use her own attributes), an out-of-position emergency player is not penalised, which flatters rare emergencies. That is an engine item, not a Bowl rule.
 - Tour Rings go to "the winners' final 53 present at kickoff": a repaired roster is the 53 that count, so a replacement who plays wins a ring and the injured player she replaced does not.
 - Deterministic and reproducible: no draw is needed except for equal ballot ties, which are already seeded.
@@ -33,6 +42,12 @@ How to answer: for each item say **Approve** (the recommended default becomes th
 **Exact question.** §11 uses four NFL defaults without owner confirmation: (a) game-day active roster 48, or 47 with fewer than 8 offensive linemen; (b) at most two practice-squad elevations a game; (c) at most three elevations per player per season; (d) injured reserve minimum of four games, with at most eight players per club per season designated to return. Confirm each as the DFL rule, or give the DFL value.
 
 **What the code does today.** All four are built exactly as written (`ledger/rules.py`: `ACTIVE_LIMIT` 48, `ACTIVE_LIMIT_FEW_OL` 47, `ELEVATIONS_PER_GAME` 2, `ELEVATIONS_PER_PLAYER` 3, `IR_MIN_GAMES` 4, `IR_RETURNS_MAX` 8). They are single constants; changing one changes nothing else in the code.
+
+**Who may be an emergency player (what §11 says, and what is built).**
+- *Spec (§11).* Before every kickoff each club files an emergency list with at least one name for every position, including K, P, LS and QB. If no medically available player remains at a position during a game, the list supplies a dressed player for it, who plays out of position and is subject to the engine's out-of-position penalty. Nothing can be signed during a game. A club that cannot field 11 medically available legal players forfeits.
+- *Eligibility as built (`ledger/gameday.py`).* The emergency player must be on that club's game-day active list (the 48, or 47 with fewer than 8 offensive linemen, including any elevated practice-squad players), so she is dressed and medically available when the list is filed. She is the best-rated active player at the first neighbouring position in a fixed order that has anyone dressed, e.g. K: P then QB; P: K then QB; LS: C then TE; QB: WR then HB; HB: FB then WR; FB: HB then TE; WR: HB, TE, CB; TE: WR, FB, RT; LT: LG then RT; LG: LT then C; C: LG then RG; RG: RT then C; RT: RG then LT; LE: RE then DT; RE: LE then DT; DT: LE then RE; ROLB: LOLB then MLB; MLB: ROLB then LOLB; LOLB: ROLB then MLB; CB: FS then SS; FS: SS then CB; SS: FS then CB. If no neighbour is dressed, the best-rated active player at any position. These neighbour orders are the builder's choice, not the owner's, and are in one table.
+- *Known gap to the spec.* Today a name is filed only for a position where nobody at all is dressed; the spec asks for a name for every position, so that a position emptied by an injury during the game has its replacement already named. Closing it is routine (file the list for all positions) and does not change any rule; it is not done yet.
+- *Out-of-position penalty.* Still open (§20 item 2): the engine lets an emergency player use her own attributes.
 
 **Recommended default: confirm all four as built.** Reasons: they are consistent with the DFL's own choices around them (53 on the roster, a 16-man practice squad, 48 required places), and no DFL document asks for different values.
 

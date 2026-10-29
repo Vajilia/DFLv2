@@ -42,7 +42,7 @@ def main():
         if n % a.validate_every == 0:
             d = f"{a.out}/tables/s{n:03d}"
             r = rep["result"]
-            league.write_tables(u.tpl, d, r["teams"], r["schedule"], r["tour"])
+            league.write_tables(u.tpl, d, r["teams"], r["schedule"], r["tour"], year=r["year"])
             p = subprocess.run([sys.executable, "-I", f"{ROOT}/tools/validate.py", d, "--season", str(n)], capture_output=True, text=True)
             if p.returncode:
                 problems.append((year, [l for l in p.stdout.splitlines() if l.startswith("FAIL")]))

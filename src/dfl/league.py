@@ -6,10 +6,12 @@ from last season's final division order (`standings`).  Nothing here knows how a
 `Resolver` (see `resolver.py`), so the real game engine can replace the placeholder without touching this file.
 """
 import csv
+import datetime as dt
 import os
 import random
 import shutil
 
+from . import calendar as C
 from . import standings
 from .schedule_bed_rotation import bed_of_division
 
@@ -86,19 +88,33 @@ def season_tables(tpl, state, season):
         teams.append(r)
     order = {dv: i for i, dv in enumerate(DIVISIONS)}
     teams.sort(key=lambda r: (order[(r["conference"], r["division"])], int(r["division_rank"])))
-    sched = [dict(r, away=slot[a], home=slot[h]) for a, h, r in tpl.games]
-    tour = [dict(r, **{c: state[tpl.s1_ambassador_division[r[c]]]["amb"] for c in ("away_nominal", "home_nominal")})
-            for r in tpl.tour]
+    # The tables on disk are Season 1's. The calendar of every year is anchored on its Coronation (last Sunday of the year) and each
+    # calendar week sits a whole number of weeks before it, so a later season's dates are Season 1's moved by the difference of the
+    # two Coronations; the weekday and kickoff of every game are unchanged.
+    days = (C.coronation(FOUNDING_YEAR + season - 1) - C.coronation(FOUNDING_YEAR)).days
+    sched = [dict(r, away=slot[a], home=slot[h], date=_moved(r["date"], days)) for a, h, r in tpl.games]
+    tour = [dict(r, **{c: state[tpl.s1_ambassador_division[r[c]]]["amb"] for c in ("away_nominal", "home_nominal")},
+                 date=_moved(r["date"], days)) for r in tpl.tour]
     return teams, sched, tour
 
 
-def write_tables(tpl, directory, teams, sched, tour):
+def _moved(iso, days):
+    return (dt.date.fromisoformat(iso) + dt.timedelta(days=days)).isoformat()
+
+
+def write_tables(tpl, directory, teams, sched, tour, year=None):
+    """Write a season's tables. With `year`, CALENDAR.csv is that year's calendar (the schedule's dates are that year's); without it the
+    Season 1 calendar is copied, which is only right for Season 1's own dates."""
     os.makedirs(directory, exist_ok=True)
     _write(f"{directory}/TEAMS.csv", teams, tpl.team_header)
     _write(f"{directory}/SCHEDULE.csv", sched, tpl.sched_header)
     _write(f"{directory}/TOUR.csv", tour, tpl.tour_header)
     for n in OTHER_TABLES:
-        shutil.copy(f"{tpl.dir}/{n}.csv", f"{directory}/{n}.csv")
+        if n == "CALENDAR" and year is not None:
+            rows = C.season_weeks(year)
+            _write(f"{directory}/CALENDAR.csv", rows, list(rows[0]))
+        else:
+            shutil.copy(f"{tpl.dir}/{n}.csv", f"{directory}/{n}.csv")
 
 
 def play_playoffs(seeds_by_conf, resolver, rng):
@@ -122,6 +138,9 @@ def play_playoffs(seeds_by_conf, resolver, rng):
     return champs, log
 
 
+ROUND_NOTE = {"wild_card": "wild card round", "divisional": "divisional round", "conference": "conference championships"}
+
+
 class SeasonRun:
     """One season played step by step, in the order the calendar fires the events (calendar.py).
 
@@ -135,6 +154,7 @@ class SeasonRun:
     def __init__(self, tpl, state, season, resolver, rng, history, seed="dfl"):
         self.tpl, self.state, self.season, self.resolver, self.rng, self.history, self.seed = tpl, state, season, resolver, rng, history, seed
         self.year = FOUNDING_YEAR + season - 1
+        self.cal = {r["note"]: r["sunday"] for r in C.season_weeks(self.year) if r["phase"] in ("postseason", "ambassadors")}   # round -> its Sunday
         self.teams, self.sched, self.tour = season_tables(tpl, state, season)
         self.active = {r["team_city"]: (r["conference"], r["division"]) for r in self.teams if r["club_status"] == "active"}
         self.ambassadors = {r["team_city"]: (r["conference"], r["division"]) for r in self.teams if r["club_status"] == "ambassador"}
@@ -176,7 +196,7 @@ class SeasonRun:
             if int(r["tour_round"]) != i:
                 continue
             g = {"away": r["away_nominal"], "home": r["home_nominal"], "neutral": True,      # no Tour venue is any club's home ground (section 7)
-                 "id": f"tour:r{i}:g{int(r['game']):02d}", "kind": "tour"}
+                 "id": f"tour:r{i}:g{int(r['game']):02d}", "kind": "tour", "date": r["date"], "kickoff": r["kickoff"]}
             a, h = self.resolver.resolve(g, self.rng, decisive=False)
             g = dict(r, away=g["away"], home=g["home"], away_score=a, home_score=h, venue=self.venues[r["venue_slot"]])
             self.tour_games.append(g)
@@ -203,7 +223,8 @@ class SeasonRun:
     def _play(self, conf, a, b):
         lo, hi = standings.host(a, b), max(a, b)
         by = self.by_seed[conf]
-        res = self.resolver.resolve({"away": by[hi], "home": by[lo], "id": f"po:{conf}:{self._round}:s{hi}v{lo}", "kind": "playoff"},
+        res = self.resolver.resolve({"away": by[hi], "home": by[lo], "id": f"po:{conf}:{self._round}:s{hi}v{lo}", "kind": "playoff",
+                                     "date": self.cal[ROUND_NOTE[self._round]]},
                                     self.rng, decisive=True)
         self.playoff_log.append((conf, by[hi], by[lo], res[0], res[1]))
         return lo if res[1] > res[0] else hi
@@ -239,7 +260,8 @@ class SeasonRun:
         if random.Random(f"{self.seed}|bowlhome|{self.season}").random() < 0.5:
             order.reverse()
         away, home = sides[order[0]], sides[order[1]]
-        res = self.resolver.resolve({"away": away, "home": home, "neutral": True, "id": "bowl", "kind": "bowl"}, self.rng, decisive=True)
+        res = self.resolver.resolve({"away": away, "home": home, "neutral": True, "id": "bowl", "kind": "bowl",
+                                     "date": self.cal["Ambassador Bowl"], "kickoff": "12:00"}, self.rng, decisive=True)
         self.bowl = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "neutral": True,
                      "venue": self.venues["BOWL"], "staff_clubs": {conf: clubs[0] for conf, clubs in by_conf.items()}}      # each conference's best Tour club supplies its coaches
         return self.bowl
@@ -252,7 +274,8 @@ class SeasonRun:
         venue = self.coronation_venue()
         self.history[self.year] = venue
         away, home, host = self.coronation_sides(venue)
-        res = self.resolver.resolve({"away": away, "home": home, "neutral": host is None, "id": "coronation", "kind": "coronation"},
+        res = self.resolver.resolve({"away": away, "home": home, "neutral": host is None, "id": "coronation", "kind": "coronation",
+                                     "date": self.cal["Diamond Coronation"]},
                                     self.rng, decisive=True)
         self.coronation = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "venue": venue,
                            "home_club": host, "neutral": host is None, "winner": home if res[1] > res[0] else away}

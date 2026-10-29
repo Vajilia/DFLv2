@@ -79,6 +79,6 @@ class LedgerEngine:
         """What the archive keeps of one game, as played (archive.py encodes it)."""
         gid = f"S{self.season:03d}/{game['id']}"
         return {"type": "game", "gid": gid, "season": self.season, "kind": game.get("kind", "game"), "home": res.home, "away": res.away,
-                "neutral": bool(game.get("neutral")), "engine": "spatial" if self.spatial else "play", "rule_version": res.rule_version,
+                "neutral": bool(game.get("neutral")), "date": game.get("date"), "kickoff": game.get("kickoff"), "engine": "spatial" if self.spatial else "play", "rule_version": res.rule_version,
                 "score": list(res.score), "periods": res.periods, "tie": res.tie, "winner": res.winner, "stats": res.stats,
                 "players": res.players, "injuries": res.injuries, "pen_types": res.pen_types, "table": res.table}
