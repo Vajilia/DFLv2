@@ -1,6 +1,6 @@
 # DFLv2 build status
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.51.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.52.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -122,9 +122,9 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 | --- | --- |
 | Play-level engine: runs, passes, drives, kicking, overtime, ties, injuries, penalties | built, default; passes all 24 game bands over thousands of games; tie rate measured (1.4 to 1.8 percent) |
 | Box scores, scoring summary, play-by-play, structured play table (Ed 8.47) | built, tested (`tests/test_boxscore.py`) |
-| 22-player (spatial) engine with per-snap traces for the 2D view (Ed 8.48, 8.49) | built, tested (`tests/test_spatial.py`: determinism, trace fidelity, outcome shapes, integration), calibrated; **opt-in**: 17 of 24 game bands pass, seven drive-efficiency bands miss (spec §20 item 46) |
+| 22-player (spatial) engine with per-snap traces for the 2D view (Ed 8.48, 8.49) | built, tested (`tests/test_spatial.py`: determinism, trace fidelity, outcome shapes, integration), calibrated; **the league's default engine since Ed 8.52**: 24 of 24 game bands pass at the default check (seed 1, 1,000 games) and at seeds 14 and 15 (1,500 games); on two of five seeds (16, 17: leagues with stronger offenses) completion rate and yards per attempt run 0.004 to 0.05 over their limits (spec §20 items 46 and 50) |
 | Spatial extensions (other personnel, nickel/dime, fatigue and substitution, on-field kicking, challenges and replay, contact injuries) | **not built**, listed in spec §20 item 47 |
-| Owner ruling (Ed 8.50) | the spatial engine becomes the default only at 24 of 24 bands; the animation is a read-only window onto its trace (spec §16, §20 item 48) |
+| Owner ruling (Ed 8.50) | the spatial engine becomes the default only at 24 of 24 bands; the animation is a read-only window onto its trace (spec §16, §20 item 48). Met in Ed 8.52: `Universe(spatial=True)` is the default; tests and the soak tools use the play-level engine for speed (`--play-level`) |
 
 ## Not built yet (next)
 1. The spatial engine's remaining gap to the bands, and its extensions (spec §20 items 46 and 47). The play-level engine behind the `Resolver` interface is built.

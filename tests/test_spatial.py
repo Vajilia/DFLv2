@@ -115,5 +115,24 @@ class InGames(unittest.TestCase):
         self.assertGreater(len(called), 60)
 
 
+class LeagueDefault(unittest.TestCase):
+    """The 22-player engine is the league's default engine (Edition 8.52); the play-level engine is the explicit fast choice."""
+
+    def test_universe_defaults_to_the_spatial_engine(self):
+        from dfl.year import Universe
+        tables = os.path.join(ROOT, "data", "season1")
+        self.assertTrue(Universe(tables, seed=3).resolver.spatial)
+        self.assertFalse(Universe(tables, seed=3, spatial=False).resolver.spatial)
+
+    def test_a_league_game_is_played_on_the_field(self):
+        from dfl.year import Universe
+        u = Universe(os.path.join(ROOT, "data", "season1"), seed=3)
+        a, b = sorted(u.world.L.clubs)[:2]
+        away, home = u.resolver.resolve({"home": a, "away": b}, random.Random(1), False)
+        self.assertGreaterEqual(min(away, home), 0)
+        self.assertGreater(away + home, 0)
+        self.assertGreaterEqual(u.resolver.games_played, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -24,7 +24,7 @@ def pass_call(rng, down, dist, yl, hurry=False):
     if dist <= 3:
         for k, m in (("quick_slants", 1.5), ("stick", 1.6), ("four_verts", 0.3), ("deep_shot", 0.4), ("screen", 0.6)):
             w[k] *= m
-    elif dist >= 8 or down >= 3 and dist >= 5:
+    elif (dist >= 8 and down >= 2) or down >= 3 and dist >= 5:
         for k, m in (("deep_shot", 1.6), ("four_verts", 1.5), ("flood", 1.4), ("smash", 1.3), ("mesh", 1.2), ("quick_slants", 0.7), ("stick", 0.6)):
             w[k] *= m
     if down >= 3 and dist >= 5:

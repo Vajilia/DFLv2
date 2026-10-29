@@ -11,8 +11,9 @@ from .squad import Squad, overall
 
 
 class EngineResolver:
-    def __init__(self, squads):
+    def __init__(self, squads, spatial=False):
         self.squads = dict(squads)
+        self.spatial = spatial
         self.games_out = {}                    # club -> {card id: games still to miss}
         self.sides = {}                        # All-Star side name -> composite squad
         self.injuries_seen = 0
@@ -51,7 +52,7 @@ class EngineResolver:
             s.out = {i for i, n in out.items() if n > 0}
             s.new_injuries.clear()
             s._units = None
-        res = play_game(home, away, random.Random(rng.random()), decisive)
+        res = play_game(home, away, random.Random(rng.random()), decisive, spatial=self.spatial)
         for s in (home, away):
             if s.cid in self.sides:
                 continue

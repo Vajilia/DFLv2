@@ -14,7 +14,7 @@ def clampy(y):
 class Pl:
     """One player on the field."""
     __slots__ = ("i", "side", "role", "prof", "state", "wps", "wpi", "speed", "mark", "zone", "lane", "delay", "stun", "eng", "aux", "ax", "ay",
-                 "read_t", "cd", "tkl", "block_dir", "route", "front", "cush")
+                 "read_t", "cd", "tkl", "block_dir", "route", "front", "cush", "fill")
 
     def __init__(self, i, side, role, prof):
         self.i, self.side, self.role, self.prof = i, side, role, prof
@@ -22,6 +22,7 @@ class Pl:
         self.wps, self.wpi, self.speed = [], 0, 1.0
         self.mark = None          # the opponent this player is blocking or covering (index)
         self.zone = None          # (x, y, half-width) landmark of a zone defender
+        self.fill = 3.0           # yards past the line a run defender lets the runner go before he fills
         self.lane = None          # a rusher's lane (x, y)
         self.delay = 0.0          # seconds before the player moves (release off the line, reads)
         self.stun = 0.0

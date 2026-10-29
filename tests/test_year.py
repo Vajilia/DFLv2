@@ -14,7 +14,7 @@ TABLES = os.path.join(ROOT, "data", "season1")
 class Year(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.u = Universe(TABLES, seed=5)
+        cls.u = Universe(TABLES, seed=5, spatial=False)
         for _ in range(3):
             cls.u.play_year()
 

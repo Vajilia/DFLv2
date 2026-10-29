@@ -1106,7 +1106,11 @@ class Game:
     # ------------------------------------------------------------ injuries
     def injuries(self, k):
         rng = self.rng
-        p_any = 22 * P["injury_rate"]
+        if self.spatial:
+            from .spatial.core import S as SPH
+            p_any = 22 * SPH["injury_rate"]                    # the field engine runs fewer snaps than the play-level resolver; its own calibrated rate
+        else:
+            p_any = 22 * P["injury_rate"]
         if rng.random() >= p_any:
             return
         team = k if rng.random() < 0.5 else self.other(k)

@@ -17,7 +17,8 @@ class CarryMixin:
         d = self.cdir
         x, y = self.px[i], self.py[i]
         pr = p.prof
-        vm = self.VM[i] * S["carry_f"]
+        cf = S["carry_f"] * (S["carry_rec"] if self.kind == "pass" and i != self.qb else 1.0)       # a receiver turns upfield from a catch; she does not run like a back
+        vm = self.VM[i] * cf
         vis = pr.g("VIS", 0.45 * pr.awr + 18.0)
         sd = 0.7 * (1.0 - min(vis, 100.0) / 125.0)
         H = S["carry_horizon"]
@@ -57,7 +58,7 @@ class CarryMixin:
                 bs, best = score, a
         p.aux = best
         tx, ty = x + d * math.cos(best) * 12.0, y + math.sin(best) * 12.0
-        self.go(i, tx, max(0.3, min(FIELD_W - 0.3, ty)), S["carry_f"])
+        self.go(i, tx, max(0.3, min(FIELD_W - 0.3, ty)), cf)
 
     # --------------------------------------------------------------------------------------------------------------- tackles
     def update_tackles(self):

@@ -12,8 +12,9 @@ from .squad import Squad, Staff
 
 
 class LedgerEngine:
-    def __init__(self, world):
+    def __init__(self, world, spatial=False):
         self.w = world
+        self.spatial = spatial                 # play every snap with 22 players on the field (Edition 8.52: the league's default engine)
         self.sides = {}
         self.injuries_seen = 0
         self.games_played = 0
@@ -56,7 +57,7 @@ class LedgerEngine:
 
     def resolve(self, game, rng, decisive):
         home, away = self.squad(game["home"]), self.squad(game["away"])
-        res = play_game(home, away, random.Random(rng.random()), decisive, curve=self.w.ep_curve)
+        res = play_game(home, away, random.Random(rng.random()), decisive, curve=self.w.ep_curve, spatial=self.spatial)
         for s in (home, away):
             if s.cid in self.sides:
                 continue

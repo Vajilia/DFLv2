@@ -21,7 +21,7 @@ from dfl import fairness as F  # noqa: E402
 
 def run(a):
     from dfl.year import Universe
-    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed, profile=a.profile)
+    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed, profile=a.profile, spatial=not a.play_level)
     seasons, t0 = [], time.time()
     for _ in range(a.years):
         rep = u.play_year()
@@ -77,6 +77,7 @@ def main():
     r.add_argument("--seed", type=int, default=1)
     r.add_argument("--years", type=int, default=36)
     r.add_argument("--out", required=True)
+    r.add_argument("--play-level", action="store_true", help="play with the play-level engine instead of the league default, the 22-player engine")
     r.add_argument("--profile", default="tight", choices=("tight", "none", "rigged"), help="parity test bed (see src/dfl/parity.py)")
     p = sub.add_parser("report")
     p.add_argument("files", nargs="+")

@@ -20,17 +20,17 @@ import calibrate_spatial as C  # noqa: E402
 # name: (low, high, kinds affected)
 RUN, PASS, BOTH = ("run",), ("pass",), ("run", "pass")
 PARAMS = {
-    "fill_depth": (1.2, 5.0, RUN), "eng_noise": (0.2, 1.4, BOTH), "fill_sd": (0.0, 3.0, RUN), "eng_arm_p": (0.0, 1.0, RUN), "gap_lb": (1.5, 5.0, RUN), "gap_w": (1.0, 4.0, RUN), "eng_win": (0.6, 1.6, BOTH), "eng_drive_run": (0.8, 3.0, RUN), "carry_horizon": (0.7, 1.8, RUN), "eng_bias_run": (0.1, 1.2, RUN), "eng_bias_perim": (0.0, 1.6, RUN), "run_read_extra": (-0.2, 0.5, RUN),
-    "tackle_base": (0.72, 0.97, BOTH), "tackle_reach": (0.95, 1.7, BOTH), "tackle_behind": (0.5, 1.0, BOTH), "carry_f": (0.8, 0.99, BOTH),
+    "fill_depth": (1.2, 5.0, RUN), "fill_key": (-1.0, 3.0, RUN), "eng_noise": (0.2, 1.4, BOTH), "fill_sd": (0.0, 1.2, RUN), "carry_hold": (0.1, 0.8, RUN), "eng_init": (0.0, 1.4, RUN), "climb_lev": (0.1, 1.2, RUN), "eng_arm_p": (0.0, 1.0, RUN), "gap_lb": (1.5, 5.0, RUN), "gap_w": (1.0, 4.0, RUN), "eng_win": (0.6, 1.6, BOTH), "eng_drive_run": (0.8, 3.0, RUN), "carry_horizon": (0.7, 1.8, RUN), "eng_bias_run": (0.1, 1.2, RUN), "eng_bias_perim": (0.0, 1.6, RUN), "run_read_extra": (-0.2, 0.5, RUN),
+    "tackle_base": (0.72, 0.97, BOTH), "fall_forward": (0.2, 1.3, BOTH), "tackle_gang": (0.0, 0.3, BOTH), "tackle_gain": (0.0, 0.03, BOTH), "tackle_speed": (0.0, 0.05, BOTH), "tackle_miss_slow": (0.6, 1.0, BOTH), "tackle_miss_stun": (0.2, 1.2, BOTH), "tackle_reach": (0.95, 1.7, BOTH), "tackle_behind": (0.5, 1.0, BOTH), "carry_f": (0.8, 0.99, BOTH),
     "pursuit_pred": (0.6, 1.0, BOTH),
-    "catch_slow": (0.3, 0.95, PASS), "touch_lane": (0.08, 0.5, PASS), "int_lane": (0.08, 0.4, PASS), "int_contested": (0.15, 0.5, PASS),
+    "catch_slow": (0.3, 0.95, PASS), "deep_pen": (0.0, 1.0, PASS), "carry_rec": (0.7, 1.0, PASS), "turn_dx": (0.8, 4.0, PASS), "force_min": (0.2, 3.5, PASS), "turn_delay": (0.05, 0.4, PASS), "lag_base": (0.1, 0.5, PASS), "backpedal": (0.55, 1.0, PASS), "acc_pow": (0.8, 2.2, PASS), "acc_err_base": (0.05, 0.8, PASS), "deep_from": (8.0, 24.0, PASS), "touch_lane": (0.08, 0.5, PASS), "int_lane": (0.08, 0.4, PASS), "int_contested": (0.15, 0.5, PASS),
     "open_margin": (0.5, 3.5, PASS), "depth_risk": (4.0, 40.0, PASS), "acc_err_dist": (0.02, 0.09, PASS), "adjust": (0.1, 0.7, PASS),
     "ball_react": (0.05, 0.4, PASS), "ball_lead": (0.2, 1.4, PASS), "eng_bias_pass": (-0.3, 0.7, PASS), "catch_free": (0.85, 0.99, PASS),
-    "catch_contested": (0.4, 0.85, PASS), "contest_gain": (0.002, 0.012, PASS), "yac_block": (0.0, 1.0, PASS),
-    "press_near": (4.0, 10.0, PASS), "press_go": (2.5, 8.0, PASS), "press_min": (0.4, 3.0, PASS), "press_bail": (0.0, 0.8, PASS), "perc_close": (0.1, 0.9, PASS), "check_pen": (0.0, 3.0, PASS), "scramble_base": (0.1, 0.7, PASS), "stick_pen": (0.0, 3.0, PASS),
+    "catch_contested": (0.4, 0.95, PASS), "contest_gain": (0.002, 0.012, PASS), "yac_block": (0.0, 1.0, PASS),
+    "press_near": (4.0, 10.0, PASS), "press_go": (2.5, 8.0, PASS), "press_min": (0.4, 3.0, PASS), "press_bail": (0.0, 0.8, PASS), "perc_close": (0.1, 1.3, PASS), "check_pen": (0.0, 5.0, PASS), "scramble_base": (0.1, 0.7, PASS), "stick_pen": (0.0, 3.0, PASS), "sack_prob": (0.6, 1.0, PASS),
 }
-WEIGHT = {"succ": 2.0, "scramble": 0.5, "throwaway": 0.5, "fumble": 0.3, "secs": 0.5, "h_0": 0.3, "h_1_2": 0.3, "h_3_4": 0.3, "h_5_9": 0.3,
-          "c_0": 0.7, "c_1_5": 0.7, "c_6_10": 0.7, "c_11_20": 1.0, "c_21_30": 0.7, "c_31": 0.7, "d_behind": 0.7, "d_0_5": 0.7, "d_5_10": 0.7, "d_10_15": 0.8, "d_15_20": 0.8, "d_20": 0.7}
+WEIGHT = {"conv3": 5.0, "succ": 10.0, "comp_pct": 1.0, "ypa": 1.5, "yac": 2.5, "ypc": 1.0, "sack": 2.0, "p10": 2.0, "p20": 2.0, "d_20": 3.0, "c_31": 1.5, "int_pct": 2.0, "k_behind": 0.6, "k_0_5": 0.6, "k_5_10": 0.8, "k_10_15": 0.8, "k_15_20": 0.6, "k_20": 0.8, "scramble": 0.5, "throwaway": 0.5, "fumble": 1.0, "secs": 0.5, "h_0": 1.0, "h_1_2": 1.0, "h_3_4": 1.5, "h_5_9": 1.0,
+          "c_0": 0.7, "c_1_5": 0.7, "c_6_10": 0.7, "c_11_20": 1.0, "c_21_30": 0.7, "d_behind": 0.7, "d_0_5": 0.7, "d_5_10": 0.7, "d_10_15": 0.8, "d_15_20": 0.8}
 
 
 def loss_of(kind, m):

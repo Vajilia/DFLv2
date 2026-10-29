@@ -21,10 +21,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--years", type=int, default=3)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--play-level", action="store_true", help="play every game with the play-level engine (fast) instead of the league default, the 22-player engine")
     ap.add_argument("--report")
     ap.add_argument("--verbose", action="store_true")
     a = ap.parse_args()
-    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed)
+    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed, spatial=not a.play_level)
     digests, t0 = [], time.time()
     for _ in range(a.years):
         rep = u.play_year()

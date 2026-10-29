@@ -8,6 +8,18 @@ The 15 bands are v1's working limits, which the owner accepted on 2026-10-04 (V1
 (noted below). A band is judged on the mean over leagues with a two-standard-error interval: PASS if the whole interval is inside the band,
 FAIL if it is entirely outside, UNCLEAR otherwise. Nothing was tuned to produce these numbers.
 
+## Re-measure with the 22-player engine (Ed 8.52)
+
+The 22-player engine became the league's default in Ed 8.52, so the engine-driven bands were measured again with it: two leagues (seeds 1 and 2), 12 seasons each, the first 3 dropped as warm-up (`python3 -I tools/fairness.py run --seed N --years 12 --out ...`, then `report --warmup 3`). A season takes about 12 minutes through the field engine, so this is a short run: the 36-season, six-league measurement below would need about 35 hours. **No band fails.** The bands the game engine drives most match the play-level run:
+
+| band | 22-player engine, 2 leagues x 9 seasons | play-level, 6 leagues x 28 seasons (Ed 8.20) | allowed |
+| --- | --- | --- | --- |
+| win_pct_sd | 0.206 ± 0.015 (UNCLEAR, interval crosses 0.21) | 0.207 ± 0.002 | 0.13 to 0.21 |
+| close_game_share | 0.415 ± 0.013 (PASS) | 0.423 ± 0.005 | 0.35 to 0.55 |
+| year_to_year_corr | 0.281 ± 0.056 (PASS) | 0.201 ± 0.028 | 0.1 to 0.5 |
+
+The people-layer bands (returners, exile, stuck at the bottom) pass or are UNCLEAR for want of data, as expected; they do not depend on the engine except through results. Not yet measured: the title-spread bands (they need 20 or more seasons), so a full run remains open (spec section 20 item 50).
+
 ## Result under Ed 8.20 (current): 14 PASS, 0 FAIL, 1 UNCLEAR
 
 The same six leagues as the Ed 8.19 run, scored against the one changed band (win_pct_sd ceiling 0.19 to 0.21, owner's ruling 2026-10-23, no new simulation needed because the band only moves the threshold). Under Ed 8.19 with the old ceiling the result was 13 PASS, 1 FAIL, 1 UNCLEAR.

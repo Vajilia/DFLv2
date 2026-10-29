@@ -81,6 +81,7 @@ class DefMixin:
                     p.zone = (self.los + 4.5 + self.rng.gauss(0.0, S["fill_sd"]), self.by + gx[role] * (1.0 if self.py[i] > self.by else -1.0), 3.0)
                 else:
                     p.zone = (self.los + S["fill_depth"] + self.rng.gauss(0.0, S["fill_sd"]), self.by + gx[role] + self.rng.gauss(0.0, 0.5 * S["fill_sd"]), S["gap_w"])
+            p.fill = S["fill_depth"] * math.exp(self.rng.gauss(0.0, S["fill_sd"]) - 0.5 * S["fill_sd"] ** 2)          # how far past the line this defender lets a runner go before he fills
             if role in DL:
                 p.state = "dlrun"
                 p.read_t = 0.14 + 0.0025 * (100.0 - a) + (0.7 if fake else 0.0)
@@ -151,11 +152,13 @@ class DefMixin:
         i = p.i
         tx, ty, vx, vy, key = self.target_of_pursuit()
         if key:
+            if p.role not in DL:
+                tx = max(tx, self.los + S["fill_key"])               # backers and backs come to the line behind a handoff; they do not run through the mesh point to the quarterback
             self.go(i, tx, ty, 1.0)
             return
         ax, ay = self.intercept_point(i, tx, ty, vx, vy, self.VM[i] * 0.95)
         if self.kind == "run" and self.cdir > 0 and p.role not in DL and tx < self.los + 0.3:
-            ax = max(ax, self.los + S["fill_depth"])                    # backers and backs fill at the line; only the linemen go into the backfield
+            ax = max(ax, self.los + p.fill)                    # backers and backs fill at the line; only the linemen go into the backfield
         self.go(i, ax, ay, 1.0)
 
     def t_escort(self, p):
@@ -199,7 +202,7 @@ class DefMixin:
     # ----------------------------------------------------------------------------------------------------------- coverage
     def react_lag(self, p, key):
         pr = p.prof
-        s = 0.30 - 0.0030 * pr.g(key, 45) - 0.0008 * (pr.awr - 50)
+        s = S["lag_base"] - 0.0030 * pr.g(key, 45) - 0.0008 * (pr.awr - 50)
         return max(1, int(max(0.04, s) / DT))
 
     def t_ball(self, p):
@@ -244,9 +247,9 @@ class DefMixin:
             back = S["backpedal"]
             ratio = back if p.aux != "turned" else 1.0
             # a defender who is beaten by more than three yards turns and runs
-            if dx > 3.0 and p.aux != "turned":
+            if dx > S["turn_dx"] and p.aux != "turned":
                 p.aux = "turned"
-                p.delay = self.t + max(0.05, 0.28 - 0.003 * (p.prof.agi - 50))
+                p.delay = self.t + max(0.05, S["turn_delay"] - 0.003 * (p.prof.agi - 50))
                 self.stop(i)
                 return
             self.go(i, tx, ty, f * ratio)

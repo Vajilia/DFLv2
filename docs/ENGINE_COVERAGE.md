@@ -20,5 +20,5 @@ Left out on purpose (fewer than about two a season in the NFL, or not distinguis
 - Built (play-level): runs, passes, sacks, scrambles, interceptions, fumbles, punts, field goals, kickoffs, onside kicks, extra points, two-point tries, kneel-downs, injuries.
 - Built (Edition 8.47): box score, scoring summary, structured play table, play-by-play text, individual defensive, kicking, punting and return statistics (`dfl.engine.boxscore`).
 - Not in the box score: longest plays, red-zone and per-quarter splits.
-- Built in the opt-in spatial engine (Edition 8.48 and 8.49, `docs/ENGINE.md`): formations (three receivers, one back, one tight end), blocking, man and zone coverage, ball flight and contested catches, tackling, fumbles, traces for the 2D view.
+- Built in the spatial engine, the league's default since Edition 8.52 (Edition 8.48 and 8.49, `docs/ENGINE.md`): formations (three receivers, one back, one tight end), blocking, man and zone coverage, ball flight and contested catches, tackling, fumbles, traces for the 2D view.
 - Not built, even in the spatial engine (spec section 20 item 47): other personnel groupings, nickel and dime packages, fatigue and substitution, kicks and returns as plays on the field, challenges and replay, contact injuries, penalties tied to positions.

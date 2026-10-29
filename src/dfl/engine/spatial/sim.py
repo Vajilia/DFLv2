@@ -358,6 +358,8 @@ class PlaySim(RunMixin, PassMixin, DefMixin, CarryMixin):
             dx_, dy_ = -0.2, 0.0
         e = Eng(b, d, kind, dx_, dy_, (self.px[b] + self.px[d]) / 2, (self.py[b] + self.py[d]) / 2, ux, uy, self.t)
         pb.eng = pd.eng = e
+        if kind == "run":
+            e.lev = self.rng.gauss(0.0, S["eng_init"])          # who gets the better of the first contact: some blocks are lost at once, some won at once
         if kind == "pass" and (b, d) in self.last:
             e.lev = -0.5
         self.engs.append(e)

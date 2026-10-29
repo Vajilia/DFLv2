@@ -24,11 +24,12 @@ def main():
     ap.add_argument("--tables", default=os.path.join(ROOT, "data", "season1"))
     ap.add_argument("--years", type=int, default=100)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--play-level", action="store_true", help="play every game with the play-level engine (fast) instead of the league default, the 22-player engine")
     ap.add_argument("--out", default=os.path.join(ROOT, "out", "years"))
     ap.add_argument("--validate-every", type=int, default=1)
     ap.add_argument("--verbose", action="store_true")
     a = ap.parse_args()
-    u = Universe(a.tables, seed=a.seed)
+    u = Universe(a.tables, seed=a.seed, spatial=not a.play_level)
     problems, t0 = [], time.time()
     os.makedirs(a.out, exist_ok=True)
     for n in range(1, a.years + 1):

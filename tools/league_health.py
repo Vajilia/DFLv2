@@ -58,9 +58,10 @@ def main():
     ap.add_argument("--tables", default=os.path.join(ROOT, "data", "season1"))
     ap.add_argument("--years", type=int, default=30)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--play-level", action="store_true", help="play every game with the play-level engine (fast) instead of the league default, the 22-player engine")
     ap.add_argument("--out", default=os.path.join(ROOT, "out", "health"))
     a = ap.parse_args()
-    u = Universe(a.tables, seed=a.seed)
+    u = Universe(a.tables, seed=a.seed, spatial=not a.play_level)
     os.makedirs(a.out, exist_ok=True)
     rows, t0 = [], time.time()
     for _ in range(a.years):

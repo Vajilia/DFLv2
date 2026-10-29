@@ -178,7 +178,7 @@ class PassMixin:
                 s, T, ax, ay = self.open_est(ri)
                 if best is None or s - (S["check_forced"] if rr == "hb" else 0.0) > best[0] - (S["check_forced"] if self.P[best[1]].role == "hb" else 0.0):
                     best = (s, ri, T, ax, ay)
-            if best is not None and best[0] > 0.45:
+            if best is not None and best[0] > S["force_min"]:
                 self.decision = (t, self.P[best[1]].role, best[0], "forced")
                 self.begin_throw(best[1], best[2], best[3], best[4])
                 return
@@ -307,7 +307,7 @@ class PassMixin:
         else:
             self.thrown_away = False
         dist = math.hypot(ax - self.px[qb], ay - self.py[qb])
-        sd = (S["acc_err_base"] + S["acc_err_dist"] * dist) * (1.9 - S["acc_err_tha"] * pr.g("THA", 50))
+        sd = (S["acc_err_base"] + S["acc_err_dist"] * 20.0 * (dist / 20.0) ** S["acc_pow"]) * (1.9 - S["acc_err_tha"] * pr.g("THA", 50))
         if self.hurry:
             sd *= 1.0 + S["acc_err_press"]
         ix, iy = ax, ay
@@ -426,9 +426,10 @@ class PassMixin:
         r = cr[0][1] if cr else None
         d = max(cd, key=lambda a: self.skill_d(a[1]) - 8.0 * a[0])[1] if cd else None
         tgt = self.targeted
+        deep = S["deep_pen"] * max(0.0, math.hypot(self.bax - self.bx0, self.bay - self.by0) - S["deep_from"]) / 20.0   # a long ball hangs: the receiver must find it, adjust and hold it
         if r is not None and d is None:
             pr = self.P[r].prof
-            pc = S["catch_free"] + 0.0025 * (self.skill_r(r) - 50.0) - 0.04 * (cr[0][0] / S["catch_radius"])
+            pc = S["catch_free"] + 0.0025 * (self.skill_r(r) - 50.0) - 0.04 * (cr[0][0] / S["catch_radius"]) - deep
             if r != tgt:
                 pc -= 0.1
             if self.hurry:
@@ -453,7 +454,7 @@ class PassMixin:
             + 0.12 * (self.P[r].prof.ht - self.P[d].prof.ht) / 20.0 - 0.05 * (1 if self.hurry else 0)
         pr_win = max(0.12, min(0.9, pr_win))
         if rng.random() < pr_win:
-            pc = S["catch_contested"] + 0.003 * (self.skill_r(r) - 50.0)
+            pc = S["catch_contested"] + 0.003 * (self.skill_r(r) - 50.0) - deep
             if rng.random() < min(0.95, pc):
                 self.catch(r)
             else:

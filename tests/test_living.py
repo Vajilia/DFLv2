@@ -286,7 +286,7 @@ class EngineOnTheLedger(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from dfl.year import Universe
-        cls.u = Universe(os.path.join(ROOT, "data", "season1"), seed=21)
+        cls.u = Universe(os.path.join(ROOT, "data", "season1"), seed=21, spatial=False)
         cls.u.play_year()
         cls.u.play_year()
 

@@ -22,7 +22,7 @@ from .resolver import PlaceholderResolver
 
 
 class Universe:
-    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight"):
+    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight", spatial=True):
         self.tpl = league.Template(tables)
         self.clubs = sorted(t["team_city"] for t in self.tpl.teams)
         self.profile = profile
@@ -30,7 +30,7 @@ class Universe:
         priority = self.clubs[-settings["priority_clubs"]:] if settings.get("priority_clubs") else ()
         self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR, engine_injuries=engine, priority=priority)
         self.state = self.tpl.initial_state()
-        self.resolver = LedgerEngine(self.world) if engine else PlaceholderResolver()
+        self.resolver = LedgerEngine(self.world, spatial=spatial) if engine else PlaceholderResolver()
         self.rng = random.Random(f"{seed}|league")
         self.seed_str = f"dfl{seed}"
         self.history = {}
