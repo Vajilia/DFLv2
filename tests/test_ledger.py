@@ -226,6 +226,7 @@ class Viability(unittest.TestCase):
 class Money(unittest.TestCase):
     def test_trade_moves_unpaid_base_not_the_bonus(self):
         L = Ledger(["A", "B"])
+        L.open_trading()
         a = L.new_player("QB", 80)
         L.sign("A", a.pid, Contract(2000, (20,) * 3, (), ((30, 0, 3),)))
         b = L.new_player("QB", 70)
@@ -242,6 +243,9 @@ class Money(unittest.TestCase):
         a, b = L.new_player("QB", 80), L.new_player("QB", 70)
         L.sign("A", a.pid, MIN); L.sign("B", b.pid, MIN)
         pick = (2000, 1, "A")
+        with self.assertRaises(Rejected):
+            L.trade("A", [], "B", [], a_picks=[pick])             # January (the window has not opened): the ledger refuses
+        L.open_trading()
         L.trade("A", [], "B", [], a_picks=[pick])
         self.assertIn(pick, L.clubs["B"].picks)
         with self.assertRaises(Rejected):
@@ -255,6 +259,40 @@ class Money(unittest.TestCase):
         L.advance_week()
         with self.assertRaises(Rejected):
             L.trade("B", [a.pid], "A", [b.pid])                   # closed from week 9
+
+    def test_trading_window_is_kept_by_the_ledger_itself(self):
+        """Item 14 (owner ruling): open from 1 February to the Friday before numbered week 9; January, the post-season and the
+        days between the close and the next 1 February are refused by the ledger, whoever asks."""
+        L = Ledger(["A", "B"], drafted=False)
+        a, b = L.new_player("QB", 80), L.new_player("QB", 70)
+        L.sign("A", a.pid, MIN); L.sign("B", b.pid, MIN)
+        swap = lambda: L.trade("A", [a.pid], "B", [b.pid])
+        self.assertFalse(L.trade_open())                           # January: new league year, window not yet open
+        with self.assertRaises(Rejected):
+            swap()
+        L.open_trading()
+        self.assertTrue(L.trade_open())
+        L.start_camp()
+        self.assertTrue(L.trade_open())                            # camp is inside the window
+        L.begin_season()
+        self.assertTrue(L.trade_open())
+        for _ in range(R.TRADE_LAST_PAID_WEEK):
+            L.advance_week()
+        self.assertTrue(L.trade_open())                            # the last open week
+        L.advance_week()
+        self.assertFalse(L.trade_open())
+        with self.assertRaises(Rejected):
+            L.trade("B", [a.pid], "A", [b.pid])
+        for _ in range(R.PAID_WEEKS - L.week):
+            L.advance_week()
+        L.end_season()
+        self.assertFalse(L.trade_open())                           # post-season: closed (the old rule left it open)
+        L.new_year()
+        self.assertFalse(L.trade_open())                           # January of the next league year
+        with self.assertRaises(Rejected):
+            L.trade("A", [], "B", [], a_picks=[(L.year, 1, "A")])
+        with self.assertRaises(Rejected):
+            L.open_trading() if L.phase == "season" else (_ for _ in ()).throw(Rejected("x"))
 
     def test_waived_player_claimed_takes_the_guarantee_with_her(self):
         L = Ledger(["A", "B"])
@@ -439,7 +477,8 @@ class GameDay(unittest.TestCase):
         L.start_camp(); L.begin_season()
         gd = gameday.build(L, "A")
         self.assertIn("K", gd.short)
-        self.assertIn("K", gd.emergency)
+        self.assertIn("K", gd.needed)
+        self.assertTrue(gd.emergency["K"])
         self.assertTrue(gd.can_field)
 
     def test_fewer_than_eleven_healthy_forfeits(self):
@@ -511,6 +550,7 @@ class PoolAndReserve(unittest.TestCase):
 
     def test_reserve_leaves_room_and_a_traded_pick_moves_its_reserve(self):
         L = Ledger(["A", "B"], drafted=False)
+        L.open_trading()
         for _ in range(60):
             L.sign("A", L.new_player("WR", 60).pid, Contract(2000, (15,)))          # 900 + 89 reserved = 989
         with self.assertRaises(Rejected):
@@ -615,6 +655,7 @@ class JerseyNumbers(unittest.TestCase):
 
     def test_trade_keeps_the_number_if_free_else_gives_another(self):
         L = Ledger(["A", "B"], drafted=True)
+        L.open_trading()
         L.start_camp(); L.begin_season()
         a = L.new_player("QB", 60); b = L.new_player("QB", 60)
         L.sign("A", a.pid, Contract(L.year, (5,), (), (), L.week))           # A: 10

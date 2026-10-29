@@ -432,6 +432,7 @@ class World:
 
     def step_year(self, first=False):
         self.open_year(first)
+        self.L.open_trading()            # the soak driver has no calendar: its offseason is taken to start inside the window
         self.free_agency_open()
         self.start_draft()
         self.draft_rounds(range(1, 8))
@@ -767,7 +768,7 @@ class World:
             self.stats.setdefault("games_by_week", {})[week] = self.stats.get("games_by_week", {}).get(week, 0) + 1
             if gd.short:
                 self.stats["short_games"] += 1
-            if gd.emergency:
+            if gd.needed:
                 self.stats["emergency_games"] += 1
             if not gd.can_field:
                 self.stats["forfeits"] += 1

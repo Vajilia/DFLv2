@@ -112,6 +112,7 @@ class ContractRoom(unittest.TestCase):
 class TradeRoom(unittest.TestCase):
     def test_each_negotiation_is_a_room_with_at_most_three_rounds_and_a_matching_outcome(self):
         w = fresh(41)
+        w.L.open_trading()
         w.free_agency_open()
         for _ in range(3):
             w.trades()

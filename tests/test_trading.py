@@ -13,6 +13,7 @@ CLUBS = [f"C{i:02d}" for i in range(1, 13)]
 def fresh(seed):
     w = World(CLUBS, seed=seed)
     w.open_year(first=True)
+    w.L.open_trading()                      # the calendar opens the window on 1 February; these tests start inside it
     w.free_agency_open()
     return w
 

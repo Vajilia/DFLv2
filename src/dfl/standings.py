@@ -65,14 +65,20 @@ def _opp_pct(opps, rec):
     return pct(w, l)
 
 
+def priority(seed, club):
+    """The club's draw priority for the season: one number per club, fixed by the season's seed and her name alone.
+    It does not depend on which other clubs are being ranked or why (division, wild card, Tour, draft), so a tie that is
+    otherwise identical is broken the same way in every scope. Higher ranks higher; the draft reverses the ranked list."""
+    return random.Random(f"{seed}|priority|{club}").random()
+
+
 def rank(clubs, rec, teams, seed=""):
     """Order clubs best-first by the cascade: (1) wins (2) win % (3) division wins (4) division win %
     (5) conference wins (6) conference win % (7) strength of schedule (8) point differential
-    (9) strength of victory, then a seeded draw. Steps 3-4 only if every tied club shares a division, 5-6 only if
+    (9) strength of victory, then the club's season draw priority (`priority`; the same in every scope). Steps 3-4 only if every tied club shares a division, 5-6 only if
     every tied club shares a conference. A tied group is sorted once by the whole cascade (no reduction)."""
     clubs = list(clubs)
-    rng = random.Random(seed)
-    draw = {c: rng.random() for c in sorted(clubs)}
+    draw = {c: priority(seed, c) for c in clubs}
 
     def base(c):
         return rec[c].w, pct(rec[c].w, rec[c].l)
@@ -108,17 +114,17 @@ def divisions(teams):
 
 def division_orders(teams, rec, seed=""):
     """{(conf, div): [rank 1 .. rank 5]}"""
-    return {dv: rank(members, rec, teams, f"{seed}|{dv}") for dv, members in sorted(divisions(teams).items())}
+    return {dv: rank(members, rec, teams, seed) for dv, members in sorted(divisions(teams).items())}
 
 
 def conference_seeds(conf, teams, rec, div_orders, seed=""):
     """Seven playoff clubs, seed 1 first: four division winners ordered by the cascade, then three wild cards
     (never a division's last-place club, which is exiled)."""
     winners = [o[0] for dv, o in sorted(div_orders.items()) if dv[0] == conf]
-    ordered = rank(winners, rec, teams, f"{seed}|{conf}|winners")
+    ordered = rank(winners, rec, teams, seed)
     exiled = {o[-1] for dv, o in div_orders.items() if dv[0] == conf}     # a last-place club cannot take a wild card
     others = [c for c, dv in teams.items() if dv[0] == conf and c not in winners and c not in exiled]
-    wild = rank(others, rec, teams, f"{seed}|{conf}|wild")[:3]
+    wild = rank(others, rec, teams, seed)[:3]
     return ordered + wild
 
 

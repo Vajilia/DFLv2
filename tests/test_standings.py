@@ -47,6 +47,62 @@ class Records(unittest.TestCase):
         self.assertEqual(S.rank(["Y", "X"], rec, t), ["X", "Y"])
 
 
+class SeasonDrawPriority(unittest.TestCase):
+    """Item 9 (owner ruling): one stable seeded priority per club per season is the final tiebreak, in every scope."""
+
+    def identical(self):
+        t = {f"{c}{cf}{d}": (cf, d) for cf in "WE" for d in "NSXY" for c in "ABCDE"}
+        return t, {c: S.Rec() for c in t}                 # every club identical: only the draw can separate them
+
+    def test_priority_depends_on_season_and_club_only(self):
+        self.assertEqual(S.priority("s", "A"), S.priority("s", "A"))
+        self.assertNotEqual(S.priority("s", "A"), S.priority("s", "B"))
+        self.assertNotEqual(S.priority("s", "A"), S.priority("t", "A"))
+
+    def test_scope_cannot_reverse_an_identical_tie(self):
+        t, rec = self.identical()
+        clubs = sorted(t)
+        whole = S.rank(clubs, rec, t, "S1")
+        pos = {c: i for i, c in enumerate(whole)}
+        rng = random.Random(3)
+        for _ in range(200):                                # any subset of clubs, in any order, keeps the whole-league order
+            sub = rng.sample(clubs, rng.randint(2, 12))
+            self.assertEqual(S.rank(sub, rec, t, "S1"), sorted(sub, key=pos.get))
+
+    def test_division_conference_and_wild_card_scopes_agree(self):
+        t, rec = self.identical()
+        whole = S.rank(sorted(t), rec, t, "S1")
+        pos = {c: i for i, c in enumerate(whole)}
+        orders = S.division_orders(t, rec, "S1")
+        for dv, o in orders.items():
+            self.assertEqual(o, sorted(o, key=pos.get))
+        for conf in "WE":
+            seeds = S.conference_seeds(conf, t, rec, orders, "S1")
+            winners = seeds[:4]
+            self.assertEqual(winners, sorted(winners, key=pos.get))
+            wild = seeds[4:]
+            self.assertEqual(wild, sorted(wild, key=pos.get))
+
+    def test_new_season_new_priority(self):
+        t, rec = self.identical()
+        orders = {S.rank(sorted(t), rec, t, f"S{i}")[0] for i in range(60)}
+        self.assertGreater(len(orders), 15)
+
+    def test_standings_best_first_and_draft_is_the_exact_reverse(self):
+        from dfl import draft
+        t, rec = self.identical()
+        for r in rec.values():
+            r.w, r.l = 9, 9                                # the rest tied on everything; one clear leader, one clear trailer
+        rec["AWN"].w, rec["AWN"].l = 12, 6
+        rec["AWS"].w, rec["AWS"].l = 3, 15
+        ranked = S.rank(sorted(t), rec, t, "S1")
+        self.assertEqual(ranked[0], "AWN")
+        self.assertEqual(ranked[-1], "AWS")                 # best first
+        order = draft.base_order(ranked, {}, [], "S1")
+        self.assertEqual(order, list(reversed(ranked)))    # worst first, and tied clubs in exactly the opposite order
+        self.assertEqual(order[0], "AWS")
+
+
 class Cascade(unittest.TestCase):
     def mk(self, rows):
         """rows: {club: dict(w,l,dw,dl,cw,cl,pf,pa,opps,beaten)}"""

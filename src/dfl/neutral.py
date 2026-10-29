@@ -12,7 +12,7 @@ of a `dfl` class with its attributes. Shared references and cycles are kept (two
 Derived caches listed in `IGNORE` are written as None, as in `deep_digest`.
 
 What it does not do: it does not translate between versions of the code. If a class gained, lost or renamed an attribute, `RENAMES` and
-`ADAPTERS` are the places to say how; both are empty today. Export alone is not a migration: see persist.upgrade, which exports under
+`ADAPTERS` are the places to say how; `RENAMES` is empty and `ADAPTERS` holds only the ledger's trading window (below). Export alone is not a migration: see persist.upgrade, which exports under
 the code that wrote the league, imports under the new code, checks the state by value and records the change.
 """
 import base64
@@ -35,6 +35,27 @@ IGNORE = ("_units",)            # derived caches: written as None, left out of d
 DIGEST_IGNORE = ("_units", "dir", "archive_buffer", "archive")   # `dir`: where this machine keeps the tables. archive*: the per-event hand-off to the archive, empty whenever a digest is taken; logging never changes league state
 RENAMES = {}        # {"old.module.Class": "new.module.Class"} for classes that moved between versions
 ADAPTERS = {}       # {"new.module.Class": callable(obj, attrs_dict)} to fill attributes a newer class expects
+
+
+def _ledger_trading_window(obj, attrs):
+    """Ledger state written before the ledger kept the trading window (it was then derived, wrongly, from phase and week alone, which
+    left January and the post-season open) has no `trading` entry. The ledger alone cannot tell whether 1 February has passed, so the
+    window is marked unknown (None, which the ledger treats as closed) and `_universe_trading_window` settles it from the events the
+    league has fired. A bare ledger with no league around it stays closed until `open_trading` is called."""
+    if "trading" not in attrs:
+        attrs["trading"] = None
+
+
+def _universe_trading_window(obj, attrs):
+    """Settle an unknown window from the calendar: open exactly when this year's `trading_open` has fired and `trade_close` has not."""
+    L = getattr(attrs.get("world"), "L", None)
+    if L is not None and getattr(L, "trading", False) is None:
+        keys = {k for (y, _, k) in attrs.get("fired", ()) if y == L.year}
+        L.trading = "trading_open" in keys and "trade_close" not in keys and L.phase != "post"
+
+
+ADAPTERS["dfl.ledger.ledger.Ledger"] = _ledger_trading_window
+ADAPTERS["dfl.year.Universe"] = _universe_trading_window
 
 
 class NeutralError(Exception):

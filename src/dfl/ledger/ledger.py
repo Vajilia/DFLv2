@@ -88,8 +88,11 @@ class Club:
 
 
 class Ledger:
+    trading = False                    # class default: a ledger without a recorded window (an old saved state) trades only where neutral.ADAPTERS says
+
     def __init__(self, cids, year=2000):
         self.year, self.week, self.phase = year, 0, "offseason"
+        self.trading = False           # the trading window (opened by open_trading, closed by close_trading, the year turn and the end of the season)
         self.draft_completed = year - 1
         self.clubs = {c: Club(c) for c in cids}
         self.players = {}
@@ -412,8 +415,22 @@ class Ledger:
             self.log("claim", club=cid, pid=pid, from_club=src)
         self._txn([cid, src], [pid], go, "claim")
 
+    def open_trading(self):
+        """The trading window opens (Edition 8.52 section 12: at the close of hiring, 1 February). Only the league calendar does this."""
+        if self.phase not in ("offseason", "camp"):
+            raise Rejected("the trading window opens in the offseason")
+        self.trading = True
+
+    def close_trading(self):
+        self.trading = False
+
     def trade_open(self):
-        return self.phase != "season" or self.week <= R.TRADE_LAST_PAID_WEEK
+        """Trades are allowed only inside the window: from its opening in the offseason through the last paid week it covers
+        (the Friday before numbered week 9). January, the end of the season, the postseason and the days before 1 February
+        are closed by this ledger itself, whoever asks."""
+        if not self.trading:
+            return False
+        return self.phase in ("offseason", "camp") or (self.phase == "season" and self.week <= R.TRADE_LAST_PAID_WEEK)
 
     def trade(self, a, a_gives, b, b_gives, a_picks=(), b_picks=()):
         pids = list(a_gives) + list(b_gives)
@@ -587,6 +604,8 @@ class Ledger:
 
     def advance_week(self):
         self.week += 1
+        if self.week > R.TRADE_LAST_PAID_WEEK:
+            self.trading = False
         for p in self.players.values():
             if p.out_weeks > 0:
                 p.out_weeks -= 1
@@ -596,6 +615,7 @@ class Ledger:
 
     def end_season(self):
         self.phase = "post"
+        self.trading = False
 
     def retire(self, pid, reason):
         """A free agent leaves the game for good and is removed from the list (database size). Only pool members can retire here."""
@@ -628,6 +648,7 @@ class Ledger:
             tops[c.cid] = set(ranked[:max(1, len(ranked) // 4)])
         self.year += 1
         self.week, self.phase = 0, "offseason"
+        self.trading = False
         self.fa_moves = []
         for pid, p in list(self.players.items()):
             p.prev_club = None

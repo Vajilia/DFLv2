@@ -56,6 +56,40 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class YearEnd(unittest.TestCase):
+    """Item 14 (owner ruling): the Coronation is the last Sunday of the year, which is 25-31 December, so it can fall up to six days
+    before the year closes. Only `year_close` (31 December: results, governance, honours) falls between the Coronation and 1 January;
+    the league year turns on 1 January and not 'the next morning' unless the Coronation is itself on 31 December."""
+
+    def test_both_a_31_december_coronation_and_an_earlier_last_sunday_occur(self):
+        gaps = {(dt.date(y, 12, 31) - C.coronation(y)).days for y in range(2000, 2300)}
+        self.assertEqual(gaps, {0, 1, 2, 3, 4, 5, 6})
+        self.assertEqual(C.coronation(2000), dt.date(2000, 12, 31))
+        self.assertEqual(C.coronation(2001), dt.date(2001, 12, 30))
+        self.assertEqual(C.coronation(2002), dt.date(2002, 12, 29))
+        self.assertEqual(C.coronation(2005), dt.date(2005, 12, 25))
+
+    def test_between_the_coronation_and_the_new_year_only_the_year_close_falls(self):
+        for y in range(2000, 2300):
+            ev = C.year_events(y)
+            c = C.coronation(y)
+            after = [(d, k) for d, k, *_ in ev if d >= c]
+            self.assertEqual([k for _, k in after], ["coronation", "year_close"], y)       # nothing else on or after the Coronation
+            self.assertEqual(after[1][0], dt.date(y, 12, 31), y)
+            self.assertEqual(ev[-1][1], "year_close")
+            nxt = C.year_events(y + 1)
+            self.assertEqual((nxt[0][0], nxt[0][1]), (dt.date(y + 1, 1, 1), "offseason_open"), y)    # the league year turns on 1 January
+            self.assertEqual(nxt[1][1:2], ("hiring_open",))                                           # leadership window the same day, after the year turns
+            self.assertEqual((nxt[1][0], ), (dt.date(y + 1, 1, 1),))
+
+    def test_the_new_year_follows_the_coronation_the_next_morning_only_on_31_december(self):
+        next_morning = [y for y in range(2000, 2300) if C.coronation(y) == dt.date(y, 12, 31)]
+        later = [y for y in range(2000, 2300) if C.coronation(y) < dt.date(y, 12, 31)]
+        self.assertIn(2000, next_morning)
+        self.assertIn(2001, later)
+        self.assertTrue(later and next_morning)
+
+
 class TradeWindow(unittest.TestCase):
     def test_ledger_trade_window_matches_the_calendar(self):
         from dfl.ledger import rules as R

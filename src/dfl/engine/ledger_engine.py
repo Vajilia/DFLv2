@@ -40,7 +40,7 @@ class LedgerEngine:
             gd = gameday.build(w.L, cid, elevate=False, judge=lambda q: coaching.judged(w, cid, q))
         cards = [w.cards[pid] for pid in gd.active]
         seen = {pid: coaching.judged(w, cid, w.L.players[pid]) for pid in gd.active}      # her coaches choose starters by what they judge, not the truth
-        return Squad(cid, cards, self.staff(cid), seen)
+        return Squad(cid, cards, self.staff(cid), seen, emergency=gd.emergency)
 
     def all_star_side(self, name, clubs):
         """A composite squad: the best healthy player at each position across `clubs` (the people layer will pick All-Stars by vote)."""

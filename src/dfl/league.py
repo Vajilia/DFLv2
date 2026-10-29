@@ -209,7 +209,7 @@ class SeasonRun:
         by_conf = {}
         for c, (conf, _) in self.ambassadors.items():
             by_conf.setdefault(conf, []).append(c)
-        return rec, {conf: standings.rank(cs, rec, self.ambassadors, f"{self.seed}|tour{self.season}|{conf}")
+        return rec, {conf: standings.rank(cs, rec, self.ambassadors, f"{self.seed}|season{self.season}")
                      for conf, cs in sorted(by_conf.items())}
 
     def finish_regular(self):
@@ -304,7 +304,7 @@ class SeasonRun:
     def draft_order(self, returning=None):
         """Next draft's base order (draft.py): the whole 40-club league ranked by the cascade, then exits, then the lottery."""
         from . import draft
-        ranked = standings.rank(list(self.active), self.outcome["records"], self.active, f"{self.seed}|draft{self.season}")
+        ranked = standings.rank(list(self.active), self.outcome["records"], self.active, f"{self.seed}|season{self.season}")
         elim = draft.elimination_rounds(self.playoff_log, (self.coronation["away"], self.coronation["home"],
                                                           self.coronation["away_score"], self.coronation["home_score"]))
         ret = sorted(returning if returning is not None else self.ambassadors)

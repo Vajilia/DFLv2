@@ -155,6 +155,22 @@ class Controller(unittest.TestCase):
         self.assertEqual(len(self.u.fired), 3 * 49)
         self.assertIsNone(self.u.cursor)                               # the last year closed
 
+    def test_results_and_honours_close_on_31_december_whatever_day_the_coronation_fell(self):
+        """Item 14: 2000's Coronation is on 31 December itself, 2001's is a day earlier and 2002's two days earlier. In each year only
+        the year close follows the Coronation, it runs on 31 December of that year, and the year's Tiaras carry that year."""
+        import datetime as dt
+        gaps = []
+        for y in (2000, 2001, 2002):
+            fired = [(d, k) for yy, d, k in self.u.fired if yy == y]
+            self.assertEqual([k for _, k in fired[-2:]], ["coronation", "year_close"])
+            self.assertEqual(fired[-1][0], dt.date(y, 12, 31).isoformat())
+            gaps.append((dt.date(y, 12, 31) - dt.date.fromisoformat(fired[-2][0])).days)
+        self.assertEqual(gaps, [0, 1, 2])
+        given = set().union(*self.u.world.tiaras.values())
+        self.assertEqual(given, {2000, 2001, 2002})                    # each year's Tiaras were awarded at that year's close, none late or twice
+        self.assertEqual(self.u.L.year, 2002)                         # the league year has not turned: it turns on 1 January
+        self.assertEqual([r["year"] for r in self.u.reports], [2000, 2001, 2002])
+
     def test_the_paid_week_counter_follows_the_calendar(self):
         for y in (2000, 2001, 2002):
             rows = [t for t in self.trace if t[0] == y]
@@ -166,18 +182,19 @@ class Controller(unittest.TestCase):
             self.assertEqual(paid, 22)
 
     def test_trades_are_made_only_from_1_february_to_the_friday_before_numbered_week_9(self):
-        """The ledger's window is open through the Friday before numbered week 9 and closed from then to the end of the season (section 12).
-        Trading rounds run at `trading_open` and in paid weeks 1 to 9 and nowhere else. (The ledger also reports the window as open between
-        the end of the season and 1 February, including January, when section 12 says trading has not opened; no trading round runs
-        then, so no trade can result. Recorded as a finding in PROJECT_COMPLETION_PLAN.md, not changed.)"""
+        """The ledger itself keeps the window (owner ruling, Item 14): closed in January, open from `trading_open` (1 February) through
+        the Friday before numbered week 9, closed again from `trade_close` to the end of the year. Trading rounds run at `trading_open`
+        and in paid weeks 1 to 9 and nowhere else."""
         for y in (2000, 2001, 2002):
             rows = [t for t in self.trace if t[0] == y]
             keys = [t[1] for t in rows]
             i_open, i_close, i_wc = keys.index("trading_open"), keys.index("trade_close"), keys.index("wild_card")
-            for t in rows[i_open:i_close + 1]:
+            for t in rows[:i_open]:
+                self.assertFalse(t[3], (y, t[1]))                          # January to 31 January (and every closed day): refused by the ledger
+            for t in rows[i_open:i_close]:
                 self.assertTrue(t[3], (y, t[1]))
-            for t in rows[i_close + 1:i_wc]:
-                self.assertFalse(t[3], (y, t[1]))
+            for t in rows[i_close:]:
+                self.assertFalse(t[3], (y, t[1]))                          # from the close, through the end of the season, the postseason and December
             self.assertLess(i_close, keys.index("week_9"))
             before = self.trace[self.trace.index(rows[0]) - 1][4] if rows[0] is not self.trace[0] else 0
             for t in rows:

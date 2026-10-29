@@ -126,6 +126,7 @@ class Universe:
         pass
 
     def on_trading_open(self, year, date, key):
+        self.L.open_trading()
         assert self.L.trade_open()
         self.world.trades()
 
@@ -197,6 +198,7 @@ class Universe:
 
     def on_trade_close(self, year, date, key):
         assert self.paid_week == R.TRADE_LAST_PAID_WEEK and self.L.trade_open()       # the last open day
+        self.L.close_trading()
         self._closing = True
 
     def on_venue_announce(self, year, date, key):

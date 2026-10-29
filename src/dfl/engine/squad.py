@@ -44,8 +44,9 @@ class Staff:
 
 
 class Squad:
-    def __init__(self, cid, cards, staff=None, ratings=None):
+    def __init__(self, cid, cards, staff=None, ratings=None, emergency=None):
         self.cid = cid
+        self.emergency = emergency or {}  # the club's emergency list filed before kickoff: position -> ordered card ids (ledger/gameday.py)
         self.ratings = ratings or {}      # card id -> hidden true overall, when the caller keeps them current (saves recomputing)
         self.cards = {c.identity.id: c for c in cards}
         self.staff = staff or Staff()
@@ -66,19 +67,36 @@ class Squad:
         cs = [c for c in self.cards.values() if c.identity.pos == pos and c.identity.id not in self.out]
         return sorted(cs, key=lambda c: (-self._rate(c), c.identity.id))
 
+    def emergency_for(self, pos, taken):
+        """The first name on the club's emergency list for `pos` who is still in the game (not injured or ejected so far) and is not
+        already on the field in `taken` (a set of card ids). One player can therefore never hold two positions at once. None if the
+        list is exhausted."""
+        for i in self.emergency.get(pos, ()):
+            if i in self.cards and i not in self.out and i not in taken:
+                return self.cards[i]
+        return None
+
     def lineup(self, spec):
-        """The best available players at each position; a position with too few is filled by the best leftover player from anywhere
-        (the out-of-position penalty is an open engine item, so slice 1 simply uses her own attributes)."""
-        out, short = [], 0
+        """The best available players at each position. A position with too few is filled, in the order of `spec`, from the club's
+        emergency list (names filed before kickoff, skipping anyone injured since and anyone already on the field), and only when that
+        is exhausted by the best leftover player from anywhere. The emergency player keeps her official position; the out-of-position
+        penalty is an open engine item (spec section 20 item 2), so for now she plays with her own attributes."""
+        out, wanted = [], []
         for pos, n in spec:
             got = self.available(pos)[:n]
             out += got
-            short += n - len(got)
-        if short:
+            wanted += [pos] * (n - len(got))
+        if wanted:
             have = {c.identity.id for c in out}
-            spare = sorted((c for c in self.cards.values() if c.identity.id not in have and c.identity.id not in self.out
-                            and c.identity.pos not in ("K", "P", "LS", "QB")), key=lambda c: (-self._rate(c), c.identity.id))
-            out += spare[:short]
+            for pos in wanted:
+                c = self.emergency_for(pos, have)
+                if c is None:
+                    c = next(iter(sorted((c for c in self.cards.values() if c.identity.id not in have and c.identity.id not in self.out
+                                          and c.identity.pos not in ("K", "P", "LS", "QB")),
+                                         key=lambda c: (-self._rate(c), c.identity.id))), None)
+                if c is not None:
+                    out.append(c)
+                    have.add(c.identity.id)
         return out
 
     def ready(self):
@@ -122,8 +140,13 @@ class Squad:
                     0.15 * mean(wmean(c, {"TAK": 70, "AWR": 30}) for c in db),
         }
         # with no kicker or punter dressed (an emergency), the best leg among the rest takes the kick
-        legs = lambda w: max(self.cards.values(), key=lambda c: (wmean(c, w), -c.identity.id))
-        k, p = self.available("K") or [legs({"KPW": 40, "KAC": 60})], self.available("P") or [legs({"KPW": 60, "KAC": 40})]
+        def legs(w, taken=()):
+            pool = [c for c in self.cards.values() if c.identity.id not in self.out and c.identity.id not in taken] or list(self.cards.values())
+            return max(pool, key=lambda c: (wmean(c, w), -c.identity.id))
+        def leg(pos, w, taken=()):
+            return self.available(pos) or [self.emergency_for(pos, set(taken)) or legs(w, taken)]
+        k = leg("K", {"KPW": 40, "KAC": 60})
+        p = leg("P", {"KPW": 60, "KAC": 40}, [k[0].identity.id])
         u["kick"] = wmean(k[0], {"KPW": 40, "KAC": 60})
         u["punt"] = wmean(p[0], {"KPW": 60, "KAC": 40})
         runners = [c for c in self.cards.values() if c.identity.pos in ("HB", "WR", "CB") and c.identity.id not in self.out]

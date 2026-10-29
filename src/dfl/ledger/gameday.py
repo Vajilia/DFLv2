@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 
 from . import rules as R
-from .positions import MINIMUMS, OL, shortfalls
+from .positions import MINIMUMS, OL, POSITIONS, shortfalls
 
 OFFENCE = ("QB", "HB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT")
 DEFENCE = ("LE", "RE", "DT", "ROLB", "MLB", "LOLB", "CB", "FS", "SS")
@@ -22,8 +22,36 @@ class GameDay:
     active: list
     elevated: list
     short: dict                                   # position -> places short of the league minimum
-    emergency: dict = field(default_factory=dict) # position -> dressed pid who plays out of position when nobody is left
+    emergency: dict = field(default_factory=dict) # EVERY position -> ordered pids (at most EMERGENCY_NAMES) of dressed, medically available
+                                                  # players of other positions who would play there, out of position, if nobody is left
+    needed: list = field(default_factory=list)    # positions with nobody dressed at kickoff (the emergency list is in use from the start)
     can_field: bool = True
+
+
+EMERGENCY_NAMES = 4        # names filed per position (the spec asks for at least one)
+
+
+def emergency_list(active, est):
+    """{position: tuple of pids} for EVERY position. Each name is a dressed player (on the game-day list) who is medically available
+    and whose permanent position is a different one; she keeps her official position (section 11: official position is permanent) and
+    would only be assigned to this one for the game, at the moment nobody at the position is left.
+    Order: neighbouring positions first, in the NEIGHBOURS order, then the rest; best-rated first within a position; ties by player id.
+    The first names are chosen to be different players for different positions where the squad allows it, so that two empty positions
+    do not both call on the same player; whoever resolves a list in a game must still skip a player already on the field
+    (engine/squad.py does), which is what guarantees nobody holds two positions at once."""
+    dressed = [p for p in active if p.out_weeks == 0]
+    out, first = {}, set()
+    for pos in POSITIONS:
+        near = NEIGHBOURS.get(pos, ())
+        ranked = sorted((p for p in dressed if p.pos != pos),
+                        key=lambda q: (near.index(q.pos) if q.pos in near else len(near), -est(q), q.pid))
+        pick = next((p for p in ranked if p.pid not in first), None) or (ranked[0] if ranked else None)
+        if pick is None:
+            out[pos] = ()
+            continue
+        first.add(pick.pid)
+        out[pos] = (pick.pid,) + tuple(p.pid for p in ranked if p.pid != pick.pid)[:EMERGENCY_NAMES - 1]
+    return out
 
 
 def build(ledger, cid, elevate=True, judge=None):
@@ -84,19 +112,10 @@ def build(ledger, cid, elevate=True, judge=None):
         active = active[:R.ACTIVE_LIMIT_FEW_OL]
     gd = GameDay(R.ACTIVE_LIMIT if n_ol_now >= R.OL_FOR_FULL else R.ACTIVE_LIMIT_FEW_OL,
                  [p.pid for p in active], [p.pid for p in elevated], shortfalls(counts))
-    # 4. every position with nobody left gets a named emergency player from its neighbours (filed before kickoff)
-    for pos in MINIMUMS:
-        if counts.get(pos, 0) == 0:
-            for n in NEIGHBOURS[pos]:
-                cand = next((p for p in sorted(active, key=lambda q: (-est(q), q.pid)) if p.pos == n), None)
-                if cand:
-                    gd.emergency[pos] = cand.pid
-                    break
-            else:
-                best = next(iter(sorted(active, key=lambda q: (-est(q), q.pid))), None)
-                if best:
-                    gd.emergency[pos] = best.pid
-    if counts.get("HB", 0) + counts.get("FB", 0) == 0 and active:
-        gd.emergency["HB"] = sorted(active, key=lambda q: (-est(q), q.pid))[0].pid
+    # 4. the emergency list (section 11): filed before kickoff with coverage for every position, from dressed, medically available players
+    gd.emergency = emergency_list(active, est)
+    gd.needed = [pos for pos in MINIMUMS if counts.get(pos, 0) == 0]
+    if counts.get("HB", 0) + counts.get("FB", 0) == 0 and "HB" not in gd.needed:
+        gd.needed.append("HB")
     gd.can_field = len(active) >= 11
     return gd
