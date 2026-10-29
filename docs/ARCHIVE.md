@@ -56,7 +56,23 @@ Time `t` of step `k` is `k*dt`. The container is stored zlib-compressed; its ide
 
 The league's commit writes the event's archive records **first**, then its own journal. A crash between the two leaves the archive exactly one event ahead of the league, never behind. The league restarts, plays the event again (it is deterministic), and `put_batch` finds identical rows already stored and does nothing. If a row exists with different content the write is refused (`ArchiveConflict`) and nothing at all is written: history is never overwritten. The same check runs while the league recovers by replay (`confirm_batch`): if replaying an event does not produce the records the archive holds, recovery stops. Tests: crash between archive write and league commit; repeat of every batch; conflicting record; edit and delete refused.
 
-If the archive is older than the league file (restored from an older backup on its own), opening the league raises `ArchiveMissing` when the gap lies in the journal being replayed; `Runner.open(path, repair_archive=True)` rebuilds exactly those batches by deterministic replay. A gap older than the newest snapshot cannot be rebuilt that way and is not detected at open. **Back up and restore the pair together** (`backup-all` / `restore-all`): the league file is copied first and the archive second, so the archive is never behind.
+## Consistency between the league and its archive
+
+The league and its archive carry the same random `league_id`, and the league's journal records, for every event, how many archive records the event produced and a digest of them (both are inside the journal's hash chain). **On opening a league, before anything is replayed or written, `Runner.open` compares every journal row with the archive's batch table** (`persist.archive_check`; it reads only the batch table, so it is cheap). Normal continuation is refused with `ArchiveInconsistent` when:
+
+| Situation | Result |
+| --- | --- |
+| The archive lacks records the journal says were committed (an older archive restored beside a newer league, a batch deleted), however old the gap, even older than the newest snapshot | refused, kind `missing`, with the first and last event |
+| The archive holds different records for an event than the journal committed (changed digest or count), or holds records for an event the journal says produced none | refused, kind `mismatched` (never repairable) |
+| The archive belongs to another league (different `league_id`), even if its games are identical | refused, kind `foreign` |
+| The archive file is absent or cannot be read (it is never recreated empty) | refused, kind `absent` or `unreadable` |
+| The archive's history from before this league file began (after an upgrade or import) is not what the file recorded | refused, kind `base` |
+| The archive is **one event ahead** after an interrupted commit | accepted; the retry makes it exact |
+| The archive is **further ahead** (an older league file beside a newer archive of the same league) | refused, kind `ahead`, unless `allow_archive_ahead=True`; the extra events are then confirmed one by one as the league replays them, and a league that diverges from them is stopped (`ArchiveConflict`) |
+
+`Runner.open(path, repair_archive=True)` rebuilds missing events: it starts from the newest snapshot before the first missing event (year-end snapshots are kept for ever, so this always exists, at the cost of replaying up to a year), replays, and writes each missing batch only if its record count and digest equal what the journal committed (otherwise `ReplayDivergence`). A refusal writes nothing to either file. `verify FILE` reports the same problems; `status FILE` shows `archive_check` and `archive_ahead_by`. `backup-all` copies the league first and the archive second, so a restored pair may have an archive further ahead than one event; `restore-all` therefore accepts that, and `upgrade` and `import` refuse a pair that is not consistent. A runner opened without its archive (`with_archive=False`, used only for reading and for the originating-code export) refuses to commit an event that makes history. Tests: `tests/test_archive_consistency.py`.
+
+**Back up and restore the pair together** (`backup-all` / `restore-all`).
 
 ## Backup and restore
 

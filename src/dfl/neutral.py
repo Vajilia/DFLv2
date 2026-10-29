@@ -367,6 +367,22 @@ def state_digest(raw):
     return hashlib.sha256(gzip.decompress(raw)).hexdigest()
 
 
+def batch_chain(prev, items):
+    """Hash chain over archive batches [(event seq, record count, records digest)] in event order, starting from `prev`."""
+    for seq, n, digest in items:
+        prev = hashlib.sha256(f"{prev}|{seq}|{n}|{digest}".encode()).hexdigest()
+    return prev
+
+
+def _archive_chain_of(r):
+    """The chain over every archive batch this league has committed (the file's base, then its journal), or None without an archive."""
+    if not r.meta.get("archive"):
+        return None
+    base = r.meta.get("archive_base") or {"chain": "0" * 64}
+    rows = r.db.execute("SELECT seq, n_records, records_digest FROM journal WHERE seq <= ? AND n_records > 0 ORDER BY seq", (r.seq,)).fetchall()
+    return batch_chain(base["chain"], rows)
+
+
 def runner_manifest(r):
     """What a state document says about the league it came from. `r` is any object with `.u` (the Universe), `.meta`, `.seq`, `.chain`,
     which is what persist.Runner has in every version of the league file."""
@@ -378,4 +394,5 @@ def runner_manifest(r):
     return {"league_format": m.get("format"), "fingerprint": m.get("fingerprint"), "seq": r.seq, "chain": r.chain, "seed": m.get("seed"),
             "snapshot_every": m.get("snapshot_every"), "keep": m.get("keep"), "universe_args": m.get("universe_args"),
             "tables": m.get("tables"), "lineage": m.get("lineage", []), "created_with": m.get("created_with"), "rule_version": rule,
-            "archive": m.get("archive"), "deep_digest": deep_digest(r.u)}
+            "archive": m.get("archive"), "league_id": m.get("league_id"), "archive_chain": _archive_chain_of(r),
+            "deep_digest": deep_digest(r.u)}

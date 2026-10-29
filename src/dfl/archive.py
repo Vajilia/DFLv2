@@ -214,21 +214,29 @@ def _meta(db):
     return {k: json.loads(v) for k, v in db.execute("SELECT key, value FROM meta")}
 
 
+class Prepared:
+    """One event's records, encoded and hashed (the league journal stores `n` and `digest` for the event)."""
+    def __init__(self, games, recs, digest):
+        self.games, self.recs, self.digest, self.n = games, recs, digest, len(games) + len(recs)
+
+
 class Archive:
     def __init__(self, path, db):
         self.path, self.db = path, db
 
     @classmethod
     def open_or_create(cls, path, info):
-        """Open the archive, or create it. `info` ({"fingerprint", "how", "seq"}) is added to its epochs when it differs from the last."""
+        """Open the archive, or create it. `info` ({"fingerprint", "how", "seq", "league_id"}) is added to its epochs when it differs from the
+        last. An existing archive that belongs to another league (different `league_id`) is refused."""
         fresh = not (os.path.exists(path) and os.path.getsize(path))
         db = _connect(path) if not fresh else _connect_new(path)
         db.executescript(SCHEMA)
         a = cls(path, db)
         if fresh:
-            a._init_meta()
+            a._init_meta(info.get("league_id"))
         else:
             a._check_format()
+            a.check_league(info.get("league_id"))
         a._epoch(info)
         a._triggers()
         return a
@@ -242,9 +250,15 @@ class Archive:
         a._check_format()
         return a
 
-    def _init_meta(self):
+    def check_league(self, league_id):
+        mine = _meta(self.db).get("league_id")
+        if league_id is not None and mine != league_id:
+            raise ArchiveError(f"{self.path} belongs to another league (archive league id {str(mine)[:12]}, league {str(league_id)[:12]})")
+
+    def _init_meta(self, league_id=None):
         self.db.execute("BEGIN IMMEDIATE")
-        for k, v in (("format", FORMAT_NAME), ("version", FORMAT_VERSION), ("trace_version", TRACE_VERSION), ("epochs", [])):
+        for k, v in (("format", FORMAT_NAME), ("version", FORMAT_VERSION), ("trace_version", TRACE_VERSION), ("epochs", []),
+                     ("league_id", league_id)):
             self.db.execute("INSERT OR IGNORE INTO meta VALUES (?,?)", (k, json.dumps(v)))
         self.db.execute("COMMIT")
 
@@ -270,7 +284,10 @@ class Archive:
         self.db.close()
 
     # ---- writing
-    def _encode_batch(self, records):
+    def prepare(self, records):
+        """Encode and hash one event's records (no I/O)."""
+        if isinstance(records, Prepared):
+            return records
         games, recs = [], []
         for r in records:
             if r["type"] == "game":
@@ -283,12 +300,13 @@ class Archive:
         ids.update({row["rid"]: row["sha256"] for row, _ in recs})
         if len(ids) != len(games) + len(recs):
             raise ArchiveError("two records in one batch share an id")
-        return games, recs, batch_digest(ids)
+        return Prepared(games, recs, batch_digest(ids))
 
     def put_batch(self, seq, records):
         """Store the records one league event produced. Idempotent: identical records already present are left alone; a stored record
         that differs is `ArchiveConflict` and nothing at all is written."""
-        games, recs, bd = self._encode_batch(records)
+        pb = self.prepare(records)
+        games, recs, bd = pb.games, pb.recs, pb.digest
         self.db.execute("BEGIN IMMEDIATE")
         try:
             row = self.db.execute("SELECT n, sha256 FROM batches WHERE seq = ?", (seq,)).fetchone()
@@ -342,7 +360,8 @@ class Archive:
         """While recovering the league by replay: the archive must already hold exactly these records. With `repair`, a missing batch is
         written (for an archive restored from an older backup than the league file); a differing one is always `ArchiveConflict`."""
         try:
-            games, recs, bd = self._encode_batch(records)
+            pb = self.prepare(records)
+            games, recs, bd = pb.games, pb.recs, pb.digest
             row = self.db.execute("SELECT n, sha256 FROM batches WHERE seq = ?", (seq,)).fetchone()
             if row is None:
                 raise ArchiveMissing(f"event {seq} is in the league's journal but not in the archive")
@@ -352,7 +371,7 @@ class Archive:
         except ArchiveMissing:
             if not repair:
                 raise
-            self.put_batch(seq, records)
+            self.put_batch(seq, pb)
 
     # ---- reading
     def games(self, season=None):
@@ -390,6 +409,23 @@ class Archive:
 
 
 # ---------------------------------------------------------------------------------------------------------------- whole-file operations
+def batch_table(path):
+    """{event seq: (record count, digest)} for every batch in the archive (read-only; cheap)."""
+    db = _connect(path, readonly=True)
+    try:
+        return {s: (n, h) for s, n, h in db.execute("SELECT seq, n, sha256 FROM batches")}
+    finally:
+        db.close()
+
+
+def league_id(path):
+    db = _connect(path, readonly=True)
+    try:
+        return _meta(db).get("league_id")
+    finally:
+        db.close()
+
+
 def parse_trace(c):
     """Container bytes -> (header dict, pos array('h') of steps*22*2, ball array('h') of steps*3). Standard library only."""
     if c[:4] != TRACE_MAGIC:

@@ -269,7 +269,7 @@ class Retry(Base):
             if os.path.exists(self.path("b") + ".archive" + ext):
                 os.remove(self.path("b") + ".archive" + ext)
         shutil.copy(old, self.path("b") + ".archive")
-        with self.assertRaises(A.ArchiveMissing):
+        with self.assertRaises(persist.ArchiveInconsistent):
             persist.Runner.open(self.path("b"))                              # the journal says events the archive never saw
         r = persist.Runner.open(self.path("b"), repair_archive=True)         # the archive is rebuilt from the deterministic replay
         r.run_events(2)

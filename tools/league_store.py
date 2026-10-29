@@ -56,6 +56,8 @@ def main(argv=None):
     p.add_argument("--deep", action="store_true")
     p.add_argument("--die-after", type=int)
     p.add_argument("--die-inside", type=int)
+    p.add_argument("--repair-archive", action="store_true", help="rebuild archive events the league committed but the archive lacks, by replay")
+    p.add_argument("--allow-archive-ahead", action="store_true", help="accept an archive further ahead than one interrupted commit")
     sub.add_parser("status").add_argument("file")
     p = sub.add_parser("verify")
     p.add_argument("file")
@@ -110,7 +112,7 @@ def main(argv=None):
                     counter["n"] += 1
                     if counter["n"] == a.die_inside:
                         os._exit(9)
-            r = persist.Runner.open(a.file, crash_hook=hook)
+            r = persist.Runner.open(a.file, crash_hook=hook, repair_archive=a.repair_archive, allow_archive_ahead=a.allow_archive_ahead)
             fired = 0
             if a.events is not None:
                 for _ in range(a.events):
@@ -126,9 +128,15 @@ def main(argv=None):
                 res["deep"] = persist.deep_digest(r.u)
             out(**res)
         elif a.cmd == "status":
-            out(**persist.status(a.file))
+            st = persist.status(a.file)
+            if st["archive"]:
+                chk = persist.archive_check(a.file)
+                st["archive_check"] = {k: (v if not isinstance(v, list) else (v[:5] + ["..."] if len(v) > 5 else v))
+                                       for k, v in chk.items() if v not in (False, None, [])}
+                st["archive_ahead_by"] = len(chk["ahead"])
+            out(**st)
         elif a.cmd == "verify":
-            problems = persist.verify(a.file, deep=a.deep)
+            problems = persist.verify(a.file, deep=a.deep, archive=True)
             out(ok=not problems, problems=problems)
             return 0 if not problems else 2
         elif a.cmd == "backup":
@@ -165,7 +173,7 @@ def main(argv=None):
         elif a.cmd == "restore-all":
             r = persist.restore_set(a.dir, a.dest)
             out(restored=a.dest, events=r.seq)
-    except (persist.PersistError, archive.ArchiveError) as e:
+    except (persist.PersistError, archive.ArchiveError) as e:         # ArchiveInconsistent is a PersistError
         out(error=type(e).__name__, message=str(e))
         return 1
     return 0

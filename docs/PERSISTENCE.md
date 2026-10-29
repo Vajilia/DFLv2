@@ -10,7 +10,7 @@ A league file is one SQLite file with four tables:
 
 | Table | Holds |
 | --- | --- |
-| `meta` | save-schema version (`format`, now 2), the fingerprint of the source and data files that may continue the league, how the file was made, the lineage of files it was upgraded from, the sequence number and chain value it starts from (`base`), the seed and creation arguments, the snapshot cadence, the name of its archive |
+| `meta` | save-schema version (`format`, now 3; formats 1 and 2 were development builds), the league's random `league_id` (shared with its archive), the fingerprint of the source and data files that may continue the league, how the file was made, the lineage of files it was upgraded from, the sequence number and chain value it starts from (`base`), the seed and creation arguments, the snapshot cadence, the name of its archive |
 | `journal` | one row per committed event: sequence number, year, events fired so far, event key, a digest of the league after the event, and a hash chain over all rows so far |
 | `snapshots` | zlib-compressed pickle of the whole league at a sequence number, with its own SHA-256 |
 | `code` | the source and data files (zip, with a per-file manifest) of every code version that has written to the file |
@@ -78,6 +78,7 @@ What the tests prove (`tests/test_upgrade.py`): the schema and code verdicts are
 - **Integrity is not authentication.** SHA-256 and the hash chain detect damage and accidental edits, not a deliberate forger who rewrites every table consistently. The snapshot reader accepts only this package's classes and a short list of plain data types, so a hostile file cannot run code, but treat league files as trusted inputs.
 - **Growth.** About 2.3 MB compressed per snapshot after two years (placeholder engine; the report list keeps every season's full result in memory). A 100-year file would hold about 100 year-end checkpoints, plausibly a few hundred megabytes. The archive now holds a season summary and every game, but the snapshot still carries each season's full result in memory (`reports[*]['result']`); trimming it is a separate, not yet made change.
 - **Cost.** A snapshot takes about 0.3 to 0.4 s, so `snapshot_every=1` (the default) adds roughly 20 s to a year, small beside a spatial-engine year (about 13 minutes). Larger values trade restart time for speed; correctness does not depend on it.
+- **League and archive consistency** is checked at every open (see `docs/ARCHIVE.md`, "Consistency between the league and its archive"): the journal records the count and digest of each event's archive records and is hash-chained, and an archive that lacks, differs from, or is far ahead of what the journal committed, or belongs to another league, is refused before anything is written. It detects accidents and naive edits, not a forger who rewrites both files consistently.
 - **One machine, one writer.** WAL mode on a local disk. Not for network file systems. Durability is as good as the disk's `fsync`.
 - **No scheduling.** Backups are taken when the operator (or the future clock process) calls `backup` or `backup-all` (use the pair form when there is an archive); nothing schedules them yet.
 - **Not covered here:** the live clock and pacing (deferred), and anything outside the `Universe` (the website). The permanent game and trace history is in `docs/ARCHIVE.md`.
