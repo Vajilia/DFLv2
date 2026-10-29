@@ -31,7 +31,7 @@ A GM willing to deal publishes the players she would move (and optionally what s
 - **Every proposal, response and counter is an event in the log.** The engine replays the log; a run is reproducible even when the deciders were not.
 
 ### 5. Deciders are pluggable **(builder)**
-The decision "propose / accept / reject / counter" sits behind one interface. The autopilot GM is the default and the one all tests use. Language-model agents plug into the same interface.
+The decision "propose / accept / reject / counter" sits behind one interface. The autopilot GM is the default and the one all tests use. Other deterministic deciders may plug into the same interface; language-model agents may not (directive of 2026-10-29).
 
 ## Why not just 48 free-running agents
 - Language models are not reproducible, slow and cost money for every call; the roadmap's own risk 3.
@@ -42,11 +42,11 @@ The decision "propose / accept / reject / counter" sits behind one interface. Th
 ## Build order
 1. **Stage 1: deterministic protocol with autopilot GMs.** Common list, trading block, deal score, three-round limit, ledger validation, event log. Measured against the Phase 4 bands.
 2. **Stage 2: public market value** from production (needs the engine's stats).
-3. **Stage 3: pluggable deciders**, then language-model agents on a few clubs with record-and-replay; measure them against autopilot clubs on trade volume, deal balance and the bands.
+3. **Stage 3: pluggable deterministic deciders** (different weighted-rule personalities behind the same interface), seeded and replayable; measure them against the default autopilot on trade volume, deal balance and the bands. *Language-model agents were removed from this stage on 2026-10-29: no language model takes part in simulation decisions.*
 4. **Stage 4: scale up** only if the bands hold.
 
 ## Owner decisions (2026-10-24)
-1. The staging is approved: autopilot first, language-model agents later.
+1. The staging is approved: autopilot first. (Superseded 2026-10-29: the "language-model agents later" half is withdrawn by the no-language-model directive; later stages use deterministic deciders only.)
 2. Picks may be traded; **no cash and no trading of cap space**; no limit on the number of trades.
 3. At most three players a side (the builder also capped picks at three a side).
 4. Discretion and relationships generate story material from the trade log; none of it flows back into the engine.

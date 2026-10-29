@@ -16,7 +16,7 @@ Phase 0 audit, 2026-10-22. Method: **source read only**, at v1 `main` commit `84
 | V1-08 | Game-day roster | 48, or 47 with fewer than 8 offensive linemen | 48 only; no 47 variant found by search | Adopt spec |
 | V1-09 | Emergency fill-ins | Emergency list per position, out-of-position play (§11) | Not found in `rosters.py` | Adopt spec |
 | V1-10 | Elevations and IR | 2 elevations a game, 3 a player, IR minimum 4 games | Same, plus a limit of 8 IR returns a season | Resolved: owner ruled yes; the 8-return limit is in Ed 8.7 |
-| V1-11 | Offseason count | Silent | Only the 51 highest cap numbers count until the cut (NFL) | Default to NFL; add to spec once confirmed |
+| V1-11 | Offseason count | Silent | Only the 51 highest cap numbers count until the cut (NFL) | Resolved by Ed 8.9 (§11): the cap is enforced all year and, before the final cut, counts a club's dead money plus its highest 69 contracts (53 + 16), the NFL top-51 method adapted |
 | V1-12 | Franchise and transition tags, restricted free agency | Removed (§11) | Implemented (steps 6e–6i, `RFA_SEASONS`, `RFA_MATCH_DAYS`) | Adopt spec; do not port |
 | V1-13 | Waiver priority | Last season's draft order until four league weeks finish | Three weeks | Adopt spec |
 | V1-14 | Coronation venue | Fan vote in June, announced July 4, 40-year window; finalist at home if its venue wins | Neutral site (`FINAL_IS_NEUTRAL_SITE`) | Adopt spec |

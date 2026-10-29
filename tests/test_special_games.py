@@ -184,6 +184,44 @@ class EngineNeutral(unittest.TestCase):
         self.assertEqual((a.score, a.stats), (b.score, b.stats))
 
 
+class OpeningPossession(unittest.TestCase):
+    """Section 10: "Home kicks to start the first half, away the second. No coin toss. In overtime the away side kicks first." The
+    DFL has no coin toss, so opening possession is fixed by which side is the (nominal) home side, and a neutral venue changes nothing."""
+
+    def kickoffs(self, neutral, seed):
+        """[(period, kicker index)] of every kickoff, taken from the engine itself (the play log's team column is the previous possession)."""
+        import test_engine as TE
+        from dfl.engine.game import Game
+        seen, real = [], Game.kickoff
+
+        def spy(game, kicker, free_kick=False):
+            seen.append((game.period, kicker, free_kick))
+            return real(game, kicker, free_kick)
+        Game.kickoff = spy
+        try:
+            Game(TE.squad("C00"), TE.squad("C01"), random.Random(seed), False, neutral=neutral).run()
+        finally:
+            Game.kickoff = real
+        return seen
+
+    def test_the_nominal_home_kicks_the_first_half_and_away_the_second_at_home_and_at_neutral_sites(self):
+        for neutral in (False, True):
+            for seed in range(1, 6):
+                ko = self.kickoffs(neutral, seed)
+                self.assertEqual(ko[0][:2], (1, 0))              # period 1: the home side (index 0) kicks
+                half2 = [k for k in ko if k[0] == 3][0]
+                self.assertEqual(half2[:2], (3, 1))              # period 3: the away side kicks
+
+    def test_neutral_changes_only_the_edge_not_the_kicking_order(self):
+        self.assertEqual(self.kickoffs(False, 7)[0], self.kickoffs(True, 7)[0])
+
+    def test_there_is_no_coin_toss_in_the_engine(self):
+        with open(os.path.join(ROOT, "src", "dfl", "engine", "game.py"), encoding="utf-8") as f:
+            text = f.read().lower()
+        self.assertNotIn("coin", text)
+        self.assertNotIn("toss", text)
+
+
 class Tiaras(unittest.TestCase):
     def setUp(self):
         self.w = World([f"C{i:02d}" for i in range(1, 9)], seed=73)

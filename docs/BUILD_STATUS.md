@@ -7,7 +7,7 @@ Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `pyt
 
 | Piece | File | Status |
 | --- | --- | --- |
-| Specification, Edition 8.7 (stamped, hashed) | `docs/spec/` | verified: `tools/validate.py --doc` |
+| Specification, Edition 8.52 (stamped, hashed; first verified at Edition 8.7) | `docs/spec/` | verified: `tools/validate.py --doc` |
 | Season 1 tables (the schedule template) | `data/season1/` | verified: validator, 75 checks |
 | Standings, tiebreak cascade, playoffs, exile hand-off, Coronation venue window | `src/dfl/standings.py` | verified: 15 tests incl. mutation-checked rules |
 | Eight-season bed rotation | `src/dfl/schedule_bed_rotation.py` (pre-existing) | verified against spec section 3 for 64 seasons |
@@ -120,16 +120,18 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 ## Phase 3: game engine (built 2026-10-27, Ed 8.49)
 | Piece | Status |
 | --- | --- |
-| Play-level engine: runs, passes, drives, kicking, overtime, ties, injuries, penalties | built, default; passes all 24 game bands over thousands of games; tie rate measured (1.4 to 1.8 percent) |
+| Play-level engine: runs, passes, drives, kicking, overtime, ties, injuries, penalties | built; the fast mode (`--play-level`, the golden digest). Re-measured 2026-10-29 (1,000 games a seed): seed 1 misses 1 of 24 bands (margin spread 15.81 against 15.5), seed 2 misses 2 (completion rate 0.671, tie rate 0.022), seed 3 misses 3 (completion rate, third-down rate, margin spread); every miss is marginal. It is not held to 24 of 24: the owner ruling of Ed 8.50 puts that bar on the spatial engine. Earlier text saying it passed all 24 was overstated |
 | Box scores, scoring summary, play-by-play, structured play table (Ed 8.47) | built, tested (`tests/test_boxscore.py`) |
 | 22-player (spatial) engine with per-snap traces for the 2D view (Ed 8.48, 8.49) | built, tested (`tests/test_spatial.py`: determinism, trace fidelity, outcome shapes, integration), calibrated; **the league's default engine since Ed 8.52**: 24 of 24 game bands pass at the default check (seed 1, 1,000 games) and at seeds 14 and 15 (1,500 games); on two of five seeds (16, 17: leagues with stronger offenses) completion rate and yards per attempt run 0.004 to 0.05 over their limits (spec §20 items 46 and 50) |
 | Spatial extensions (other personnel, nickel/dime, fatigue and substitution, on-field kicking, challenges and replay, contact injuries) | **not built**, listed in spec §20 item 47 |
 | Owner ruling (Ed 8.50) | the spatial engine becomes the default only at 24 of 24 bands; the animation is a read-only window onto its trace (spec §16, §20 item 48). Met in Ed 8.52: `Universe(spatial=True)` is the default; tests and the soak tools use the play-level engine for speed (`--play-level`) |
 
-## Not built yet (next)
-1. The spatial engine's remaining gap to the bands, and its extensions (spec §20 items 46 and 47). The play-level engine behind the `Resolver` interface is built.
-2. Fairness bands and parity profiles, then the people layer, persistence and pacing, presentation (see ROADMAP).
-3. Everything in spec section 20.
+## Not built yet (next) — refreshed 2026-10-29
+1. Phase 6: the live clock and pacing (storage, restart recovery and backup are built: `docs/PERSISTENCE.md`).
+2. Phase 7: website, 2D animation viewer, narrative layer (template-driven, read-only), Commissioner page, chaos injections.
+3. Phase 8: release pipeline (Truth, Beta, Alpha, Truth), security review, deployment and rollback rehearsal. Nothing is deployed.
+4. Verification gaps: a 100-year soak on the spatial default, the full 36-season by six-league fairness measurement, a second platform for numpy determinism, trace archive (spec §20 item 49), spatial extensions (item 47).
+5. Open owner rulings in spec section 20 (items 4 to 9, 14, 49 among them); see `PROJECT_COMPLETION_PLAN.md` section 5.
 
 ## Not imported
 The 339-file `DFL-vBeta_source_snapshot_2026-10-20.zip` is not in this repository and has not been seen. Nothing here claims to include it.

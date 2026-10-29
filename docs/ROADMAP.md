@@ -7,18 +7,18 @@ Written 2026-10-22, after Milestone 1. This is a plan, not a set of accepted dec
 2. **Test with the change.** Each rule gets a unit test, and each phase ends with a long soak run (100+ seasons) against stated invariants. Rules are mutation-checked: break the rule on purpose and confirm a test fails.
 3. **Placeholder honesty.** Anything standing in for a real model (the game resolver, development curves) is labelled as such, and no fairness or calibration claim rests on it.
 4. **Small branches, owner merges.** One branch per milestone, verified from a clean clone, pushed, then merged by the owner. No production change, deploy, or reset of live league state without explicit approval and a rollback plan.
-5. **Autopilot first, agents second.** Every decision has a deterministic autopilot that picks among legal options the engine enumerates. AI agents are an optional layer on top, never required for a season to run.
+5. **Deterministic decisions only.** Every decision is made by deterministic rules, weighted choices and seeded randomness among the legal options the engine enumerates. No language model takes part in any simulation decision (owner directive, 2026-10-29; this replaces the earlier "agents second" plan). Language models, if ever used, may only write presentation text that is read-only and cannot reach the engine.
 6. **Status you can trust.** `docs/BUILD_STATUS.md` says verified, untested, or proposed for each piece.
 
 ## Where we are
-Milestone 1 is done and merged to `main`; Phase 0 is done: divergence register, CI, merge, five owner rulings (Edition 8.7). There is no snapshot; the engine is rebuilt from the spec. Milestone 1 contents: specification Edition 8.7, Season 1 template, standings and tiebreaks, the eight-season rotation, a season loop with a placeholder game resolver, 24 tests, a 100-season run with 0 validator failures. Missing: the 339-file snapshot (`DFL-vBeta_source_snapshot_2026-10-20.zip`, still only in the ChatGPT conversation), the roster and cap ledger, Tour and Bowl games, the real game engine, and everything about people.
+Updated 2026-10-29 (see `PROJECT_COMPLETION_PLAN.md` for the audited detail). Phases 0 to 3 are built, Phase 4's harness and first measurements exist, the Phase 5 people-layer slices 5.1 to 5.7 are built, and the storage half of Phase 6 (SQLite saving, atomic events, restart recovery, backup and restore) is built. The 22-player engine is the league default (Ed 8.52). Not built: the live clock and pacing, Phase 7 and Phase 8. There is no source snapshot; the engine was rebuilt from the spec. Many numbers (development curves, people-layer parameters, physics) are working values.
 
 ## The shape
 Two products, in this order:
 - **A. The league without people** (Phases 0–4, 6): anonymous players with ratings, autopilot decisions, a real game engine, a live clock. This is testable, fair-or-not can be measured, and it can run on the Droplet.
-- **B. The league with people** (Phases 5, 7): character cards, living coaches, GMs and CEOs, agents, negotiations, narrative. Built on top of A so every addition can be tested against A's fairness bands.
+- **B. The league with people** (Phases 5, 7): character cards, living coaches, GMs and CEOs, negotiations, narrative (all rule-driven). Built on top of A so every addition can be tested against A's fairness bands.
 
-Reason for the order: people-and-agents is the most expensive and least testable layer, and it cannot be judged for fairness until A exists. Shipping A first gives a running, watchable league early.
+Reason for the order: the people layer is the most expensive and least testable layer, and it cannot be judged for fairness until A exists. Shipping A first gives a running, watchable league early.
 
 ## Phase 0 — Intake and decisions (now)
 - **Goal:** one source of truth and no hidden surprises.
@@ -85,10 +85,10 @@ Reason for the order: people-and-agents is the most expensive and least testable
 ## Risks to watch
 1. **Scope.** This is a very large project. If time is short, stop after Phase 4 plus a minimal Phase 6: a watchable, fair league with anonymous players.
 2. **Engine unknowns.** Phase 3 can overturn assumptions made earlier (tie rate, scoring, injury load). Build its calibration harness early.
-3. **Agents versus determinism.** Language-model agents are slow, costly and not reproducible. Keeping autopilot as the default protects testing and cost.
+3. **Determinism.** Language models are slow, costly and not reproducible, so none takes part in simulation decisions (owner directive, 2026-10-29).
 4. **Three parity profiles triple the test surface.** Tight first.
 5. **Knowledge outside the repo.** The snapshot and earlier decisions live in other conversations. Phase 0 exists to bring them in.
 6. **Specification drift.** Several documents disagree (pacing, cap, tiebreaks). The Design Document is the single authority, and each phase ends with an edition bump.
 
 ## Not doing (until the owner says otherwise)
-Deploying anything, changing the live site or `Vajilia/DFL`, or running agents against live state; 3D visuals; a commercial or multi-user product beyond a handful of peers.
+Deploying anything, changing the live site or `Vajilia/DFL`, or running anything against live state; 3D visuals; a commercial or multi-user product beyond a handful of peers.

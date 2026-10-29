@@ -80,7 +80,7 @@ def new_stats():
 class Game:
     def __init__(self, home, away, rng, decisive=False, log=False, curve=None, spatial=False, trace=False, neutral=False):
         self.sq = (home, away)
-        self.neutral = neutral               # a neutral venue: the nominal home kicks first but carries no home-field edge (builder's reading of sections 3 and 6, awaiting an owner ruling: PROJECT_COMPLETION_PLAN.md C8)
+        self.neutral = neutral               # a neutral venue: the nominal home still kicks first (section 10) but carries no home-field edge (owner ruling 2026-10-29, plan C8)
         self.home_edge = 0.0 if neutral else P["home_edge"]
         self.spatial = spatial               # plays are played out by 22 players on the field (Edition 8.48); False is the play-level resolver
         self.trace = trace                   # keep each spatial play's compressed trace in the play table

@@ -22,5 +22,7 @@ jobs:
         run: python3 -I tools/run_ledger_soak.py --years 3 --seed 1
       - name: Full-league soak (3 league years, real calendar and engine; the 100-year soak is run by hand)
         run: python3 -I tools/run_universe_soak.py --years 3 --seed 1
+      - name: Restart recovery (a league killed four times and restored must equal one that never stopped; 1 year, play-level engine; the 22-player version is run by hand)
+        run: python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 4 --play-level
       - name: Spatial engine smoke (22-player plays, 20 games; band misses are informational, but a crash or an incomplete run fails the job; the full calibration is run by hand)
         run: python3 -I tools/calibrate_engine.py --games 20 --seed 1 --spatial --procs 2 --informational

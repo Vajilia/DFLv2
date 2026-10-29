@@ -53,6 +53,6 @@ The engine is sensitive to the league's average ratings (a point or two on recei
 
 Not built (item 47): other personnel groupings, nickel and dime, fatigue and substitution, on-field kicking and returns, challenges and replay, contact injuries, penalties tied to the players' positions.
 
-## Neutral venues (added 2026-10-29)
+## Neutral venues (owner ruling 2026-10-29)
 
-A game dict may carry `neutral: true`. The engine then gives the nominal home side no home-field edge (the nominal home still kicks first). Used for all 28 Tour games, the Bowl, and a Coronation held at a venue that is not a finalist's own. The spec says only how the nominal home is chosen, not whether the edge applies, so this is the builder's reading, listed as C8 in `PROJECT_COMPLETION_PLAN.md` and awaiting an owner ruling. `tools/calibrate_engine.py --informational` is the smoke-run mode used by CI: band misses are printed, crashes still fail.
+A game dict may carry `neutral: true`. The engine then gives the nominal home side no home-field edge (owner ruling: neutral venues provide no home-field advantage). Opening possession is unaffected: spec section 10 says "Home kicks to start the first half, away the second. No coin toss. In overtime the away side kicks first", and at a neutral site "home" is the nominal home that sections 6 and 7 assign. Used for all 28 Tour games, the Bowl (nominal home by a seeded draw, owner ruling), and a Coronation held at a venue that is not a finalist's own. `tools/calibrate_engine.py --informational` is the smoke-run mode used by CI: band misses are printed, crashes still fail.

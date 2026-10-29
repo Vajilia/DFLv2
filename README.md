@@ -6,26 +6,25 @@ This repository is the **development home** for the Diamond Football League's re
 
 A persistent, female-only, 48-franchise football universe featuring autonomous management, players, an evidence-based spatial game engine, eight-year rotating division scheduling beds, exile/return mechanics, and a read-only narrative layer.
 
-## Current engineering status (2026-10-20)
+## Current engineering status (2026-10-29)
 
-- A prior development archive recorded and audited all **360 founding-season regular-season spatial games**. These historical simulation records are development evidence, not files uploaded to this repository.
-- A recurring schedule design handles division standings, fifth-place exile, returning franchises, and deterministic eight-year conference-bed rotation.
-- Contract renewal and independent player consent have targeted tests, but the entire second-year offseason and roster construction have **not** been completed end-to-end.
-- The second season's **360 genuine spatial games** have **not** been executed.
-- Player development calibration remains experimental; unverified automatic ability changes must remain disabled.
-- The **48-hour viewer clock** is a presentation mechanism, not a license to bypass verified simulation or archival checks.
-- Character meters and internal assessments are engine-only; the narrative layer reads observable evidence and must never influence the engine.
+The simulation core is built in this repository and tested; the website, live clock and release pipeline are not. See `PROJECT_COMPLETION_PLAN.md` for what is verified, provisional, missing and unresolved, and `docs/BUILD_STATUS.md` for the build record.
+
+- **Authority:** `docs/spec/DFL_Design_Document_Ed8.52.md` (hash-stamped). The spec wins over everything, including v1.
+- **Built:** league layer (standings, rotation, exile, playoffs, Tour, Bowl, Coronation), roster and cap ledger, the 27-week calendar and year loop, character creator, a play-level engine and a 22-player spatial engine (the league default), the people layer (scouting, souls, demands, coaches, governance, meeting rooms, analytics and halls), trades, the draft, a fairness harness, and durable saving (SQLite).
+- **Not built:** the live clock and pacing, the website and animation viewer, the narrative layer, and the release pipeline.
+- **Determinism:** deterministic rules, weighted decisions and seeded randomness only. No language model takes part in any simulation decision.
+- **Pacing target:** about 50 real hours per season (owner ruling, Edition 8.7; non-binding).
+- Character meters and internal assessments are engine-only; any narrative layer reads observable evidence, is template-driven and must never influence the engine.
 
 ## Import status
 
-**IMPORTANT:** This GitHub repository has been initialized with project documentation only. The prepared source snapshot contains 339 files and is **not yet imported here**. No complete codebase, reproducible tests, or certified deployment are represented by this repository at this point.
-
-The prepared package in the ChatGPT conversation is named `DFL-vBeta_source_snapshot_2026-10-20.zip`. The package includes source and tests but excludes SQLite historical archives. It should be inspected for secrets and temporary artifacts before import.
+There is no source snapshot. DFLv2 was rebuilt from the specification, and the earlier import notes (`BETA_STATUS.md`, `SOURCE_IMPORT_STATUS.md`) are superseded.
 
 ## Milestone 1 (league layer) — see `docs/BUILD_STATUS.md`
 
 ```
-python3 -I -m unittest discover -s tests          # 24 tests
+python3 -I -m unittest discover -s tests          # 350+ tests (about 12 minutes)
 python3 -I tools/run_seasons.py --seasons 100     # multi-season run, validates every season's tables
 python3 tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.52.md
 ```

@@ -1,2 +1,2 @@
-# Only the opt-in 22-player engine (src/dfl/engine/spatial/, Edition 8.48) needs a third-party package; everything else is the standard library.
+# The 22-player engine (src/dfl/engine/spatial/), the league default since Edition 8.52, needs numpy; everything else is the standard library.
 numpy>=1.26

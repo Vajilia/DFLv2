@@ -42,17 +42,32 @@ class Universe:
         self.run = None
         self.vote = None
         self.paid_week = 0
+        self.cursor = None                # (year, index of the next event) while a year is open, else None
 
     # ------------------------------------------------------------------ the year
     def play_year(self):
-        self.season += 1
-        year = league.FOUNDING_YEAR + self.season - 1
-        self.run, self.vote, self.paid_week, self.comps = None, None, 0, []
-        self.venues = sorted({self.tpl.venue[c] for c in self.tpl.division_of})
-        for date, key, phase, _ in C.year_events(year):
-            getattr(self, "on_" + self._handler(key))(year, date, key)
-            self.fired.append((year, date.isoformat(), key))
+        """Fire every event of one league year, in order. Same as calling `step_event()` until the year closes."""
+        self.step_event()
+        while self.cursor is not None:
+            self.step_event()
         return self.reports[-1]
+
+    def step_event(self):
+        """Fire the next calendar event and return its key. The first call of a year opens it (season counter, per-year fields); the
+        call that fires the last event closes it (`cursor` returns to None). One event is the unit of durable saving (persist.py):
+        everything an event changes is in this object, so saving between two events and restoring loses and repeats nothing."""
+        if self.cursor is None:
+            self.season += 1
+            self.cursor = (league.FOUNDING_YEAR + self.season - 1, 0)
+            self.run, self.vote, self.paid_week, self.comps = None, None, 0, []
+            self.venues = sorted({self.tpl.venue[c] for c in self.tpl.division_of})
+        year, i = self.cursor
+        events = C.year_events(year)
+        date, key, phase, _ = events[i]
+        getattr(self, "on_" + self._handler(key))(year, date, key)
+        self.fired.append((year, date.isoformat(), key))
+        self.cursor = None if i + 1 == len(events) else (year, i + 1)
+        return key
 
     @staticmethod
     def _handler(key):
