@@ -57,9 +57,9 @@ Code exists and runs; the numbers or behaviour have not been fully verified or a
 5. **People-layer numbers.** Scouting noise, soul traits, demand weights, coach effects, governance thresholds, room and analytics values are working values. Some stand-ins still read true ability instead of scouted or perceived ability.
 6. **EP curve, trade prices, penalty attribution.** Working values.
 7. **Tie rate.** Monitored; the spatial engine's 0.015–0.025 is noisy (item 7).
-8. **Traces.** Not stored for league games (item 49), so a played game cannot be replayed from a league run.
+8. **Traces.** Now stored for every league game played with the archive on (section 11); the 22-player engine's traces are complete (every simulated snap) and verified. Seasons played before the archive existed have none.
 9. **Long-run stability on the spatial default.** Only 3-year soaks, one restore-soak year and 30 structural seasons are verified. No 100-year soak on the spatial default. numpy cross-platform determinism is unverified (CI runs on one platform).
-10. **League files and code releases.** A league file opens only under the exact source and data that wrote it (section 10, C11). File growth over 100 years is estimated, not measured.
+10. **League files and code releases.** Resolved in design and proved for behaviour-neutral code changes (C11, section 10a). The upgrade is not yet exercised on a release that changes league rules or the shape of the state. File growth over 100 years is estimated from measurement, not run.
 
 ## 4. Missing
 
@@ -77,16 +77,16 @@ Code exists and runs; the numbers or behaviour have not been fully verified or a
 | ID | Conflict | Status |
 | --- | --- | --- |
 | C1 | **Language-model deciders.** `docs/TRADES.md` stage 3 and the roadmap's "agents second" assumed LLM decision-makers; the directive forbids them in simulation decisions. | **Resolved 2026-10-29 (housekeeping).** `TRADES.md` stage 3 is now pluggable *deterministic* deciders; `ROADMAP.md` rule 5 and risk 3 rewritten; the README states the rule. Narrative text, if built, is template-driven, read-only and cannot reach the engine |
-| C2 | **Pacing.** README 48 h; spec §0 arithmetic ≈55 h; owner ruling ≈50 h (Ed 8.7, non-binding); §20 item 5. | **Resolved.** README and ROADMAP say ≈50 h, non-binding. The clock mapping itself is Phase 6 clock work |
+| C2 | **Pacing.** README 48 h; spec §0 arithmetic ≈55 h; owner ruling ≈50 h (Ed 8.7, non-binding); §20 item 5. | **Resolved, and now provisional (owner 2026-10-29).** README and ROADMAP say ≈50 h, non-binding, and that the live clock is deferred until saving and archiving were complete. The clock mapping itself is Phase 6 clock work |
 | C3 | **Snapshot/import.** `BETA_STATUS.md` and `SOURCE_IMPORT_STATUS.md` demanded a snapshot that does not exist. | **Resolved.** Both marked superseded (kept as history); the README import section corrected |
 | C4 | **Stale text** (README, BUILD_STATUS edition row and "next" list, ROADMAP "Where we are", `requirements.txt` numpy comment). | **Resolved** |
 | C5 | **Calibration claim vs result.** Docs said the play-level engine passes all 24 bands. | **Resolved by restating the claim**, not by changing the engine or the bands. Re-measured: seeds 1, 2, 3 (1,000 games each) miss 1, 2, 3 bands, all marginally. The play-level engine is the fast mode and is not held to 24/24; the owner ruling of Ed 8.50 puts that bar on the spatial engine, which meets it at the default check. The golden digest is untouched |
 | C6 | **V1-11 offseason cap count** was marked "default to NFL". | **Resolved:** Ed 8.9 (§11) already defines it: before the final cut a club's cap number is dead money plus its highest 69 contracts (the NFL top-51 method adapted). `V1_DIVERGENCES.md` updated |
-| C7 | **Open §20 items.** | **Open; none blocks the next stage.** Needing an owner ruling when convenient, with the builder's recommended default: **4** Bowl roster repair (fill from the next-ranked ballot candidates of the same conference, then the emergency list); **8** the NFL-inherited fill-in parameters (confirm 48/47, 2 elevations a game, 3 a player, 4-game IR minimum as built); **9** standings assumptions (confirm higher strength of schedule ranks higher, no decisions = 0 win %); **14** offseason dates (confirm as built). Routine, no ruling needed: **6** rule IDs (next spec edition), **7** ties (monitored figure), **49** trace archive (with the website), **5** pacing map (Phase 6 clock) |
+| C7 | **Open §20 items.** | **Open; none blocks the next stage.** Full question, recommended default and gameplay consequences for each of 4, 8, 9 and 14 are in `docs/OWNER_RULINGS_NEEDED.md`. In short: **4** Bowl roster repair (fill from the next-ranked ballot candidates of the same conference, then the emergency list); **8** the NFL-inherited fill-in parameters (confirm 48/47, 2 elevations a game, 3 a player, 4-game IR minimum as built); **9** standings assumptions (confirm higher strength of schedule ranks higher, no decisions = 0 win %); **14** offseason dates (confirm as built). Routine, no ruling needed: **6** rule IDs (next spec edition), **7** ties (monitored figure), **49** trace archive (format chosen and built, section 11; hosting with the website), **5** pacing map (deferred with the live clock; the ≈50-hour season is provisional) |
 | C8 | **Home-field edge at a neutral venue.** | **Approved by the owner 2026-10-29:** neutral venues provide no home-field advantage. Implemented (section 8) |
 | C9 | **Nominal home of the Bowl** (no template, no seeds). | **Approved by the owner 2026-10-29:** a seeded draw. Implemented (section 8) |
 | C10 | **Opening possession and the nominal home.** The owner asked that opening possession follow "the established DFL coin-toss rule", independently of the nominal home. | **No such rule exists, and no gap.** Spec §10 says: "Home kicks to start the first half, away the second. No coin toss. In overtime the away side kicks first, alternating each period." The DFL has no coin toss; "home" there means the nominal home, which §6 assigns at neutral sites and §7 repeats for the Tour ("The nominal home kicks the first half"). So the earlier statement that the nominal home "still kicks first" is exactly the spec rule, and nothing was added. A test (`OpeningPossession`) now locks it in for home and neutral games, and checks the engine contains no coin toss. If the owner wants a coin toss or a possession rule independent of the nominal home, that is a substantive rule change for a new edition; the simplest fair candidate would be a seeded draw per game, but none is implemented |
-| C11 | **League files are tied to the code that wrote them** (section 10). | **Open, for Phase 8.** Recommended: add a neutral (JSON/CSV) export and a tested import before the first release, or freeze code between releases |
+| C11 | **League files are tied to the code that wrote them** (section 10). | **Resolved 2026-10-29 (section 10a).** Save schema (readable?) and code identity (exact?) are separate verdicts; the originating code is kept inside every file; clear rejections; a tested upgrade path that never touches the original file; export is only half of it, and the import is proved by value (state, identifiers, exact money, every random state). No migration framework: two empty hooks (`neutral.RENAMES`, `neutral.ADAPTERS`). Not yet exercised on a rule-changing release |
 
 ## 6. Itinerary (ROADMAP Phases 0–8, adjusted)
 
@@ -99,19 +99,17 @@ Code exists and runs; the numbers or behaviour have not been fully verified or a
 | 3 Game engine | Done, provisional calibration | seed 16/17 overruns; 100-year soak (the play-level band claim is restated, C5) |
 | 4 Fairness | Harness done, results partial | full 36-season × 6-league measurement (~35 h) after people-layer numbers are frozen |
 | 5 People | Built, provisional | replace true-ability stand-ins; tune; rule on decisions needed in `docs/PEOPLE.md` |
-| 6 Persistence / pacing / live clock | **Storage half built and verified** (section 10); clock half not started | live clock, game blocks, pause; backup scheduling |
+| 6 Persistence / archive / live clock | **Saving built, accepted provisionally by the owner (independent review pending); upgrade path built (10a); permanent archive built (11)**; clock half deferred | live clock, game blocks, pause; backup scheduling |
 | 7 Presentation / story | **Not started** | after 6 |
 | 8 Release | **Not started** | after 7; no deploy without owner approval |
 
 ## 7. Recommended next stage
 
-**Next: the live clock and pacing (Phase 6, second half).** Map simulated events to real time (target ≈50 h a season, non-binding), run game blocks on that clock with per-instance pause, and have the clock process call the durable `Runner` one event at a time, with scheduled backups. The exit test is the roadmap's: a full season completes on the chosen clock, and a kill and restart mid-season loses and duplicates nothing (the second half of that test is already proven; section 10).
+**Next: the live clock and pacing (Phase 6, second half), now that saving, upgrade and archiving are in place.** The owner deferred it until they were complete. Map simulated events to real time (the ≈50-hour season is **provisional**, not a target to build to), run game blocks on that clock with per-instance pause, and have the clock process call the durable `Runner` one event at a time, with scheduled `backup-all`. The exit test is the roadmap's: a full season completes on the chosen clock, and a kill and restart mid-season loses and duplicates nothing (proved already; sections 10 and 11).
 
-**In parallel, as background compute:** a 100-year soak on the spatial default, a second platform in CI for numpy determinism, and the full 36-season × six-league fairness measurement once the people-layer numbers are frozen.
+**Before that, independent review of Step 3** (the owner accepted it provisionally), and the four rulings in `docs/OWNER_RULINGS_NEEDED.md`.
 
-**Owner rulings wanted when convenient (none blocks the clock):** C7 items 4, 8, 9, 14, and C11 (how league files survive a code release).
-
-Do not merge this branch, deploy, or touch the live site, `Vajilia/DFL`, or `step6-rebuild`.
+**In parallel, as background compute:** a 100-year soak on the spatial default (it will also measure archive and file growth), a second platform in CI for numpy determinism, and the full 36-season × six-league fairness measurement once the people-layer numbers are frozen.
 
 ## 8. Fix log, 2026-10-29
 
@@ -177,3 +175,54 @@ Design and limits: `docs/PERSISTENCE.md`. Code: `src/dfl/persist.py`; `Universe.
 
 **Cost.** A snapshot takes about 0.3 to 0.4 s; at the default of one per event that adds about 20 s to a league year.
 
+
+## 10a. C11 resolved: league files, code identity, upgrade (2026-10-29)
+
+The owner accepted Step 3 provisionally, **subject to later independent review**, and asked that C11 be settled first. Design: `docs/PERSISTENCE.md` (Compatibility, versions and upgrade). Code: `src/dfl/persist.py` (save schema 2), `src/dfl/neutral.py`. Tests: `tests/test_upgrade.py` (12), plus the 21 persistence tests, all kept.
+
+| Owner's requirement | What was built | Evidence (RE-RUN 2026-10-29) |
+| --- | --- | --- |
+| Distinguish save-schema compatibility from exact code/data identity | `meta.format` (can this code read the tables?) and `meta.fingerprint` (is this the exact source and data?) are separate verdicts; `compatibility()` and the `compat` command report both without loading anything; a file opens for use only if both hold; `status` and `verify` work under any code | `Compatibility` tests: ok/exact, ok/differs, unsupported |
+| Preserve the originating versions for reproducibility | Every file carries the source and data that wrote it (zip, about 0.2 MB, with a per-file manifest) and every later code version that wrote to it; `extract-code` restores them byte for byte and checks the fingerprint. Each archived game stores its rule version and engine | An old file, run under its own extracted code, reproduces the same event digest |
+| Reject unsupported combinations clearly | `UnsupportedFormat` (format 1: first development build, never held a league of record, no converter; future formats: newer code needed) and `CodeMismatch` naming the files that differ and the way forward; state from other code is refused unless a new code epoch is asked for; a state that differs from its export digest is `StateMismatch` and nothing is written | Open, export and upgrade all refuse format 1 and 99 with the reason; foreign-code import refused; tampered digest refused with no file written; existing destination refused |
+| Documented, tested upgrade path that preserves the original file | `upgrade OLD NEW --run-originating-code`: work on a copy; export under the originating code in a separate process (opt-in, it executes code from the file); neutral document; import under current code; compare by value; lineage recorded; NEW continues OLD's event numbers and hash chain; OLD's hash checked before and after | Original file byte-identical after the upgrade; lineage holds old fingerprint, last event, chain value and file hash; the upgraded league then plays 8 events with digests equal to an unbroken league |
+| Prove export/import preserves required state, identifiers, exact money, random state; do not describe export alone as migration | Round trip under the same code | Exhaustive digest equal; every `Fraction` equal in numerator and denominator (and still `Fraction`); player, club and card identifiers equal; every random generator's full state equal; both leagues then play 8 more events with identical digests and identical hash-chain values; document bytes deterministic |
+| Avoid a large migration framework | None built. Two empty hooks, `neutral.RENAMES` and `neutral.ADAPTERS`, are the places to say what a release changed | |
+
+**Honest limits.** Proved for behaviour-neutral code changes and for the round trip. A release that changes league rules changes the league's future by design, and one that changes the shape of the state needs an adapter written and tested for that release; none exists because no such release does. Extracting the code means running it: only upgrade files you trust. Reproduction is exact within a code version; across an upgrade the past is preserved (old file, old code, archive) and the future is the new code's.
+
+## 11. Step 4: the permanent archive (2026-10-29)
+
+Design and format: `docs/ARCHIVE.md`. Code: `src/dfl/archive.py`; capture in `engine/ledger_engine.py` and `year.py`; game ids from `league.py`; reader `tools/read_archive.py` (standard library only); tests `tests/test_archive.py` (15). The tool `league_store.py` gained `archive-verify`, `archive-stats`, `archive-digest`, `backup-all`, `restore-all`.
+
+**What it stores.** A second SQLite file beside the league file, append-only (triggers refuse UPDATE and DELETE), holding every game as played (score, team and player statistics, injuries, penalties, the full structured play table), **every simulated snap's trace** from the 22-player engine in a documented binary container (positions every 0.05 s, ball, events, intents, formation, play, coverage; rule and engine version), and a season summary. Game ids come from the league layer (`S001/reg:w03:g07`, `S001/tour:r4:g02`, `S001/po:Western:wild_card:s7v2`, `S001/bowl`, `S001/coronation`). Capture is part of normal league execution: `Runner.create` turns it on by default; with it off the league runs as before.
+
+| Requirement | Proof (RE-RUN 2026-10-29) |
+| --- | --- |
+| Capturing history does not change what the league does | Real 22-player week 1 with the archive on and off: quick digest identical after every event. Whole-year soak and the full season below produce the same chain on two separate runs |
+| Complete | In the 22-player engine every snap with a play call has a trace (verified per game; `verify` fails otherwise). One whole season: 402 games, 47,985 traces, 104 to 151 per game |
+| Integrity | Every row carries a SHA-256 of its uncompressed content; `verify` re-hashes games, traces and records, parses every container, checks declared against stored trace counts and each event's batch digest, and checks the append-only triggers. Damage to a game, a trace, or a missing trace is found by `verify` and by the stand-alone reader. Edits and deletes are refused |
+| Retry safety | The archive is written first, idempotently, then the league journal. Crash between the two: archive exactly one event ahead, never behind; the retry finds identical rows and changes nothing, and the final archive digest equals a run that never crashed. A different record under an existing id is `ArchiveConflict` and nothing is written. Replaying the journal on recovery checks the regenerated records against the archive; an archive that is behind is refused (`ArchiveMissing`) unless `repair_archive` is asked for, and is then rebuilt exactly |
+| Backup and restore | `backup-all` copies league first, then archive, so the archive is never behind; both verified; `restore-all` verifies both, never overwrites, and opens the league. A damaged archive cannot be backed up. Restore soak, one year, play-level engine (the CI step), 4 process deaths, one backup restored: PASS, 87 s. **Same soak on the 22-player engine** (3 deaths at events 27, 39 and 42, alternately between events and inside a commit; backup after event 38 restored with its archive and run to the end): **PASS**, 2,631 s; journal identical at 49 of 49 events; final league digest `17a6b04d…` identical; **archive digest `37929ed7…` identical** for the uninterrupted, killed-and-resumed and restored runs, covering every game and all of that year's traces |
+| Historical readability | `python3 -I -S tools/read_archive.py` (no site-packages: no numpy, no DFL code) lists games, prints a game, prints a trace as JSON frames, prints the season summary and verifies the file; a test compares its output with the module and with the engine's own `trace.decode` (positions identical to the hundredth of a yard) |
+
+**Measured storage** (22-player engine, season 1, seed 1, one full league year, 49 events; final format with delta-coded positions and 16 KB pages; the file verifies):
+
+| Quantity | Measured |
+| --- | --- |
+| Games archived | 402: 360 regular, 28 Tour, 12 playoff, Bowl, Coronation |
+| Traced snaps | 47,985 (119 a game on average; 104 to 151) |
+| One trace, stored | 2,539 bytes on average (7,949 uncompressed, 3.1 times smaller) |
+| One game's record (play table and statistics, no traces), stored | 5.2 KB on average (regular season) |
+| **One game, everything** | **about 308 KB** (303 KB of traces) |
+| **One season**, payload | 123.9 MB (traces 121.8 MB, game records 2.1 MB, season summary 9.5 KB) |
+| **One season**, archive file on disk | **142.8 MB** (15% database overhead on top of the payload) |
+| Cost to a hundred seasons | about 14 GB of archive, plus about 0.2 MB of code per file and the league file |
+| League file after the season | 8.4 MB (five snapshots of 0.5 to 2.0 MB each, two of them year checkpoints, the journal and the 0.2 MB code record) |
+| Season run time | 1,076 s (shared machine; capture overhead was not isolated) |
+
+Before the delta coding and the page size change the same season was 4,824 bytes a trace and a 274 MB file; the change is exact (round trip checked on measured traces) and was made now, before any permanent archive exists, because afterwards it would be a format migration. Spec §17's estimate was about 4 KB a snap and about 0.5 GB a season; the measured season is about 0.14 GB. A further reduction (coarser time steps for stored traces) would lose information as played, so it was not taken.
+
+**Limits.** An archive that is older than the newest league snapshot and was restored on its own is not detected at open (only the replayed window is checked); back up and restore the pair. The snapshot still carries each season's full result in memory (`reports[*]["result"]`); trimming it is separate. Checksums are not authentication. Seasons played before this step have no archive. Hosting, indexing for the website and a viewer are Phase 7.
+
+**Checks run on the final code (2026-10-29).** Full unit-test suite `python3 -I -m unittest discover -s tests`: **401 tests, all pass** (was 333 at the start of the audit; 21 persistence, 12 upgrade, 15 archive among them; one persistence test's hook counting was adapted because the commit gained an archive hook point, the guarantee it checks is unchanged). Validator: 75 of 75. 30-season run: 30 validated, 0 failures. Ledger soak (3 years) and universe soak (3 years): PASS. Restore soaks: above. Not run: the 100-year soak, seeds 16 and 17, the full fairness measurement (unchanged from section 3).

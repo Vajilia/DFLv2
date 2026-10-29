@@ -1,50 +1,71 @@
-"""Durable saving, restart recovery, atomic event processing, backup and restore (Phase 6, storage half).
+"""Durable saving, restart recovery, atomic event processing, backup, restore and upgrade (Phase 6, storage half).
 
 The league is a `year.Universe`; its unit of work is one calendar event (`Universe.step_event`). This module keeps a SQLite file that
 always holds a complete, verifiable record of the league as of its last *committed* event:
 
-  meta       one row per fact about the file: format version, code fingerprint, creation arguments, snapshot cadence.
-  journal    one row per committed event: sequence number, year, event index, key, a digest of the league after the event and a
-             hash chain over all rows so far (editing any past row breaks every later link).
+  meta       facts about the file: save-schema version, the fingerprint of the code and data that may continue it, how it was made,
+             the lineage of files it was upgraded from, the sequence number and chain value it starts from, creation arguments.
+  journal    one row per committed event: sequence number, year, events fired so far, key, a digest of the league after the event and
+             a hash chain over all rows so far (editing any past row breaks every later link).
   snapshots  zlib-compressed pickles of the whole Universe at chosen sequence numbers, each with its own SHA-256.
+  code       the source and data files (a zip, with a per-file manifest) of every code version that has written to the file.
 
-**Atomic events.** An event runs in memory; only when it has finished does one SQLite transaction write its journal row, its
-snapshot (if one is due) and the pruning of old snapshots. An exception inside an event, or a kill at any instant, therefore leaves the
-file at the previous event; the half-changed in-memory league is discarded and reloaded. The transaction also checks that the file
-still stands at the sequence number this runner last wrote, so two runners cannot silently fork one league.
+**Atomic events.** An event runs in memory; only when it has finished are its archive records (archive.py) and then one SQLite
+transaction (journal row, snapshot if due, pruning) written. An exception inside an event, or a kill at any instant, leaves the file at
+the previous event; the half-changed league is discarded and reloaded. The transaction also checks that the file still stands where this
+runner last left it, so two runners cannot silently fork one league. The archive is written first and idempotently, so it can be ahead
+of the league file by the one event in flight, never behind; the repeated event finds identical records already there.
 
-**Recovery.** `Runner.open` takes the newest snapshot whose checksum holds, then replays the journal after it by firing the same
-events again and comparing the digest after each with the journal's. Replay is exact because the league is deterministic (seeded
-random streams, no clock, no network, no language model); a mismatch raises `ReplayDivergence` instead of continuing quietly.
+**Recovery.** `Runner.open` takes the newest snapshot whose checksum holds, then replays the journal after it by firing the same events
+again and comparing the digest after each with the journal's (and the regenerated archive records with the archive's). Replay is exact
+because the league is deterministic (seeded random streams, no clock, no network, no language model).
 
-**Backup and restore.** `backup` uses SQLite's online backup (consistent while the file is in use) and verifies the copy;
-`restore` verifies a backup before it becomes a live file. `verify` checks SQLite integrity, journal continuity, the hash chain and
-every snapshot checksum.
+**Compatibility is two different questions.** *Save schema* (`format`): can this code read the file's tables at all? *Code identity*
+(`fingerprint`): is this the exact source and data that wrote the league, so that replaying and continuing it reproduces what would have
+happened? A file opens for use only if both hold. `compatibility()` reports both without loading anything, and `status` and `verify`
+work under any code. A file whose format this code does not read, or whose code differs, is refused with a message that says why.
 
-**Trust.** Snapshots are Python pickles read through an allow-listed unpickler (only `dfl`, `numpy` and a few standard-library
-types), so a damaged or hostile file cannot run arbitrary code; it is still a format tied to this code: the file records a
-fingerprint of the source and data files and refuses to open under different code unless told to (`allow_code_change`).
-Nothing here reads a clock.
+**Upgrade (code changed).** `upgrade(old, new)` never touches the old file. It copies it, exports the league *under the code that wrote
+it* (the file carries that code in its `code` table; running it is opt-in because it is code), writes the state in the neutral form of
+neutral.py, imports that under the current code into a new file, checks the imported state by value against the digest taken at export,
+and records the old file's identity (code fingerprint, final sequence number and chain value) in the new file's lineage. The new file
+continues the sequence numbers and the hash chain of the old one. Exact reproduction holds within each code version; across an upgrade
+the past is preserved (the old file and the archive are kept) and the future is whatever the new code does.
+
+**Backup and restore.** `backup` uses SQLite's online backup (consistent while the file is in use) and verifies the copy; `restore`
+verifies a backup before it becomes a live file. `backup_set` and `restore_set` do the same for a league file with its archive.
+
+**Trust.** Snapshots are pickles read through an allow-listed unpickler (only `dfl`, plus a few plain data types), so a damaged or
+hostile file cannot run arbitrary code. Checksums detect damage; they do not authenticate. Nothing here reads a clock.
 """
 import hashlib
 import io
 import json
 import os
 import pickle
-import random
+import shutil
 import sqlite3
+import subprocess
 import sys
-import types
+import tempfile
+import zipfile
 import zlib
 
+from . import neutral
+from .neutral import deep_digest          # re-exported: the exhaustive state digest
 from .year import Universe
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2                      # the save schema this code writes
+SUPPORTED_FORMATS = (2,)                # the save schemas this code can read (format 1 was a development build; see _refuse)
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class PersistError(Exception):
     pass
+
+
+class UnsupportedFormat(PersistError):
+    """The save schema is one this code does not read."""
 
 
 class CodeMismatch(PersistError):
@@ -67,10 +88,14 @@ class Corrupt(PersistError):
     pass
 
 
-# ---------------------------------------------------------------------------------------------------------------- fingerprint
-def fingerprint(root=ROOT):
-    """SHA-256 over every source file under src/dfl and every file under data/, by relative path. Same code and data, same value."""
-    h = hashlib.sha256()
+class StateMismatch(PersistError):
+    """An imported state does not equal the state that was exported."""
+
+
+# ---------------------------------------------------------------------------------------------------------------- code identity
+def code_manifest(root=ROOT):
+    """{relative path: SHA-256} of every source file under src/dfl and every file under data/."""
+    out = {}
     for top in ("src/dfl", "data"):
         base = os.path.join(root, top)
         for dirpath, dirs, files in os.walk(base):
@@ -79,10 +104,36 @@ def fingerprint(root=ROOT):
                 if f.endswith((".pyc", ".pyo")):
                     continue
                 path = os.path.join(dirpath, f)
-                h.update(os.path.relpath(path, root).replace(os.sep, "/").encode() + b"\0")
                 with open(path, "rb") as fh:
-                    h.update(hashlib.sha256(fh.read()).digest())
+                    out[os.path.relpath(path, root).replace(os.sep, "/")] = hashlib.sha256(fh.read()).hexdigest()
+    return out
+
+
+def fingerprint(root=ROOT, manifest=None):
+    """One SHA-256 over the manifest: same code and data, same value."""
+    manifest = manifest if manifest is not None else code_manifest(root)
+    h = hashlib.sha256()
+    for k in sorted(manifest):
+        h.update(k.encode() + b"\0" + manifest[k].encode() + b"\n")
     return h.hexdigest()
+
+
+def code_zip(root=ROOT, manifest=None):
+    """The code and data themselves as a zip (deterministic bytes), so a league file can reproduce the code that wrote it."""
+    manifest = manifest if manifest is not None else code_manifest(root)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel in sorted(manifest):
+            info = zipfile.ZipInfo(rel, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            with open(os.path.join(root, rel), "rb") as fh:
+                z.writestr(info, fh.read())
+    return buf.getvalue()
+
+
+def rule_version():
+    from .engine.params import RULE_VERSION
+    return RULE_VERSION
 
 
 # ---------------------------------------------------------------------------------------------------------------- serialisation
@@ -119,77 +170,9 @@ def loads(raw):
     return _Unpickler(io.BytesIO(zlib.decompress(raw))).load()
 
 
-# ---------------------------------------------------------------------------------------------------------------- digests
-def deep_digest(obj, ignore=("_units",)):
-    """A digest of an entire object graph that does not depend on dict or set order, memory addresses or hash randomisation, so two
-    leagues that hold the same values have the same digest whichever process built them. Random generators contribute their full
-    state. `ignore` names derived caches that may or may not be filled without changing any outcome."""
-    import numpy as np
-    memo = {}
-    sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
-
-    def prim(tag, body):
-        b = body if isinstance(body, bytes) else str(body).encode()
-        return tag + str(len(b)).encode() + b":" + b
-
-    def comb(tag, parts):
-        hh = hashlib.sha256(tag)
-        for p in parts:
-            hh.update(len(p).to_bytes(4, "big"))
-            hh.update(p)
-        return b"h" + hh.digest()
-
-    def h(o):
-        t = type(o)
-        if o is None:
-            return b"N"
-        if t is bool or t is int:
-            return prim(b"i", repr(o))
-        if t is float:
-            return prim(b"f", repr(o))
-        if t is str:
-            return prim(b"s", o.encode())
-        if t is bytes:
-            return prim(b"b", o)
-        i = id(o)
-        if i in memo:
-            return memo[i]
-        memo[i] = b"cycle"
-        name = f"{t.__module__}.{t.__qualname__}".encode()
-        if isinstance(o, random.Random):
-            r = comb(b"random" + name, [h(o.getstate())])
-        elif isinstance(o, np.ndarray):
-            r = comb(b"nd", [str(o.dtype).encode(), repr(o.shape).encode(), o.tobytes()])
-        elif isinstance(o, np.generic):
-            r = prim(b"g", repr(o))
-        elif isinstance(o, dict):
-            r = comb(b"dict" + name, sorted(h(k) + b"=" + h(v) for k, v in o.items()))
-        elif isinstance(o, (set, frozenset)):
-            r = comb(b"set" + name, sorted(h(x) for x in o))
-        elif isinstance(o, (list, tuple)) or t.__name__ == "deque":
-            r = comb(b"seq" + name, [h(x) for x in o])
-        elif isinstance(o, (int, float, str, bytes)):
-            r = comb(b"sub" + name, [repr(o).encode()])
-        elif isinstance(o, (type, types.FunctionType, types.MethodType, types.BuiltinFunctionType)):
-            r = prim(b"c", f"{getattr(o, '__module__', '')}.{getattr(o, '__qualname__', repr(o))}")
-        elif hasattr(o, "__dict__") or hasattr(t, "__slots__"):
-            state = dict(getattr(o, "__dict__", {}))
-            for klass in t.__mro__:
-                for sl in getattr(klass, "__slots__", ()) or ():
-                    if hasattr(o, sl):
-                        state[sl] = getattr(o, sl)
-            r = comb(b"obj" + name, sorted(h(k) + b"=" + h(v) for k, v in state.items() if k not in ignore))
-        else:
-            r = prim(b"o", f"{name!r}:{o!r}")
-        memo[i] = r
-        return r
-
-    return hashlib.sha256(h(obj)).hexdigest()
-
-
 def quick_digest(u):
     """The per-event digest in the journal: the ledger digest plus the cursors, the random streams and the books that decide the
-    future. Cheap (milliseconds); `deep_digest` is the exhaustive check used at snapshots when asked and in tests."""
+    future. Cheap (milliseconds); `deep_digest` is the exhaustive check used when asked and in tests."""
     hh = hashlib.sha256()
     hh.update(u.L.digest().encode())
     hh.update(repr((u.season, u.cursor, u.paid_week, len(u.fired), len(u.reports), sorted(u.history.items()))).encode())
@@ -209,6 +192,7 @@ CREATE TABLE IF NOT EXISTS journal (
     digest TEXT NOT NULL, chain TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS snapshots (
     seq INTEGER PRIMARY KEY, sha256 TEXT NOT NULL, size INTEGER NOT NULL, checkpoint INTEGER NOT NULL, payload BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS code (fingerprint TEXT PRIMARY KEY, manifest TEXT NOT NULL, zip BLOB NOT NULL);
 """
 GENESIS = "0" * 64
 
@@ -217,11 +201,87 @@ def _chain(prev, seq, key, digest):
     return hashlib.sha256(f"{prev}|{seq}|{key}|{digest}".encode()).hexdigest()
 
 
-def connect(path):
+def connect(path, readonly=False):
+    if readonly:
+        return sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True, isolation_level=None)
     db = sqlite3.connect(path, isolation_level=None)         # explicit transactions below
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=FULL")
     return db
+
+
+def read_meta(db):
+    return {k: json.loads(v) for k, v in db.execute("SELECT key, value FROM meta")}
+
+
+def _tables_ref(tables):
+    """Tables are stored relative to the repository root when they live in it, so a file moves between machines."""
+    t = os.path.abspath(tables)
+    return os.path.relpath(t, ROOT).replace(os.sep, "/") if t.startswith(ROOT + os.sep) else t
+
+
+def _tables_path(ref):
+    return ref if os.path.isabs(ref) else os.path.join(ROOT, ref)
+
+
+def _resolve_archive(league_path, ref):
+    return ref if os.path.isabs(ref) else os.path.join(os.path.dirname(os.path.abspath(league_path)), ref)
+
+
+def _archive_ref(league_path, archive_path):
+    base = os.path.dirname(os.path.abspath(league_path))
+    a = os.path.abspath(archive_path)
+    return os.path.basename(a) if os.path.dirname(a) == base else a
+
+
+# ---------------------------------------------------------------------------------------------------------------- compatibility
+def compatibility(path):
+    """Two questions about a league file, answered without loading any snapshot (so it works under any code):
+    `schema`: "ok" if this code reads the file's save schema, else "unsupported";
+    `code`:   "exact" if the file was written by exactly this source and data, else "differs" (with the files that differ).
+    `usable` is True only when both hold."""
+    db = connect(path, readonly=True)
+    try:
+        meta = read_meta(db)
+        have = meta.get("fingerprint")
+        row = db.execute("SELECT manifest FROM code WHERE fingerprint = ?", (have,)).fetchone() if meta.get("format") in SUPPORTED_FORMATS else None
+    finally:
+        db.close()
+    fmt = meta.get("format")
+    out = {"format": fmt, "supported_formats": list(SUPPORTED_FORMATS), "file_fingerprint": have, "current_fingerprint": None,
+           "schema": "ok" if fmt in SUPPORTED_FORMATS else "unsupported", "code": None, "changed_files": None,
+           "created_with": meta.get("created_with"), "lineage": meta.get("lineage", [])}
+    if out["schema"] == "ok":
+        mine = code_manifest()
+        out["current_fingerprint"] = fingerprint(manifest=mine)
+        out["code"] = "exact" if have == out["current_fingerprint"] else "differs"
+        if out["code"] == "differs" and row:
+            then = json.loads(row[0])
+            out["changed_files"] = {"modified": sorted(k for k in mine if k in then and mine[k] != then[k]),
+                                    "added": sorted(k for k in mine if k not in then), "removed": sorted(k for k in then if k not in mine)}
+    out["usable"] = out["schema"] == "ok" and out["code"] == "exact"
+    return out
+
+
+def _refuse(path, c):
+    fmt = c["format"]
+    if c["schema"] == "unsupported":
+        if not isinstance(fmt, int) or fmt < min(SUPPORTED_FORMATS):
+            raise UnsupportedFormat(
+                f"{path} has save schema {fmt}, which this code (reads {c['supported_formats']}) does not read. Schema 1 was the first "
+                "development build and never held a league of record: recreate the league from its seed, or open the file with the "
+                "checkout that wrote it. There is no automatic upgrade for it.")
+        raise UnsupportedFormat(f"{path} has save schema {fmt}, newer than this code reads ({c['supported_formats']}); use newer code.")
+    ch = c["changed_files"]
+    where = ""
+    if ch:
+        names = ch["modified"] + ["+" + n for n in ch["added"]] + ["-" + n for n in ch["removed"]]
+        where = f" {len(names)} file(s) differ: {', '.join(names[:6])}{' ...' if len(names) > 6 else ''}."
+    raise CodeMismatch(
+        f"{path} was written by code {str(c['file_fingerprint'])[:12]}, this is {str(c['current_fingerprint'])[:12]}.{where} The schema "
+        "is readable but replaying or continuing it under different code would not reproduce what the original code would have done. "
+        "'status' and 'verify' still work. To continue the league under this code: league_store.py upgrade OLD NEW --run-originating-code "
+        "(the original file is kept untouched). To read the old file only: league_store.py extract-code OLD DIR.")
 
 
 class Runner:
@@ -230,45 +290,64 @@ class Runner:
     snapshot_every   write a full snapshot after every Nth event (1 = every event). Between snapshots recovery replays the journal.
     keep             how many of the newest ordinary snapshots to keep (the one before the latest is the fallback if the latest is damaged).
     Year-end snapshots are checkpoints and are kept for ever.
-    crash_hook       test seam: called with a point name ("event_done", "journal_written") inside the commit; raising there is a crash.
+    archive          True (the default) to keep the permanent game and trace archive beside the file; see archive.py.
+    crash_hook       test seam: called with a point name inside the commit; raising there is a crash.
     """
 
-    def __init__(self, path, db, universe, seq, chain, meta, crash_hook=None):
-        self.path, self.db, self.u, self.seq, self.chain, self.meta, self.crash_hook = path, db, universe, seq, chain, meta, crash_hook
+    def __init__(self, path, db, universe, seq, chain, meta, crash_hook=None, archive=None):
+        self.path, self.db, self.u, self.seq, self.chain, self.meta, self.crash_hook, self.archive = (
+            path, db, universe, seq, chain, meta, crash_hook, archive)
 
     # ---- creation and opening
     @classmethod
-    def create(cls, path, tables, seed=1, snapshot_every=1, keep=3, crash_hook=None, **universe_args):
+    def create(cls, path, tables, seed=1, snapshot_every=1, keep=3, crash_hook=None, archive=True, archive_path=None, **universe_args):
         if os.path.exists(path) and os.path.getsize(path):
             raise PersistError(f"{path} already exists")
+        u = Universe(tables, seed=seed, archive=archive, **universe_args)
+        meta = {"seed": seed, "snapshot_every": snapshot_every, "keep": keep, "universe_args": universe_args, "tables": _tables_ref(tables),
+                "archive": None}
+        if archive:
+            apath = archive_path or path + ".archive"
+            meta["archive"] = {"file": _archive_ref(path, apath)}
+        return cls._new_file(path, u, meta, 0, GENESIS, how="create", crash_hook=crash_hook)
+
+    @classmethod
+    def _new_file(cls, path, u, meta, base_seq, base_chain, how, lineage=(), crash_hook=None):
+        from . import archive as A
+        manifest = code_manifest()
+        fp = fingerprint(manifest=manifest)
+        meta = dict(meta, format=FORMAT_VERSION, fingerprint=fp, base={"seq": base_seq, "chain": base_chain}, lineage=list(lineage),
+                    created_with={"how": how, "format": FORMAT_VERSION, "fingerprint": fp, "rule_version": rule_version()})
         db = connect(path)
         db.executescript(SCHEMA)
-        meta = {"format": FORMAT_VERSION, "fingerprint": fingerprint(), "seed": seed, "snapshot_every": snapshot_every, "keep": keep,
-                "universe_args": universe_args, "tables": os.path.abspath(tables)}
-        u = Universe(tables, seed=seed, **universe_args)
         raw, sha = dumps(u)
+        arch = None
+        if meta.get("archive"):
+            arch = A.Archive.open_or_create(_resolve_archive(path, meta["archive"]["file"]), {"fingerprint": fp, "how": how, "seq": base_seq})
         db.execute("BEGIN IMMEDIATE")
         try:
             for k, v in meta.items():
                 db.execute("INSERT INTO meta VALUES (?,?)", (k, json.dumps(v, sort_keys=True)))
-            db.execute("INSERT INTO snapshots VALUES (0,?,?,1,?)", (sha, len(raw), raw))
+            db.execute("INSERT INTO code VALUES (?,?,?)", (fp, json.dumps(manifest, sort_keys=True), code_zip(manifest=manifest)))
+            db.execute("INSERT INTO snapshots VALUES (?,?,?,1,?)", (base_seq, sha, len(raw), raw))
             db.execute("COMMIT")
         except BaseException:
             db.execute("ROLLBACK")
             raise
-        return cls(path, db, u, 0, GENESIS, meta, crash_hook)
+        return cls(path, db, u, base_seq, base_chain, meta, crash_hook, arch)
 
     @classmethod
-    def open(cls, path, allow_code_change=False, crash_hook=None, heal=True):
+    def open(cls, path, allow_code_change=False, crash_hook=None, heal=True, with_archive=True, repair_archive=False):
+        """Open for use. Refuses a save schema this code does not read, and (unless `allow_code_change`, for forensic reading only)
+        a file written by different code. The refusal says which and why. `with_archive=False` opens the league alone."""
         if not os.path.exists(path):
             raise PersistError(f"{path} does not exist")
+        c = compatibility(path)
+        if c["schema"] != "ok" or (c["code"] != "exact" and not allow_code_change):
+            _refuse(path, c)
         db = connect(path)
-        meta = {k: json.loads(v) for k, v in db.execute("SELECT key, value FROM meta")}
-        if meta.get("format") != FORMAT_VERSION:
-            raise PersistError(f"league file format {meta.get('format')} is not {FORMAT_VERSION}")
-        if meta["fingerprint"] != fingerprint() and not allow_code_change:
-            raise CodeMismatch("this league file was written by different source or data files; replay would not be exact")
-        head, chain = cls._head(db)
+        meta = read_meta(db)
+        head, chain = cls._head(db, meta)
         u, seq = None, None
         for sseq, sha, raw in db.execute("SELECT seq, sha256, payload FROM snapshots WHERE seq <= ? ORDER BY seq DESC", (head,)):
             if hashlib.sha256(raw).hexdigest() != sha:
@@ -280,25 +359,37 @@ class Runner:
             break
         if u is None:
             raise Unrecoverable("no snapshot in the file passes its checksum")
-        r = cls(path, db, u, seq, None, meta, crash_hook)
-        r._replay(head)
+        u.rebind(_tables_path(meta["tables"]))
+        arch = None
+        if meta.get("archive") and with_archive:
+            from . import archive as A
+            arch = A.Archive.open(_resolve_archive(path, meta["archive"]["file"]))
+        r = cls(path, db, u, seq, None, meta, crash_hook, arch)
+        r._replay(head, repair_archive)
         r.chain = chain
         if heal and r.seq != seq:
             r._write_snapshot(r.seq)                          # next recovery starts here, not at the old snapshot
         return r
 
     @staticmethod
-    def _head(db):
+    def _head(db, meta=None):
+        meta = meta or read_meta(db)
         row = db.execute("SELECT seq, chain FROM journal ORDER BY seq DESC LIMIT 1").fetchone()
-        return (row[0], row[1]) if row else (0, GENESIS)
+        if row:
+            return row[0], row[1]
+        b = meta.get("base", {"seq": 0, "chain": GENESIS})
+        return b["seq"], b["chain"]
 
-    def _replay(self, head):
+    def _replay(self, head, repair_archive=False):
         rows = self.db.execute("SELECT seq, year, n_fired, key, digest FROM journal WHERE seq > ? AND seq <= ? ORDER BY seq", (self.seq, head)).fetchall()
         for seq, year, n_fired, key, digest in rows:
             at = self.u.cursor
             fired = self.u.step_event()
             if fired != key or quick_digest(self.u) != digest:
                 raise ReplayDivergence(f"replaying event {seq} ({key}) did not reproduce the journal (cursor was {at})")
+            records = self.u.take_archive()
+            if self.archive is not None and records:
+                self.archive.confirm_batch(seq, records, repair=repair_archive)
             self.seq = seq
 
     def _write_snapshot(self, seq, checkpoint=None):
@@ -334,6 +425,7 @@ class Runner:
 
     def _commit(self, key, digest):
         seq = self.seq + 1
+        records = self.u.take_archive()
         due = seq % int(self.meta["snapshot_every"]) == 0 or self.u.cursor is None
         raw = sha = None
         if due:
@@ -341,9 +433,12 @@ class Runner:
         year, n_fired = self.u.fired[-1][0], len(self.u.fired)
         chain = _chain(self.chain, seq, key, digest)
         self._hook("event_done")
+        if self.archive is not None and records:
+            self.archive.put_batch(seq, records)              # idempotent; durable before the league file moves on
+        self._hook("archive_written")
         self.db.execute("BEGIN IMMEDIATE")
         try:
-            head, head_chain = self._head(self.db)
+            head, head_chain = self._head(self.db, self.meta)
             if head != self.seq or head_chain != self.chain:
                 raise ConcurrentWriter(f"the file is at event {head}, this runner is at {self.seq}")
             self.db.execute("INSERT INTO journal VALUES (?,?,?,?,?,?)", (seq, year, n_fired, key, digest, chain))
@@ -366,7 +461,9 @@ class Runner:
         """Discard the in-memory league and rebuild it from the file (the last committed event)."""
         fresh = Runner.open(self.path, allow_code_change=True, crash_hook=self.crash_hook, heal=False)
         self.db.close()
-        self.db, self.u, self.seq, self.chain = fresh.db, fresh.u, fresh.seq, fresh.chain
+        if self.archive is not None:
+            self.archive.close()
+        self.db, self.u, self.seq, self.chain, self.archive = fresh.db, fresh.u, fresh.seq, fresh.chain, fresh.archive
 
     def run_events(self, n):
         return [self.step() for _ in range(n)]
@@ -382,6 +479,8 @@ class Runner:
 
     def close(self):
         self.db.close()
+        if self.archive is not None:
+            self.archive.close()
 
     # ---- maintenance
     def backup(self, dest):
@@ -390,15 +489,59 @@ class Runner:
     def status(self):
         return status(self.path, self.db)
 
+    # ---- moving a league to new code
+    @classmethod
+    def import_state(cls, doc_path, dest, accept_code_change=False, accept_state_change=False, tables=None, archive_path=None,
+                     source_file_sha256=None, crash_hook=None):
+        """Build a new league file from a state document (neutral.py). The state is rebuilt and compared by value with the digest taken
+        at export: a difference is `StateMismatch` unless `accept_state_change` says it is intended (the code changed the shape of the
+        state on purpose). A document from other code is refused unless `accept_code_change`. The new file continues the document's
+        sequence numbers and hash chain and records where it came from in its lineage."""
+        if os.path.exists(dest) and os.path.getsize(dest):
+            raise PersistError(f"{dest} already exists")
+        with open(doc_path, "rb") as f:
+            raw = f.read()
+        doc = neutral.loads_doc(raw)
+        m = doc["manifest"]
+        mine = fingerprint()
+        code_changed = m["fingerprint"] != mine
+        if code_changed and not accept_code_change:
+            raise CodeMismatch(f"the state was exported from code {str(m['fingerprint'])[:12]} and this is {mine[:12]}; importing starts a new "
+                               "code epoch for the league, which must be asked for explicitly (accept_code_change)")
+        u = neutral.decode(doc["state"])
+        u.rebind(tables or _tables_path(m["tables"]))
+        d = neutral.deep_digest(u)
+        state_changed = d != m["deep_digest"]
+        if state_changed and not accept_state_change:
+            raise StateMismatch("the imported league differs from the exported one (state digest "
+                                f"{d[:12]} against {m['deep_digest'][:12]}); nothing was written")
+        lineage = list(m.get("lineage") or []) + [{
+            "from_fingerprint": m["fingerprint"], "from_format": m["league_format"], "from_rule_version": m.get("rule_version"),
+            "from_seq": m["seq"], "from_chain": m["chain"], "source_file_sha256": source_file_sha256,
+            "state_document_sha256": neutral.state_digest(raw), "state_digest": m["deep_digest"],
+            "code_changed": code_changed, "state_changed": state_changed}]
+        meta = {k: m[k] for k in ("seed", "snapshot_every", "keep", "universe_args", "tables")}
+        meta["archive"] = None
+        if m.get("archive"):
+            a = archive_path or _resolve_archive(doc_path, m["archive"]["file"])
+            if not os.path.exists(a):
+                raise PersistError("the league has an archive but it was not found; pass archive_path (the archive is permanent history "
+                                   "and is never recreated empty)")
+            meta["archive"] = {"file": _archive_ref(dest, a)}
+        return cls._new_file(dest, u, meta, m["seq"], m["chain"], how="import", lineage=lineage, crash_hook=crash_hook)
+
 
 def status(path, db=None):
     own = db is None
-    db = db or connect(path)
+    db = db or connect(path, readonly=True)
     try:
-        head, chain = Runner._head(db)
+        meta = read_meta(db)
+        head, chain = Runner._head(db, meta)
         snaps = [(s, c, n) for s, c, n in db.execute("SELECT seq, checkpoint, size FROM snapshots ORDER BY seq")]
         last = db.execute("SELECT year, n_fired, key FROM journal ORDER BY seq DESC LIMIT 1").fetchone()
-        return {"events": head, "last": last, "chain": chain, "snapshots": snaps, "bytes": os.path.getsize(path)}
+        return {"events": head, "last": last, "chain": chain, "snapshots": snaps, "bytes": os.path.getsize(path),
+                "format": meta.get("format"), "base": meta.get("base"), "lineage": len(meta.get("lineage", [])),
+                "fingerprint": meta.get("fingerprint"), "archive": meta.get("archive")}
     finally:
         if own:
             db.close()
@@ -406,15 +549,17 @@ def status(path, db=None):
 
 # ---------------------------------------------------------------------------------------------------------------- verify, backup, restore
 def verify(path, deep=False):
-    """-> list of problems (empty means the file is sound). Checks SQLite integrity, journal continuity and hash chain, snapshot
-    checksums and, with deep=True, that the newest snapshot loads."""
+    """-> list of problems (empty means the file is sound). Checks SQLite integrity, journal continuity and hash chain from the file's
+    base, snapshot checksums, the recorded code and, with deep=True, that the file recovers (under the current code)."""
     problems = []
-    db = connect(path)
+    db = connect(path, readonly=True)
     try:
         res = db.execute("PRAGMA integrity_check").fetchall()
         if res != [("ok",)]:
             problems.append(f"sqlite integrity check: {res[:3]}")
-        prev, expect = GENESIS, 1
+        meta = read_meta(db)
+        base = meta.get("base", {"seq": 0, "chain": GENESIS})
+        prev, expect = base["chain"], base["seq"] + 1
         for seq, key, digest, chain in db.execute("SELECT seq, key, digest, chain FROM journal ORDER BY seq"):
             if seq != expect:
                 problems.append(f"journal gap: expected event {expect}, found {seq}")
@@ -433,14 +578,26 @@ def verify(path, deep=False):
                 problems.append(f"snapshot {seq} is ahead of the journal (head {head})")
         if not n_ok:
             problems.append("no snapshot passes its checksum")
-        if deep and not problems:
+        for fp, manifest, z in db.execute("SELECT fingerprint, manifest, zip FROM code"):
+            if fingerprint(manifest=json.loads(manifest)) != fp:
+                problems.append(f"code record {fp[:12]} does not match its manifest")
             try:
-                Runner.open(path, allow_code_change=True, heal=False).close()
-            except PersistError as e:
-                problems.append(f"recovery failed: {e}")
-        return problems
+                names = set(zipfile.ZipFile(io.BytesIO(z)).namelist())
+            except zipfile.BadZipFile:
+                problems.append(f"code record {fp[:12]} is not a readable zip")
+                continue
+            if names != set(json.loads(manifest)):
+                problems.append(f"code record {fp[:12]} does not hold the files its manifest lists")
+        if meta.get("fingerprint") and not db.execute("SELECT 1 FROM code WHERE fingerprint = ?", (meta["fingerprint"],)).fetchone():
+            problems.append("the file's own code version is not recorded in it")
     finally:
         db.close()
+    if deep and not problems:
+        try:
+            Runner.open(path, heal=False, with_archive=False).close()
+        except PersistError as e:
+            problems.append(f"recovery failed: {e}")
+    return problems
 
 
 def backup(src, dest, source_db=None):
@@ -448,7 +605,7 @@ def backup(src, dest, source_db=None):
     if os.path.exists(dest):
         raise PersistError(f"{dest} already exists")
     own = source_db is None
-    sdb = source_db or connect(src)
+    sdb = source_db or connect(src, readonly=True)
     tmp = dest + ".partial"
     try:
         out = sqlite3.connect(tmp)
@@ -470,8 +627,9 @@ def backup(src, dest, source_db=None):
     return dest
 
 
-def restore(backup_path, dest, allow_code_change=False):
-    """Make `dest` a live league file from a verified backup. Never overwrites an existing file."""
+def restore(backup_path, dest, allow_code_change=False, archive_path=None, open_after=True):
+    """Make `dest` a live league file from a verified backup. Never overwrites an existing file. `archive_path` points the restored
+    league at a restored archive. Returns the opened Runner (opening proves it recovers) unless open_after is False."""
     if os.path.exists(dest):
         raise PersistError(f"{dest} already exists; restore never overwrites a league file")
     problems = verify(backup_path)
@@ -486,5 +644,177 @@ def restore(backup_path, dest, allow_code_change=False):
         out.close()
         src.close()
     os.replace(tmp, dest)
-    r = Runner.open(dest, allow_code_change=allow_code_change)       # proves it recovers
-    return r
+    if archive_path is not None:
+        db = connect(dest)
+        try:
+            if db.execute("SELECT 1 FROM meta WHERE key = 'archive'").fetchone():
+                db.execute("UPDATE meta SET value = ? WHERE key = 'archive'",
+                           (json.dumps({"file": _archive_ref(dest, archive_path)}, sort_keys=True),))
+        finally:
+            db.close()
+    return Runner.open(dest, allow_code_change=allow_code_change) if open_after else None
+
+
+def backup_set(league_path, dest_dir):
+    """Back up a league file and its archive together into `dest_dir` (league first, then archive: the archive is never behind the
+    league, so the pair is always consistent). Returns {"league": ..., "archive": ... or None}."""
+    from . import archive as A
+    os.makedirs(dest_dir, exist_ok=True)
+    db = connect(league_path, readonly=True)
+    try:
+        meta = read_meta(db)
+    finally:
+        db.close()
+    out = {"league": backup(league_path, os.path.join(dest_dir, "league.db")), "archive": None}
+    if meta.get("archive"):
+        out["archive"] = A.backup(_resolve_archive(league_path, meta["archive"]["file"]), os.path.join(dest_dir, "archive.db"))
+    return out
+
+
+def restore_set(backup_dir, dest_dir, allow_code_change=False):
+    """Restore a backed-up league and archive into `dest_dir` (which must not hold either file). Returns the opened Runner."""
+    from . import archive as A
+    os.makedirs(dest_dir, exist_ok=True)
+    lg, ar = os.path.join(dest_dir, "league.db"), os.path.join(dest_dir, "archive.db")
+    src_archive = os.path.join(backup_dir, "archive.db")
+    if os.path.exists(lg) or os.path.exists(ar):
+        raise PersistError(f"{dest_dir} already holds a league or an archive; restore never overwrites")
+    if os.path.exists(src_archive):
+        problems = A.verify(src_archive)
+        if problems:
+            raise Corrupt("the archive backup does not verify: " + "; ".join(problems))
+        A.restore(src_archive, ar)
+    return restore(os.path.join(backup_dir, "league.db"), lg, allow_code_change=allow_code_change,
+                   archive_path=ar if os.path.exists(ar) else None)
+
+
+# ---------------------------------------------------------------------------------------------------------------- upgrade
+def extract_code(path, dest, fingerprint_=None):
+    """Write the source and data a league file recorded (by default the version that may continue it) into `dest`, ready to run:
+    `dest/src/dfl`, `dest/data`. Returns the fingerprint."""
+    db = connect(path, readonly=True)
+    try:
+        meta = read_meta(db)
+        fp = fingerprint_ or meta["fingerprint"]
+        row = db.execute("SELECT manifest, zip FROM code WHERE fingerprint = ?", (fp,)).fetchone()
+    finally:
+        db.close()
+    if not row:
+        raise PersistError(f"the file holds no record of code version {str(fp)[:12]}")
+    manifest = json.loads(row[0])
+    root = os.path.abspath(dest)
+    with zipfile.ZipFile(io.BytesIO(row[1])) as z:
+        for name in z.namelist():
+            target = os.path.abspath(os.path.join(root, name))
+            if os.path.commonpath([root, target]) != root:
+                raise Corrupt(f"unsafe path in code record: {name}")
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(target, "wb") as fh:
+                fh.write(z.read(name))
+    if fingerprint(root, manifest=code_manifest(root)) != fp:
+        raise Corrupt("the extracted code does not reproduce its fingerprint")
+    return fp
+
+
+# Run under the originating code. It touches only what any format-2 version provides: Runner.open(path, heal=False, with_archive=False),
+# .u, .meta, .seq, .chain. The current neutral.py is loaded by file path so the document is written in the current document format.
+_WORKER = r'''
+import sys, importlib.util
+code_dir, db_copy, neutral_path, out = sys.argv[1:5]
+sys.path.insert(0, code_dir + "/src")
+spec = importlib.util.spec_from_file_location("dfl_neutral_current", neutral_path)
+N = importlib.util.module_from_spec(spec)
+sys.modules["dfl_neutral_current"] = N
+spec.loader.exec_module(N)
+from dfl import persist as P
+r = P.Runner.open(db_copy, heal=False, with_archive=False)
+with open(out, "wb") as f:
+    f.write(N.dumps_doc(r.u, N.runner_manifest(r)))
+r.close()
+'''
+
+
+def backup_to(src, dest):
+    """Plain SQLite copy without the verification pass (used on temporary working copies)."""
+    sdb = connect(src, readonly=True)
+    out = sqlite3.connect(dest)
+    try:
+        sdb.backup(out)
+    finally:
+        out.close()
+        sdb.close()
+
+
+def export_state(path, out_path):
+    """Write the league in the file as a neutral state document (neutral.py), under the code that wrote it (this code, so the file must
+    be usable). The file is not modified. Export alone is not a migration: see `upgrade`. Returns the document's SHA-256."""
+    if os.path.exists(out_path):
+        raise PersistError(f"{out_path} already exists")
+    c = compatibility(path)
+    if not c["usable"]:
+        _refuse(path, c)
+    work = tempfile.mkdtemp(prefix="dflexport")
+    try:
+        copy = os.path.join(work, "copy.db")
+        backup_to(path, copy)
+        r = Runner.open(copy, heal=False, with_archive=False)
+        raw = neutral.dumps_doc(r.u, neutral.runner_manifest(r))
+        r.close()
+        with open(out_path, "wb") as f:
+            f.write(raw)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return neutral.state_digest(raw)
+
+
+def _file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def upgrade(old, new, run_originating_code=False, accept_state_change=False, archive_path=None):
+    """Continue the league in `old` under the current code, as a new file `new`. The old file is not modified (its bytes are hashed
+    before and after, and all work is done on a copy). Same code: export and import in this process. Different code: the file's recorded
+    code is extracted and the export is run under it in a separate process, which executes code from the file, so it must be asked for
+    (`run_originating_code`). Either way the import checks the rebuilt state by value against the export. Returns a report."""
+    c = compatibility(old)
+    if c["schema"] != "ok":
+        _refuse(old, c)
+    if c["code"] != "exact" and not run_originating_code:
+        _refuse(old, c)
+    before = _file_sha256(old)
+    work = tempfile.mkdtemp(prefix="dflupgrade")
+    try:
+        copy, doc = os.path.join(work, "copy.db"), os.path.join(work, "state.gz")
+        backup_to(old, copy)
+        if c["code"] == "exact":
+            r = Runner.open(copy, heal=False, with_archive=False)
+            with open(doc, "wb") as f:
+                f.write(neutral.dumps_doc(r.u, neutral.runner_manifest(r)))
+            r.close()
+        else:
+            code_dir = os.path.join(work, "code")
+            extract_code(copy, code_dir)
+            res = subprocess.run([sys.executable, "-I", "-c", _WORKER, code_dir, copy, neutral.__file__, doc], capture_output=True, text=True)
+            if res.returncode:
+                raise PersistError("exporting under the originating code failed: " + res.stderr[-800:])
+        db = connect(old, readonly=True)
+        try:
+            meta = read_meta(db)
+        finally:
+            db.close()
+        arch = archive_path or (_resolve_archive(old, meta["archive"]["file"]) if meta.get("archive") else None)
+        r = Runner.import_state(doc, new, accept_code_change=True, accept_state_change=accept_state_change, archive_path=arch,
+                                source_file_sha256=before)
+        report = {"from_fingerprint": c["file_fingerprint"], "to_fingerprint": r.meta["fingerprint"], "events": r.seq, "chain": r.chain,
+                  "code_changed": c["code"] != "exact", "lineage": r.meta["lineage"][-1]}
+        r.close()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    if _file_sha256(old) != before:
+        raise Corrupt("the original league file changed during the upgrade")
+    report["original_sha256"] = before
+    return report

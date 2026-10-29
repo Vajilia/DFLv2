@@ -146,9 +146,10 @@ class Atomicity(Base):
         calls = []
 
         def hook(point):
-            calls.append(point)
-            if point == "journal_written" and len(calls) > 3 * 2:      # the 4th event, after its journal row is written
-                raise Boom("killed mid-commit")
+            if point == "journal_written":                             # the commit has several hook points (v2 added "archive_written"); count one
+                calls.append(point)
+                if len(calls) == 4:                                    # the 4th event, after its journal row is written
+                    raise Boom("killed mid-commit")
         r = self.new("mid", every=1, crash_hook=hook)
         r.run_events(3)
         with self.assertRaises(Boom):

@@ -7,8 +7,9 @@
 2. The subject: a league file driven by separate processes (`tools/league_store.py`), each with different hash randomisation, each killed
    without clean-up at a seeded random event (alternately between events and in the middle of a commit), the file verified after every
    death, then resumed by a fresh process. One backup is taken part-way and restored at the end and run to the finish as well.
-3. Compared: the journal digest after every event, and the exhaustive digest (`persist.deep_digest`) of the final league, for the
-   uninterrupted run, the killed-and-resumed run and the restored backup.
+3. Compared: the journal digest after every event, the exhaustive digest (`persist.deep_digest`) of the final league, and the digest of
+   the permanent archive (every game and trace as played), for the uninterrupted run, the killed-and-resumed run and the restored backup
+   (league file and archive restored together).
 Exit status 0 only if all three agree and every verification passed.
 """
 import argparse
@@ -23,7 +24,7 @@ import sqlite3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
-from dfl import persist  # noqa: E402
+from dfl import archive, persist  # noqa: E402
 from dfl.year import Universe  # noqa: E402
 
 TOOL = os.path.join(ROOT, "tools", "league_store.py")
@@ -54,19 +55,25 @@ def main():
     problems = []
 
     # 1. the reference
-    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed, **kw)
+    u = Universe(os.path.join(ROOT, "data", "season1"), seed=a.seed, archive=True, **kw)
+    d = tempfile.mkdtemp(prefix="dflrestore")
+    ref_arch = archive.Archive.open_or_create(os.path.join(d, "reference.archive"), {"fingerprint": "reference", "how": "soak", "seq": 0})
     ref = []
-    for _ in range(total):
+    for n in range(total):
         u.step_event()
         ref.append(persist.quick_digest(u))
+        recs = u.take_archive()
+        if recs:
+            ref_arch.put_batch(n + 1, recs)
     ref_deep = persist.deep_digest(u)
+    ref_arch.close()
+    ref_archive_digest = archive.digest(os.path.join(d, "reference.archive"))
     t_ref = time.time() - t0
 
     # 2. the subject, killed and resumed
     rng = random.Random(f"restore-soak|{a.seed}")
     points = sorted(rng.sample(range(2, total - 1), min(a.kills, total - 3)))
-    d = tempfile.mkdtemp(prefix="dflrestore")
-    path, bak, restored = (os.path.join(d, n) for n in ("league.db", "league.bak", "restored.db"))
+    path, bak, restored = (os.path.join(d, n) for n in ("league.db", "bak", "restored"))
     init = ["init", path, "--seed", str(a.seed), "--snapshot-every", str(a.snapshot_every)]
     init += ["--placeholder"] if a.placeholder else (["--play-level"] if a.play_level else [])
     rc, out, err = tool(*init, hashseed=1)
@@ -85,7 +92,7 @@ def main():
             problems.append(f"verify after death at event {k}: {v}")
         log.append({"died_at": k, "style": style[0], "events_in_file": done, "verified": bool(v.get("ok"))})
         if backed_up_at is None and n == len(points) // 2:
-            rc, _, err = tool("backup", path, bak, hashseed=400)
+            rc, _, err = tool("backup-all", path, bak, hashseed=400)
             backed_up_at = done
             if rc:
                 problems.append(f"backup failed: {err[-300:]}")
@@ -100,13 +107,25 @@ def main():
         problems.append(f"the journal differs from the uninterrupted run, first at event {bad}")
     if fin.get("deep") != ref_deep:
         problems.append("the final league differs from the uninterrupted run (exhaustive digest)")
+    rc, ad, _ = tool("archive-digest", path + ".archive", hashseed=700)
+    archive_same = ad.get("digest") == ref_archive_digest
+    if not archive_same:
+        problems.append("the archive of the killed-and-resumed run differs from the uninterrupted run's")
+    rc, av, _ = tool("archive-verify", path + ".archive", hashseed=701)
+    if rc or not av.get("ok"):
+        problems.append(f"archive verify: {av}")
 
     # 3. the backup, restored and run to the end
     if backed_up_at is not None:
-        rc, rr, err = tool("restore", bak, restored, hashseed=500)
-        rc2, fin2, err2 = tool("run", restored, "--events", str(total - backed_up_at), "--deep", hashseed=501)
+        rc, rr, err = tool("restore-all", bak, restored, hashseed=500)
+        rpath = os.path.join(restored, "league.db")
+        rc2, fin2, err2 = tool("run", rpath, "--events", str(total - backed_up_at), "--deep", hashseed=501)
         if rc or rc2 or fin2.get("deep") != ref_deep:
             problems.append(f"the restored backup did not reach the same league: {rr} {fin2 or err2[-300:]}")
+        rc3, ad2, _ = tool("archive-digest", os.path.join(restored, "archive.db"), hashseed=502)
+        restored_archive_same = ad2.get("digest") == ref_archive_digest
+        if not restored_archive_same:
+            problems.append("the restored backup's archive differs from the uninterrupted run's")
     rc, v, _ = tool("verify", path, "--deep", hashseed=600)
     if rc or not v.get("ok"):
         problems.append(f"final verify: {v}")
@@ -118,6 +137,8 @@ def main():
              f"- snapshot every {a.snapshot_every} events; backup taken after event {backed_up_at}, restored and run to the end",
              f"- journal digests identical for all {total} events: {journal == ref}",
              f"- exhaustive final digest identical (uninterrupted / resumed / restored backup): {ref_deep[:16]}",
+             f"- archive digest identical (uninterrupted / resumed{' / restored backup' if backed_up_at is not None else ''}): {ref_archive_digest[:16]}"
+             f" (resumed {archive_same})",
              f"- run time: {time.time() - t0:.0f}s (reference alone {t_ref:.0f}s)", ""]
     lines += [f"- deaths: {json.dumps(x)}" for x in log]
     lines += [f"- PROBLEM: {p}" for p in problems]

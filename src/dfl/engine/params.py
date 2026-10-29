@@ -4,7 +4,7 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA = os.path.join(ROOT, "data", "engine")
-RULE_VERSION = "engine-1.1 (Ed 8.46, play-level)"
+RULE_VERSION = "engine-1.2 (Ed 8.52; play-level and 22-player spatial)"
 
 
 def _rows(name, path=DATA):

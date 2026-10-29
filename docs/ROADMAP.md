@@ -11,7 +11,7 @@ Written 2026-10-22, after Milestone 1. This is a plan, not a set of accepted dec
 6. **Status you can trust.** `docs/BUILD_STATUS.md` says verified, untested, or proposed for each piece.
 
 ## Where we are
-Updated 2026-10-29 (see `PROJECT_COMPLETION_PLAN.md` for the audited detail). Phases 0 to 3 are built, Phase 4's harness and first measurements exist, the Phase 5 people-layer slices 5.1 to 5.7 are built, and the storage half of Phase 6 (SQLite saving, atomic events, restart recovery, backup and restore) is built. The 22-player engine is the league default (Ed 8.52). Not built: the live clock and pacing, Phase 7 and Phase 8. There is no source snapshot; the engine was rebuilt from the spec. Many numbers (development curves, people-layer parameters, physics) are working values.
+Updated 2026-10-29 (see `PROJECT_COMPLETION_PLAN.md` for the audited detail). Phases 0 to 3 are built, Phase 4's harness and first measurements exist, the Phase 5 people-layer slices 5.1 to 5.7 are built, and the storage half of Phase 6 (SQLite saving, atomic events, restart recovery, backup and restore, a tested upgrade path for code releases, and the permanent game and trace archive) is built. Step 3 was accepted by the owner provisionally, subject to later independent review. The 22-player engine is the league default (Ed 8.52). Not built: the live clock and pacing (deferred by the owner until saving and archiving were complete; the about-50-hour season is provisional), Phase 7 and Phase 8. There is no source snapshot; the engine was rebuilt from the spec. Many numbers (development curves, people-layer parameters, physics) are working values.
 
 ## The shape
 Two products, in this order:

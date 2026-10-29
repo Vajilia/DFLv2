@@ -149,6 +149,7 @@ class SeasonRun:
         self.by_seed = {}
         self.champs = {}
         self.round_done = []
+        self._round = None
         self.bowl = None
         self.coronation = None
 
@@ -163,7 +164,7 @@ class SeasonRun:
     def play_week(self, numbered_week):
         out = []
         for r in self.week_rows[numbered_week]:
-            a, h = self.resolver.resolve(r, self.rng, decisive=False)
+            a, h = self.resolver.resolve(dict(r, id=f"reg:w{int(r['week']):02d}:g{int(r['game']):02d}", kind="regular"), self.rng, decisive=False)
             g = dict(r, away_score=a, home_score=h)
             self.games.append(g)
             out.append(g)
@@ -174,7 +175,8 @@ class SeasonRun:
         for r in self.tour:
             if int(r["tour_round"]) != i:
                 continue
-            g = {"away": r["away_nominal"], "home": r["home_nominal"], "neutral": True}      # no Tour venue is any club's home ground (section 7)
+            g = {"away": r["away_nominal"], "home": r["home_nominal"], "neutral": True,      # no Tour venue is any club's home ground (section 7)
+                 "id": f"tour:r{i}:g{int(r['game']):02d}", "kind": "tour"}
             a, h = self.resolver.resolve(g, self.rng, decisive=False)
             g = dict(r, away=g["away"], home=g["home"], away_score=a, home_score=h, venue=self.venues[r["venue_slot"]])
             self.tour_games.append(g)
@@ -201,12 +203,14 @@ class SeasonRun:
     def _play(self, conf, a, b):
         lo, hi = standings.host(a, b), max(a, b)
         by = self.by_seed[conf]
-        res = self.resolver.resolve({"away": by[hi], "home": by[lo]}, self.rng, decisive=True)
+        res = self.resolver.resolve({"away": by[hi], "home": by[lo], "id": f"po:{conf}:{self._round}:s{hi}v{lo}", "kind": "playoff"},
+                                    self.rng, decisive=True)
         self.playoff_log.append((conf, by[hi], by[lo], res[0], res[1]))
         return lo if res[1] > res[0] else hi
 
     def play_round(self, name):
         assert name == ("wild_card", "divisional", "conference")[len(self.round_done)], name
+        self._round = name
         for conf in self.by_seed:
             if name == "wild_card":
                 wc = [self._play(conf, a, b) for a, b in standings.wild_card_pairs()]
@@ -235,7 +239,7 @@ class SeasonRun:
         if random.Random(f"{self.seed}|bowlhome|{self.season}").random() < 0.5:
             order.reverse()
         away, home = sides[order[0]], sides[order[1]]
-        res = self.resolver.resolve({"away": away, "home": home, "neutral": True}, self.rng, decisive=True)
+        res = self.resolver.resolve({"away": away, "home": home, "neutral": True, "id": "bowl", "kind": "bowl"}, self.rng, decisive=True)
         self.bowl = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "neutral": True,
                      "venue": self.venues["BOWL"], "staff_clubs": {conf: clubs[0] for conf, clubs in by_conf.items()}}      # each conference's best Tour club supplies its coaches
         return self.bowl
@@ -248,7 +252,8 @@ class SeasonRun:
         venue = self.coronation_venue()
         self.history[self.year] = venue
         away, home, host = self.coronation_sides(venue)
-        res = self.resolver.resolve({"away": away, "home": home, "neutral": host is None}, self.rng, decisive=True)
+        res = self.resolver.resolve({"away": away, "home": home, "neutral": host is None, "id": "coronation", "kind": "coronation"},
+                                    self.rng, decisive=True)
         self.coronation = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "venue": venue,
                            "home_club": host, "neutral": host is None, "winner": home if res[1] > res[0] else away}
         return self.coronation

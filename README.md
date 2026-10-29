@@ -11,10 +11,10 @@ A persistent, female-only, 48-franchise football universe featuring autonomous m
 The simulation core is built in this repository and tested; the website, live clock and release pipeline are not. See `PROJECT_COMPLETION_PLAN.md` for what is verified, provisional, missing and unresolved, and `docs/BUILD_STATUS.md` for the build record.
 
 - **Authority:** `docs/spec/DFL_Design_Document_Ed8.52.md` (hash-stamped). The spec wins over everything, including v1.
-- **Built:** league layer (standings, rotation, exile, playoffs, Tour, Bowl, Coronation), roster and cap ledger, the 27-week calendar and year loop, character creator, a play-level engine and a 22-player spatial engine (the league default), the people layer (scouting, souls, demands, coaches, governance, meeting rooms, analytics and halls), trades, the draft, a fairness harness, and durable saving (SQLite).
+- **Built:** league layer (standings, rotation, exile, playoffs, Tour, Bowl, Coronation), roster and cap ledger, the 27-week calendar and year loop, character creator, a play-level engine and a 22-player spatial engine (the league default), the people layer (scouting, souls, demands, coaches, governance, meeting rooms, analytics and halls), trades, the draft, a fairness harness, durable saving (SQLite) with a tested upgrade path for code releases, and a permanent archive of every game and every 22-player snap's trace (`docs/PERSISTENCE.md`, `docs/ARCHIVE.md`).
 - **Not built:** the live clock and pacing, the website and animation viewer, the narrative layer, and the release pipeline.
 - **Determinism:** deterministic rules, weighted decisions and seeded randomness only. No language model takes part in any simulation decision.
-- **Pacing target:** about 50 real hours per season (owner ruling, Edition 8.7; non-binding).
+- **Pacing target:** about 50 real hours per season (owner ruling, Edition 8.7; non-binding). **Provisional:** the live clock is deferred until saving and archiving are complete (owner, 2026-10-29), so this figure is not a design constraint yet.
 - Character meters and internal assessments are engine-only; any narrative layer reads observable evidence, is template-driven and must never influence the engine.
 
 ## Import status

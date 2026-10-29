@@ -22,7 +22,7 @@ from .resolver import PlaceholderResolver
 
 
 class Universe:
-    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight", spatial=True):
+    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight", spatial=True, archive=False):
         self.tpl = league.Template(tables)
         self.clubs = sorted(t["team_city"] for t in self.tpl.teams)
         self.profile = profile
@@ -43,6 +43,9 @@ class Universe:
         self.vote = None
         self.paid_week = 0
         self.cursor = None                # (year, index of the next event) while a year is open, else None
+        self.archive_buffer = [] if archive else None     # records for the permanent archive (archive.py), drained after every event
+        if archive:
+            self.resolver.archive = self.archive_buffer   # the ledger engine adds each game's record here
 
     # ------------------------------------------------------------------ the year
     def play_year(self):
@@ -75,6 +78,34 @@ class Universe:
             if key.startswith(prefix):
                 return prefix.rstrip("_")
         return key
+
+    def season_record(self, result):
+        """The season's history for the archive: results, standings, seeds, playoffs, Tour, Bowl, Coronation. The tables the season was
+        built from (teams, schedule, tour slots) are derived from the template and the division state, so they are left out."""
+        keep = {k: v for k, v in result.items() if k not in ("teams", "schedule", "tour")}
+        out = dict(keep["outcome"])
+        out["records"] = {c: {f: getattr(r, f) for f in r.__slots__} for c, r in out["records"].items()}       # standings.Rec -> plain values
+        keep["outcome"] = out
+
+        def plain(o):                       # (conference, division) keys become "conference/division"
+            if isinstance(o, dict):
+                return {("/".join(map(str, k)) if isinstance(k, tuple) else k): plain(v) for k, v in o.items()}
+            if isinstance(o, (list, tuple)):
+                return [plain(x) for x in o]
+            return o
+        return {"type": "season", "rid": f"S{self.season:03d}/summary", "season": self.season, "result": plain(keep)}
+
+    def take_archive(self):
+        """The archive records produced since the last call (games, season summaries), removed from the league. [] when not archiving."""
+        if not self.archive_buffer:
+            return []
+        out = list(self.archive_buffer)
+        del self.archive_buffer[:]
+        return out
+
+    def rebind(self, tables):
+        """Point the season template at this machine's copy of the tables after a restore or import (the path is not league state)."""
+        self.tpl.dir = tables
 
     @property
     def L(self):
@@ -205,6 +236,8 @@ class Universe:
         honours.award_tiara(self.world, self.L.year, result["coronation_winner"])
         honours.update(self.world, self.L.year, self.tpl.division_of)
         honours.fan_entrant(self.world, self.L.year, self.clubs)
+        if self.archive_buffer is not None:
+            self.archive_buffer.append(self.season_record(result))
         L = self.L
         self.reports.append({
             "year": year, "season": self.season, "winner": result["coronation_winner"], "venue": result["coronation_venue"],
