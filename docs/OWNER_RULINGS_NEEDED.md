@@ -87,15 +87,15 @@ How to answer: for each item say **Approve** (the recommended default becomes th
 | Draft round 1 (last Thursday of April); rounds 2–3 next day; rounds 4–7 and compensatory picks the day after | late April |
 | Camp opens (preseason ceiling of 90 applies) | 1 June |
 | Coronation venue vote | 15 June |
-| Final cut to 53 and 16 (Tuesday), waivers clear (Wednesday) | the days before week 1 (week 1 is Saturday 1 July in the first year) |
+| Final cut to 53 and 16 (Tuesday), waivers clear (Wednesday) | the days before week 1 (week 1 is Saturday 1 July in 2000; because the calendar is anchored on the Coronation, in other years it falls between 24 June and 1 July) |
 
 **What the code does today.** Built exactly as listed; the calendar fires events in this order, and the dates can be edited in the one data file without touching code.
 
 **Recommended default: confirm as built.**
 
 **Gameplay consequences.**
-- The year is split roughly in half: about 182 days of offseason (1 January to 30 June) and about 184 of season (1 July to 31 December). The Coronation is the last Sunday of the year and the league year turns the next morning, so there is **no gap** between the final game and contract expiry: players whose contracts end with the year are in the pool on 1 January, a month before free agency opens on 1 February. In the built calendar nothing is signed or traded in that month; only leadership hiring runs. That is the biggest practical effect of these dates and is deliberate in the NFL pattern; it is worth the owner knowing.
+- The year is split roughly in half: about 175 to 182 days of offseason (1 January to the day before week 1) and about 183 to 191 of season, depending on the year. The Coronation is the last Sunday of the year and the league year turns the next morning, so there is **no gap** between the final game and contract expiry: players whose contracts end with the year are in the pool on 1 January, a month before free agency opens on 1 February. In the built calendar nothing is signed or traded in that month; only leadership hiring runs. That is the biggest practical effect of these dates and is deliberate in the NFL pattern; it is worth the owner knowing.
 - Free agency opens about 12 weeks before the draft, so clubs shape needs in free agency first and draft second. Moving the draft earlier would make it the main source of need-filling and shrink the free-agency market's role.
-- Camp opens about four weeks (26 days) before the final cut and the upgrade signings happen in that window; the cap timing rule (top-count until the final cut) lasts exactly that long. A shorter camp shortens the window in which clubs sign and then cut down.
-- The venue vote on 15 June falls twelve days before the cut and about two weeks before the season; moving it only moves a headline.
+- Camp opens three to four weeks (20 to 26 days, depending on the year) before the final cut and the upgrade signings happen in that window; the cap timing rule (top-count until the final cut) lasts exactly that long. A shorter camp shortens the window in which clubs sign and then cut down.
+- The venue vote on 15 June falls 6 to 12 days before the cut and 10 to 16 days before the season; moving it only moves a headline.
 - Because the real-time clock is deferred, none of this fixes how long any date lasts in real time. If the owner later wants the offseason to take a different share of the real season (the ≈50-hour target is provisional) that is a pacing choice, not a change to these dates.
