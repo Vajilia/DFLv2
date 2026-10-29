@@ -1,7 +1,10 @@
 """Calibration harness for the game engine: plays many games between founding-league clubs and compares the averages with
 data/engine/BANDS.csv.  Usage: calibrate_engine.py [--games N] [--seed S] [--baseline] [--spatial] [--procs P]
 --spatial plays every scrimmage snap with the 22-player engine (Edition 8.48); --procs spreads the games over worker processes.
---baseline prints the unit means and spreads of the 48 founding squads (to set data/engine/PARAMS.csv).  Exit code = bands failed."""
+--baseline prints the unit means and spreads of the 48 founding squads (to set data/engine/PARAMS.csv).
+Exit code = bands failed, which a crash (exit 1 from the traceback) can be mistaken for. --informational is for small-sample smoke runs
+(CI): band misses are printed but do not change the exit code, while a crash, a missing game or a non-finite statistic still fails
+(exit 1 for an exception, exit 2 for an incomplete or invalid run)."""
 import argparse
 import csv
 import os
@@ -22,6 +25,7 @@ ap.add_argument("--seed", type=int, default=1)
 ap.add_argument("--baseline", action="store_true")
 ap.add_argument("--spatial", action="store_true")
 ap.add_argument("--procs", type=int, default=1)
+ap.add_argument("--informational", action="store_true", help="report band misses without failing; execution failures still fail")
 a = ap.parse_args()
 
 clubs = [f"C{i:02d}" for i in range(48)]
@@ -65,6 +69,10 @@ if a.procs > 1:
         results = pool.map(one, jobs, chunksize=4)
 else:
     results = map(one, jobs)
+results = list(results)
+if len(results) != a.games:
+    print(f"EXECUTION FAILURE: {len(results)} of {a.games} games completed")
+    sys.exit(2)
 for r in results:
     for i in (0, 1):
         S["points"] += r["score"][i]
@@ -91,6 +99,11 @@ m = {
     "margin_sd": statistics.pstdev(margins), "injuries": inj / n_team,
 }
 bands = list(csv.DictReader(open(os.path.join(ROOT, "data", "engine", "BANDS.csv"))))
+import math
+bad = [k for k, v in m.items() if not math.isfinite(v)]
+if bad:
+    print(f"EXECUTION FAILURE: non-finite statistics {bad}")
+    sys.exit(2)
 fails = 0
 print(f"{a.games} games, seed {a.seed}, {time.time() - t0:.0f}s ({a.games / (time.time() - t0):.1f} games/s)")
 for b in bands:
@@ -98,4 +111,7 @@ for b in bands:
     ok = float(b["lo"]) <= v <= float(b["hi"])
     fails += not ok
     print(f"{'ok  ' if ok else 'FAIL'} {b['metric']:13} {v:8.3f}   band {b['lo']} - {b['hi']}")
+if a.informational:
+    print(f"{fails} band(s) outside the limits in {a.games} games (informational: small samples miss bands by chance)")
+    sys.exit(0)
 sys.exit(fails)

@@ -29,7 +29,7 @@ class PlaceholderResolver:
             s = rng.randint(3, 30)
             return s, s
         a = max(0, round(rng.gauss(21 + 4 * sa, 8)))
-        h = max(0, round(rng.gauss(21 + self.home_edge + 4 * sh, 8)))
+        h = max(0, round(rng.gauss(21 + (0 if game.get("neutral") else self.home_edge) + 4 * sh, 8)))
         while a == h:
             h = max(0, h + rng.choice([-3, 3, 7]))
         return a, h

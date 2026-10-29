@@ -57,7 +57,7 @@ class LedgerEngine:
 
     def resolve(self, game, rng, decisive):
         home, away = self.squad(game["home"]), self.squad(game["away"])
-        res = play_game(home, away, random.Random(rng.random()), decisive, curve=self.w.ep_curve, spatial=self.spatial)
+        res = play_game(home, away, random.Random(rng.random()), decisive, curve=self.w.ep_curve, spatial=self.spatial, neutral=bool(game.get("neutral")))
         for s in (home, away):
             if s.cid in self.sides:
                 continue

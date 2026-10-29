@@ -14,8 +14,10 @@ Staff hold Tiaras but have no halls yet. Nothing here reaches a game. Numbers ar
 from ..characters.creator import rng_for
 from ..engine.production import tables
 from .analytics import SLOTS
+from .rules import ROSTER_MAX
 
 LEAGUE = ("league",)
+LEADER_ROLES = ("ceo", "gm", "hc", "oc", "dc", "stc")
 
 
 def scopes(club, division_of):
@@ -23,14 +25,27 @@ def scopes(club, division_of):
     return [LEAGUE, ("conference", conf), ("division", conf, div), ("club", club)]
 
 
+def tiara_set(world, winner):
+    """The exact Tiara set (section 15): the winning club's final 53 (its active roster; injured reserve and the practice squad are not
+    in the 53) plus its CEO, general manager, head coach and three coordinators."""
+    club = world.L.clubs[winner]
+    assert len(club.roster) <= ROSTER_MAX, f"{winner} has more than 53 on its roster"
+    got = set(club.roster)
+    got |= {c.identity.id for r, c in world.leaders[winner].items() if r in LEADER_ROLES}
+    return got
+
+
 def award_tiara(world, year, winner):
-    """Give the Coronation winner's final 53 and six leaders their Tiara for `year`."""
-    L = world.L
-    got = set(L.clubs[winner].roster) | set(L.clubs[winner].ir)
-    got |= {c.identity.id for r, c in world.leaders[winner].items() if r in ("ceo", "gm", "hc", "oc", "dc", "stc")}
+    """Give the Coronation winner's final 53 and six leaders their Tiara for `year`. Idempotent: a second call for the same year and winner
+    changes nothing, and the `tiaras` counter counts only Tiaras newly given. Returns the whole eligible set."""
+    got = tiara_set(world, winner)
+    new = 0
     for pid in got:
-        world.tiaras.setdefault(pid, set()).add(year)
-    world.stats["tiaras"] = world.stats.get("tiaras", 0) + len(got)
+        years = world.tiaras.setdefault(pid, set())
+        if year not in years:
+            years.add(year)
+            new += 1
+    world.stats["tiaras"] = world.stats.get("tiaras", 0) + new
     return got
 
 

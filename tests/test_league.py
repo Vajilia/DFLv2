@@ -147,7 +147,7 @@ class TourBowlAndDraftOrder(unittest.TestCase):
     def test_the_bowl_is_played_without_a_tie_between_the_two_all_star_sides(self):
         for r in self.res:
             b = r["bowl"]
-            self.assertEqual((b["away"], b["home"]), ("Western All-Stars", "Eastern All-Stars"))
+            self.assertEqual({b["away"], b["home"]}, {"Western All-Stars", "Eastern All-Stars"})      # which is nominal home is a seeded draw
             self.assertNotEqual(b["away_score"], b["home_score"])
             amb = {t["team_city"]: t["conference"] for t in r["teams"] if t["club_status"] == "ambassador"}
             self.assertEqual({conf: amb[c] for conf, c in b["staff_clubs"].items()}, {"Western": "Western", "Eastern": "Eastern"})

@@ -78,8 +78,10 @@ def new_stats():
 
 
 class Game:
-    def __init__(self, home, away, rng, decisive=False, log=False, curve=None, spatial=False, trace=False):
+    def __init__(self, home, away, rng, decisive=False, log=False, curve=None, spatial=False, trace=False, neutral=False):
         self.sq = (home, away)
+        self.neutral = neutral               # a neutral venue: the nominal home kicks first but carries no home-field edge (builder's reading of sections 3 and 6, awaiting an owner ruling: PROJECT_COMPLETION_PLAN.md C8)
+        self.home_edge = 0.0 if neutral else P["home_edge"]
         self.spatial = spatial               # plays are played out by 22 players on the field (Edition 8.48); False is the play-level resolver
         self.trace = trace                   # keep each spatial play's compressed trace in the play table
         self.sim_secs = None                 # seconds the last spatial play took
@@ -609,7 +611,7 @@ class Game:
         rng = self.rng
         zo, zd = uo["z"], ud["z"]
         edge = 0.55 * (zo["runblock"] - zd["rdef"]) + 0.45 * (zo["rb"] - 0.5 * zd["rdef"] - 0.5 * zd["cover"] * 0)
-        edge += zo["off_coach"] - zd["def_coach"] + (P["home_edge"] if k == 0 else -P["home_edge"])
+        edge += zo["off_coach"] - zd["def_coach"] + (self.home_edge if k == 0 else -self.home_edge)
         m = P["run_yards_mean"] + P["run_edge_yards"] * edge
         u = rng.random()
         if u < 0.095 - 0.02 * edge:
@@ -628,7 +630,7 @@ class Game:
     def resolve_pass(self, k, uo, ud):
         rng = self.rng
         zo, zd = uo["z"], ud["z"]
-        coach = zo["off_coach"] - zd["def_coach"] + (P["home_edge"] if k == 0 else -P["home_edge"])
+        coach = zo["off_coach"] - zd["def_coach"] + (self.home_edge if k == 0 else -self.home_edge)
         press = zd["prush"] - zo["pro"]
         sack_p = clamp(P["sack_base"] + P["sack_pressure_gain"] * press - 0.01 * zo["qb"], 0.015, 0.17)
         qb = uo["qb"]
@@ -669,7 +671,7 @@ class Game:
             self.ball_y = MID
         by = max(HASH_R, min(HASH_L, self.ball_y))
         zo, zd = uo["z"], ud["z"]
-        edge = zo["off_coach"] - zd["def_coach"] + (P["home_edge"] if k == 0 else -P["home_edge"])
+        edge = zo["off_coach"] - zd["def_coach"] + (self.home_edge if k == 0 else -self.home_edge)
         sim = PlaySim(uo, ud, "pass" if is_pass else "run", play, cov, yl, by, random.Random(rng.getrandbits(64)), staff=(edge, 0.0),
                       trace=self.trace, down=down, dist=dist)
         o = sim.run()
@@ -1140,8 +1142,8 @@ def rng_gauss(rng, m, s):
     return rng.gauss(m, s)
 
 
-def play_game(home, away, rng, decisive=False, log=False, curve=None, spatial=False, trace=False):
+def play_game(home, away, rng, decisive=False, log=False, curve=None, spatial=False, trace=False, neutral=False):
     """Play one game between two `Squad`s. `decisive` forbids a tie (postseason, Coronation). `spatial` plays every scrimmage snap out with
-    22 players on the field (Edition 8.48) instead of resolving it at the play level."""
-    g = Game(home, away, rng, decisive, log, curve, spatial, trace)
+    22 players on the field (Edition 8.48) instead of resolving it at the play level. `neutral` removes the home-field edge."""
+    g = Game(home, away, rng, decisive, log, curve, spatial, trace, neutral)
     return g.run()

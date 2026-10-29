@@ -174,7 +174,7 @@ class SeasonRun:
         for r in self.tour:
             if int(r["tour_round"]) != i:
                 continue
-            g = {"away": r["away_nominal"], "home": r["home_nominal"]}
+            g = {"away": r["away_nominal"], "home": r["home_nominal"], "neutral": True}      # no Tour venue is any club's home ground (section 7)
             a, h = self.resolver.resolve(g, self.rng, decisive=False)
             g = dict(r, away=g["away"], home=g["home"], away_score=a, home_score=h, venue=self.venues[r["venue_slot"]])
             self.tour_games.append(g)
@@ -229,8 +229,14 @@ class SeasonRun:
                 self.resolver.strength[name] = sum(self.resolver.strength.get(c, 0.0) for c in clubs) / len(clubs)
             if hasattr(self.resolver, "all_star_side"):
                 self.resolver.all_star_side(name, clubs)
-        res = self.resolver.resolve({"away": sides["Western"], "home": sides["Eastern"]}, self.rng, decisive=True)
-        self.bowl = {"away": sides["Western"], "home": sides["Eastern"], "away_score": res[0], "home_score": res[1],
+        # A neutral venue, so the nominal home is not a home side: the two All-Star sides carry no seeds, so the "higher seed with a
+        # seeded tie" rule (section 6) reduces to a seeded draw; neither conference is always the nominal home.
+        order = ["Western", "Eastern"]
+        if random.Random(f"{self.seed}|bowlhome|{self.season}").random() < 0.5:
+            order.reverse()
+        away, home = sides[order[0]], sides[order[1]]
+        res = self.resolver.resolve({"away": away, "home": home, "neutral": True}, self.rng, decisive=True)
+        self.bowl = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "neutral": True,
                      "venue": self.venues["BOWL"], "staff_clubs": {conf: clubs[0] for conf, clubs in by_conf.items()}}      # each conference's best Tour club supplies its coaches
         return self.bowl
 
@@ -241,13 +247,30 @@ class SeasonRun:
     def play_coronation(self):
         venue = self.coronation_venue()
         self.history[self.year] = venue
-        finalists = sorted(self.champs.values())
-        away, home = self.champs["Western"], self.champs["Eastern"]
-        res = self.resolver.resolve({"away": away, "home": home}, self.rng, decisive=True)
-        host = next((c for c in finalists if self.tpl.venue[c] == venue), None)
+        away, home, host = self.coronation_sides(venue)
+        res = self.resolver.resolve({"away": away, "home": home, "neutral": host is None}, self.rng, decisive=True)
         self.coronation = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "venue": venue,
-                           "home_club": host, "winner": home if res[1] > res[0] else away}
+                           "home_club": host, "neutral": host is None, "winner": home if res[1] > res[0] else away}
         return self.coronation
+
+    def coronation_sides(self, venue):
+        """(away, home, host) for the Coronation at `venue` (section 3). A finalist whose own venue won the vote plays at home and
+        hosts; that is the only home-field case. Otherwise the venue is neutral: host is None, no home-field edge is given, and the
+        nominal home is the higher seed (the lower seed number in its conference), with a seeded draw when the seeds are equal.
+        If both finalists share the winning venue it is neither's alone, so it is treated as neutral too."""
+        finalists = sorted(self.champs.values())
+        owners = [c for c in finalists if self.tpl.venue[c] == venue]
+        if len(owners) == 1:
+            host = owners[0]
+            other = next(c for c in finalists if c != host)
+            return other, host, host
+        seed_of = {self.by_seed[conf][s]: s for conf in self.by_seed for s in self.by_seed[conf]}
+        w, e = self.champs["Western"], self.champs["Eastern"]
+        if seed_of[w] != seed_of[e]:
+            home = w if seed_of[w] < seed_of[e] else e
+        else:
+            home = random.Random(f"{self.seed}|corhome|{self.year}").choice([w, e])
+        return (e if home == w else w), home, None
 
     # ---- hand-off
     def draft_order(self, returning=None):

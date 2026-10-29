@@ -52,7 +52,7 @@ class EngineResolver:
             s.out = {i for i, n in out.items() if n > 0}
             s.new_injuries.clear()
             s._units = None
-        res = play_game(home, away, random.Random(rng.random()), decisive, spatial=self.spatial)
+        res = play_game(home, away, random.Random(rng.random()), decisive, spatial=self.spatial, neutral=bool(game.get("neutral")))
         for s in (home, away):
             if s.cid in self.sides:
                 continue

@@ -230,7 +230,7 @@ class SeasonIntegration(unittest.TestCase):
 
     def test_the_bowl_is_played_by_all_star_squads(self):
         res, out = self.season()
-        self.assertEqual((out["bowl"]["away"], out["bowl"]["home"]), ("Western All-Stars", "Eastern All-Stars"))
+        self.assertEqual({out["bowl"]["away"], out["bowl"]["home"]}, {"Western All-Stars", "Eastern All-Stars"})
         self.assertTrue(out["bowl"]["away_score"] != out["bowl"]["home_score"])
         self.assertTrue(any(n.endswith("All-Stars") for n in res.sides))
 

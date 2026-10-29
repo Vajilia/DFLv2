@@ -78,6 +78,8 @@ Code exists and runs; the numbers or behaviour have not been fully verified or a
 | C4 | **Stale text.** README ("24 tests", documentation-only); BUILD_STATUS ("Edition 8.7" row, stale "Not built yet" list); ROADMAP "Where we are"; `requirements.txt` "opt-in" comment on numpy. | Refresh in the first doc-cleanup commit. |
 | C5 | **Calibration claim vs result.** Docs say the play-level engine passes all 24 bands; seed 1 shows one miss. | Re-state the claim with the seed range, or fix the band. |
 | C6 | **Silent-spec items defaulting to NFL.** V1-11 (offseason count: top 51 salaries) is "default NFL, add to spec once confirmed". | Owner to confirm; keep flagged until then. |
+| C8 | **Home-field edge at a neutral venue.** The spec says the nominal home at a neutral site is assigned by the fixture template or by higher seed with a seeded tie (§6), and that no Tour venue is any club's home ground (§7). It does not say whether the nominal home also gets the home-field edge (z, §6). | Builder's reading, implemented 2026-10-29: neutral means no edge; the nominal home still kicks first. Needs an owner ruling. If the owner wants the edge kept, flip `Game.home_edge` for neutral games back to `P["home_edge"]`. |
+| C9 | **Nominal home of the Bowl.** The two All-Star sides have no fixture template and no seeds. | Builder's reading: a seeded draw each season (`{seed}\|bowlhome\|{season}`). Needs an owner ruling. |
 | C7 | **Open §20 items called out in the audit:** 4 (Bowl roster repair), 6, 7, 8, 9, 14, 49 and all others in 1–50 not listed here. | Review the full list with the owner; each needs a ruling or an explicit "defer". |
 
 ## 6. Itinerary (ROADMAP Phases 0–8, adjusted)
@@ -95,7 +97,7 @@ Code exists and runs; the numbers or behaviour have not been fully verified or a
 | 7 Presentation / story | **Not started** | after 6 |
 | 8 Release | **Not started** | after 7; no deploy without owner approval |
 
-## 7. Recommended next stage
+## 7. Recommended next stage (before the fix log below)
 
 **Stage A (small, first): housekeeping and decisions.** Resolve C1–C6 with the owner, refresh stale docs, and settle the play-level margin_sd miss (re-state or fix). No simulation changes.
 
@@ -103,4 +105,30 @@ Code exists and runs; the numbers or behaviour have not been fully verified or a
 
 **In parallel (background compute, not blocking):** a 100-year soak on the spatial default, and a cross-platform numpy determinism check in CI.
 
+Stage A should also take the owner rulings C8 and C9 (section 5), which the fixes in section 8 had to answer provisionally.
+
 Do not merge this branch, deploy, or touch the live site, `Vajilia/DFL`, or `step6-rebuild`.
+
+## 8. Fix log, 2026-10-29
+
+Four defects from the earlier audit were re-checked against the current code first. All four still existed. Regression tests are in `tests/test_special_games.py` (17 tests); 14 of them fail on the pre-fix code and all pass now.
+
+| # | Defect (still present when checked) | Fix | Tests |
+| --- | --- | --- | --- |
+| 1 | `SeasonRun.play_coronation` always passed the Eastern champion as the engine's home side, whatever the venue. The engine had no neutral-venue mode at all, so Tour games, the Bowl and a neutral Coronation all gave their nominal home side the home-field edge. | New `SeasonRun.coronation_sides`: a finalist whose own venue won the vote hosts and is the home side (Western or Eastern); otherwise the venue is neutral, the higher seed is the nominal home, and equal seeds go to a seeded draw. If both finalists share the winning venue it counts as neutral. The game dict now carries `neutral`, and `Game`, `play_game`, both engine resolvers and the placeholder resolver honour it (neutral removes the home-field edge; the nominal home still kicks first). | `CoronationVenue` (5), `EngineNeutral` (3) |
+| 1b | Audit of other special games. | **Tour** (28 games a season, no venue is any club's home): now neutral. **Bowl**: was always Eastern home with the edge; now neutral, with the nominal home a seeded draw per season (the All-Star sides have no seeds). **Playoffs**: already correct (higher seed hosts, not neutral); now covered by a test. **Regular season**: correct; the schedule has no neutral games. **`play_playoffs` helper**: correct. | `OtherSpecialGames` (3) |
+| 2 | `honours.award_tiara` gave Tiaras to `roster` plus `ir`. The rule (§15, Ed 8.30 as built, confirmed unchanged in Ed 8.52) is the winning club's final 53 plus the CEO, GM, HC and three coordinators. | The set is now exactly `club.roster` (at most 53, asserted) plus the six leaders. Injured reserve and the practice squad are excluded. New `honours.tiara_set`. | `Tiaras` (2) |
+| 3 | Calling `award_tiara` twice doubled `world.stats["tiaras"]`, although the personal award sets did not duplicate. | Idempotent: the counter adds only Tiaras newly given; a repeat call changes no state and returns the same set. A different year counts again. | `Tiaras` (2) |
+| 4 | CI ran `calibrate_engine.py … --spatial … \|\| true`, which hid crashes along with expected small-sample band misses. The tool's exit code was the number of failed bands, so one miss was indistinguishable from a crash (exit 1). | New `--informational` flag: band misses are printed and exit 0; an exception exits 1; an incomplete run or non-finite statistic exits 2. The CI step uses the flag and no longer has `\|\| true`. | `CiSmoke` (2) |
+
+**Rulings taken provisionally** (section 5, C8 and C9): neutral means no home-field edge; the Bowl's nominal home is a seeded draw. The spec is silent on both. Neither changes any stored rule or data file.
+
+**Checks after the fixes (RE-RUN 2026-10-29):**
+- Full unit suite: **350 tests OK** (333 earlier plus 17 new), 758 s.
+- Validator vs Ed 8.52: 75/75.
+- 30 structural seasons: 0 validator failures; Coronation venue 40-year rule holds; a finalist hosts in 6.7% of seasons.
+- 3-year ledger soak: PASS, digest `9fdf159d…` (identical to before; nothing in the ledger changed).
+- CI smoke command run locally: exits 0 with 5 informational band misses in 20 games.
+- 3-year universe soak: **PASS**, digest `f340fce7…` (changed from `308b548d…`, as expected), 2,328 games, 0 forfeits, 0 legal-move failures, 2,514 s. The in-season overage figure (1.9) is the documented within-season drift that the audit allows; the invariants held at every season start and year end.
+
+**Not changed:** the golden engine digest (play_game defaults to non-neutral), the calibration bands, the spec and any data file. League-level digests change because the Tour, Bowl and Coronation now draw differently; that is expected.
