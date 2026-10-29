@@ -105,7 +105,63 @@ class ArchiveInconsistent(PersistError):
 
 
 class StateMismatch(PersistError):
-    """An imported state does not equal the state that was exported."""
+    """An imported state does not equal the state that was exported. `diagnostics` (a dict, also written to $DFL_DIAG_DIR when that is set)
+    says where: see `mismatch_report`."""
+    diagnostics = None
+
+
+DIAG_CONTEXT = []        # callables returning a dict, called when a mismatch report is made (the test runner registers the order of tests run)
+
+
+def mismatch_report(doc, u, actual_digest, source=None):
+    """Everything needed to tell a real state difference from an unstable digest, gathered at the moment of a mismatch: the expected and
+    actual digests, the digest of the parts of the league on both sides, the random generators' states on both sides, the differences between
+    the exported document and a fresh encoding of the imported state, fresh re-decodes of the same document (an unstable digest gives
+    different answers for identical input), versions, the hash seed, and whatever the registered context hooks add."""
+    import platform
+    m = doc["manifest"]
+    expected = m.get("deep_digest")
+    again = []
+    for _ in range(3):
+        try:
+            again.append(neutral.deep_digest(neutral.decode(doc["state"])))
+        except Exception as e:                       # a report must never hide the failure it describes
+            again.append(f"error: {e}")
+    parts_now, rngs_now = neutral.digest_parts(u), neutral.rng_states(u)
+    parts_was, rngs_was = m.get("digest_parts"), m.get("rng_states")
+    rep = {
+        "expected_digest": expected, "actual_digest": actual_digest, "fresh_redecode_digests": again,
+        "digest_is_unstable": len(set(again + [actual_digest])) > 1,
+        "differing_parts": None if parts_was is None else sorted(k for k in set(parts_was) | set(parts_now) if parts_was.get(k) != parts_now.get(k)),
+        "differing_random_states": None if rngs_was is None else sorted(k for k in set(rngs_was) | set(rngs_now) if rngs_was.get(k) != rngs_now.get(k)),
+        "random_states_imported": rngs_now, "random_states_exported": rngs_was,
+        "document_differences": neutral.state_diff(doc["state"], neutral.encode(u)),
+        "manifest": {k: m.get(k) for k in ("league_format", "fingerprint", "seq", "chain", "seed", "rule_version", "created_with", "league_id")},
+        "this_code_fingerprint": fingerprint(), "source": source,
+        "versions": {"python": sys.version, "implementation": platform.python_implementation(), "platform": platform.platform(),
+                     "numpy": getattr(neutral.np, "__version__", None), "sqlite": sqlite3.sqlite_version, "zlib": zlib.ZLIB_VERSION,
+                     "document_version": neutral.DOC_VERSION, "save_schema": FORMAT_VERSION},
+        "environment": {"PYTHONHASHSEED": os.environ.get("PYTHONHASHSEED"), "hash_randomization": sys.flags.hash_randomization,
+                        "isolated": sys.flags.isolated, "pid": os.getpid(), "cwd": os.getcwd(), "argv": sys.argv[:6],
+                        "recursion_limit": sys.getrecursionlimit()},
+        "context": {},
+    }
+    for i, hook in enumerate(DIAG_CONTEXT):
+        try:
+            rep["context"][getattr(hook, "__name__", f"hook{i}")] = hook()
+        except Exception as e:
+            rep["context"][getattr(hook, "__name__", f"hook{i}")] = f"error: {e}"
+    where = os.environ.get("DFL_DIAG_DIR")
+    if where:
+        try:
+            os.makedirs(where, exist_ok=True)
+            fd, path = tempfile.mkstemp(prefix="statemismatch-", suffix=".json", dir=where)
+            with os.fdopen(fd, "w") as f:
+                json.dump(rep, f, indent=1, sort_keys=True, default=str)
+            rep["written_to"] = path
+        except OSError as e:
+            rep["written_to"] = f"could not write: {e}"
+    return rep
 
 
 # ---------------------------------------------------------------------------------------------------------------- code identity
@@ -662,8 +718,13 @@ class Runner:
         d = neutral.deep_digest(u)
         state_changed = d != m["deep_digest"]
         if state_changed and not accept_state_change:
-            raise StateMismatch("the imported league differs from the exported one (state digest "
-                                f"{d[:12]} against {m['deep_digest'][:12]}); nothing was written")
+            rep = mismatch_report(doc, u, d, source=doc_path)
+            where = f"; report: {rep['written_to']}" if rep.get("written_to") else ""
+            note = "; the digest itself is unstable (identical input digested differently)" if rep["digest_is_unstable"] else ""
+            err = StateMismatch("the imported league differs from the exported one (state digest "
+                                f"{d[:12]} against {m['deep_digest'][:12]}); nothing was written{note}{where}")
+            err.diagnostics = rep
+            raise err
         lineage = list(m.get("lineage") or []) + [{
             "from_fingerprint": m["fingerprint"], "from_format": m["league_format"], "from_rule_version": m.get("rule_version"),
             "from_seq": m["seq"], "from_chain": m["chain"], "source_file_sha256": source_file_sha256,

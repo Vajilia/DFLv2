@@ -68,6 +68,8 @@ def deep_digest(obj, ignore=DIGEST_IGNORE):
     leagues that hold the same values have the same digest whichever process built them. Random generators contribute their full
     state. `ignore` names derived caches that may or may not be filled without changing any outcome."""
     memo = {}
+    alive = []             # every object seen stays alive until the digest is finished: the memo is keyed by address, and a temporary
+    #                        (the tuple `Random.getstate()` returns) freed early would let a later object reuse its address and inherit its digest
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
 
     def prim(tag, body):
@@ -97,6 +99,7 @@ def deep_digest(obj, ignore=DIGEST_IGNORE):
         if i in memo:
             return memo[i]
         memo[i] = b"cycle"
+        alive.append(o)
         name = f"{t.__module__}.{t.__qualname__}".encode()
         if isinstance(o, random.Random):
             r = comb(b"random" + name, [h(o.getstate())])
@@ -131,6 +134,94 @@ def _attrs(o):
             if hasattr(o, sl):
                 state[sl] = getattr(o, sl)
     return state
+
+
+# ---------------------------------------------------------------------------------------------------------------- diagnostics
+def _children(o):
+    """(label, child) pairs of a container or league object, for walking a state by path."""
+    if isinstance(o, dict):
+        return [(f"[{k!r}]", v) for k, v in o.items()]
+    if isinstance(o, (list, tuple, deque)):
+        return [(f"[{i}]", v) for i, v in enumerate(o)]
+    if isinstance(o, (set, frozenset)):
+        return []
+    if hasattr(o, "__dict__") or hasattr(type(o), "__slots__"):
+        return [(f".{k}", v) for k, v in _attrs(o).items()]
+    return []
+
+
+def rng_states(obj):
+    """{path: short digest of the generator's full state} for every random.Random reached from `obj`, found in the same order every
+    time (dict order is the order the state was built in). Part of what a mismatch report compares."""
+    out, seen = {}, set()
+
+    def walk(o, path):
+        if id(o) in seen or isinstance(o, (type(None), bool, int, float, str, bytes)):
+            return
+        seen.add(id(o))
+        if isinstance(o, random.Random):
+            out[path] = hashlib.sha256(repr(o.getstate()).encode()).hexdigest()[:16]
+            return
+        for label, child in _children(o):
+            walk(child, path + label)
+    walk(obj, "u")
+    return out
+
+
+def digest_parts(obj, depth=2):
+    """{path: deep_digest} for each attribute of `obj` and of its attributes (to `depth` levels), so a mismatch can be narrowed to the part
+    of the league that differs. Each part is digested on its own."""
+    out = {}
+
+    def walk(o, path, d):
+        if d == 0 or isinstance(o, (type(None), bool, int, float, str, bytes)):
+            return
+        for label, child in _children(o):
+            if label[1:] in IGNORE or label[1:] in DIGEST_IGNORE:
+                continue
+            out[path + label] = deep_digest(child)[:16]
+            walk(child, path + label, d - 1)
+    walk(obj, "u", depth)
+    return out
+
+
+def state_diff(expected, actual, limit=25):
+    """Where two encoded states (the output of `encode`) differ: [(path, expected, actual)] with short renderings, at most `limit`, plus
+    the count of differences found. Paths follow the encoding (`$o`/`s` attribute pairs, `$l` lists, `$d` dict pairs)."""
+    found = []
+
+    def short(x):
+        text = json.dumps(x, sort_keys=True, default=str) if not isinstance(x, str) else x
+        return text if len(text) <= 160 else text[:157] + "..."
+
+    def walk(a, b, path):
+        if len(found) >= limit * 20:
+            return
+        if type(a) is not type(b):
+            found.append((path, short(a), short(b)))
+        elif isinstance(a, dict):
+            if "$o" in a and "s" in a and "s" in b and a.get("$o") == b.get("$o"):
+                da, db = dict((k, v) for k, v in a["s"]), dict((k, v) for k, v in b["s"])
+                for k in sorted(set(da) | set(db)):
+                    if k not in da or k not in db:
+                        found.append((f"{path}.{k}", short(da.get(k, "<missing>")), short(db.get(k, "<missing>"))))
+                    else:
+                        walk(da[k], db[k], f"{path}.{k}")
+                return
+            for k in sorted(set(a) | set(b)):
+                if k not in a or k not in b:
+                    found.append((f"{path}.{k}", short(a.get(k, "<missing>")), short(b.get(k, "<missing>"))))
+                else:
+                    walk(a[k], b[k], f"{path}.{k}")
+        elif isinstance(a, list):
+            if len(a) != len(b):
+                found.append((f"{path}#len", len(a), len(b)))
+            for i, (x, y) in enumerate(zip(a, b)):
+                walk(x, y, f"{path}[{i}]")
+        elif a != b:
+            found.append((path, short(a), short(b)))
+    walk(expected, actual, "u")
+    return {"count": len(found), "first": found[:limit]}
 
 
 # ---------------------------------------------------------------------------------------------------------------- encode
@@ -416,4 +507,4 @@ def runner_manifest(r):
             "snapshot_every": m.get("snapshot_every"), "keep": m.get("keep"), "universe_args": m.get("universe_args"),
             "tables": m.get("tables"), "lineage": m.get("lineage", []), "created_with": m.get("created_with"), "rule_version": rule,
             "archive": m.get("archive"), "league_id": m.get("league_id"), "archive_chain": _archive_chain_of(r),
-            "deep_digest": deep_digest(r.u)}
+            "deep_digest": deep_digest(r.u), "digest_parts": digest_parts(r.u), "rng_states": rng_states(r.u)}

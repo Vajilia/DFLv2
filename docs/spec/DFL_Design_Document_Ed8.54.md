@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.53 · 2026-10-29** (amends Edition 8.52; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `3022ef393fadc24fdef58b1289641daa78559707d7f937e3362d783031f5eb24`
+**Edition 8.54 · 2026-10-29** (amends Edition 8.53; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `ab4b297032f7fe6c6e157e9bb9b2c6c9cd72293d30cf8adeac33559cc07119ff`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -548,6 +548,7 @@ Composition per club: 18 games, 9H/9A; 8 divisional (4H/4A, each rival twice); 4
 - Each game carries a template-assigned nominal home tag, balanced to 3–4 per club, with no club nominally home, and none nominally away, in three consecutive rounds. (Never home in consecutive rounds is unsatisfiable for eight clubs in a single round robin; this template has six repeats in total, the minimum possible.) The nominal home kicks the first half.
 - The Bowl is the Sunday immediately preceding the Coronation, at noon league time, between Western and Eastern Ambassador All-Stars.
 - Each conference's best Tour club supplies its HC and all three coordinators. All eight ambassador HCs vote after the Tour.
+- **Status: INCOMPLETE (marked 2026-10-29).** The Bowl's ballots and the construction of each conference's final 53 are not built and are specified only in outline: how the ballot results become the 48 positional places and 5 discretionary places, how ties across positions are resolved, and the exact sequence from vote to locked roster are not yet written down. The replacement rule and the ring rule below are ruled; the rest is open (§20 item 4). The league's Bowl currently plays composite All-Star sides built from the best healthy players, not voted rosters.
 - All-Star selection uses per-position ranked ballots, all candidates ranked, Droop quota `floor(8 / (places + 1)) + 1`, seeded ties. 53 places per conference, drawn from that conference's four clubs.
 - Rosters lock one simulated hour before kickoff. A shortfall is a validation failure repaired before play.
 - **Bowl rosters: replacements and exhausted ballots (owner ruling of 2026-10-29).** Each conference's roster is exactly 53 distinct players, drawn from its four Ambassador clubs. Three things are kept apart. *Permanent position*: the position on the player's card, which selection and play never change. *Emergency game assignment*: a rostered player named on the Bowl club's emergency list (§11) who plays another position in the game; it fills no roster place and changes no permanent position. *Exception to the positional minimums*: the one case below.
@@ -838,7 +839,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.53 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37, 8.38, 8.39, 8.40, 8.41, 8.42, 8.43, 8.44, 8.45, 8.46, 8.47, 8.48, 8.49, 8.50, 8.51 and 8.52 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.54 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37, 8.38, 8.39, 8.40, 8.41, 8.42, 8.43, 8.44, 8.45, 8.46, 8.47, 8.48, 8.49, 8.50, 8.51, 8.52 and 8.53 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -939,12 +940,13 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-29 | §11 | defaults confirmed: game-day active 48 (47 with fewer than 8 offensive linemen), two elevations a game, three a player a season, four-game injured-reserve minimum, eight designated returns; inactive players replace injured players only before the roster locks; the emergency list covers every position, uses only dressed medically available players as injuries happen and never puts a player in two positions at once | owner's ruling of 2026-10-29 (item 8) | 8.53 |
 | 2026-10-29 | §3 | higher strength of schedule and of victory rank higher, no decisions = 0, cascade unchanged; the last step is one stable seeded priority per club per season, the same in every ranking; draft order is its exact reverse | owner's ruling of 2026-10-29 (item 9) | 8.53 |
 | 2026-10-29 | §2, §12 | offseason dates approved after checking against the leadership, contract-expiry and 31 December honours rules; Coronation-to-1 January gap stated correctly (0 to 6 days); the ledger rejects trades outside the window | owner's ruling of 2026-10-29 (item 14) | 8.53 |
+| 2026-10-29 | §7, §20 | Bowl ballots and final-53 construction marked incomplete (item 4 is ruled for replacement and rings only) | owner's instruction of 2026-10-29; no rule changed | 8.54 |
 
 ## §20 Open items
 1. Analytics definitions: approved by the owner on 2026-10-24 and built in Edition 8.30 (§15); every number is a placeholder (item 29).
 2. Engine content: play catalogue, numeric route landmarks, blocking rules, coverage responsibilities, ball flight, injury and fatigue models. Slice 1 (play-level resolver, clock and rules core, injuries, calibration harness) is built; formations, blocking, coverage, ball flight, fatigue and challenges remain for the spatial engine.
 3. Negotiation and market-clearing mechanics. Development, aging and retirement are built (§13, Edition 8.18; position decline and wear retirement in Edition 8.38, item 37) on placeholder curves in data; the owner has not yet ruled on their numbers, but ruled on 2026-10-26 that rates follow the NFL's.
-4. Ruled 2026-10-29 (Edition 8.53, §7): Bowl roster repair when a position runs short. Bowl rosters and ballots themselves are people-layer work and are not yet built.
+4. **INCOMPLETE.** Ruled 2026-10-29 (Edition 8.53, §7) for one part only: Bowl roster repair when a position runs short, and who receives rings. Not ruled and not built: the ballots, their count, and the construction of the final 53 (48 positional and 5 discretionary places) from them; the Bowl plays composite All-Star sides until the people layer builds them.
 5. The real-time to simulated-time mapping under deterministic pacing (target about 50 hours a season, non-binding).
 6. §19 promises a stable ID on every rule; none are assigned yet, so the changelog uses section references.
 7. Tie-game frequency: ties are excluded from records, so the order of overall wins before overall win % matters only when ties occur. The owner accepted (2026-10-23) the roughly 1.5% of regular-season games the slice-1 engine produces under the ten-minute overtime with a possession for each side; the overtime rule stands as written. Re-measure with the spatial engine; the rate is a monitored figure, not a target.

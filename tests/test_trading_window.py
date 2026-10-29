@@ -15,6 +15,8 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _diag  # noqa: F401,E402  (failure diagnostics; see tests/_diag.py)
 from dfl import neutral, persist  # noqa: E402
 from dfl.ledger.ledger import Ledger, Rejected  # noqa: E402
 

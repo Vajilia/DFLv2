@@ -1,5 +1,7 @@
 # Durable saving, restart recovery and backup (Phase 6, storage half)
 
+> **Correction of 2026-10-29.** Where this document relies on the exhaustive state digest (`deep_digest`), note that before the fix described in `PROJECT_COMPLETION_PLAN.md` section 15 it did not cover most random generators' states and was not stable for identical input. An intermittent import mismatch is OPEN; persistence is not described as fully verified.
+
 Built 2026-10-29 (Step 3, accepted provisionally by the owner, subject to later independent review); compatibility and upgrade added the same day (C11, save schema 2). Code: `src/dfl/persist.py`, `src/dfl/neutral.py`, `Universe.step_event` in `src/dfl/year.py`, command line `tools/league_store.py`, tests `tests/test_persist.py` and `tests/test_upgrade.py`. The permanent history is in a separate file: `docs/ARCHIVE.md`. The live clock and pacing (the other half of Phase 6) are deferred until saving and archiving are complete; the roughly 50-hour season is provisional.
 
 ## What is saved, and when

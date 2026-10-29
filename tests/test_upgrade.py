@@ -20,6 +20,8 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _diag  # noqa: F401,E402  (failure diagnostics; see tests/_diag.py)
 from dfl import archive, neutral, persist  # noqa: E402
 from dfl.year import Universe  # noqa: E402
 
@@ -221,6 +223,54 @@ class RoundTrip(Base):
         n = persist.Runner.import_state(bad, self.path("accepted"), accept_state_change=True)    # allowed only when asked, and recorded
         self.assertTrue(n.meta["lineage"][-1]["state_changed"])
         n.close()
+
+    def test_a_mismatch_report_says_where_the_state_differs_and_whether_the_digest_is_stable(self):
+        r = self.league(events=4)
+        r.close()
+        doc = self.path("old") + ".state.gz"
+        persist.export_state(self.path("old"), doc)
+        raw = json.loads(gzip.decompress(read(doc)))
+        man = raw["manifest"]
+        self.assertTrue(man["digest_parts"] and man["rng_states"])                        # recorded at export, for exactly this purpose
+        man["deep_digest"] = "0" * 64
+        victim = sorted(man["rng_states"])[0]
+        man["rng_states"][victim] = "0" * 16                                              # pretend that generator was exported in another state
+        part = sorted(man["digest_parts"])[0]
+        man["digest_parts"][part] = "0" * 16
+        bad = self.path("old") + ".bad.gz"
+        write(bad, gzip.compress(json.dumps(raw).encode()))
+        outdir = os.path.join(self.tmp, "diag")
+        persist.DIAG_CONTEXT.append(lambda: {"marker": "hook ran"})
+        os.environ["DFL_DIAG_DIR"] = outdir
+        try:
+            with self.assertRaises(persist.StateMismatch) as cm:
+                persist.Runner.import_state(bad, self.path("new"))
+        finally:
+            os.environ.pop("DFL_DIAG_DIR")
+            persist.DIAG_CONTEXT.pop()
+        rep = cm.exception.diagnostics
+        self.assertEqual(rep["expected_digest"], "0" * 64)
+        self.assertEqual(rep["actual_digest"], neutral.deep_digest(persist.Runner.import_state(doc, self.path("same")).u))
+        self.assertEqual(len(set(rep["fresh_redecode_digests"])), 1)
+        self.assertFalse(rep["digest_is_unstable"])                                       # three fresh decodes agree: a real difference, not noise
+        self.assertEqual(rep["differing_random_states"], [victim])
+        self.assertIn(part, rep["differing_parts"])
+        for key in ("random_states_imported", "random_states_exported", "document_differences", "versions", "environment", "manifest"):
+            self.assertIn(key, rep)
+        self.assertIn("PYTHONHASHSEED", rep["environment"])
+        self.assertEqual(rep["context"]["<lambda>"], {"marker": "hook ran"})
+        self.assertTrue(os.path.exists(rep["written_to"]))
+        with open(rep["written_to"]) as f:
+            self.assertEqual(json.load(f)["expected_digest"], "0" * 64)
+        self.assertFalse(os.path.exists(self.path("new")))
+
+    def test_state_diff_names_the_paths_that_differ(self):
+        a = neutral.encode({"x": [1, 2, {"y": random.Random(1)}], "z": "same"})
+        b = neutral.encode({"x": [1, 3, {"y": random.Random(2)}], "z": "same"})
+        d = neutral.state_diff(a, b)
+        paths = [p for p, _, _ in d["first"]]
+        self.assertTrue(any("[1]" in p for p in paths), paths)
+        self.assertEqual(neutral.state_diff(a, neutral.encode({"x": [1, 2, {"y": random.Random(1)}], "z": "same"}))["count"], 0)
 
     def test_other_ways_an_import_is_refused(self):
         r = self.league(events=4)

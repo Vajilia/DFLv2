@@ -1,5 +1,7 @@
 # The permanent archive (Phase 6, history half; spec §17 and §20 item 49)
 
+> **Correction of 2026-10-29.** Where this document relies on the exhaustive state digest (`deep_digest`), note that before the fix described in `PROJECT_COMPLETION_PLAN.md` section 15 it did not cover most random generators' states and was not stable for identical input. An intermittent import mismatch is OPEN; persistence is not described as fully verified.
+
 Code: `src/dfl/archive.py`, capture in `src/dfl/engine/ledger_engine.py` (`game_record`) and `src/dfl/year.py` (`season_record`), reader `tools/read_archive.py`, tests `tests/test_archive.py`. Built 2026-10-29.
 
 ## What it is for

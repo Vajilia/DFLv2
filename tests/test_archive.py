@@ -15,6 +15,8 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 import numpy as np  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _diag  # noqa: F401,E402  (failure diagnostics; see tests/_diag.py)
 from dfl import archive as A, persist  # noqa: E402
 from dfl.engine.spatial import trace as dfl_trace  # noqa: E402
 from dfl.year import Universe  # noqa: E402
