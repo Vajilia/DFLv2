@@ -111,7 +111,7 @@ Results at the commit that carries this handoff (save schema 4):
 - Validator against Ed 8.54: 75 of 75.
 - Ledger soak, 3 years: PASS, final ledger digest `9fdf159d…` (unchanged).
 - Restore soak, 1 year, play-level engine, 4 deaths (two between events, two inside a commit): PASS; **complete** journal digests identical at all 49 events; final digest `0cf52f5e174ce7b8` identical across uninterrupted, resumed and restored runs; archive digest `34d86b85ec63e3bf` identical. (The final digest differs from the earlier `674c9fdc…` because the digest algorithm changed, not because the league did.)
-- Restore soak, 1 year, 22-player engine, 3 deaths: running when this commit was made; its result is recorded in the commit that follows.
+- Restore soak, 1 year, 22-player engine, 3 deaths (at events 27, 39, 42; two after an event, one inside a commit), code of commit 060c001: **PASS**. 49 events, journal digests identical for all 49, exhaustive final digest identical for the uninterrupted run, the resumed run and the restored backup (`dc87c782a4d7dbab`), archive digest identical (`a3d3ca3ea8ee56b9`). 2389 s (reference alone 845 s). This covers the persistence mechanism only; the original uninstrumented failure remains open.
 - Bounded stability loop (`tools/diag_digest_stability.py --iterations 200 --seed 4`): 200 of 200 equal on the current code. (On `9211b28`: 10 of 200; after `030b51a`: 0 of 200.)
 - Profile leak (`tools/diag_profile_leak.py`): exit 1 on the tree at `9211b28` (first league altered from event 5), exit 0 on the current code.
 - Hash seeds: the digest of a 49-event league, with a decode round trip, is identical under `PYTHONHASHSEED` 0, 1, 2 and 777; the test suite adds two more seeds in a subprocess.
