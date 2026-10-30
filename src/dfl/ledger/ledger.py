@@ -320,6 +320,8 @@ class Ledger:
                 raise Rejected(f"player {pid} is not a free agent")
             if (contract.start_year, contract.start_week) != (self.year, self.week):
                 raise Rejected("contract must start now")
+            if self.week > 0 and len(contract.years) > 1:        # section 11: "Midseason deals pay remaining weeks only and expire at year close"
+                raise Rejected("a midseason deal expires at year close: one year only")
             if slot not in ("roster", "ps"):
                 raise Rejected("slot")
             if not self.room(cid, slot):
@@ -643,6 +645,7 @@ class Ledger:
         """League year rolls over. Contracts that have run out release their players to the free-agent pool; elevations and
         IR returns reset; old dead money drops off; nothing is banked."""
         rank = rank or (lambda cid, p: p.ovr)       # how good her club thinks she is; without a club view, the true overall
+        self.resolve_waivers([])                    # anyone still on the wire when the year turns clears to free agency: her contract ends with the year
         tops = {}
         for c in self.clubs.values():       # the club's top quarter by her coaches' judgement (Edition 8.37), taken before the year turns
             ranked = sorted(c.all_pids(), key=lambda i: (-rank(c.cid, self.players[i]), i))

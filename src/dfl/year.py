@@ -161,9 +161,23 @@ class Universe:
         for cid, c in self.L.clubs.items():
             assert len(c.roster) <= R.ROSTER_MAX and len(c.ps) <= R.PS_MAX and self.L.overage(cid) == 0, cid
 
+    def waiver_priority(self):
+        """Who claims first (section 12): last season's draft order until four league weeks have finished, then the current standings, worst
+        record first. The eight Tour clubs have no place in the standings of the clubs at home; each keeps the place her prior draft band gave
+        her in last season's order, and the clubs at home take the remaining places in standings order. In the first season there is no
+        earlier draft, so club id order stands in."""
+        base = list(self.draft_order) if self.draft_order else []
+        base += [c for c in sorted(self.L.clubs) if c not in base]
+        run = self.run
+        if run is None or len({g["week"] for g in run.games}) < R.WAIVER_STANDINGS_AFTER_WEEKS or set(run.active) | set(run.ambassadors) != set(base):
+            return base
+        rec = standings.tally(run.active, run.games)
+        worst_first = iter(reversed(standings.rank(list(run.active), rec, run.active, f"{run.seed}|season{run.season}")))
+        tour = set(run.ambassadors)
+        return [c if c in tour else next(worst_first) for c in base]
+
     def on_waivers_clear(self, year, date, key):
-        order = sorted(self.L.clubs)
-        self.world.rng.shuffle(order)
+        order = self.world.waiver_order()
         self.world.stats["claims"] += len(self.L.resolve_waivers(order, wants=lambda cid, p: self.world.view(cid, p) > 62 and self.world.rng.random() < 0.3))
 
     # ------------------------------------------------------------------ the season
@@ -186,12 +200,14 @@ class Universe:
         if n == 1:
             self._begin_season(year)
         paid = self._paid()
+        self.world.waiver_priority = self.waiver_priority()
         playing = {c for g in self.run.week_rows[n] for c in (g["away"], g["home"])} | self._tour_week(paid)
         self.world.play_paid_week(paid, playing)
         self.run.play_week(n)
 
     def on_break(self, year, date, key):
         paid = self._paid()
+        self.world.waiver_priority = self.waiver_priority()
         self.world.play_paid_week(paid, self._tour_week(paid))
 
     def on_tour_round(self, year, date, key):
@@ -235,6 +251,7 @@ class Universe:
     def on_year_close(self, year, date, key):
         result, self.state = self.run.handoff()
         self.draft_order = result["draft_order"]
+        self.world.waiver_priority = list(self.draft_order)          # the offseason's waivers run on last season's draft order
         self.last_results = {c: (r.w / (r.w + r.l) if r.w + r.l else 0.5) for c, r in result["outcome"]["records"].items()}
         governance.close_year(self.world, self.last_results)
         analytics.season_close(self.world, self.L.year)

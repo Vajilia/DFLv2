@@ -93,7 +93,7 @@ Code exists and runs; the numbers or behaviour have not been fully verified or a
 | Stage | Status | Remaining work |
 | --- | --- | --- |
 | 0 Intake | Done, verified | none |
-| 1 Roster / cap ledger | Done, verified | none |
+| 1 Roster / cap ledger | Done, verified (re-verified independently in Step 7, section 17) | extensions and postseason replacements unbuilt (owner question L4) |
 | 2 Full calendar | Done, verified | none |
 | 2.5 Character creator | Done, numbers provisional | tune with Phase 4 |
 | 3 Game engine | Done, provisional calibration | seed 16/17 overruns; 100-year soak (the play-level band claim is restated, C5) |
@@ -338,3 +338,9 @@ The owner asked for four things before Step 7; all are done and recorded here an
 4. **Handoff and claims corrected.** The earlier statements that journal digests and the exhaustive digest showed a restored league identical were weaker than stated (the journal digest saw two of six generators; the exhaustive digest was blind and unstable before `030b51a`); the parity-profile remark was an understatement. Corrections are tabulated in the handoff, section 4, and noted at the top of the sections they concern.
 
 **Results of the re-run checks are in the handoff, section 6.** The unexplained mismatch (section 15) remains OPEN.
+
+## 17. Step 7: roster, contract and transaction verification (2026-10-30)
+
+Done; account in `docs/STEP7_LEDGER_VERIFICATION.md` and `docs/REVIEW_HANDOFF_9211b28.md` section 10. An independent model of the ledger's money and lists, written from the Design Document, is compared with the ledger after every call of long seeded random transaction sequences (6 clubs, 2 to 3 league years, every transaction kind including illegal ones) and on 3,000 random contracts; the document's numbers are read from its text and compared with the code; scenario tests cover the rules that need their own setup. Five defects found and fixed: game-day lists over the 48 limit with elevations; waiver priority was a random shuffle instead of the document's order; midseason deals could be multi-year; waivers outstanding at the year turn; trade proposals dependent on set iteration order (found by the 22-player restore soak, which failed once and passed after the fix). Not built: extensions, postseason-only replacements, restructuring a future year's base. Owner questions L1 to L4 are in `docs/OWNER_RULINGS_NEEDED.md` (waiver order reading, split release, first-round option, which unbuilt items are wanted).
+
+Checks on the final code: full suite 560 tests pass; validator 75 of 75; ledger soak PASS (`41a4da4f…`); restore soaks PASS, play-level (4 deaths) and 22-player (3 deaths). The open item in section 15 is unchanged: nothing found in Step 7 can explain the original failure (it compared a decoded state with the state exported and stepped no event), and persistence is still not described as fully verified.

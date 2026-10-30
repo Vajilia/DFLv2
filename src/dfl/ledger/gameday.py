@@ -83,11 +83,24 @@ def build(ledger, cid, elevate=True, judge=None):
     n_ol_now = sum(1 for q in chosen if q.pos in OL)
     limit = R.ACTIVE_LIMIT if n_ol_now >= R.OL_FOR_FULL else R.ACTIVE_LIMIT_FEW_OL
     chosen = chosen[:limit]
-    # 3. elevate from the practice squad where a position is short, then where the list is short
+    # 3. elevate from the practice squad where a position is short, then where the list is short. Elevated players are dressed, so they
+    #    count inside the active limit (section 11: "Game-day active roster 48"): a player elevated into a full list displaces the weakest
+    #    player at a position the club holds beyond its league minimum, and never anyone whose absence would open a gap.
     elevated = []
     counts = {}
     for p in chosen:
         counts[p.pos] = counts.get(p.pos, 0) + 1
+
+    def surplus_victim():
+        group = lambda pos: "HB" if pos in ("HB", "FB") else pos          # HB 3, or HB 2 and FB 1: the pair is held to a total of three
+        held = {}
+        for q in chosen:
+            held[group(q.pos)] = held.get(group(q.pos), 0) + 1
+        for q in reversed(chosen):                                            # chosen is best-first inside the filler, so the tail is weakest
+            if held[group(q.pos)] > (3 if group(q.pos) == "HB" else MINIMUMS.get(q.pos, 0)):
+                return q
+        return None
+
     if elevate:
         pool = [p for p in (P[i] for i in c.ps) if p.out_weeks == 0 and p.elevations < R.ELEVATIONS_PER_PLAYER]
         pool.sort(key=lambda q: (-est(q), q.pid))
@@ -103,13 +116,23 @@ def build(ledger, cid, elevate=True, judge=None):
                 pick = next((p for p in pool if p not in elevated), None)
             if pick is None:
                 break
+            if len(chosen) + len(elevated) >= limit:
+                victim = surplus_victim()
+                if victim is None:
+                    break
+                chosen.remove(victim)
+                counts[victim.pos] -= 1
             elevated.append(pick)
             counts[pick.pos] = counts.get(pick.pos, 0) + 1
             pick.elevations += 1
     active = chosen + elevated
     n_ol_now = sum(1 for q in active if q.pos in OL)
     if n_ol_now < R.OL_FOR_FULL and len(active) > R.ACTIVE_LIMIT_FEW_OL:
-        active = active[:R.ACTIVE_LIMIT_FEW_OL]
+        cut = len(active) - R.ACTIVE_LIMIT_FEW_OL                           # the weakest of the chosen go; an elevated player stays dressed
+        for q in chosen[len(chosen) - cut:]:
+            counts[q.pos] -= 1
+        chosen = chosen[:len(chosen) - cut]
+        active = chosen + elevated
     gd = GameDay(R.ACTIVE_LIMIT if n_ol_now >= R.OL_FOR_FULL else R.ACTIVE_LIMIT_FEW_OL,
                  [p.pid for p in active], [p.pid for p in elevated], shortfalls(counts))
     # 4. the emergency list (section 11): filed before kickoff with coverage for every position, from dressed, medically available players

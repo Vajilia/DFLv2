@@ -4,7 +4,7 @@ Written 2026-10-29 for an independent reviewer; updated the same day after the o
 
 ## 0. Status in one paragraph
 
-Saving, restart recovery, backup/restore, the upgrade path, the permanent archive and archive consistency (Steps 3 and 4) are built and tested, **and the persistence verification the owner asked for is done** (section 3): the journal's state check is now complete (all six random generators and everything else reachable from the universe, with a short list of excluded caches, each with its reason), parity-profile settings belong to the league instead of the process, development saves (schema 3) are refused clearly and can be carried forward, and regression tests cover each. One item stays **OPEN**: the single unexplained `StateMismatch` in the first full test run (section 2). A *defect* that could produce exactly that failure was found, reproduced and fixed; **that it caused the original failure is not proved**, because the original run was not instrumented. So **persistence is not described as fully verified.** Several earlier verification claims were wrong or weaker than stated; they are corrected in section 4. The Bowl's ballots and final-53 construction are **incomplete** (not built, not fully specified). Live-clock pacing is deferred. Step 7 (roster, contract and transaction verification) is next.
+Saving, restart recovery, backup/restore, the upgrade path, the permanent archive and archive consistency (Steps 3 and 4) are built and tested, **and the persistence verification the owner asked for is done** (section 3): the journal's state check is now complete (all six random generators and everything else reachable from the universe, with a short list of excluded caches, each with its reason), parity-profile settings belong to the league instead of the process, development saves (schema 3) are refused clearly and can be carried forward, and regression tests cover each. One item stays **OPEN**: the single unexplained `StateMismatch` in the first full test run (section 2). A *defect* that could produce exactly that failure was found, reproduced and fixed; **that it caused the original failure is not proved**, because the original run was not instrumented. So **persistence is not described as fully verified.** Several earlier verification claims were wrong or weaker than stated; they are corrected in section 4. The Bowl's ballots and final-53 construction are **incomplete** (not built, not fully specified). Live-clock pacing is deferred. Step 7 (roster, contract and transaction verification) is **done** (section 10; `docs/STEP7_LEDGER_VERIFICATION.md`): it found and fixed five defects, one of them a second, separate source of run-to-run differences (section 10, item 5). The owner's next step after 7 is next.
 
 ## 1. What is at `9211b28` and what came after
 
@@ -75,6 +75,7 @@ Review the checkpoint with `git diff 4232e22 9211b28 -- src tools tests docs`. R
 | Parity profile "harmless for the shipped profile, latent for test beds; not changed" (plan section 15, this handoff) | A real defect: a second league could change the first; a restored non-default league could not be replayed. | Fixed (3.2). |
 | "`persist.quick_digest`: is covering two of six acceptable?" (a reviewer question) | Not acceptable; no reviewer answer was needed. | Replaced (3.1). |
 | "Restoring a league is exact" for leagues on `none` or `rigged` | Not established by anything before 3.2; fairness runs used one profile per process and never restored. | Established for schema 4 by the tests above. |
+| "Unordered iteration: no code iterates a set where order changes results" (section 2, "Other checks done"; hash seeds 1 to 19) | True of the persistence path only. In the simulation, trade proposals ordered a club's picks with a key that ties (same round and year, different original club), so the set's order decided; found 2026-10-30 by the 22-player restore soak and fixed (section 10, item 5). A restored or resumed league could have differed from an uninterrupted one in that way. It cannot explain the original failure, which compared a decoded state with the state exported (no event is stepped). | Fixed; regression test `tests/test_hash_order.py`. |
 | The original `StateMismatch` was "explained" by the digest defect (wording in places) | Mechanism demonstrated; attribution to that failure **unproven**. | OPEN (section 2). |
 
 Not wrong, but worth stating: the earlier validator, ledger soak (`9fdf159d…`) and the play-level results did not depend on any digest changed here.
@@ -116,6 +117,14 @@ Results at the commit that carries this handoff (save schema 4):
 - Profile leak (`tools/diag_profile_leak.py`): exit 1 on the tree at `9211b28` (first league altered from event 5), exit 0 on the current code.
 - Hash seeds: the digest of a 49-event league, with a decode round trip, is identical under `PYTHONHASHSEED` 0, 1, 2 and 777; the test suite adds two more seeds in a subprocess.
 
+**Step 7 code (2026-10-30), after the Step 7 changes (waiver priority, game-day limit, midseason deals, year-turn waivers, trade pick order):**
+- Full suite: **560 tests, all pass** (4,054 s).
+- Validator: 75 of 75 against Ed 8.54.
+- Ledger soak, 3 years, 48 clubs: PASS, final digest `41a4da4f1435a5688182f55a552c7a3d3c52cf8404360ebc27aa331ab131a466` (it was `9fdf159d…`; the waiver order no longer draws random numbers, so trajectories changed on purpose).
+- Restore soak, play-level engine, 4 deaths: PASS; 49 of 49 journal digests identical; exhaustive `b21f4c28e1f6762d`; archive `555d1d31312f3239`.
+- Restore soak, 22-player engine, 3 deaths: **first attempt FAILED, second PASSED.** The first (after the waiver, game-day and midseason changes) found the journal of the resumed run differing from the uninterrupted one from event 21 (the first week with standings-based waiver priority). Cause: the hash-order dependence in trade proposals above, not a persistence fault; reproduced from a saved state (the same event gave two leagues in 3 of 8 runs), fixed, and the soak re-run: PASS, 49 of 49 journal digests identical, exhaustive `849e3cd1dc8d6d80`, archive `e295bbdf59c78191`. Both reports are kept in `out/` (`restore_soak_22_v5_first_attempt_FAILED.md`, `restore_soak_22_v5.md`; git ignores `out/`, so the digests above are the record in the repository).
+- `tests/test_format3_upgrade.py` was reworked: the schema-3 fixture's code and this code no longer agree after event 4 (the waiver order changed at event 5), so the independent reference comparison uses a file of 4 events; a 12-event file is checked by value, continued, verified and reopened.
+
 ## 7. Not verified, or verified only partly
 
 1. **The cause of the original failure (section 2).** The suite has been run four times in all (once before the digest fix, three times after) and the failure has not recurred, which is evidence of nothing without knowing the rate.
@@ -135,7 +144,22 @@ Results at the commit that carries this handoff (save schema 4):
 5. `Ledger.trade_open` / `open_trading` / `close_trading` and their call sites in `year.py` and `ledger/world.py` (`step_year`).
 6. `standings.priority` and its callers in `league.py`.
 7. `ledger/gameday.emergency_list` and `engine/squad.py` (`emergency_for`).
+8. Step 7: `tests/ledger_oracle.py` (is the independent model faithful to §11? it states its two readings), `tests/test_step7_oracle.py`, then the five fixes in `docs/STEP7_LEDGER_VERIFICATION.md` §2 (`gameday.build`, `Universe.waiver_priority` and `World.waiver_order`, `Ledger.sign` and `World.offer` midseason, `Ledger.new_year`, `trading._assets`).
 
 ## 9. Next stage
 
-Step 7: roster, contract and transaction verification (ledger rules in spec §11 and §12, tested independently of the ledger's own tests). Live pacing remains deferred.
+The owner's next step after 7 (the plan's itinerary is in `PROJECT_COMPLETION_PLAN.md` section 6). Live pacing remains deferred. The Bowl's ballots and final-53 construction remain incomplete.
+
+## 10. Step 7: roster, contract and transaction verification (2026-10-30)
+
+Full account: `docs/STEP7_LEDGER_VERIFICATION.md` (method, results, rule-by-rule trace, owner questions L1 to L4 also in `docs/OWNER_RULINGS_NEEDED.md`). In short: an independent model of the ledger written from §0, §11 and §12 (`tests/ledger_oracle.py`) is compared with the ledger after every call of long seeded random transaction sequences, and on 3,000 random contracts; the document's numbers are read from its text and compared with the code. Defects found and fixed:
+
+1. Game-day list could exceed 48 (49 or 50 dressed) when a practice-squad player was elevated into a full list; the 47-player trim could drop an elevated player while still counting her elevation.
+2. Waiver priority was a seeded shuffle; now last season's draft order for four weeks, then the standings, Tour clubs in their prior draft bands (reading L1, owner question).
+3. Midseason signings could be multi-year; the document says they expire at year close. `Ledger.sign` now rejects them and `World.offer` offers one year.
+4. `Ledger.new_year` left players on waivers with expired contracts (not reachable through the World, which clears the wire first); they now clear to free agency.
+5. Trade proposals depended on set iteration order (hash randomisation) when a club held two picks of the same round and year; found by the 22-player restore soak, reproduced, fixed, tested.
+
+Not built, listed so nothing is claimed that is not there: extensions, postseason-only replacements, restructuring a future year's base. The committed-money cache `Club._cmap` is still part of the state digest (a derived cache; coherent in every sequence run; excluding it needs a digest-algorithm and schema change, recommended for the next format change).
+
+**What this does to the open item (section 2).** Nothing changes its status. A second source of process-to-process difference was found and fixed in the simulation, but the original failure compared a decoded state with the state exported and stepped no event, so this defect cannot be its cause.

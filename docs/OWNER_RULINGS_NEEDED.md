@@ -112,3 +112,20 @@ The owner approved the recommended defaults with clarifications. Nothing was bro
 - Camp opens three to four weeks (20 to 26 days, depending on the year) before the final cut and the upgrade signings happen in that window; the cap timing rule (top-count until the final cut) lasts exactly that long. A shorter camp shortens the window in which clubs sign and then cut down.
 - The venue vote on 15 June falls 6 to 12 days before the cut and 10 to 16 days before the season; moving it only moves a headline.
 - Because the real-time clock is deferred, none of this fixes how long any date lasts in real time. If the owner later wants the offseason to take a different share of the real season (the ≈50-hour target is provisional) that is a pacing choice, not a change to these dates.
+
+---
+
+## Ledger questions arising from Step 7 verification (2026-10-30)
+
+New. Each is a reading of existing spec text, or an item the spec lists but the build does not yet have. Nothing here blocks anything; each can be changed later. Details in `docs/STEP7_LEDGER_VERIFICATION.md`. The builder's choice is built and tested, and is the recommended default in every case.
+
+**L1. Waiver claim order (§11, "Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands").**
+Built: worst record claims first, as in the draft. Weeks 1 to 4 use last season's draft order; from week 5 the clubs at home are ordered by the current standings, worst first, and each of the eight Tour clubs keeps the place her prior draft band gave her (the Tour clubs' bands are the first eight places of that draft). The standings used are those of the league weeks finished before the paid week being processed. In the first season there is no earlier draft, so club-id order stands in until week 5. *Gameplay effect:* the weakest clubs get first call on released players, with the Tour clubs ahead of everyone in the early weeks. *Alternative:* Tour clubs placed by their own Tour record, or at the back.
+
+**L2. Split release (§11, "one release's uncharged bonus accelerates 50/50 across the current and next year instead of in full").**
+Built: the release year's own bonus portion stays in that year (it is already part of that year's cap hit); the later portions divide 50/50 between that year and the next. *Alternative:* divide the whole uncharged bonus, this year's portion included. The two differ by half of the release year's own portion, so the saving is a little larger under the alternative.
+
+**L3. First-round option (§11, "First-round option salary $35").**
+Built: every first-round pick has a fifth year at $35, automatically. The document does not say who decides or when. *Alternative:* the club decides after the third season (a transaction with its own cap and viability checks); a declined option makes the player a free agent a year earlier.
+
+**L4. Items the document lists that are not built yet:** extensions ("two completed seasons and mutual consent"), postseason-only replacements ("one salary-week equivalent"), restructuring a future year's base. Say which are wanted before they are built; extensions in particular change how clubs keep players, and today every contract simply runs out.

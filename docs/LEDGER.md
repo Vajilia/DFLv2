@@ -32,3 +32,7 @@ Retired by Ed 8.8/8.9: A3 (floor supplement exempt from the gate), A5-old (overa
 
 ## Not evidence for
 The world driving the soak (player ratings, aging, prices, trades, injuries) is a placeholder. It shows the rules cannot jam or be broken; it says nothing about market realism (open item 3).
+
+## Step 7 verification (2026-10-30)
+
+The ledger was re-verified against an independent model written from the Design Document; five defects were fixed and three listed items remain unbuilt. See `docs/STEP7_LEDGER_VERIFICATION.md`.

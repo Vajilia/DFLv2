@@ -51,6 +51,8 @@ def ask(player):
 
 
 class World:
+    waiver_priority = None      # club ids, first claim first: set by the league that owns the calendar and the standings (year.Universe); None: by id
+
     def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False, priority=(), cap=None):
         self.rng = random.Random(seed)
         self.dev_rng = random.Random(f"{seed}|develop")
@@ -232,9 +234,10 @@ class World:
         r = self.rng
         reck = cid in self.reckless
         a = value if value is not None else self.quote(cid, p)
+        midseason = self.L.week > 0                        # section 11: a midseason deal pays the weeks that remain and expires at year close
         if a <= R.MIN_SALARY or round(self.view(cid, p)) < 56:
-            return Contract(self.L.year, (R.MIN_SALARY,) * r.choice((1, 1, 2)), (), (), self.L.week)
-        n = r.choice((1, 2, 3, 4, 5)) if not reck else 5
+            return Contract(self.L.year, (R.MIN_SALARY,) * (1 if midseason else r.choice((1, 1, 2))), (), (), self.L.week)
+        n = 1 if midseason else (r.choice((1, 2, 3, 4, 5)) if not reck else 5)
         bf = F(r.randint(30, 60), 100) if reck else F(r.randint(0, 20), 100)
         gf = F(r.randint(50, 100), 100) if reck else F(r.randint(0, 30), 100)
         shape = r.choice(("steady", "rising", "declining"))
@@ -478,6 +481,12 @@ class World:
         governance.turn_year(self)
         coaching.turn_year(self)
 
+    def waiver_order(self):
+        """The claim order for the waiver period (section 12). The league layer sets `waiver_priority`; a bare World, which has no standings,
+        uses club id order, so a soak is deterministic and draws no random numbers for it."""
+        order = list(self.waiver_priority or [])
+        return order + [c for c in sorted(self.L.clubs) if c not in order]
+
     def pre_draft_trim(self):
         L = self.L
         for cid in L.clubs:
@@ -485,8 +494,7 @@ class World:
                 if not self.drop_weakest(cid, keep_minimums=False):
                     break
         # waivers clear
-        order = sorted(L.clubs)
-        self.rng.shuffle(order)
+        order = self.waiver_order()
         self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: self.view(cid, p) > 62 and self.rng.random() < 0.3))
 
     def start_draft(self, order=None, comps=()):
@@ -693,8 +701,7 @@ class World:
         self.games(week, playing)
         if week <= R.TRADE_LAST_PAID_WEEK:
             self.trades()
-        order = sorted(L.clubs)
-        rng.shuffle(order)
+        order = self.waiver_order()
         self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: self.view(cid, p) > 65 and rng.random() < 0.2))
         self.top_up_pool()
         for cid in L.clubs:

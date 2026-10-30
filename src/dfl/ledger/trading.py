@@ -195,7 +195,7 @@ def _assets(world, cid, used, taken_ids, taken_picks):
         if diff < 0:
             chips.append((diff, pid))
     out = [("p", i) for _, i in sorted(chips)]
-    out += [("k", k) for k in sorted(world.L.clubs[cid].picks, key=lambda k: (-k[1], -k[0]))
+    out += [("k", k) for k in sorted(world.L.clubs[cid].picks, key=lambda k: (-k[1], -k[0], k[2]))      # k[2], the original club, makes the order total: a set's order is not
             if world.L.draft_completed < k[0] <= world.L.draft_completed + 3 and k not in taken_picks]
     return out
 
