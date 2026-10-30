@@ -49,7 +49,7 @@ from dfl import persist
 from dfl.year import Universe
 u = Universe(%r, seed=3, engine=False, archive=False)
 out = []
-for _ in range(49):
+for _ in range(47):
     u.step_event()
     out.append(persist.journal_digest(u)[:12])
 print(",".join(out))
@@ -64,7 +64,7 @@ print(",".join(out))
             o, e = p.communicate()
             self.assertEqual(p.returncode, 0, e[-1500:])
             outs.append(o.strip().split(","))
-        self.assertEqual(len(outs[0]), 49)
+        self.assertEqual(len(outs[0]), 47)
         self.assertEqual(outs[0], outs[1])
 
 

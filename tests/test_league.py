@@ -23,9 +23,9 @@ def spec_bed(conf, div, n):
 
 def run(seasons, seed):
     tpl = league.Template(TABLES)
-    state, rng, res, hist, out = tpl.initial_state(), random.Random(seed), PlaceholderResolver(), {}, []
+    state, rng, res, out = tpl.initial_state(), random.Random(seed), PlaceholderResolver(), []
     for s in range(1, seasons + 1):
-        r, state = league.play_season(tpl, state, s, res, rng, hist, seed=f"t{seed}")
+        r, state = league.play_season(tpl, state, s, res, rng, seed=f"t{seed}")
         out.append(r)
     return tpl, out, state
 
@@ -63,15 +63,15 @@ class Loop(unittest.TestCase):
         _, a, _ = run(6, 7)
         _, b, _ = run(6, 7)
         _, c, _ = run(6, 8)
-        key = lambda rs: [(r["coronation_venue"], r["coronation_winner"], r["outcome"]["exiled"]) for r in rs]
+        key = lambda rs: [(r["coronation_designation"], r["coronation_winner"], r["outcome"]["exiled"]) for r in rs]
         self.assertEqual(key(a), key(b))
         self.assertNotEqual(key(a), key(c))
 
     def test_state_handoff_each_season(self):
         tpl = league.Template(TABLES)
-        state, rng, res, hist = tpl.initial_state(), random.Random(3), PlaceholderResolver(), {}
+        state, rng, res = tpl.initial_state(), random.Random(3), PlaceholderResolver()
         for s in range(1, 25):
-            r, new = league.play_season(tpl, state, s, res, rng, hist)
+            r, new = league.play_season(tpl, state, s, res, rng)
             for dv in league.DIVISIONS:
                 order = r["outcome"]["division_orders"][dv]
                 self.assertEqual([new[dv]["seeds"][i] for i in (1, 2, 3, 4)], order[:4])
@@ -86,8 +86,8 @@ class Loop(unittest.TestCase):
         for r in rs:
             self.assertEqual(len(r["games"]), 360)
             for conf, seeds in r["outcome"]["seeds"].items():
-                self.assertEqual(len(seeds), 7)
-            self.assertEqual(len(r["playoff_log"]), 2 * 6)          # 3 + 2 + 1 games per conference
+                self.assertEqual(len(seeds), 6)
+            self.assertEqual(len(r["playoff_log"]), 2 * 5)          # 2 + 2 + 1 games per conference
             self.assertTrue(all(a != b for _, _, _, a, b in r["playoff_log"]))   # no tied playoff games
 
     def test_tables_validate_for_20_seasons(self):
@@ -100,13 +100,16 @@ class Loop(unittest.TestCase):
                                    capture_output=True, text=True)
                 self.assertEqual(p.returncode, 0, p.stdout[-800:])
 
-    def test_coronation_window_over_120_seasons(self):
+    def test_the_coronation_is_at_the_one_permanent_venue_every_season_and_always_has_a_saved_designation(self):
         _, rs, _ = run(120, 4)
-        yrs = {}
+        homes = set()
         for r in rs:
-            yrs.setdefault(r["coronation_venue"], []).append(r["year"])
-        for v, ys in yrs.items():
-            self.assertTrue(all(b - a >= 40 for a, b in zip(ys, ys[1:])), v)
+            self.assertEqual(r["coronation_venue"], "Amethyst Aloha Stadium")
+            d = r["coronation_designation"]
+            self.assertEqual(d["through_week"], 4)
+            self.assertEqual(r["coronation_home"], r["champions"][d["home_conference"]])
+            homes.add(d["home_conference"])
+        self.assertEqual(homes, {"Western", "Eastern"})
 
 
 if __name__ == "__main__":
@@ -166,5 +169,5 @@ class TourBowlAndDraftOrder(unittest.TestCase):
         for r in self.res:
             o = r["draft_order"]
             exiled = set(r["outcome"]["exiled"].values())
-            non_playoff_end = 8 + 26
+            non_playoff_end = 8 + 28
             self.assertTrue(exiled <= set(o[8:non_playoff_end]))

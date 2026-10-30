@@ -133,23 +133,29 @@ class Cascade(unittest.TestCase):
     def test_conference_steps_skipped_across_conferences(self):
         t = {"A": ("W", "N"), "B": ("E", "N")}
         rec = self.mk({"A": dict(w=10, l=8, cw=9, cl=3, pf=300, pa=290), "B": dict(w=10, l=8, cw=3, cl=9, pf=320, pa=290)})
-        self.assertEqual(S.rank(["A", "B"], rec, t), ["B", "A"])   # falls to SOS (equal), then point differential
+        self.assertEqual(S.rank(["A", "B"], rec, t), ["B", "A"])   # conference steps skipped: point differential decides
 
-    def test_sos_higher_is_better_then_pd_then_sov(self):
-        t = {"A": ("W", "N"), "B": ("W", "N")}
-        strong, weak, o = "S", "K", None
-        t.update({"S": ("E", "N"), "K": ("E", "N")})
+    def test_cascade_order_is_point_differential_then_sos_then_sov_then_draw(self):
+        # owner ruling (Edition 8.55): the league-wide cascade is wins, win %, division, conference, POINT DIFFERENTIAL, strength of
+        # schedule, strength of victory, seeded draw. Edition 8.54 ranked strength of schedule before point differential.
+        T = {"A": ("W", "N"), "B": ("E", "N"), "S": ("E", "N"), "K": ("E", "N")}
         base = dict(w=10, l=8)
         rec = self.mk({
             "A": dict(base, opps=["S"], beaten=[], pf=300, pa=300),
             "B": dict(base, opps=["K"], beaten=[], pf=400, pa=300),
             "S": dict(w=12, l=6), "K": dict(w=6, l=12)})
-        self.assertEqual(S.rank(["A", "B"], rec, {"A": ("W", "N"), "B": ("E", "N"), "S": ("E", "N"), "K": ("E", "N")}), ["A", "B"])
-        rec["A"].opps = rec["B"].opps = ["S"]
-        self.assertEqual(S.rank(["A", "B"], rec, {"A": ("W", "N"), "B": ("E", "N"), "S": ("E", "N"), "K": ("E", "N")}), ["B", "A"])
+        self.assertEqual(S.rank(["A", "B"], rec, T), ["B", "A"])        # B has the worse schedule but the better differential
         rec["A"].pf = rec["B"].pf = 300
-        rec["A"].beaten, rec["B"].beaten = ["S"], ["K"]
-        self.assertEqual(S.rank(["A", "B"], rec, {"A": ("W", "N"), "B": ("E", "N"), "S": ("E", "N"), "K": ("E", "N")}), ["A", "B"])
+        self.assertEqual(S.rank(["A", "B"], rec, T), ["A", "B"])        # equal differential: A's opponents were stronger
+        rec["A"].opps = rec["B"].opps = ["S"]
+        rec["A"].beaten, rec["B"].beaten = ["K"], ["S"]
+        self.assertEqual(S.rank(["A", "B"], rec, T), ["B", "A"])        # equal schedule: B beat the stronger opponent
+        rec["A"].beaten = ["S"]
+        draws = {tuple(S.rank(["A", "B"], rec, T, f"s{i}")) for i in range(60)}
+        self.assertEqual(draws, {("A", "B"), ("B", "A")})               # everything equal: only the seeded draw is left
+
+    def test_stages_after_differential_are_in_the_documented_order(self):
+        self.assertEqual(S.CASCADE[-4:], ("point_differential", "strength_of_schedule", "strength_of_victory", "seeded_draw"))
 
     def test_seeded_draw_is_deterministic_and_fair_ish(self):
         t = {c: ("W", "N") for c in "ABCDE"}
@@ -183,7 +189,7 @@ def load_schedule():
 class Playoffs(unittest.TestCase):
     def test_division_winner_seeds_above_better_wild_card(self):
         # Division N's best club is 8-10; three other divisions each hold a 12-6 runner-up. The weak winner is
-        # still seed 4 and the 12-6 runners-up are wild cards 5-7.
+        # still seed 4 and two of the three 12-6 runners-up are the wild cards 5 and 6.
         t, rec = {}, {}
 
         def add(c, dv, w):
@@ -199,7 +205,8 @@ class Playoffs(unittest.TestCase):
         seeds = S.conference_seeds("W", t, rec, orders, "z")
         self.assertEqual(seeds[3], "N1")
         self.assertEqual({s[0] for s in seeds[:3]}, {"S", "E", "C"})
-        self.assertEqual({s for s in seeds[4:]}, {"S2", "E2", "C2"})
+        self.assertEqual(len(seeds), 6)
+        self.assertTrue(set(seeds[4:]) < {"S2", "E2", "C2"} and len(set(seeds[4:])) == 2)
 
     def test_last_place_club_cannot_take_a_wild_card(self):
         # Division N's five clubs all finish 10-8, so its last place (n5, worst division record) could outrank
@@ -224,15 +231,20 @@ class Playoffs(unittest.TestCase):
         self.assertEqual(orders[("W", "N")][-1], "n5")
         seeds = S.conference_seeds("W", t, rec, orders, "z")
         self.assertNotIn("n5", seeds)
-        self.assertEqual(len(seeds), 7)
+        self.assertEqual(len(seeds), 6)
         for dv in "NSEC":
             self.assertNotIn(orders[("W", dv)][-1], seeds)
 
     def test_bracket_shape_and_home(self):
-        self.assertEqual(S.wild_card_pairs(), [(2, 7), (3, 6), (4, 5)])
-        self.assertEqual(S.divisional_pairs([1, 4, 5, 7]), [(1, 7), (4, 5)])
-        self.assertEqual(S.divisional_pairs([1, 2, 3, 4]), [(1, 4), (2, 3)])
+        # six clubs a conference; seeds 1 and 2 have a bye; 3 hosts 6 and 4 hosts 5
+        self.assertEqual(S.wild_card_pairs(), [(3, 6), (4, 5)])
+        # divisional round reseeded: 1 hosts the lowest surviving seed, 2 hosts the other survivor
+        for left, want in (([3, 4], [(1, 4), (2, 3)]), ([3, 5], [(1, 5), (2, 3)]), ([6, 4], [(1, 6), (2, 4)]), ([6, 5], [(1, 6), (2, 5)])):
+            self.assertEqual(S.divisional_pairs([1, 2] + left), want)
+        with self.assertRaises(AssertionError):
+            S.divisional_pairs([1, 3, 4, 5])                    # seed 2 always survives to this round
         self.assertEqual(S.host(6, 3), 3)
+        self.assertEqual(S.host(2, 5), 2)                       # the higher remaining seed hosts the conference championship
 
 
 class Rotation(unittest.TestCase):
@@ -243,21 +255,103 @@ class Rotation(unittest.TestCase):
         self.assertEqual(n["ambassador"], "e")
 
 
-class Coronation(unittest.TestCase):
-    def test_forty_year_window(self):
-        venues = [f"V{i:02d}" for i in range(48)]
-        hist = {}
-        for y in range(2000, 2400):
-            el = S.coronation_eligible(hist, venues, y)
-            if y >= 2000 + 39:
-                self.assertEqual(len(el), 9, y)
-            pick = S.coronation_pick(hist, venues, y, "t")
-            self.assertEqual(pick, S.coronation_pick(hist, venues, y, "t"))
-            hist[y] = pick
-        for v in venues:
-            yrs = sorted(y for y, x in hist.items() if x == v)
-            self.assertTrue(all(b - a >= 40 for a, b in zip(yrs, yrs[1:])), v)
-        self.assertEqual(len(set(hist.values())), 48)    # every venue gets its turn within 400 years
+def WG(week, away, home, sa, sh):
+    return {"week": week, "away": away, "home": home, "away_score": sa, "home_score": sh}
+
+
+class CoronationDesignation(unittest.TestCase):
+    """Week 4 designation (Edition 8.55): the conferences, pooled over the opening four weeks' interconference games, are two aggregate
+    teams ranked by the cascade without its division and conference steps; the winner's finalist is the Coronation's nominal home."""
+
+    T = {"a": ("W", "x"), "b": ("W", "x"), "e": ("W", "x"), "c": ("E", "y"), "d": ("E", "y"), "f": ("E", "y")}
+
+    def balanced(self):
+        """One win each, point differential 0, equal strength of schedule (2/3 each); the Western opponents' victories were over the stronger club."""
+        return [WG(1, "a", "c", 10, 7), WG(2, "d", "b", 10, 7), WG(3, "c", "f", 14, 3), WG(3, "a", "e", 14, 3)]
+
+    def test_wins_decide_first(self):
+        g = [WG(1, "a", "c", 10, 7), WG(2, "b", "d", 24, 3), WG(3, "e", "f", 20, 0), WG(4, "c", "a", 9, 3)]    # West wins 3 of the 4 pooled games
+        r = S.conference_designation(self.T, g, "s")
+        self.assertEqual((r["home_conference"], r["decided_by"]), ("W", "wins"))
+        self.assertEqual((r["conferences"]["W"]["w"], r["conferences"]["W"]["l"], r["interconference_games"]), (3, 1, 4))
+
+    def test_win_percentage_cannot_separate_two_conferences_whose_wins_tie(self):
+        # every pooled game is one conference's win and the other's loss, so equal wins imply equal losses and equal percentages
+        r = S.conference_designation(self.T, self.balanced(), "s")
+        self.assertEqual(r["conferences"]["W"]["win_pct"], r["conferences"]["E"]["win_pct"])
+        self.assertNotEqual(r["decided_by"], "win_pct")
+
+    def test_point_differential_decides_when_wins_tie(self):
+        g = [WG(1, "a", "c", 20, 7), WG(2, "d", "b", 10, 7)]
+        r = S.conference_designation(self.T, g, "s")
+        self.assertEqual((r["home_conference"], r["decided_by"], r["conferences"]["W"]["pd"]), ("W", "point_differential", 10))
+        self.assertEqual(r["conferences"]["E"]["pd"], -10)
+
+    def test_strength_of_schedule_aggregation(self):
+        # wins tie 1-1 and the differential is 0. West's opponents (one entry per decided pooled game) are c and d, East's are a and b, each
+        # with her whole record through Week 4: c 1-1, d 1-0 against a 2-0, b 0-1 (the games of week 3 are inside the conferences).
+        g = self.balanced()[:3]                                            # no a>e: a is 1-0
+        r = S.conference_designation(self.T, g, "s")
+        self.assertEqual(r["conferences"]["W"]["sos"], "2/3")             # (1+1) wins over (2+1) decisions
+        self.assertEqual(r["conferences"]["E"]["sos"], "1/2")             # a 1-0 and b 0-1
+        self.assertEqual((r["home_conference"], r["decided_by"]), ("W", "strength_of_schedule"))
+
+    def test_strength_of_victory_aggregation(self):
+        r = S.conference_designation(self.T, self.balanced(), "s")
+        self.assertEqual((r["conferences"]["W"]["sos"], r["conferences"]["E"]["sos"]), ("2/3", "2/3"))
+        self.assertEqual((r["conferences"]["W"]["sov"], r["conferences"]["E"]["sov"]), ("1/2", "0"))     # West beat c (1-1); East beat b (0-1)
+        self.assertEqual((r["home_conference"], r["decided_by"]), ("W", "strength_of_victory"))
+
+    def test_seeded_draw_when_everything_ties_and_it_is_reproducible(self):
+        none = S.conference_designation(self.T, [], "s1")
+        self.assertEqual((none["decided_by"], none["interconference_games"]), ("seeded_draw", 0))
+        self.assertEqual(none, S.conference_designation(self.T, [], "s1"))
+        seen = {S.conference_designation(self.T, [], f"s{i}")["home_conference"] for i in range(80)}
+        self.assertEqual(seen, {"W", "E"})                                # either conference can win the draw, seed by seed
+
+    def test_only_the_first_four_weeks_and_only_interconference_games_count(self):
+        base = S.conference_designation(self.T, self.balanced(), "s")
+        later = self.balanced() + [WG(5, "c", "a", 40, 0), WG(9, "d", "b", 40, 0), WG(18, "f", "e", 40, 0)]    # East wins, everything after Week 4
+        inner = self.balanced() + [WG(2, "a", "b", 50, 0), WG(4, "c", "d", 50, 0)]                            # inside conferences: not pooled
+        self.assertEqual(S.conference_designation(self.T, later, "s"), base)
+        got = S.conference_designation(self.T, inner, "s")
+        self.assertEqual(got["interconference_games"], 2)
+        for c in ("W", "E"):                                              # the pooled totals are untouched (opponents' records may move)
+            for f in ("w", "l", "t", "pf", "pa", "pd"):
+                self.assertEqual(got["conferences"][c][f], base["conferences"][c][f])
+
+    def test_a_tie_is_not_played_for_wins_losses_or_opponents_but_its_points_count(self):
+        g = [WG(1, "a", "c", 17, 17), WG(2, "d", "b", 9, 6)]
+        r = S.conference_designation(self.T, g, "s")
+        w, e = r["conferences"]["W"], r["conferences"]["E"]
+        self.assertEqual((w["w"], w["l"], w["t"], e["w"], e["l"], e["t"]), (0, 1, 1, 1, 0, 1))
+        self.assertEqual((w["pf"], w["pa"], e["pf"], e["pa"]), (23, 26, 26, 23))
+        self.assertEqual(w["sos"], "1")                                   # only the decided game counts: opponent d is 1-0
+        self.assertEqual((r["home_conference"], r["decided_by"]), ("E", "wins"))
+
+    def test_game_order_does_not_matter(self):
+        rng = random.Random(8)
+        g = self.balanced()
+        for _ in range(10):
+            rng.shuffle(g)
+            self.assertEqual(S.conference_designation(self.T, g, "s"), S.conference_designation(self.T, self.balanced(), "s"))
+
+    def test_real_schedule_pools_eighty_games_and_the_two_conferences_mirror_each_other(self):
+        teams, sched = load_schedule()
+        rng = random.Random(4)
+        pooled = [r for r in sched if int(r["week"]) <= 4 and teams[r["away"]][0] != teams[r["home"]][0]]
+        self.assertEqual(len(pooled), 80)
+        seen = set()
+        for n in range(60):
+            games = S.random_results(sched, rng, {c: rng.gauss(0, 1) for c in teams}, tie_rate=0.03)
+            r = S.conference_designation(teams, games, f"s{n}")
+            w, e = r["conferences"]["Western"], r["conferences"]["Eastern"]
+            self.assertEqual((r["interconference_games"], w["w"], w["l"], w["pd"]), (80, e["l"], e["w"], -e["pd"]))
+            self.assertEqual((w["w"] + w["l"] + w["t"], w["t"]), (80, e["t"]))
+            later = [dict(g, away_score=g["home_score"], home_score=g["away_score"]) if int(g["week"]) > 4 else g for g in games]
+            self.assertEqual(S.conference_designation(teams, later, f"s{n}"), r)          # nothing after Week 4 can move it
+            seen.add(r["home_conference"])
+        self.assertEqual(seen, {"Western", "Eastern"})
 
 
 class RealSchedule(unittest.TestCase):
@@ -282,7 +376,7 @@ class RealSchedule(unittest.TestCase):
                 self.assertEqual(sorted(o), sorted(c for c, d in teams.items() if d == dv))
                 self.assertEqual(o[-1], out["exiled"][dv])
             for conf, seeds in out["seeds"].items():
-                self.assertEqual(len(set(seeds)), 7)
+                self.assertEqual(len(set(seeds)), 6)
                 self.assertTrue(all(teams[c][0] == conf for c in seeds))
             # shuffling the game list changes nothing
             g2 = list(games)

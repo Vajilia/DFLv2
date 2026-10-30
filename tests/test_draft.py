@@ -65,14 +65,15 @@ class Order(unittest.TestCase):
     def test_elimination_rounds_from_a_playoff_log(self):
         log = []
         for conf, base in (("W", "w"), ("E", "e")):
-            log += [(conf, f"{base}7", f"{base}2", 10, 20), (conf, f"{base}6", f"{base}3", 10, 20), (conf, f"{base}5", f"{base}4", 10, 20),
-                    (conf, f"{base}4", f"{base}1", 10, 20), (conf, f"{base}3", f"{base}2", 10, 20), (conf, f"{base}2", f"{base}1", 10, 20)]
+            log += [(conf, f"{base}6", f"{base}3", 10, 20), (conf, f"{base}5", f"{base}4", 10, 20),            # wild card: 3 hosts 6, 4 hosts 5
+                    (conf, f"{base}4", f"{base}1", 10, 20), (conf, f"{base}3", f"{base}2", 10, 20),            # divisional: 1 v 4, 2 v 3 (reseeded)
+                    (conf, f"{base}2", f"{base}1", 10, 20)]                                                    # conference championship
         e = D.elimination_rounds(log, ("e1", "w1", 7, 14))
-        self.assertEqual(e["w7"], "wild_card")
-        self.assertEqual(e["w4"], "divisional")
+        self.assertEqual((e["w6"], e["w5"]), ("wild_card", "wild_card"))
+        self.assertEqual((e["w4"], e["w3"]), ("divisional", "divisional"))
         self.assertEqual(e["w2"], "conference")
         self.assertEqual((e["e1"], e["w1"]), ("runner_up", "champion"))
-        self.assertEqual(len(e), 14)
+        self.assertEqual(len(e), 12)                                    # six clubs a conference make the playoffs
 
     def test_slots_cover_seven_rounds(self):
         o = clubs(48)

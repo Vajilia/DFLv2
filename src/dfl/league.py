@@ -16,10 +16,11 @@ from . import standings
 from .schedule_bed_rotation import bed_of_division
 
 WEST = ["Northwest", "Southwest", "Central", "Southern"]
-EAST = ["Midwest", "Northeast", "East", "Southeast"]
+EAST = ["Great Lakes", "Atlantic", "Midland", "Southeast"]
 DIVISIONS = tuple((c, d) for c, ds in (("Western", WEST), ("Eastern", EAST)) for d in ds)   # founding bed order
 OTHER_TABLES = ("INTL_VENUES", "CALENDAR", "COLOR_REGISTRY")
 FOUNDING_YEAR = 2000
+CORONATION_VENUE = "Amethyst Aloha Stadium"       # the Diamond Coronation's permanent venue (section 3): owned and renovated by the DFL, always neutral
 
 
 def bed_of(conf, div, season):
@@ -118,8 +119,8 @@ def write_tables(tpl, directory, teams, sched, tour, year=None):
 
 
 def play_playoffs(seeds_by_conf, resolver, rng):
-    """NFL format on seed numbers 1-7 per conference. Returns (champions by conference, list of game records).
-    Playoff games have no ties; the higher seed hosts."""
+    """DFL format on seed numbers 1-6 per conference (seeds 1 and 2 have a bye; 3 hosts 6, 4 hosts 5; the divisional round is reseeded).
+    Returns (champions by conference, list of game records). Playoff games have no ties; the higher seed hosts."""
     log, champs = [], {}
     for conf, clubs in seeds_by_conf.items():
         by_seed = {i + 1: c for i, c in enumerate(clubs)}
@@ -132,7 +133,7 @@ def play_playoffs(seeds_by_conf, resolver, rng):
             return lo if hs > as_ else hi
 
         wc = [play(a, b) for a, b in standings.wild_card_pairs()]
-        survivors = [1] + wc
+        survivors = [1, 2] + wc
         winners = [play(a, b) for a, b in standings.divisional_pairs(survivors)]
         champs[conf] = by_seed[play(*sorted(winners))]
     return champs, log
@@ -151,8 +152,8 @@ class SeasonRun:
 
     TOUR_SLOTS = 7
 
-    def __init__(self, tpl, state, season, resolver, rng, history, seed="dfl", returner_block=True):
-        self.tpl, self.state, self.season, self.resolver, self.rng, self.history, self.seed = tpl, state, season, resolver, rng, history, seed
+    def __init__(self, tpl, state, season, resolver, rng, seed="dfl", returner_block=True):
+        self.tpl, self.state, self.season, self.resolver, self.rng, self.seed = tpl, state, season, resolver, rng, seed
         self.returner_block = returner_block        # the league's own setting (parity profile), used by its draft order
         self.year = FOUNDING_YEAR + season - 1
         self.cal = {r["note"]: r["sunday"] for r in C.season_weeks(self.year) if r["phase"] in ("postseason", "ambassadors")}   # round -> its Sunday
@@ -173,6 +174,7 @@ class SeasonRun:
         self._round = None
         self.bowl = None
         self.coronation = None
+        self.coronation_designation = None      # saved after Week 4 (`play_week`) and never recomputed
 
     # ---- venues
     def _draw_venues(self):
@@ -189,7 +191,16 @@ class SeasonRun:
             g = dict(r, away_score=a, home_score=h)
             self.games.append(g)
             out.append(g)
+        if numbered_week == standings.CORONATION_AGGREGATE_WEEKS:
+            self.designate_coronation_home()
         return out
+
+    def designate_coronation_home(self):
+        """Decide, once and from Weeks 1-4 alone, which conference's finalist is the Coronation's nominal home (standings.conference_designation).
+        The record is frozen: a second call returns the saved one."""
+        if self.coronation_designation is None:
+            self.coronation_designation = standings.conference_designation(self.active, self.games, f"{self.seed}|season{self.season}")
+        return self.coronation_designation
 
     def play_tour_round(self, i):
         out = []
@@ -217,7 +228,7 @@ class SeasonRun:
         assert len(self.games) == len(self.sched), "regular season not finished"
         self.outcome = standings.season_outcome(self.active, self.games, f"{self.seed}|season{self.season}")
         self.by_seed = {conf: {i + 1: c for i, c in enumerate(clubs)} for conf, clubs in self.outcome["seeds"].items()}
-        self.alive = {conf: [1, 2, 3, 4, 5, 6, 7] for conf in self.by_seed}
+        self.alive = {conf: [1, 2, 3, 4, 5, 6] for conf in self.by_seed}
         return self.outcome
 
     # ---- playoffs
@@ -236,7 +247,7 @@ class SeasonRun:
         for conf in self.by_seed:
             if name == "wild_card":
                 wc = [self._play(conf, a, b) for a, b in standings.wild_card_pairs()]
-                self.alive[conf] = [1] + wc
+                self.alive[conf] = [1, 2] + wc
             elif name == "divisional":
                 self.alive[conf] = [self._play(conf, a, b) for a, b in standings.divisional_pairs(self.alive[conf])]
             else:
@@ -267,39 +278,24 @@ class SeasonRun:
                      "venue": self.venues["BOWL"], "staff_clubs": {conf: clubs[0] for conf, clubs in by_conf.items()}}      # each conference's best Tour club supplies its coaches
         return self.bowl
 
-    def coronation_venue(self):
-        venues = sorted({self.tpl.venue[c] for c in self.tpl.division_of})
-        return standings.coronation_pick(self.history, venues, self.year, self.seed)
-
     def play_coronation(self):
-        venue = self.coronation_venue()
-        self.history[self.year] = venue
-        away, home, host = self.coronation_sides(venue)
-        res = self.resolver.resolve({"away": away, "home": home, "neutral": host is None, "id": "coronation", "kind": "coronation",
+        """The Diamond Coronation: always at CORONATION_VENUE and always neutral (no home-field edge in the engine). The designation made after
+        Week 4 only names the nominal home finalist, which controls the established kickoff and uniform rules."""
+        assert self.coronation_designation is not None, "the Week 4 designation precedes the Coronation"
+        away, home = self.coronation_sides()
+        res = self.resolver.resolve({"away": away, "home": home, "neutral": True, "id": "coronation", "kind": "coronation",
                                      "date": self.cal["Diamond Coronation"]},
                                     self.rng, decisive=True)
-        self.coronation = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "venue": venue,
-                           "home_club": host, "neutral": host is None, "winner": home if res[1] > res[0] else away}
+        self.coronation = {"away": away, "home": home, "away_score": res[0], "home_score": res[1], "venue": CORONATION_VENUE,
+                           "neutral": True, "home_conference": self.coronation_designation["home_conference"],
+                           "winner": home if res[1] > res[0] else away}
         return self.coronation
 
-    def coronation_sides(self, venue):
-        """(away, home, host) for the Coronation at `venue` (section 3). A finalist whose own venue won the vote plays at home and
-        hosts; that is the only home-field case. Otherwise the venue is neutral: host is None, no home-field edge is given, and the
-        nominal home is the higher seed (the lower seed number in its conference), with a seeded draw when the seeds are equal.
-        If both finalists share the winning venue it is neither's alone, so it is treated as neutral too."""
-        finalists = sorted(self.champs.values())
-        owners = [c for c in finalists if self.tpl.venue[c] == venue]
-        if len(owners) == 1:
-            host = owners[0]
-            other = next(c for c in finalists if c != host)
-            return other, host, host
-        seed_of = {self.by_seed[conf][s]: s for conf in self.by_seed for s in self.by_seed[conf]}
-        w, e = self.champs["Western"], self.champs["Eastern"]
-        if seed_of[w] != seed_of[e]:
-            home = w if seed_of[w] < seed_of[e] else e
-        else:
-            home = random.Random(f"{self.seed}|corhome|{self.year}").choice([w, e])
-        return (e if home == w else w), home, None
+    def coronation_sides(self):
+        """(away, home) for the Coronation: the finalist from the conference designated after Week 4 is the nominal home."""
+        conf = self.coronation_designation["home_conference"]
+        other = next(c for c in self.champs if c != conf)
+        return self.champs[other], self.champs[conf]
 
     # ---- hand-off
     def draft_order(self, returning=None):
@@ -322,15 +318,16 @@ class SeasonRun:
         c = self.coronation
         result = {"season": self.season, "year": self.year, "teams": self.teams, "schedule": self.sched, "tour": self.tour,
                   "games": self.games, "outcome": self.outcome, "champions": self.champs, "playoff_log": self.playoff_log,
-                  "coronation_venue": c["venue"], "coronation_home_club": c["home_club"], "coronation_winner": c["winner"],
+                  "coronation_venue": c["venue"], "coronation_designation": self.coronation_designation, "coronation_home": c["home"],
+                  "coronation_winner": c["winner"],
                   "tour_games": self.tour_games, "bowl": self.bowl, "venues": self.venues, "draft_order": self.draft_order()}
         return result, new_state
 
 
-def play_season(tpl, state, season, resolver, rng, history, seed="dfl"):
-    """Play one whole season in one call. Returns (result dict, next state). `history` maps year -> Coronation venue
-    (mutated). The year loop (year.py) uses SeasonRun directly so events fire on their calendar dates."""
-    run = SeasonRun(tpl, state, season, resolver, rng, history, seed)
+def play_season(tpl, state, season, resolver, rng, seed="dfl"):
+    """Play one whole season in one call. Returns (result dict, next state). The year loop (year.py) uses SeasonRun directly so events fire
+    on their calendar dates."""
+    run = SeasonRun(tpl, state, season, resolver, rng, seed)
     for n in sorted(run.week_rows):
         run.play_week(n)
     for i in range(1, 8):

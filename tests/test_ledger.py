@@ -97,7 +97,7 @@ class ContractMath(unittest.TestCase):
     def test_rookie_scale(self):
         self.assertEqual(rookie_contract(2000, 1).years, (25,) * 4)
         self.assertEqual(rookie_contract(2000, 7).years, (5,) * 4)
-        self.assertEqual(rookie_contract(2000, 1, True).years[-1], 35)
+        self.assertEqual((rookie_contract(2000, 1, True).years, rookie_contract(2000, 1, True).option), ((25,) * 4, 35))      # Ed 8.55: a pending club option, not a covered year
 
 
 class Rosters(unittest.TestCase):

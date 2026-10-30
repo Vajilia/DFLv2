@@ -113,7 +113,7 @@ class Generators(unittest.TestCase):
 class Coverage(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.u = league(events=14)                    # past the venue vote, so a season run exists
+        cls.u = league(events=14)                    # past week 1 of the season, so a season run exists
         assert cls.u.run is not None
 
     def targets(self):

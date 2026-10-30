@@ -2,7 +2,7 @@
 
 Calendar (pure functions, 400 consecutive years including leap years and every possible Coronation date): the 27-week year, the
 Coronation as the last Sunday, the fixed offsets, breaks, byes, Tour rounds, offseason order and weekday rules.
-Controller (`Universe.step_event`, three whole years, placeholder resolver so it is fast): each of the 49 events fires once on its calendar
+Controller (`Universe.step_event`, three whole years, placeholder resolver so it is fast): each of the 47 events fires once on its calendar
 date, the paid-week count and the trade window follow the calendar, every game is scheduled on its own calendar date in its own year,
 every club's bye is in the week the calendar assigns to its seed, and a year's totals are the spec's."""
 import csv
@@ -73,21 +73,20 @@ class CalendarShape(unittest.TestCase):
             self.assertEqual((d1 + dt.timedelta(days=7)).month, 5)                   # and the last one: the next is in May
             self.assertEqual((ev["draft_rounds_2_3"] - d1).days, 1)
             self.assertEqual((ev["draft_rounds_4_7"] - d1).days, 2)
-            self.assertEqual((ev["camp_open"], ev["venue_vote"]), (dt.date(y, 6, 1), dt.date(y, 6, 15)))
+            self.assertEqual(ev["camp_open"], dt.date(y, 6, 1))
             w1 = C.week1_saturday(y)
             self.assertEqual((w1 - ev["final_cuts"]).days, 4)                        # the Tuesday before week 1 (a Saturday)
             self.assertEqual((ev["final_cuts"].weekday(), ev["waivers_clear"].weekday()), (1, 2))
             self.assertEqual((ev["waivers_clear"] - ev["final_cuts"]).days, 1)
-            self.assertLess(ev["venue_vote"], ev["final_cuts"])                       # the vote precedes the cut and the season
+            self.assertLess(ev["camp_open"], ev["final_cuts"])
             self.assertLess(ev["waivers_clear"], w1)
             self.assertEqual(ev["year_close"], dt.date(y, 12, 31))
-            self.assertEqual(ev["venue_announce"], dt.date(y, 7, 4))
 
-    def test_there_are_49_events_a_year_and_none_share_a_name(self):
+    def test_there_are_47_events_a_year_and_none_share_a_name(self):
         for y in (2000, 2001, 2004, 2100, 2399):
             ev = C.year_events(y)
-            self.assertEqual(len(ev), 49)
-            self.assertEqual(len({k for _, k, *_ in ev}), 49)
+            self.assertEqual(len(ev), 47)
+            self.assertEqual(len({k for _, k, *_ in ev}), 47)
             self.assertEqual([d for d, *_ in ev], sorted(d for d, *_ in ev))
             self.assertTrue(all(dt.date(y, 1, 1) <= d <= dt.date(y, 12, 31) for d, *_ in ev))
 
@@ -147,12 +146,12 @@ class Controller(unittest.TestCase):
             key = cls.u.step_event()
             cls.trace.append((cls.u.fired[-1][0], key, cls.u.paid_week, cls.u.L.trade_open(), cls.u.world.stats["trades"]))
 
-    def test_each_year_fires_its_49_events_once_on_their_dates(self):
+    def test_each_year_fires_its_47_events_once_on_their_dates(self):
         for y in (2000, 2001, 2002):
             fired = [(d, k) for yy, d, k in self.u.fired if yy == y]
             self.assertEqual(fired, [(d.isoformat(), k) for d, k, *_ in C.year_events(y)])
-            self.assertEqual(len(fired), 49)
-        self.assertEqual(len(self.u.fired), 3 * 49)
+            self.assertEqual(len(fired), 47)
+        self.assertEqual(len(self.u.fired), 3 * 47)
         self.assertIsNone(self.u.cursor)                               # the last year closed
 
     def test_results_and_honours_close_on_31_december_whatever_day_the_coronation_fell(self):
@@ -209,9 +208,9 @@ class Controller(unittest.TestCase):
             res = r["result"]
             self.assertEqual(len(res["games"]), 360)                       # 40 active clubs x 18 games / 2
             self.assertEqual(len(res["tour_games"]), 28)
-            self.assertEqual(len(res["playoff_log"]), 12)                  # 3 + 2 + 1 games a conference
+            self.assertEqual(len(res["playoff_log"]), 10)                  # 2 + 2 + 1 games a conference
             self.assertEqual(r["bowl"]["neutral"], True)
-            self.assertEqual(r["events"], 49)
+            self.assertEqual(r["events"], 47)
 
     def test_every_club_plays_18_games_and_has_its_bye_in_the_week_for_its_seed(self):
         for r in self.u.reports:

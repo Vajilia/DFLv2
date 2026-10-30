@@ -36,3 +36,7 @@ The world driving the soak (player ratings, aging, prices, trades, injuries) is 
 ## Step 7 verification (2026-10-30)
 
 The ledger was re-verified against an independent model written from the Design Document; five defects were fixed and three listed items remain unbuilt. See `docs/STEP7_LEDGER_VERIFICATION.md`.
+
+## Owner rulings L1 to L3 (2026-10-30, spec Edition 8.55)
+
+Waiver order kept (club's own prior draft slot; pick trades move nothing). Split release keeps the current year's bonus portion in the current year and splits only future portions. A first-round contract is four years plus a pending fifth-year club option (`Contract.option`), decided by `World.decide_options` before Draft Round 1 of the player's fourth contract year, recorded in `Ledger.option_log`; an exercised option is fully guaranteed (`rules.R1_OPTION_GUARANTEED`, builder's choice). Extensions, postseason-only replacements and restructuring a future year's base remain unbuilt (rules proposed in `docs/OWNER_RULINGS_NEEDED.md`). Ledger soak on this code: 12 years, 48 clubs, PASS.

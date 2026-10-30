@@ -8,6 +8,5 @@ order,event,rule,note
 7,draft_rounds_2_3,after draft_round_1 1,Draft rounds 2 and 3
 8,draft_rounds_4_7,after draft_round_1 2,Draft rounds 4 to 7 and compensatory picks
 9,camp_open,fixed 06-01,Camp opens (preseason ceiling applies)
-10,venue_vote,fixed 06-15,Coronation venue vote (fictional fan vote)
-11,final_cuts,before week1 tue,"Final cut to 53 and 16: all contracts count, cap must be met"
-12,waivers_clear,before week1 wed,Waiver period after the final cut
+10,final_cuts,before week1 tue,"Final cut to 53 and 16: all contracts count, cap must be met"
+11,waivers_clear,before week1 wed,Waiver period after the final cut

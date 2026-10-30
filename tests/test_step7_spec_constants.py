@@ -159,5 +159,70 @@ class PositionsAndNumbers(unittest.TestCase):
         self.assertEqual(want, O.OVERFLOW)
 
 
+S3 = section(TEXT, "## §3 League structure", "## §4")
+
+
+class Edition855(unittest.TestCase):
+    """Edition 8.55 (owner's rulings of 2026-10-30): the playoff, Coronation and cascade statements in the document are the code's."""
+
+    def test_the_postseason_row_matches_the_standings_constants(self):
+        from dfl import standings
+        (cell,) = row("Postseason")
+        self.assertTrue(cell.startswith("12 clubs (6 per conference), 11 games"), cell)
+        self.assertEqual(standings.PLAYOFF_CLUBS_PER_CONFERENCE * 2, 12)
+        self.assertEqual(standings.PLAYOFF_CLUBS_PER_CONFERENCE, 4 + standings.WILD_CARDS)           # four division winners and the wild cards
+        per_conf = len(standings.wild_card_pairs()) + 2 + 1                                         # wild card games, two divisional games, the championship
+        self.assertEqual(per_conf * 2 + 1, 11)                                                      # and the Coronation
+        self.assertEqual(2 ** 11, 2048)
+        self.assertIn("2,048", " ".join(row("Bracket winner paths")))
+
+    def test_the_bracket_text(self):
+        from dfl import standings
+        self.assertIn("seed 3 hosts seed 6 and seed 4 hosts seed 5", S3)
+        self.assertEqual(standings.wild_card_pairs(), [(3, 6), (4, 5)])
+        self.assertIn("seed 1 hosts the lowest surviving seed and seed 2 hosts the other survivor", S3)
+        self.assertEqual(standings.divisional_pairs([1, 2, 4, 5]), [(1, 5), (2, 4)])
+        self.assertIn("Seeds 1 and 2 have a bye", S3)
+
+    def test_the_coronation_venue_is_permanent_and_neutral(self):
+        from dfl import league
+        m = re.search(r"always played at \*\*([^*]+)\*\*", S3)
+        self.assertEqual(m.group(1), league.CORONATION_VENUE)
+        self.assertIn(league.CORONATION_VENUE, " ".join(row("Diamond Coronation venue")))
+        self.assertIn("always neutral", S3)
+        self.assertNotIn("fan vote held in June", S3)
+
+    def test_the_cascade_order(self):
+        from dfl import standings
+        m = re.search(r"\(1\) overall wins; (.*?)\(10\) the seeded draw", S3)
+        steps = [re.sub(r"^\(\d+\) ", "", x.strip().rstrip(";").rstrip(",")) for x in ("(1) overall wins; " + m.group(1)).split("; ") if x.strip()]
+        names = ["overall wins", "overall win %", "division wins", "division win %", "conference wins", "conference win %", "point differential",
+                 "strength of schedule", "strength of victory"]
+        self.assertEqual(steps, names)
+        self.assertEqual(standings.CASCADE[:-1], tuple(n.replace("overall ", "").replace(" ", "_").replace("%", "pct").replace("win_pct", "win_pct") for n in names))
+        self.assertEqual(standings.CASCADE[-1], "seeded_draw")
+
+    def test_the_designation_is_about_weeks_1_to_4_and_80_games(self):
+        from dfl import standings
+        self.assertEqual(standings.CORONATION_AGGREGATE_WEEKS, 4)
+        self.assertIn("numbered weeks 1–4 (80 games)", S3)
+
+    def test_the_year_has_47_events_and_no_venue_events(self):
+        from dfl import calendar as C
+        self.assertIn("47 dated events a year", TEXT)
+        keys = [k for _, k, *_ in C.year_events(2000)]
+        self.assertEqual(len(keys), 47)
+        self.assertFalse([k for k in keys if "venue" in k])
+        self.assertNotIn("| Coronation venue vote |", TEXT)
+
+    def test_the_draft_returner_block_matches_twelve_playoff_clubs(self):
+        self.assertIn("slots 37 minus the block size through 36", S12)             # 8 returning + 28 non-playoff clubs = 36
+
+    def test_the_first_round_option_text(self):
+        self.assertIn("guaranteed in full", S11)
+        self.assertIn("Draft Round 1", S11)
+        self.assertEqual((R.R1_OPTION, R.R1_OPTION_GUARANTEED), (F(35), True))
+
+
 if __name__ == "__main__":
     unittest.main()

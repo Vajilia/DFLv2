@@ -141,8 +141,10 @@ class ContractMoney(unittest.TestCase):
             k = rookie_contract(2001, rnd)
             self.assertEqual((k.years, k.guaranteed, k.bonuses, k.start_week), ((F(O.ROOKIE_SCALE[rnd - 1]),) * 4, (0,) * 4, (), 0))
         k = rookie_contract(2001, 1, first_round_option=True)
-        self.assertEqual(k.years, (F(25),) * 4 + (F(35),))
+        self.assertEqual((k.years, k.option), ((F(25),) * 4, F(35)))             # Edition 8.55 (L3): the fifth year is the club's option, not a covered year
+        self.assertEqual(k.with_option_exercised().years, (F(25),) * 4 + (F(35),))
         self.assertEqual(rookie_contract(2001, 3, first_round_option=True).years, (F(14),) * 4)         # only round one has the option
+        self.assertIsNone(rookie_contract(2001, 3, first_round_option=True).option)
 
 
 # ------------------------------------------------------------------------------------------------------------- the long random run

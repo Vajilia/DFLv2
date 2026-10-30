@@ -354,7 +354,7 @@ class SeasonRecord(Base):
         s = a.record("S001/summary")
         a.close()
         self.assertEqual(s["result"]["coronation_winner"], champ)
-        self.assertIn("Eastern/East", s["result"]["outcome"]["division_orders"])        # no tuple keys: plain JSON
+        self.assertIn("Eastern/Atlantic", s["result"]["outcome"]["division_orders"])        # no tuple keys: plain JSON
         rc, out, err = reader("season", self.path("y") + ".archive", "1")
         self.assertEqual(json.loads(out)["result"]["coronation_winner"], champ)
         self.assertEqual(A.verify(self.path("y") + ".archive"), [])

@@ -27,9 +27,12 @@ from dfl.year import Universe  # noqa: E402
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "schema3_code_030b51a.tar.gz")
 FIXTURE_SHA256 = "177ac0aea85a0b01f6bb45d843ca586cb82e4c9d34d7b5a0f983498258bf6d88"
 TABLES = os.path.join(ROOT, "data", "season1")
-K, MORE = 12, 6
-K_EARLY = 4          # events after which the code that wrote schema 3 and this code still agree (they part at event 5, when the waiver order stopped being a
-                     # random shuffle); a fresh run of this code is then an independent reference for the upgraded league
+K = 12
+K_EARLY = 4          # a short file, to show that the carry-forward does not depend on how far the file had run
+# Edition 8.55 realigned the divisions, renamed clubs and removed the venue-vote and venue-announcement events. A schema-3 file written before
+# it (this fixture) is therefore a league of the old clubs on the old calendar: it can still be carried to schema 4 by value, which is what is
+# tested here, but it cannot be continued by this code. Before 8.55 these tests also continued the upgraded file and compared it with a fresh run
+# of this code; that comparison is gone because the two codes no longer describe the same league from the first event.
 
 
 def sha256_file(path):
@@ -85,8 +88,7 @@ class Schema3(unittest.TestCase):
         self.assertEqual(persist.status(self.old)["events"], K)         # reading it still works
         self.assertEqual(persist.verify(self.old), [])
 
-    def test_upgrade_carries_it_forward_and_it_continues_exactly(self):
-        """Independent reference: while the old code and this code still agree (K_EARLY events), a fresh run of this code is the expected state."""
+    def test_upgrade_carries_it_forward_by_value(self):
         before = sha256_file(self.early)
         new = os.path.join(self.tmp, "upgraded_early.db")
         rep = persist.upgrade(self.early, new, run_originating_code=True)      # no accept_state_change: the check was by value and passed
@@ -98,20 +100,11 @@ class Schema3(unittest.TestCase):
         self.assertEqual((lin["from_format"], lin["from_seq"], lin["code_changed"], lin["state_changed"]), (3, K_EARLY, True, False))
         self.assertEqual(lin["adapted_attributes"], ["cap", "returner_block"])  # what the older state could not have carried, named
         self.assertEqual((n.u.world.L.cap, n.u.returner_block), (F(10 ** 7), False))   # from its profile, "none"
-        ref = Universe(TABLES, seed=1, engine=False, profile="none")
-        for _ in range(K_EARLY):
-            ref.step_event()
-        self.assertEqual(persist.deep_digest(n.u), persist.deep_digest(ref))          # every value, six generators included
-        for _ in range(MORE):
-            ref.step_event()
-        n.run_events(MORE)
-        self.assertEqual(persist.journal_digest(n.u), persist.journal_digest(ref))
-        self.assertEqual(persist.verify(new, deep=True), [])
         n.close()
+        self.assertEqual(persist.verify(new, deep=True), [])
 
-    def test_a_later_file_is_carried_by_value_and_continues_to_verify(self):
-        """After the two codes have parted there is no fresh run to compare with; the upgrade's own by-value check carries the claim, and the
-        upgraded file must continue, verify and reopen."""
+    def test_a_later_file_is_carried_by_value_and_verifies(self):
+        """The upgrade's own by-value check carries the claim; the upgraded file must verify and reopen at the same event."""
         before = sha256_file(self.old)
         new = os.path.join(self.tmp, "upgraded.db")
         persist.upgrade(self.old, new, run_originating_code=True)
@@ -119,11 +112,10 @@ class Schema3(unittest.TestCase):
         n = persist.Runner.open(new)
         lin = n.meta["lineage"][-1]
         self.assertEqual((n.seq, lin["from_seq"], lin["state_changed"], lin["adapted_attributes"]), (K, K, False, ["cap", "returner_block"]))
-        n.run_events(MORE)
         n.close()
         self.assertEqual(persist.verify(new, deep=True), [])
         again = persist.Runner.open(new)
-        self.assertEqual(again.seq, K + MORE)
+        self.assertEqual(again.seq, K)
         again.close()
 
 

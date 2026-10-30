@@ -28,7 +28,7 @@ from dfl import archive, persist  # noqa: E402
 from dfl.year import Universe  # noqa: E402
 
 TOOL = os.path.join(ROOT, "tools", "league_store.py")
-EVENTS_PER_YEAR = 49
+EVENTS_PER_YEAR = 47
 
 
 def tool(*args, hashseed):

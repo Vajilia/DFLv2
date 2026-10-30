@@ -1,6 +1,6 @@
 # Worked example: whom a club plays across eight seasons
 
-Written 2026-10-29. The rotation is **unchanged**; this only shows what it does today, on the real code (`league.season_tables`), for one club: **Montana**, the Northwest division's seed 1 in Season 1. The numbers are reproduced by `tests/test_schedule_rotation.py` (class `RotationChangesWhenAndWhereNotWhom`) and the script in section 4.
+Written 2026-10-29; the club tables were regenerated on 2026-10-30 for the realigned Eastern divisions (Edition 8.55; the rotation itself is unchanged). The rotation is **unchanged**; this only shows what it does today, on the real code (`league.season_tables`), for one club: **Montana**, the Northwest division's seed 1 in Season 1. The numbers are reproduced by `tests/test_schedule_rotation.py` (class `RotationChangesWhenAndWhereNotWhom`) and the script in section 4.
 
 ## 1. Two different things the word "division" can mean
 
@@ -33,7 +33,7 @@ Montana's 14 non-division opponents, Seasons 1–8.
 
 | Season | Bed | Conference opponents (6) | Interconference opponents (4) | Same as Season 1? | Home/away vs the four (alphabetical) |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | Houston, Mexico City, Oklahoma City, Omaha, San Diego, San Francisco | Alabama, Carolina, Montreal, St. Louis | – | H A H A |
+| 1 | 1 | Houston, Mexico City, Oklahoma City, Omaha, San Diego, San Francisco | Alabama, Green Bay, Montreal, St. Louis | – | H A H A |
 | 2 | 2 | same six | same four | yes | H A H A |
 | 3 | 3 | same six | same four | yes | H A H A |
 | 4 | 4 | same six | same four | yes | H A H A |
@@ -46,12 +46,12 @@ Over Seasons 1–8 each of the 14 opponents is met the same number of times, wit
 
 | Season | Seed | Bed | Conference opponents (6) | Interconference opponents (4) |
 | --- | --- | --- | --- | --- |
-| 1 | 1 | 1 | Houston, Mexico City, Oklahoma City, Omaha, San Diego, San Francisco | Alabama, Carolina, Montreal, St. Louis |
-| 2 | 3 | 2 | Arizona, Kansas City, Mexico City, Omaha, San Antonio, San Diego | Miami, Tennessee, Toronto, Washington |
-| 3 | 2 | 3 | Dakota, Dallas, Houston, Oklahoma City, Sacramento, San Francisco | Chicago, Detroit, Florida, New England |
-| 4 | 5 | 4 | Arizona, Denver, Kansas City, Las Vegas, New Mexico, San Antonio | Cincinnati, Cleveland, New Orleans, New York |
+| 1 | 1 | 1 | Houston, Mexico City, Oklahoma City, Omaha, San Diego, San Francisco | Alabama, Green Bay, Montreal, St. Louis |
+| 2 | 3 | 2 | Arizona, Kansas City, Mexico City, Omaha, San Antonio, San Diego | Cincinnati, Detroit, Miami, New York |
+| 3 | 2 | 3 | Dakota, Dallas, Houston, Oklahoma City, Sacramento, San Francisco | Chicago, Havana, New England, Tennessee |
+| 4 | 5 | 4 | Arizona, Denver, Kansas City, Las Vegas, New Mexico, San Antonio | New Orleans, Pittsburgh, Toronto, Washington |
 | 5 | 1 | 5 | **same as Season 1** | **same as Season 1** |
-| 6 | 4 | 6 | Dakota, Dallas, Denver, Las Vegas, New Mexico, Sacramento | Atlanta, Green Bay, Philadelphia, Pittsburgh |
+| 6 | 4 | 6 | Dakota, Dallas, Denver, Las Vegas, New Mexico, Sacramento | Atlanta, Carolina, Cleveland, Philadelphia |
 | 7 | 2 | 7 | same as Season 3 | same as Season 3 |
 | 8 | 3 | 8 | same as Season 2 | same as Season 2 |
 

@@ -19,7 +19,7 @@ Phase 0 audit, 2026-10-22. Method: **source read only**, at v1 `main` commit `84
 | V1-11 | Offseason count | Silent | Only the 51 highest cap numbers count until the cut (NFL) | Resolved by Ed 8.9 (§11): the cap is enforced all year and, before the final cut, counts a club's dead money plus its highest 69 contracts (53 + 16), the NFL top-51 method adapted |
 | V1-12 | Franchise and transition tags, restricted free agency | Removed (§11) | Implemented (steps 6e–6i, `RFA_SEASONS`, `RFA_MATCH_DAYS`) | Adopt spec; do not port |
 | V1-13 | Waiver priority | Last season's draft order until four league weeks finish | Three weeks | Adopt spec |
-| V1-14 | Coronation venue | Fan vote in June, announced July 4, 40-year window; finalist at home if its venue wins | Neutral site (`FINAL_IS_NEUTRAL_SITE`) | Adopt spec |
+| V1-14 | Coronation venue | Fan vote in June, announced July 4, 40-year window; finalist at home if its venue wins | Neutral site (`FINAL_IS_NEUTRAL_SITE`); since Edition 8.55 (2026-10-30) one permanent neutral venue, Amethyst Aloha Stadium, with no vote or rotation | Adopt spec |
 | V1-15 | Ambassador Tour dates | Calendar weeks 1, 4, 8, 11, 15, 18, 22; Bowl at C−7; one venue per round | Weeks 1–7; Bowl in week 8 | Adopt spec |
 | V1-16 | Wild-card eligibility of a division's last-place club | Not excluded: "three best other clubs" (§3) | Excluded (`FIFTH_PLACE_WILD_CARD_ELIGIBLE = False`) | Resolved: owner ruled no; v1's exclusion is right and is now in Ed 8.7 |
 | V1-17 | Season length in real time | About 55 hours in §0 arithmetic | `REAL_WEEKS_PER_SEASON = 2`; owner statements elsewhere of 168 hours, about 50, 48 | Resolved: target about 50 hours, non-binding (Ed 8.7). Build pacing in Phase 6 |

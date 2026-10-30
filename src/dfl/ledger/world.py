@@ -497,6 +497,28 @@ class World:
         order = self.waiver_order()
         self.stats["claims"] += len(L.resolve_waivers(order, wants=lambda cid, p: self.view(cid, p) > 62 and self.rng.random() < 0.3))
 
+    def decide_options(self):
+        """Fifth-year options (Edition 8.55, L3). The deadline is the opening of Draft Round 1 in the league year of the player's fourth contract
+        year; each club's general manager decides every option due, then the deadline closes. The GM exercises when the market price of the overall
+        the club believes the player has (its own view, which carries the GM's evaluation) is at least the option salary: paying $35 for a player
+        the club thinks is worth less is worse than letting him go. A club that could not carry the guaranteed year (the ledger refuses it on the
+        viability invariant) or whose contract cannot take the extra year declines, and the record says why. Deterministic: it draws no random
+        numbers. Every decision is saved in `Ledger.option_log`."""
+        L = self.L
+        for cid, pid in L.options_due():
+            p = L.players[pid]
+            worth = self.quote(cid, p)
+            if worth < R.R1_OPTION:
+                L.decline_option(cid, pid, f"club prices him at {worth}, below the option salary {R.R1_OPTION}")
+                continue
+            try:
+                L.exercise_option(cid, pid, f"club prices him at {worth}, at or above the option salary {R.R1_OPTION}")
+            except Rejected as e:
+                L.decline_option(cid, pid, f"could not carry the option year: {e}")
+        L.close_options()
+        self.stats["options_exercised"] = self.stats.get("options_exercised", 0) + sum(
+            1 for d in L.option_log if d["year"] == L.year and d["decision"] == "exercised")
+
     def start_draft(self, order=None, comps=()):
         """Create the class and put the compensatory picks (rounds 8 and 9) into their owners' hands."""
         from .. import draft as D

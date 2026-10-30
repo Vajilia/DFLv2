@@ -33,9 +33,10 @@ class Calendar(unittest.TestCase):
             self.assertEqual(len(keys), len(set(keys)), y)
             keys0 = keys0 or set(keys)
             self.assertEqual(keys0, set(keys))      # the same events every year (their order may shift with the date)
+            self.assertFalse({"venue_vote", "venue_announce"} & set(keys))      # Edition 8.55: the Coronation has one permanent venue, nothing is voted or announced
             at = {k: d for d, k, *_ in ev}
             order = ["offseason_open", "hiring_close", "trading_open", "draft_round_1", "draft_rounds_4_7", "camp_open",
-                     "venue_vote", "final_cuts", "waivers_clear", "week_1", "venue_announce", "trade_close", "week_9",
+                     "final_cuts", "waivers_clear", "week_1", "trade_close", "week_9",
                      "week_19", "wild_card", "divisional", "conference_championships", "ambassador_bowl", "coronation", "year_close"]
             for a, b in zip(order, order[1:]):
                 self.assertLessEqual(at[a], at[b], (y, a, b))

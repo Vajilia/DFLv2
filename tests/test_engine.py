@@ -215,7 +215,7 @@ class SeasonIntegration(unittest.TestCase):
     def season(self, seed=1):
         res = self.ER({c: Squad(c, self.pop["clubs"][c]["roster"] + self.pop["clubs"][c]["ps"]) for c in self.clubs})
         state = self.tpl.initial_state()
-        out, _ = self.league.play_season(self.tpl, state, 1, res, random.Random(seed), {}, seed="t")
+        out, _ = self.league.play_season(self.tpl, state, 1, res, random.Random(seed), seed="t")
         return res, out
 
     def test_a_whole_season_runs_on_the_engine_and_is_deterministic(self):

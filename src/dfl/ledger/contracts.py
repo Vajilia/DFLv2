@@ -22,6 +22,7 @@ class Contract:
     bonuses: tuple = ()          # (amount, first_year_index, proration_years)
     start_week: int = 0
     shape: str = "steady"
+    option: object = None        # an unexercised club option on one more year at this base salary (the first-round fifth-year option); not a covered year until exercised
     _memo: dict = field(default_factory=dict, compare=False, repr=False, hash=False)
 
     def __post_init__(self):
@@ -36,6 +37,10 @@ class Contract:
             raise ContractError("guarantee must be between 0 and the year's base")
         if any(b < R.MIN_SALARY for b in self.years):
             raise ContractError("base salary below the minimum")
+        if self.option is not None:
+            object.__setattr__(self, "option", F(self.option))
+            if self.option < R.MIN_SALARY or n >= R.MAX_COVERED_YEARS:
+                raise ContractError("an option year needs a room for a further covered year and a salary of at least the minimum")
         if not 0 <= self.start_week <= R.PAID_WEEKS:
             raise ContractError("start week out of range")
         for a, i, p in self.bonuses:
@@ -122,7 +127,7 @@ class Contract:
         ys, gs = self.years[i:], self.guaranteed[i:]
         # the first (current) year is paid only for the weeks that remain
         shape = "steady" if all(x == ys[0] for x in ys) else self.shape
-        return Contract(year, ys, gs, (), week, shape)
+        return Contract(year, ys, gs, (), week, shape, self.option)
 
     def restructured(self, year, week, amount):
         """Convert `amount` of this year's remaining base into signing bonus prorated over the remaining covered years (max 5)."""
@@ -142,7 +147,22 @@ class Contract:
             if shape is None:
                 raise ContractError("restructure would leave a non-monotone contract")
         gs = [min(g, y) for g, y in zip(self.guaranteed, ys)]
-        return Contract(self.start_year, tuple(ys), tuple(gs), self.bonuses + ((amount, i, n),), self.start_week, shape)
+        return Contract(self.start_year, tuple(ys), tuple(gs), self.bonuses + ((amount, i, n),), self.start_week, shape, self.option)
+
+    def without_option(self):
+        """The same contract with the option gone (declined or lapsed)."""
+        return Contract(self.start_year, self.years, self.guaranteed, self.bonuses, self.start_week, self.shape)
+
+    def with_option_exercised(self, guaranteed=None):
+        """This contract with its option year added as one more covered year (guaranteed in full by default, rules.R1_OPTION_GUARANTEED)."""
+        if self.option is None:
+            raise ContractError("no option to exercise")
+        guaranteed = R.R1_OPTION_GUARANTEED if guaranteed is None else guaranteed
+        ys = self.years + (self.option,)
+        if not self._shape_ok(ys, "rising"):
+            raise ContractError("the option year would leave the base salaries out of order")
+        return Contract(self.start_year, ys, self.guaranteed + (self.option if guaranteed else F(0),), self.bonuses, self.start_week,
+                        "rising" if not self._shape_ok(ys, "steady") else "steady")
 
     @staticmethod
     def _shape_ok(ys, shape):
@@ -151,10 +171,9 @@ class Contract:
 
 
 def rookie_contract(year, rnd, first_round_option=False):
-    """Four fixed years at the round's scale salary, no bonus; the first-round option is a fifth year at $35 (club's choice)."""
+    """Four fixed years at the round's scale salary, no bonus. With `first_round_option` a first-round contract carries the club's option on a
+    fifth year at $35: not a covered year, so no commitment, until the club exercises it (Ledger.exercise_option, decided by the draft of
+    the player's fourth contract year)."""
     base = R.ROOKIE_SCALE[rnd - 1]
     ys = (base,) * R.ROOKIE_YEARS
-    if first_round_option and rnd == 1:
-        ys = ys + (R.R1_OPTION,)
-        return Contract(year, ys, (), (), 0, "rising")
-    return Contract(year, ys, (), (), 0, "steady")
+    return Contract(year, ys, (), (), 0, "steady", R.R1_OPTION if first_round_option and rnd == 1 else None)

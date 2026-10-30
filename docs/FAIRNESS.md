@@ -1,5 +1,8 @@
 # Fairness bands on the living league (Phase 4, first pass and re-measure)
 
+> **Edition 8.55 (2026-10-30) note.** Every figure below was measured before the playoff change (seven clubs a conference), the new tiebreak order and the new team data. Twelve playoff clubs instead of fourteen move the returner-block positions and `returner_playoff_first`; the section "Re-measured under Edition 8.55" at the end of this file (if present) holds the current figures.
+
+
 Measured 2026-10-23 on the living league (character cards, development, draft, free agency, the engine). Six independent leagues
 (seeds 1 to 6), 36 seasons each, the first 8 dropped as warm-up. Tool: `tools/fairness.py` (`run` writes season records, `report`
 prints the table); logic in `src/dfl/fairness.py`; bands are data in `data/fairness/BANDS.csv`; 12 tests in `tests/test_fairness.py`.

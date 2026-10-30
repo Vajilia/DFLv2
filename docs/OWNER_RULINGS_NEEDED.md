@@ -6,6 +6,15 @@ How to answer: for each item say **Approve** (the recommended default becomes th
 
 ---
 
+## Superseded by the owner's rulings of 2026-10-30 04:01 (Edition 8.55)
+
+Three statements below were true when they were written and are no longer current. They are kept only because the questions are kept as asked.
+- **Item 9, order of the cascade.** Strength of schedule no longer ranks ahead of point differential. The league-wide cascade is now: overall wins; overall win %; division wins and win % (only if every tied club shares a division); conference wins and win % (only if every tied club shares a conference); **point differential; strength of schedule; strength of victory**; the seeded draw. The figures quoted under item 9 for how often each step separates a group were measured on the old order and are not repeated for the new one.
+- **Item 14, the Coronation venue vote (15 June) and its announcement (4 July) no longer exist.** The Coronation has one permanent neutral venue, Amethyst Aloha Stadium, owned and renovated by the DFL; there is no vote, no rotation and no 40-year rule. The year has 47 dated events, not 49. The nominal home finalist is designated after Week 4 from the conferences' pooled interconference record (§3).
+- **Playoffs.** Six clubs a conference (four division winners and two wild cards), seeds 1 and 2 on byes, a reseeded divisional round; ten playoff games a year, not twelve (§3).
+
+---
+
 ## Rulings recorded 2026-10-29 (the questions below are kept as asked; where a statement in them is superseded it is marked)
 
 The owner approved the recommended defaults with clarifications. Nothing was broadened beyond them. They are in spec Ed 8.53 (§2, §3, §7, §11, §12, §20 items 4, 8, 9, 14).
@@ -115,17 +124,38 @@ The owner approved the recommended defaults with clarifications. Nothing was bro
 
 ---
 
-## Ledger questions arising from Step 7 verification (2026-10-30)
+## Ledger questions arising from Step 7 verification (2026-10-30): RULED 2026-10-30 04:01 (Edition 8.55)
 
-New. Each is a reading of existing spec text, or an item the spec lists but the build does not yet have. Nothing here blocks anything; each can be changed later. Details in `docs/STEP7_LEDGER_VERIFICATION.md`. The builder's choice is built and tested, and is the recommended default in every case.
+The four questions below were answered in the owner's message of 2026-10-30 04:01. Status of each:
 
-**L1. Waiver claim order (§11, "Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands").**
-Built: worst record claims first, as in the draft. Weeks 1 to 4 use last season's draft order; from week 5 the clubs at home are ordered by the current standings, worst first, and each of the eight Tour clubs keeps the place her prior draft band gave her (the Tour clubs' bands are the first eight places of that draft). The standings used are those of the league weeks finished before the paid week being processed. In the first season there is no earlier draft, so club-id order stands in until week 5. *Gameplay effect:* the weakest clubs get first call on released players, with the Tour clubs ahead of everyone in the early weeks. *Alternative:* Tour clubs placed by their own Tour record, or at the back.
+**L1. Waiver claim order: RETAINED, provisionally.** The order built in Step 7 stays (weeks 1 to 4 last season's draft order; from the paid week after league week 4 the clubs at home by the current standings, worst record first; each Ambassador keeps her own prior draft place). The ruling asked for one complete worked example of all 48 clubs, and for "prior draft slot" to be defined: **it is the club's own slot in last season's draft order, never a traded pick.** A pick is a (year, round, original club) token, the slot it takes depends on its original club alone, and the waiver code reads only the list of clubs, so trading picks cannot transfer waiver priority. The example, generated from a real second season with all 48 clubs before and after the Week 4 transition and with a pick swap that moves nothing, is `docs/WAIVER_PRIORITY_EXAMPLE.md` (tool: `tools/show_waiver_example.py`); tests: `tests/test_waiver_priority.py` (`PickTradesMoveNothing`, `WorkedExample`).
 
-**L2. Split release (§11, "one release's uncharged bonus accelerates 50/50 across the current and next year instead of in full").**
-Built: the release year's own bonus portion stays in that year (it is already part of that year's cap hit); the later portions divide 50/50 between that year and the next. *Alternative:* divide the whole uncharged bonus, this year's portion included. The two differ by half of the release year's own portion, so the saving is a little larger under the alternative.
+**L2. Split release: APPROVED as built.** The release year's own bonus portion stays in that year; only the future portions divide 50/50 between that year and the next (`tests/test_step7_rules.py`, `SplitReleaseL2`, and the independent oracle).
 
-**L3. First-round option (§11, "First-round option salary $35").**
-Built: every first-round pick has a fifth year at $35, automatically. The document does not say who decides or when. *Alternative:* the club decides after the third season (a transaction with its own cap and viability checks); a declined option makes the player a free agent a year earlier.
+**L3. First-round option: IMPLEMENTED as a club decision.** A first-round contract is now four years carrying the club's option on a fifth at $35. *Who decides:* the club's general manager, by a light deterministic rule (no random numbers): exercise when the market price of the overall the club believes the player has (its own view, which already carries the GM's evaluation) is at least the option salary; otherwise decline. *Deadline:* the opening of Draft Round 1 in the league year of the player's fourth contract year (the last Thursday of April), before the first pick. *Financial consequences:* exercising adds one covered year at $35, **guaranteed in full**, so it counts at once toward the viability invariant for that year and a club that could not carry it is refused (and so declines); the year costs nothing in the current year's cap. Declining (or missing the deadline) lets the contract end with the year, and the player is a free agent a year earlier. *Record:* every decision is saved in the ledger (`Ledger.option_log`: year, club, player, decision, salary, the year covered, the guarantee, and the reason). The full guarantee is the one detail the owner did not specify; it is one constant (`rules.R1_OPTION_GUARANTEED`) and costs nothing to reverse. Tests: `tests/test_fifth_year_option.py`.
 
-**L4. Items the document lists that are not built yet:** extensions ("two completed seasons and mutual consent"), postseason-only replacements ("one salary-week equivalent"), restructuring a future year's base. Say which are wanted before they are built; extensions in particular change how clubs keep players, and today every contract simply runs out.
+**L4. Extensions and postseason injury replacements: INCLUDED, PROPOSED RULES BELOW, NOT YET BUILT.** Restructuring a future year's base salary is **deferred**: the code restructures the current year's base only, and the spec sentence "current or future year" is annotated accordingly in Edition 8.55. Nothing below is implemented until the owner approves it.
+
+### L4 proposed rules (for approval)
+
+**Extensions (§11: "two completed seasons and mutual consent").**
+1. *Who and when.* A club may extend a player on its roster or injured reserve who has completed at least two credited seasons and whose contract ends with the current league year, from the day Draft Rounds 4 to 7 finish until the Friday before numbered week 9 (the trade window's close). Never in January, the postseason or the camp.
+2. *Mutual consent* is the existing negotiation: the club's price for the player must not exceed what the club will pay (`willing`) and the player's ask must not exceed it. No consent, no extension, and nothing is forced.
+3. *The new years begin after the old contract ends.* The extension is a new contract of one to five years that starts the next league year; nothing about the current year changes. This stops an extension from being used to rewrite the current cap hit. Its signing bonus is prorated only over the extension's own years.
+4. *Checks.* The viability invariant and cap timing apply to every year the extension covers, as for any signing. At most one extension per player per league year.
+5. *Anti-bypass.* A player the club acquired this league year by trade or waiver claim cannot be extended in that year. An extended contract may not be restructured until the year it begins. Rookie contracts are extended on the same terms once their fourth year is under way (the fifth-year option stays a separate decision).
+6. *Record.* Every extension is saved (club, player, years, salary, bonus, guarantees, date).
+
+**Postseason injury replacements (§11: "Postseason-only replacements pay one salary-week equivalent").**
+1. *When a replacement is allowed.* Only from the Wild Card round to the Coronation, only for a club still playing, and only one for one: a club may sign a replacement only for a named player on its 53 who is out for the rest of the postseason (the club's medical ruling). That player goes to injured reserve for the postseason and cannot return, even if he heals. A club with no such player can sign no one.
+2. *Same position.* The replacement must have the injured player's permanent position. This stops a replacement being used to change the shape of the roster.
+3. *No upgrading.* The replacement may not rate higher, by the club's own view, than the player he replaces. Players released by any club after the regular season's last roster lock, and anyone on waivers, are not eligible for any club until the new league year. Ambassador clubs and the Bowl rosters are outside this rule (§7 governs them).
+4. *Order of supply.* The club's own practice squad first (promotion, as in the regular season); free agents only when no practice-squad player of that position is available.
+5. *Contract.* The minimum salary, one year, expiring at the year's close, no bonus, no guarantee, no extension, not tradable. It costs **one salary-week equivalent** ($5 ÷ 22 of cap) however many postseason games he plays. Viability and cap timing apply as for any signing.
+6. *Freeze.* From the trade close until the new league year opens, no trades, waiver claims, restructures or extensions; the only permitted signings are these replacements and the practice-squad promotions already allowed.
+7. *Limits and record.* At most eight replacements a club per postseason. The roster stays at or below 53 and the practice squad at or below 16. Replacements earn no compensatory-pick value. Each is saved with the player he replaced and the round.
+
+**Decisions needed from the owner.** (a) Approve, change or reject each numbered rule above, in particular extensions rule 1 (window) and postseason rule 3 (the no-upgrade test). (b) Whether extended players should have a bargaining discount or premium (none is proposed). (c) Whether the postseason replacement cost should be a constant rather than one salary-week ($5 ÷ 22), as now written.
+
+*What each does to play if approved as written:* extensions give clubs a way to keep players past the end of a contract, so fewer good players reach free agency and the market thins; postseason replacements keep a contender playable after injuries without letting it improve itself.
+

@@ -105,7 +105,6 @@ def season_events(year):
     out.append((first_sat[9] - dt.timedelta(days=1), "trade_close", "regular", "Friday 23:59 before week 9"))
     for i, w in enumerate(TOUR_CALENDAR_WEEKS, 1):
         out.append((dt.date.fromisoformat(weeks[w - 1]["saturday"]), f"tour_round_{i}", "ambassadors", ""))
-    out.append((dt.date(year, 7, 4), "venue_announce", "regular", "Coronation venue announced on 4 July"))
     out.append((dt.date(year, 12, 31), "year_close", "regular", "League year closes"))
     return out
 

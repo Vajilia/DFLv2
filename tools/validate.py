@@ -65,7 +65,7 @@ check("TEAMS is_active == (club_status=='active')", all((t["is_active"] == "true
 check("TEAMS is_league_member true on all 48", all(t["is_league_member"] == "true" for t in teams))
 beds = [t["bed_id"] for t in act]
 WEST = ["Northwest", "Southwest", "Central", "Southern"]
-EAST = ["Midwest", "Northeast", "East", "Southeast"]
+EAST = ["Great Lakes", "Atlantic", "Midland", "Southeast"]
 
 
 def expected_bed(conf, div, season):
@@ -306,8 +306,8 @@ minima = {"K": 1, "P": 1, "QB": 3, "HB/FB": 3, "WR": 5, "TE": 2, "LT": 2, "LG": 
 req = sum(minima.values())
 check("CAP positional minimums total 48 required places; Bowl discretionary 53 - 48 = 5; ceiling 1000 - 48*5 - 25 = 735",
       req == 48 and 53 - req == 5 and 1000 - req * 5 - 25 == 735, f"minimums sum to {req}")
-check("SECTION 0 bracket paths 2^13 = 8192, halls 1+2+8+48 = 59, relationships 48*47 = 2256, draft 7*48 = 336",
-      2 ** 13 == 8192 and 1 + 2 + 8 + 48 == 59 and 48 * 47 == 2256 and 7 * 48 == 336)
+check("SECTION 0 bracket paths 2^11 = 2048 (eleven playoff games), halls 1+2+8+48 = 59, relationships 48*47 = 2256, draft 7*48 = 336",
+      2 ** 11 == 2048 and 1 + 2 + 8 + 48 == 59 and 48 * 47 == 2256 and 7 * 48 == 336)
 check("SECTION 0 real-time year: (27 * 120 + 45) / 60 ~ 55 h", round((27 * 120 + 45) / 60) == 55, f"{(27 * 120 + 45) / 60:.2f} h")
 
 if DOC:

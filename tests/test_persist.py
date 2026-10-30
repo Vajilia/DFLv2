@@ -24,7 +24,7 @@ from dfl.year import Universe  # noqa: E402
 
 TABLES = os.path.join(ROOT, "data", "season1")
 TOOL = os.path.join(ROOT, "tools", "league_store.py")
-N = 52                    # events in the reference: one whole year (49 events) and three of the next
+N = 50                    # events in the reference: one whole year (47 events) and three of the next
 H = 20                    # the shorter horizon most tests run to: four game weeks into the season
 
 
@@ -66,12 +66,12 @@ class Base(unittest.TestCase):
 class Equivalence(Base):
     def test_a_saved_run_killed_as_the_year_closes_is_the_same_league_as_an_unsaved_one(self):
         r = self.new()
-        r.run_events(49)                                       # the whole year; the year-close snapshot is a checkpoint
+        r.run_events(47)                                       # the whole year; the year-close snapshot is a checkpoint
         r.db.close()                                           # killed the instant the year closes
         r = persist.Runner.open(self.path("a"))
-        self.assertEqual((r.seq, r.u.cursor), (49, None))
-        self.assertEqual(persist.journal_digest(r.u), self.ref[48])
-        r.run_events(N - 49)                                   # the next year opens on the first event after the restart
+        self.assertEqual((r.seq, r.u.cursor), (47, None))
+        self.assertEqual(persist.journal_digest(r.u), self.ref[46])
+        r.run_events(N - 47)                                   # the next year opens on the first event after the restart
         self.assertEqual(self.journal(r.path), self.ref)
         self.assertEqual(persist.deep_digest(r.u), self.ref_deep[N])
         self.assertEqual(persist.verify(r.path), [])
@@ -81,7 +81,7 @@ class Equivalence(Base):
         a = Universe(TABLES, seed=1, engine=False)
         a.play_year()                                           # the original whole-year entry point
         self.assertIsNone(a.cursor)
-        self.assertEqual(persist.journal_digest(a), self.ref[48])  # the reference was built one event at a time
+        self.assertEqual(persist.journal_digest(a), self.ref[46])  # the reference was built one event at a time
 
     def test_killed_and_restored_at_any_point_ends_in_the_same_league(self):
         # 13: week 1 has just been played, the exact state is compared with the reference's at that moment;
@@ -122,9 +122,9 @@ class Equivalence(Base):
 class Atomicity(Base):
     def test_an_exception_inside_an_event_changes_nothing_and_the_retry_is_exact(self):
         r = self.new("exc")
-        r.run_events(10)
+        r.run_events(9)
         before_u, before_seq = persist.journal_digest(r.u), r.seq
-        real = Universe.on_venue_vote                          # event 10 is the venue vote... fire the next, event 11 (final_cuts)
+        # event 10 is final_cuts: the next event, interrupted half way
         real_cuts = Universe.on_final_cuts
 
         def broken(self_, year, date, key):
@@ -138,8 +138,8 @@ class Atomicity(Base):
             Universe.on_final_cuts = real_cuts
         self.assertEqual(r.seq, before_seq)
         self.assertEqual(persist.journal_digest(r.u), before_u)  # the half-changed league was thrown away and reloaded
-        self.assertEqual(len(self.journal(r.path)), 10)
-        r.run_events(H - 10)
+        self.assertEqual(len(self.journal(r.path)), 9)
+        r.run_events(H - 9)
         self.assertEqual(self.journal(r.path), self.ref[:H])
         self.assertEqual(persist.deep_digest(r.u), self.ref_deep[H])
         r.close()

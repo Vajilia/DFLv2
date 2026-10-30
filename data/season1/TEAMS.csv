@@ -1,16 +1,16 @@
 team_id,abbr,team_city,team_name,conference,division,bed_id,division_rank,club_status,is_active,is_league_member,draft_band,venue,location,primary_color,primary_hex,secondary_color,secondary_hex,tertiary_color,tertiary_hex
-30,MON,Montana,Outriders,Western,Northwest,1-1,1,active,true,true,standard,IronGate Stadium,"Helena, MT",Dark Forest Green,#174A32,Tan,#C2A477,Topaz,#E6A32E
-21,SEA,Seattle,Orcas,Western,Northwest,1-2,2,active,true,true,standard,Lumen Field,"Seattle, WA",College Navy,#002244,Action Green,#69BE28,Topaz,#E6A32E
-31,UTA,Utah,Avalanche,Western,Northwest,1-3,3,active,true,true,standard,NorthStar Bank Field,"Salt Lake City, Utah",Glacier Blue,#8FC8D8,Deep Navy Blue,#16324F,Topaz,#E6A32E
-39,CAL,Calgary,Stampede,Western,Northwest,1-4,4,active,true,true,standard,Redwood Credit Union Park,"Calgary, Canada",Root Beer Brown,#492716,Prairie Green,#688B45,Topaz,#E6A32E
-40,IDA,Idaho,Tomahawks,Western,Northwest,1-5,5,active,true,true,standard,Continental Freight Stadium,"Boise, ID",Pine Green,#17543B,Steel Gray,#87949E,Topaz,#E6A32E
-41,POR,Portland,Tempest,Western,Northwest,,6,ambassador,false,true,lottery_1_8,HarborTrust Field,"Portland, OR",Storm Gray,#606A75,Electric Purple,#A334E8,Topaz,#E6A32E
-7,SFX,San Francisco,Shine,Western,Southwest,2-1,1,active,true,true,standard,Candlestick Park,"San Francisco, CA",Scarlet Red,#AA0000,Gold,#D3BC8D,Peridot,#A5C83B
-20,SDX,San Diego,Sirens,Western,Southwest,2-2,2,active,true,true,standard,Qualcomm Stadium,"San Diego, CA",Powder Blue,#6CAEDF,Gold,#D3BC8D,Peridot,#A5C83B
-33,SAC,Sacramento,Sting,Western,Southwest,2-3,3,active,true,true,standard,Twin Rivers Stadium,"West Sacramento, CA",Electric Yellow,#EFFF00,Black,#101010,Peridot,#A5C83B
-6,ARI,Arizona,Thunderbirds,Western,Southwest,2-4,4,active,true,true,standard,State Farm Stadium,"Glendale, AZ",Cardinal Red,#97233F,Black,#000000,Peridot,#A5C83B
-19,LVR,Las Vegas,Invaders,Western,Southwest,2-5,5,active,true,true,standard,Allegiant Stadium,"Las Vegas, NV",Black,#000000,Silver,#B0B7BC,Peridot,#A5C83B
-4,LAL,Los Angeles,Legion,Western,Southwest,,6,ambassador,false,true,lottery_1_8,SoFi Stadium,"Inglewood, CA",Royal Blue,#003DA5,Silver,#B0B7BC,Peridot,#A5C83B
+30,MON,Montana,Outriders,Western,Northwest,1-1,1,active,true,true,standard,IronGate Stadium,"Helena, MT",Dark Forest Green,#174A32,Tan,#C2A477,Peridot,#A5C83B
+21,SEA,Seattle,Orcas,Western,Northwest,1-2,2,active,true,true,standard,Lumen Field,"Seattle, WA",College Navy,#002244,Action Green,#69BE28,Peridot,#A5C83B
+31,UTA,Utah,Avalanche,Western,Northwest,1-3,3,active,true,true,standard,NorthStar Bank Field,"Salt Lake City, Utah",Glacier Blue,#8FC8D8,Deep Navy Blue,#16324F,Peridot,#A5C83B
+39,CAL,Calgary,Stampede,Western,Northwest,1-4,4,active,true,true,standard,Redwood Credit Union Park,"Calgary, Canada",Root Beer Brown,#492716,Prairie Green,#688B45,Peridot,#A5C83B
+40,IDA,Idaho,Tomahawks,Western,Northwest,1-5,5,active,true,true,standard,Continental Freight Stadium,"Boise, ID",Pine Green,#17543B,Steel Gray,#87949E,Peridot,#A5C83B
+41,POR,Portland,Tempest,Western,Northwest,,6,ambassador,false,true,lottery_1_8,HarborTrust Field,"Portland, OR",Storm Gray,#606A75,Electric Purple,#A334E8,Peridot,#A5C83B
+7,SFX,San Francisco,Shine,Western,Southwest,2-1,1,active,true,true,standard,Candlestick Park,"San Francisco, CA",Scarlet Red,#AA0000,Gold,#D3BC8D,Topaz,#E6A32E
+20,SDX,San Diego,Sirens,Western,Southwest,2-2,2,active,true,true,standard,Qualcomm Stadium,"San Diego, CA",Powder Blue,#6CAEDF,Gold,#D3BC8D,Topaz,#E6A32E
+33,SAC,Sacramento,Sting,Western,Southwest,2-3,3,active,true,true,standard,Twin Rivers Stadium,"West Sacramento, CA",Electric Yellow,#EFFF00,Black,#101010,Topaz,#E6A32E
+6,ARI,Arizona,Thunderbirds,Western,Southwest,2-4,4,active,true,true,standard,State Farm Stadium,"Glendale, AZ",Cardinal Red,#97233F,Black,#000000,Topaz,#E6A32E
+19,LVR,Las Vegas,Invaders,Western,Southwest,2-5,5,active,true,true,standard,Allegiant Stadium,"Las Vegas, NV",Black,#000000,Silver,#B0B7BC,Topaz,#E6A32E
+4,LAL,Los Angeles,Legion,Western,Southwest,,6,ambassador,false,true,lottery_1_8,SoFi Stadium,"Inglewood, CA",Royal Blue,#003DA5,Silver,#B0B7BC,Topaz,#E6A32E
 43,OCO,Oklahoma City,Outlaws,Western,Central,3-1,1,active,true,true,standard,TriAxis Financial Stadium,"Oklahoma City, OK",Desert Tan,#C2A477,Blued Gunmetal,#293C4A,Tourmaline,#D94B89
 34,OMA,Omaha,Assassins,Western,Central,3-2,2,active,true,true,standard,SilverGate Field,"Omaha, NE",Obsidian,#111318,Acid Green,#A8FF2A,Tourmaline,#D94B89
 27,DAK,Dakota,Divas,Western,Central,3-3,3,active,true,true,standard,Union Capital Stadium,"Bismarck, ND",Gotham Green,#125740,Silver,#B0B7BC,Tourmaline,#D94B89
@@ -18,31 +18,31 @@ team_id,abbr,team_city,team_name,conference,division,bed_id,division_rank,club_s
 16,DEN,Denver,Unicorns,Western,Central,3-5,5,active,true,true,standard,Empower Field at Mile High,"Denver, CO",Orange,#FF5F05,Navy,#002244,Tourmaline,#D94B89
 5,MIN,Minnesota,Warriors,Western,Central,,6,ambassador,false,true,lottery_1_8,U.S. Bank Stadium,"Minneapolis, MN",Purple,#4F2683,Gold,#D3BC8D,Tourmaline,#D94B89
 17,HOU,Houston,Faeries,Western,Southern,4-1,1,active,true,true,standard,NRG Stadium,"Houston, TX",Deep Steel Blue,#03202F,Battle Red,#A71930,Garnet,#9A1B36
-42,MCA,Mexico City,Aztecas,Western,Southern,4-2,2,active,true,true,standard,Ironclad Insurance Stadium,"Mexico City, Mexico",Turquoise,#20AFA6,Sun Gold,#E9B44C,Garnet,#9A1B36
+42,MCA,Mexico City,Mariachas,Western,Southern,4-2,2,active,true,true,standard,Ironclad Insurance Stadium,"Mexico City, Mexico",Turquoise,#20AFA6,Sun Gold,#E9B44C,Garnet,#9A1B36
 1,DAL,Dallas,Starlings,Western,Southern,4-3,3,active,true,true,standard,AT&T Stadium,"Arlington, TX",Navy,#002244,Silver,#B0B7BC,Garnet,#9A1B36
 29,SAV,San Antonio,Vaqueras,Western,Southern,4-4,4,active,true,true,standard,Stratos Bank Stadium,"San Antonio, TX",Bronze,#CD7F32,Desert Teal,#3D8C8C,Garnet,#9A1B36
 44,NMS,New Mexico,Scorpions,Western,Southern,4-5,5,active,true,true,standard,Crown Harbor Field,"Albuquerque, NM",Midnight Plum,#321C31,Desert Copper,#D47842,Garnet,#9A1B36
 45,BAJ,Baja,Barracudas,Western,Southern,,6,ambassador,false,true,lottery_1_8,PrairieStar Stadium,"Cabo San Lucas, Mexico",Abyssal Teal,#083B4C,Predator Silver,#A8B7BC,Garnet,#9A1B36
-35,SLR,St. Louis,Archers,Eastern,Midwest,5-1,1,active,true,true,standard,MetroAxis Field,"St. Louis, MO",Navy,#002244,Metallic Gold,#B3995D,Aquamarine,#55C5D8
-9,CHI,Chicago,Foxes,Eastern,Midwest,5-2,2,active,true,true,standard,Soldier Field,"Chicago, IL",Navy,#002244,Orange,#FF5F05,Aquamarine,#55C5D8
-38,TEN,Tennessee,Belles,Eastern,Midwest,5-3,3,active,true,true,standard,Nissan Stadium,"Nashville, TN",Navy,#0C2340,Titans Blue,#4B92DB,Aquamarine,#55C5D8
-3,GBP,Green Bay,Glamour,Eastern,Midwest,5-4,4,active,true,true,standard,Lambeau Field,"Green Bay, WI",Green,#203731,Gold,#D3BC8D,Aquamarine,#55C5D8
-23,CIN,Cincinnati,Shadow Katz,Eastern,Midwest,5-5,5,active,true,true,standard,Paycor Stadium,"Cincinnati, OH",Orange,#FF5F05,Black,#000000,Aquamarine,#55C5D8
-24,IND,Indianapolis,Pit Vipers,Eastern,Midwest,,6,ambassador,false,true,lottery_1_8,Lucas Oil Stadium,"Indianapolis, IN",Racing Red,#D71920,Electric Lime,#C6FF00,Aquamarine,#55C5D8
-47,MOS,Montreal,Storm,Eastern,Northeast,6-1,1,active,true,true,standard,Evergreen Credit Stadium,"Montreal, Canada",Frost Silver,#B8C5D1,Nordic Blue,#245A81,Emerald,#009B77
-26,NEP,New England,Rebels,Eastern,Northeast,6-2,2,active,true,true,standard,Gillette Stadium,"Foxborough, MA",Navy,#002244,Red,#C8102E,Emerald,#009B77
-46,TOR,Toronto,Sentinels,Eastern,Northeast,6-3,3,active,true,true,standard,GoldenRail Stadium,"Toronto, Canada",Crimson,#A6192E,Steel Gray,#78858B,Emerald,#009B77
-12,PHI,Philadelphia,Harpies,Eastern,Northeast,6-4,4,active,true,true,standard,Lincoln Financial Field,"Philadelphia, PA",Midnight Green,#004C54,Silver,#B0B7BC,Emerald,#009B77
-10,NYG,New York,Goliaths,Eastern,Northeast,6-5,5,active,true,true,standard,MetLife Stadium,"East Rutherford, NJ",Blue,#0B2265,Red,#C8102E,Emerald,#009B77
-22,BUF,Buffalo,Brats,Eastern,Northeast,,6,ambassador,false,true,lottery_1_8,Highmark Stadium,"Orchard Park, NY",Royal Blue,#003DA5,Red,#C8102E,Emerald,#009B77
-36,CAR,Carolina,Comets,Eastern,East,7-1,1,active,true,true,standard,Bank of America Stadium,"Charlotte, NC",Carolina Blue,#0085CA,Black,#101820,Turquoise,#26A9A0
-2,DET,Detroit,Soul,Eastern,East,7-2,2,active,true,true,standard,Ford Field,"Detroit, MI",Honolulu Blue,#0076B6,Silver,#B0B7BC,Turquoise,#26A9A0
-14,WAS,Washington,Commandos,Eastern,East,7-3,3,active,true,true,standard,Northwest Stadium,"Landover, MD",Burgundy,#773141,Gold,#D3BC8D,Turquoise,#26A9A0
-28,PIT,Pittsburgh,Riviters,Eastern,East,7-4,4,active,true,true,standard,Acrisure Stadium,"Pittsburgh, PA",Black,#101820,Light Blue,#83C9EF,Turquoise,#26A9A0
-15,CLE,Cleveland,Mud Dawgs,Eastern,East,7-5,5,active,true,true,standard,Huntington Bank Field,"Cleveland, OH",Brown,#311D00,Orange,#FF5F05,Turquoise,#26A9A0
-32,BAL,Baltimore,Rooks,Eastern,East,,6,ambassador,false,true,lottery_1_8,M&T Bank Stadium,"Baltimore, MD",Purple,#4F2683,Black,#000000,Turquoise,#26A9A0
+3,GBP,Green Bay,Glamour,Eastern,Great Lakes,5-1,1,active,true,true,standard,Lambeau Field,"Green Bay, WI",Green,#203731,Gold,#D3BC8D,Aquamarine,#55C5D8
+9,CHI,Chicago,Foxes,Eastern,Great Lakes,5-2,2,active,true,true,standard,Soldier Field,"Chicago, IL",Navy,#002244,Orange,#FF5F05,Aquamarine,#55C5D8
+2,DET,Detroit,Soul,Eastern,Great Lakes,5-3,3,active,true,true,standard,Ford Field,"Detroit, MI",Honolulu Blue,#0076B6,Silver,#B0B7BC,Aquamarine,#55C5D8
+15,CLE,Cleveland,Mud Dawgs,Eastern,Great Lakes,5-4,4,active,true,true,standard,Huntington Bank Field,"Cleveland, OH",Brown,#311D00,Orange,#FF5F05,Aquamarine,#55C5D8
+46,TOR,Toronto,Sentinels,Eastern,Great Lakes,5-5,5,active,true,true,standard,GoldenRail Stadium,"Toronto, Canada",Crimson,#A6192E,Steel Gray,#78858B,Aquamarine,#55C5D8
+22,BUF,Buffalo,Brats,Eastern,Great Lakes,,6,ambassador,false,true,lottery_1_8,Highmark Stadium,"Orchard Park, NY",Royal Blue,#003DA5,Red,#C8102E,Aquamarine,#55C5D8
+47,MOS,Montreal,Storm,Eastern,Atlantic,6-1,1,active,true,true,standard,Evergreen Credit Stadium,"Montreal, Canada",Frost Silver,#B8C5D1,Nordic Blue,#245A81,Emerald,#009B77
+26,NEP,New England,Rebels,Eastern,Atlantic,6-2,2,active,true,true,standard,Gillette Stadium,"Foxborough, MA",Navy,#002244,Red,#C8102E,Emerald,#009B77
+10,NYG,New York,Gladiators,Eastern,Atlantic,6-3,3,active,true,true,standard,MetLife Stadium,"East Rutherford, NJ",Blue,#0B2265,Red,#C8102E,Emerald,#009B77
+12,PHI,Philadelphia,Harpies,Eastern,Atlantic,6-4,4,active,true,true,standard,Lincoln Financial Field,"Philadelphia, PA",Midnight Green,#004C54,Silver,#B0B7BC,Emerald,#009B77
+14,WAS,Washington,Commandos,Eastern,Atlantic,6-5,5,active,true,true,standard,Northwest Stadium,"Landover, MD",Burgundy,#773141,Gold,#D3BC8D,Emerald,#009B77
+32,BAL,Baltimore,Rooks,Eastern,Atlantic,,6,ambassador,false,true,lottery_1_8,M&T Bank Stadium,"Baltimore, MD",Purple,#4F2683,Black,#000000,Emerald,#009B77
+35,SLR,St. Louis,Archers,Eastern,Midland,7-1,1,active,true,true,standard,MetroAxis Field,"St. Louis, MO",Navy,#002244,Metallic Gold,#B3995D,Turquoise,#26A9A0
+38,TEN,Tennessee,Belles,Eastern,Midland,7-2,2,active,true,true,standard,Nissan Stadium,"Nashville, TN",Navy,#0C2340,Titans Blue,#4B92DB,Turquoise,#26A9A0
+23,CIN,Cincinnati,Shadow Katz,Eastern,Midland,7-3,3,active,true,true,standard,Paycor Stadium,"Cincinnati, OH",Orange,#FF5F05,Black,#000000,Turquoise,#26A9A0
+36,CAR,Carolina,Comets,Eastern,Midland,7-4,4,active,true,true,standard,Bank of America Stadium,"Charlotte, NC",Carolina Blue,#0085CA,Black,#101820,Turquoise,#26A9A0
+28,PIT,Pittsburgh,Riviters,Eastern,Midland,7-5,5,active,true,true,standard,Acrisure Stadium,"Pittsburgh, PA",Black,#101820,Light Blue,#83C9EF,Turquoise,#26A9A0
+24,IND,Indianapolis,Pit Vipers,Eastern,Midland,,6,ambassador,false,true,lottery_1_8,Lucas Oil Stadium,"Indianapolis, IN",Racing Red,#D71920,Electric Lime,#C6FF00,Turquoise,#26A9A0
 48,ALA,Alabama,Thunder,Eastern,Southeast,8-1,1,active,true,true,standard,Granite Stadium,"Birmingham, AL",Dark Thunder Blue,#102A43,Lightning Yellow,#F5D547,Alexandrite,#7040A0
-37,JAX,Florida,Fangs,Eastern,Southeast,8-2,2,active,true,true,standard,EverBank Stadium,"Jacksonville, FL",Teal,#006778,Black,#101820,Alexandrite,#7040A0
+37,HAV,Havana,Mariposas,Eastern,Southeast,8-2,2,active,true,true,standard,Estadio Panamericano,"Havana, Cuba",Teal,#006778,Black,#101820,Alexandrite,#7040A0
 25,MIA,Miami,Monsters,Eastern,Southeast,8-3,3,active,true,true,standard,Hard Rock Stadium,"Miami Gardens, FL",Aqua,#008E97,Orange,#FF5F05,Alexandrite,#7040A0
 8,ATL,Atlanta,Mavericks,Eastern,Southeast,8-4,4,active,true,true,standard,Mercedes-Benz Stadium,"Atlanta, GA",Black,#000000,Red,#C8102E,Alexandrite,#7040A0
 11,NOS,New Orleans,Mayfairs,Eastern,Southeast,8-5,5,active,true,true,standard,Caesars Superdome,"New Orleans, LA",Black,#000000,Old Gold,#9F8958,Alexandrite,#7040A0

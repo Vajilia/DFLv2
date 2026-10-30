@@ -1,6 +1,6 @@
 # DFL — Living Design Document
-**Edition 8.54 · 2026-10-29** (amends Edition 8.53; changes listed in §19)
-**Content hash (SHA-256 of this file with this line removed):** `ab4b297032f7fe6c6e157e9bb9b2c6c9cd72293d30cf8adeac33559cc07119ff`
+**Edition 8.55 · 2026-10-30** (amends Edition 8.54; changes listed in §19)
+**Content hash (SHA-256 of this file with this line removed):** `23aa6dae7f87f121e4772ae90bb400408f76a56cabd9a3a371c2a4090b79ac95`
 
 **Normative fence.** §0–§20 are normative. Where this document and any earlier artifact disagree, this document wins. Reference code: `tools/validate.py`, `tools/run_seasons.py`, `src/dfl/` and `tests/` in the DFLv2 repository (§18). The old archive, the "Audit changes" list, and the workbook are all superseded by this text.
 
@@ -19,14 +19,15 @@ Single source. Nothing below repeats a figure that appears here.
 | Numbered fixture weeks / calendar weeks / active-club breaks | 19 · 27 · 3 (after weeks 4, 9, 14) |
 | Bye window | weeks 15–19, one per club |
 | Kickoff windows | 5 — Sat 17:30, Sun 10:00, Sun 13:00, Sun 17:30, Mon 17:30 |
-| Postseason | 14 clubs (7 per conference), 13 games |
+| Postseason | 12 clubs (6 per conference), 11 games (10 conference playoff games and the Coronation) |
+| Diamond Coronation venue | Amethyst Aloha Stadium (permanent, neutral) |
 | Ambassador Tour | 8 clubs, 7 rounds, 28 games |
 | Cap · reserve · min salary · comp threshold · CEO salary | $1,000 · $25 · $5 · $75 · $2,000 |
 | Rookie scale (R1–R7) · first-round option | $25/$18/$14/$11/$9/$7/$5 · $35 |
 | Roster · practice squad · preseason ceiling · required places · Bowl places | 53 · 16 · 90 · 48 · 53 |
 | Contracts counted against the cap before the final cut · credited seasons that exempt a released player from waivers | 69 (53 + 16) · 4 |
 | Draft | 7 rounds × 48 = 336 picks |
-| Bracket winner paths · halls · directional relationships | 8,192 · 59 · 2,256 |
+| Bracket winner paths · halls · directional relationships | 2,048 · 59 · 2,256 |
 | Draft class size · pool floor per position · leadership candidates per role | 672 · 8 · 4 |
 | Real time: offseason · per competitive week block · year | 45 min · 120 min · ≈55 h |
 | Season length target | about 50 hours of real time; a target, and missing it is not a defect |
@@ -56,10 +57,9 @@ Single source. Nothing below repeats a figure that appears here.
 | Trading opens (§12); free agency opens | 1 February |
 | Draft: round 1 on the last Thursday of April; rounds 2–3 the next day; rounds 4–7 and compensatory picks the day after | late April |
 | Camp opens (preseason ceiling applies) | 1 June |
-| Coronation venue vote | 15 June |
 | Final cut to 53 and 16, then the waiver period | the Tuesday and Wednesday before week 1 |
 
-In the DFL calendar a year's events fire in the order of this table, then the 27-week season below, and close on 31 December. *Owner ruling of 2026-10-29: the offseason dates above are approved.* They agree with the leadership, contract and honours rules: contracts end with the league year and expire on 1 January; the leadership window runs 1–31 January on the previous season's records, which were fixed at the year close; honours and the year's results are written at the year close on 31 December.
+In the DFL calendar a year's events fire in the order of this table, then the 27-week season below, and close on 31 December: 47 dated events a year (Edition 8.55 removed the Coronation venue vote of 15 June and its announcement of 4 July). *Owner ruling of 2026-10-29: the offseason dates above are approved.* They agree with the leadership, contract and honours rules: contracts end with the league year and expire on 1 January; the leadership window runs 1–31 January on the previous season's records, which were fixed at the year close; honours and the year's results are written at the year close on 31 December.
 - **The year close and the new year.** The Coronation is the last Sunday of the year, so it falls on one of 25–31 December and the year closes (31 December: results, governance, honours) between 0 and 6 days after it. The league year turns on 1 January. The turn follows the Coronation "the next morning" only when the Coronation is itself on 31 December (for example 2000); in a year whose last Sunday is earlier (2001: 30 December; 2002: 29 December; 2005: 25 December) the days between are empty, and only the year close falls in them. Nothing else, trading and signing included, happens between the Coronation and 1 January.
 - **The Diamond Coronation is the last Sunday of the simulated year.** All scheduling is derived backwards from it.
 - Fixed offsets: final regular-season Monday = **C−34**; wild card C−28; divisional C−21; conference C−14; **Ambassador Bowl C−7**; Coronation C. All rungs are Sundays, 7 days apart.
@@ -101,17 +101,19 @@ calendar_week,phase,numbered_week,saturday,sunday,monday,note
 ## §3 League structure
 - Two conferences (Western, Eastern), four divisions each, six clubs per division: five active and one ambassador.
 - **Exile and seeds.** After the last regular-season game, each division's five active clubs are ranked by the tiebreak cascade below. Ranks 1–4 become the next season's seeds 1–4. The last-place club is exiled: it is the next season's ambassador, and exile cannot be declined. The current ambassador returns as seed 5, so every division has seeds 1–5 and one ambassador every year. Season 1 seeds are drawn by chance.
-- **Tiebreak cascade.** It orders every ranking: divisions, playoff seeding and the exile decision. Steps run in this order, each used only while clubs remain tied: (1) overall wins; (2) overall win %; (3) division wins; (4) division win %; (5) conference wins; (6) conference win %; (7) strength of schedule; (8) point differential; (9) strength of victory; then the club's draw priority for the season. Steps 3–4 apply only when every tied club is in the same division, and steps 5–6 only when every tied club is in the same conference. A tied group is sorted once by the whole cascade; there is no step-by-step reduction. The cascade is deliberately a list of columns, so every step can be shown beside each club on the standings page in this order; it intentionally has no head-to-head step and no restart (owner ruling, Edition 8.9). *Draw priority (owner ruling of 2026-10-29).* Each club has one seeded priority per season, fixed by the season's seed and the club alone, and the same in every ranking that season (division, seeding, wild card, Tour, draft order), so changing the scope of a ranking can never reverse an otherwise identical tie. Standings rank best first, with a higher strength of schedule, strength of victory and priority ranking higher; a club with no decisions has a win % of 0. The draft order is the exact reverse of the ranking (worst first), so every step, the priority included, runs the other way there.
+- **Tiebreak cascade.** It orders every ranking: divisions, playoff seeding, the exile decision, the draft and the Week 4 comparison of the conferences. Steps run in this order, each used only while clubs remain tied: (1) overall wins; (2) overall win %; (3) division wins; (4) division win %; (5) conference wins; (6) conference win %; (7) point differential; (8) strength of schedule; (9) strength of victory; (10) the seeded draw. Steps 3–4 apply only when every tied club is in the same division, and steps 5–6 only when every tied club is in the same conference; inapplicable steps are skipped. A tied group is sorted once by the whole cascade; there is no step-by-step reduction. The cascade is deliberately a list of columns, so every step can be shown beside each club on the standings page in this order; it intentionally has no head-to-head step and no restart (owner ruling, Edition 8.9). *Order of steps 7–9 (owner's ruling of 2026-10-30, Edition 8.55).* Point differential now precedes strength of schedule and strength of victory; before, strength of schedule was step 7 and point differential step 8. *Draw priority (owner ruling of 2026-10-29).* Each club has one seeded priority per season, fixed by the season's seed and the club alone, and the same in every ranking that season (division, seeding, wild card, Tour, draft order), so changing the scope of a ranking can never reverse an otherwise identical tie. Standings rank best first, with a higher point differential, strength of schedule, strength of victory and priority ranking higher; a club with no decisions has a win % of 0. The draft order is the exact reverse of the ranking (worst first), so every step, the priority included, runs the other way there.
 - **Records.** A tied game counts as not played in the standings only: it adds no win or loss, no division or conference record, and is left out of every win % and every opponent list (so out of strength of schedule and strength of victory). For statistical purposes it is played: games played, points scored and points allowed include it, and so does point differential. Win % = wins ÷ (wins + losses), counted as 0 when a club has no decisions. Strength of schedule = the combined win % of every opponent played (their total wins ÷ their total wins and losses, once per game played); strength of victory = the same for every opponent beaten; for both, a higher figure ranks higher. Point differential = points scored minus points allowed over all regular-season games. Ambassadors' Tour results play no part.
-- **Playoffs.** Identical to the NFL's. Seven clubs per conference: the four division winners (seeds 1–4) and the three best other clubs (seeds 5–7), all ordered by the cascade. Seed 1 has a bye. Wild card round: 2 v 7, 3 v 6, 4 v 5. Divisional round: seed 1 plays the lowest remaining seed and the other two survivors meet. Then the conference championships, then the Diamond Coronation between the two conference champions. A division's last-place club is exiled and cannot take a wild card. Playoff games are played at the higher seed's home venue. The Coronation's venue is chosen by a fictitious fan vote held in June and announced on 4 July from the 48 DFL club venues; no venue may host the Coronation twice within a rolling 40-year window, which leaves nine eligible venues each year. The vote is decided by a seeded random draw among the nine eligible venues. If a finalist's own venue wins the vote, it plays at home.
+- **Playoffs.** Six clubs per conference: the four division winners (seeds 1–4) and the two best other clubs (seeds 5–6), all ordered by the cascade. Seeds 1 and 2 have a bye in the Wild Card round. Wild card round: seed 3 hosts seed 6 and seed 4 hosts seed 5. Divisional round, reseeded: seed 1 hosts the lowest surviving seed and seed 2 hosts the other survivor. Conference championship: the higher remaining seed hosts. The winners of the two conference championships meet in the Diamond Coronation. The four-round postseason calendar of §2 is unchanged (wild card, divisional, conference championships, Coronation). A conference plays five playoff games, ten in all, and the Coronation makes eleven. A division's last-place club is exiled and cannot take a wild card. Conference playoff games are played at the higher seed's home venue. *(Owner's ruling of 2026-10-30, Edition 8.55; replaces the seven-club NFL bracket.)*
+- **The Diamond Coronation.** The Coronation is always played at **Amethyst Aloha Stadium**, the DFL's own stadium, owned and renovated by the DFL. There is no venue vote, no rotating host and no repeat rule, and no club's own venue is ever used. The game is always neutral: the engine gives neither finalist a home-field edge (§10). *(Owner's ruling of 2026-10-30, Edition 8.55; replaces the fan vote of June, the announcement of 4 July and the 40-year window.)*
+- **Nominal home of the Coronation (designated after Week 4).** Which finalist is the nominal home is decided from the first four weeks and frozen. Pool every interconference game of numbered weeks 1–4 (80 games) and treat each conference as one aggregate team. Rank the two aggregates by the cascade above, skipping the steps that cannot apply to two conferences (3–6): (1) wins; (2) win %; (7) point differential; (8) strength of schedule; (9) strength of victory; (10) a seeded draw. *Aggregation.* Wins and losses are the pooled games each conference won and lost. A tied pooled game is not played for wins, losses or the opponent lists but its points count toward point differential (the rule for clubs, above). Aggregate strength of schedule = the combined win % of the opponents the aggregate played: one entry for every decided pooled game, the opponent being the club on the other side, and each opponent's wins and losses taken from her full regular-season record over numbered weeks 1–4 (all her games, not only the interconference ones); aggregate strength of victory = the same over the opponents the aggregate beat. A higher figure ranks higher. Only the games of numbered weeks 1–4 are read; Tour games and later games play no part. Because one conference's win is the other's loss and the two point differentials sum to zero, equal wins always mean equal win %, so step 2 can never separate them, and point differential decides unless it is exactly zero. The seeded draw gives each conference one number fixed by the season's seed and the conference alone, so it is reproducible. The champion of the winning conference is the Coronation's nominal home (the finalist of the other conference is the nominal away side). The decision is made when Week 4 is complete, saved with the figures of every step, the step that decided it and the draw numbers, and never recomputed; nothing played afterwards can change it. The designation controls only the established rules for the nominal home side: it kicks the first half (§10) and takes the home uniform (§9). *(Owner's ruling of 2026-10-30, Edition 8.55.)*
 - Ambassadors keep identity, full roster obligations and full cap, play the 7-game Tour, and receive a first-round lottery band.
-- **Seed beds and rotation.** The schedule template has eight seed beds, each holding seed positions 1–5, in two blocks: beds 1–4 and beds 5–8. Each division fills one bed, its five active clubs holding the bed's positions by seed. In Season 1 the Western divisions fill beds 1–4 in the order Northwest, Southwest, Central, Southern, and the Eastern divisions fill beds 5–8 in the order Midwest, Northeast, East, Southeast. Each season every division moves one bed on inside its block (bed 4 to bed 1, bed 8 to bed 5). After four seasons the conferences flip: in Season 5 the Western divisions fill beds 5–8 in the same order and the Eastern divisions fill beds 1–4. The next four seasons rotate inside the new blocks, then the conferences flip back, so the pattern repeats every eight seasons. Divisions never change conference. In formula form, for season n let k = (n − 1) mod 4, p = ⌊(n − 1) ÷ 4⌋ mod 2, and i = the division's position (0–3) in its conference's order above: a Western division fills bed 1 + 4p + (i + k) mod 4 and an Eastern division fills bed 1 + 4(1 − p) + (i + k) mod 4. Clubs never change division; only seeds and beds move.
+- **Seed beds and rotation.** The schedule template has eight seed beds, each holding seed positions 1–5, in two blocks: beds 1–4 and beds 5–8. Each division fills one bed, its five active clubs holding the bed's positions by seed. In Season 1 the Western divisions fill beds 1–4 in the order Northwest, Southwest, Central, Southern, and the Eastern divisions fill beds 5–8 in the order Great Lakes, Atlantic, Midland, Southeast. Each season every division moves one bed on inside its block (bed 4 to bed 1, bed 8 to bed 5). After four seasons the conferences flip: in Season 5 the Western divisions fill beds 5–8 in the same order and the Eastern divisions fill beds 1–4. The next four seasons rotate inside the new blocks, then the conferences flip back, so the pattern repeats every eight seasons. Divisions never change conference. In formula form, for season n let k = (n − 1) mod 4, p = ⌊(n − 1) ÷ 4⌋ mod 2, and i = the division's position (0–3) in its conference's order above: a Western division fills bed 1 + 4p + (i + k) mod 4 and an Eastern division fills bed 1 + 4(1 − p) + (i + k) mod 4. Clubs never change division; only seeds and beds move.
 - 59 halls: 1 league, 2 conference, 8 division, 48 club.
 
 ## §4 Table conventions and sort orders
 - All tables are CSV, UTF-8, LF, with a header row. Dates are ISO `YYYY-MM-DD`. Times are `HH:MM` league time (UTC).
 - Booleans are lowercase `true`/`false`. Empty cells are empty, never `"Exile"`.
-- Canonical sorts (also asserted in §18): `TEAMS` conference → division → division_rank, where conference and division order follow `COLOR_REGISTRY` (Western, then Eastern; Northwest, Southwest, Central, Southern; Midwest, Northeast, East, Southeast), not alphabetical order; `SCHEDULE` week → game; `TOUR` round → game; `INTL_VENUES` venue_id; `CALENDAR` calendar_week; `COLOR_REGISTRY` row order as listed (league brand, conferences, then divisions in the order above).
+- Canonical sorts (also asserted in §18): `TEAMS` conference → division → division_rank, where conference and division order follow `COLOR_REGISTRY` (Western, then Eastern; Northwest, Southwest, Central, Southern; Great Lakes, Atlantic, Midland, Southeast), not alphabetical order; `SCHEDULE` week → game; `TOUR` round → game; `INTL_VENUES` venue_id; `CALENDAR` calendar_week; `COLOR_REGISTRY` row order as listed (league brand, conferences, then divisions in the order above).
 - Club name columns are `team_city` and `team_name`; a bare `city` belongs to `INTL_VENUES` only. City values in `SCHEDULE` and `TOUR` are `team_city` values. `team_city` is a region label and may differ from the stadium's town (`location`): Minnesota plays in Minneapolis.
 - `bed_id` is the durable fixture slot, `bed-rank`: the bed (1–8) and the club's seed in it, for example `1-1` for Northwest seed 1 in Season 1. A division's bed changes by season (§3). Ambassadors carry no bed_id.
 - `division_rank` is the club's seed for the season, set from the previous season's final division ranking (§3). Ambassadors carry 6.
@@ -122,18 +124,18 @@ Season 1 values. Sorted conference → division → division_rank. Ambassadors h
 
 ```
 team_id,abbr,team_city,team_name,conference,division,bed_id,division_rank,club_status,is_active,is_league_member,draft_band,venue,location,primary_color,primary_hex,secondary_color,secondary_hex,tertiary_color,tertiary_hex
-30,MON,Montana,Outriders,Western,Northwest,1-1,1,active,true,true,standard,IronGate Stadium,"Helena, MT",Dark Forest Green,#174A32,Tan,#C2A477,Topaz,#E6A32E
-21,SEA,Seattle,Orcas,Western,Northwest,1-2,2,active,true,true,standard,Lumen Field,"Seattle, WA",College Navy,#002244,Action Green,#69BE28,Topaz,#E6A32E
-31,UTA,Utah,Avalanche,Western,Northwest,1-3,3,active,true,true,standard,NorthStar Bank Field,"Salt Lake City, Utah",Glacier Blue,#8FC8D8,Deep Navy Blue,#16324F,Topaz,#E6A32E
-39,CAL,Calgary,Stampede,Western,Northwest,1-4,4,active,true,true,standard,Redwood Credit Union Park,"Calgary, Canada",Root Beer Brown,#492716,Prairie Green,#688B45,Topaz,#E6A32E
-40,IDA,Idaho,Tomahawks,Western,Northwest,1-5,5,active,true,true,standard,Continental Freight Stadium,"Boise, ID",Pine Green,#17543B,Steel Gray,#87949E,Topaz,#E6A32E
-41,POR,Portland,Tempest,Western,Northwest,,6,ambassador,false,true,lottery_1_8,HarborTrust Field,"Portland, OR",Storm Gray,#606A75,Electric Purple,#A334E8,Topaz,#E6A32E
-7,SFX,San Francisco,Shine,Western,Southwest,2-1,1,active,true,true,standard,Candlestick Park,"San Francisco, CA",Scarlet Red,#AA0000,Gold,#D3BC8D,Peridot,#A5C83B
-20,SDX,San Diego,Sirens,Western,Southwest,2-2,2,active,true,true,standard,Qualcomm Stadium,"San Diego, CA",Powder Blue,#6CAEDF,Gold,#D3BC8D,Peridot,#A5C83B
-33,SAC,Sacramento,Sting,Western,Southwest,2-3,3,active,true,true,standard,Twin Rivers Stadium,"West Sacramento, CA",Electric Yellow,#EFFF00,Black,#101010,Peridot,#A5C83B
-6,ARI,Arizona,Thunderbirds,Western,Southwest,2-4,4,active,true,true,standard,State Farm Stadium,"Glendale, AZ",Cardinal Red,#97233F,Black,#000000,Peridot,#A5C83B
-19,LVR,Las Vegas,Invaders,Western,Southwest,2-5,5,active,true,true,standard,Allegiant Stadium,"Las Vegas, NV",Black,#000000,Silver,#B0B7BC,Peridot,#A5C83B
-4,LAL,Los Angeles,Legion,Western,Southwest,,6,ambassador,false,true,lottery_1_8,SoFi Stadium,"Inglewood, CA",Royal Blue,#003DA5,Silver,#B0B7BC,Peridot,#A5C83B
+30,MON,Montana,Outriders,Western,Northwest,1-1,1,active,true,true,standard,IronGate Stadium,"Helena, MT",Dark Forest Green,#174A32,Tan,#C2A477,Peridot,#A5C83B
+21,SEA,Seattle,Orcas,Western,Northwest,1-2,2,active,true,true,standard,Lumen Field,"Seattle, WA",College Navy,#002244,Action Green,#69BE28,Peridot,#A5C83B
+31,UTA,Utah,Avalanche,Western,Northwest,1-3,3,active,true,true,standard,NorthStar Bank Field,"Salt Lake City, Utah",Glacier Blue,#8FC8D8,Deep Navy Blue,#16324F,Peridot,#A5C83B
+39,CAL,Calgary,Stampede,Western,Northwest,1-4,4,active,true,true,standard,Redwood Credit Union Park,"Calgary, Canada",Root Beer Brown,#492716,Prairie Green,#688B45,Peridot,#A5C83B
+40,IDA,Idaho,Tomahawks,Western,Northwest,1-5,5,active,true,true,standard,Continental Freight Stadium,"Boise, ID",Pine Green,#17543B,Steel Gray,#87949E,Peridot,#A5C83B
+41,POR,Portland,Tempest,Western,Northwest,,6,ambassador,false,true,lottery_1_8,HarborTrust Field,"Portland, OR",Storm Gray,#606A75,Electric Purple,#A334E8,Peridot,#A5C83B
+7,SFX,San Francisco,Shine,Western,Southwest,2-1,1,active,true,true,standard,Candlestick Park,"San Francisco, CA",Scarlet Red,#AA0000,Gold,#D3BC8D,Topaz,#E6A32E
+20,SDX,San Diego,Sirens,Western,Southwest,2-2,2,active,true,true,standard,Qualcomm Stadium,"San Diego, CA",Powder Blue,#6CAEDF,Gold,#D3BC8D,Topaz,#E6A32E
+33,SAC,Sacramento,Sting,Western,Southwest,2-3,3,active,true,true,standard,Twin Rivers Stadium,"West Sacramento, CA",Electric Yellow,#EFFF00,Black,#101010,Topaz,#E6A32E
+6,ARI,Arizona,Thunderbirds,Western,Southwest,2-4,4,active,true,true,standard,State Farm Stadium,"Glendale, AZ",Cardinal Red,#97233F,Black,#000000,Topaz,#E6A32E
+19,LVR,Las Vegas,Invaders,Western,Southwest,2-5,5,active,true,true,standard,Allegiant Stadium,"Las Vegas, NV",Black,#000000,Silver,#B0B7BC,Topaz,#E6A32E
+4,LAL,Los Angeles,Legion,Western,Southwest,,6,ambassador,false,true,lottery_1_8,SoFi Stadium,"Inglewood, CA",Royal Blue,#003DA5,Silver,#B0B7BC,Topaz,#E6A32E
 43,OCO,Oklahoma City,Outlaws,Western,Central,3-1,1,active,true,true,standard,TriAxis Financial Stadium,"Oklahoma City, OK",Desert Tan,#C2A477,Blued Gunmetal,#293C4A,Tourmaline,#D94B89
 34,OMA,Omaha,Assassins,Western,Central,3-2,2,active,true,true,standard,SilverGate Field,"Omaha, NE",Obsidian,#111318,Acid Green,#A8FF2A,Tourmaline,#D94B89
 27,DAK,Dakota,Divas,Western,Central,3-3,3,active,true,true,standard,Union Capital Stadium,"Bismarck, ND",Gotham Green,#125740,Silver,#B0B7BC,Tourmaline,#D94B89
@@ -141,31 +143,31 @@ team_id,abbr,team_city,team_name,conference,division,bed_id,division_rank,club_s
 16,DEN,Denver,Unicorns,Western,Central,3-5,5,active,true,true,standard,Empower Field at Mile High,"Denver, CO",Orange,#FF5F05,Navy,#002244,Tourmaline,#D94B89
 5,MIN,Minnesota,Warriors,Western,Central,,6,ambassador,false,true,lottery_1_8,U.S. Bank Stadium,"Minneapolis, MN",Purple,#4F2683,Gold,#D3BC8D,Tourmaline,#D94B89
 17,HOU,Houston,Faeries,Western,Southern,4-1,1,active,true,true,standard,NRG Stadium,"Houston, TX",Deep Steel Blue,#03202F,Battle Red,#A71930,Garnet,#9A1B36
-42,MCA,Mexico City,Aztecas,Western,Southern,4-2,2,active,true,true,standard,Ironclad Insurance Stadium,"Mexico City, Mexico",Turquoise,#20AFA6,Sun Gold,#E9B44C,Garnet,#9A1B36
+42,MCA,Mexico City,Mariachas,Western,Southern,4-2,2,active,true,true,standard,Ironclad Insurance Stadium,"Mexico City, Mexico",Turquoise,#20AFA6,Sun Gold,#E9B44C,Garnet,#9A1B36
 1,DAL,Dallas,Starlings,Western,Southern,4-3,3,active,true,true,standard,AT&T Stadium,"Arlington, TX",Navy,#002244,Silver,#B0B7BC,Garnet,#9A1B36
 29,SAV,San Antonio,Vaqueras,Western,Southern,4-4,4,active,true,true,standard,Stratos Bank Stadium,"San Antonio, TX",Bronze,#CD7F32,Desert Teal,#3D8C8C,Garnet,#9A1B36
 44,NMS,New Mexico,Scorpions,Western,Southern,4-5,5,active,true,true,standard,Crown Harbor Field,"Albuquerque, NM",Midnight Plum,#321C31,Desert Copper,#D47842,Garnet,#9A1B36
 45,BAJ,Baja,Barracudas,Western,Southern,,6,ambassador,false,true,lottery_1_8,PrairieStar Stadium,"Cabo San Lucas, Mexico",Abyssal Teal,#083B4C,Predator Silver,#A8B7BC,Garnet,#9A1B36
-35,SLR,St. Louis,Archers,Eastern,Midwest,5-1,1,active,true,true,standard,MetroAxis Field,"St. Louis, MO",Navy,#002244,Metallic Gold,#B3995D,Aquamarine,#55C5D8
-9,CHI,Chicago,Foxes,Eastern,Midwest,5-2,2,active,true,true,standard,Soldier Field,"Chicago, IL",Navy,#002244,Orange,#FF5F05,Aquamarine,#55C5D8
-38,TEN,Tennessee,Belles,Eastern,Midwest,5-3,3,active,true,true,standard,Nissan Stadium,"Nashville, TN",Navy,#0C2340,Titans Blue,#4B92DB,Aquamarine,#55C5D8
-3,GBP,Green Bay,Glamour,Eastern,Midwest,5-4,4,active,true,true,standard,Lambeau Field,"Green Bay, WI",Green,#203731,Gold,#D3BC8D,Aquamarine,#55C5D8
-23,CIN,Cincinnati,Shadow Katz,Eastern,Midwest,5-5,5,active,true,true,standard,Paycor Stadium,"Cincinnati, OH",Orange,#FF5F05,Black,#000000,Aquamarine,#55C5D8
-24,IND,Indianapolis,Pit Vipers,Eastern,Midwest,,6,ambassador,false,true,lottery_1_8,Lucas Oil Stadium,"Indianapolis, IN",Racing Red,#D71920,Electric Lime,#C6FF00,Aquamarine,#55C5D8
-47,MOS,Montreal,Storm,Eastern,Northeast,6-1,1,active,true,true,standard,Evergreen Credit Stadium,"Montreal, Canada",Frost Silver,#B8C5D1,Nordic Blue,#245A81,Emerald,#009B77
-26,NEP,New England,Rebels,Eastern,Northeast,6-2,2,active,true,true,standard,Gillette Stadium,"Foxborough, MA",Navy,#002244,Red,#C8102E,Emerald,#009B77
-46,TOR,Toronto,Sentinels,Eastern,Northeast,6-3,3,active,true,true,standard,GoldenRail Stadium,"Toronto, Canada",Crimson,#A6192E,Steel Gray,#78858B,Emerald,#009B77
-12,PHI,Philadelphia,Harpies,Eastern,Northeast,6-4,4,active,true,true,standard,Lincoln Financial Field,"Philadelphia, PA",Midnight Green,#004C54,Silver,#B0B7BC,Emerald,#009B77
-10,NYG,New York,Goliaths,Eastern,Northeast,6-5,5,active,true,true,standard,MetLife Stadium,"East Rutherford, NJ",Blue,#0B2265,Red,#C8102E,Emerald,#009B77
-22,BUF,Buffalo,Brats,Eastern,Northeast,,6,ambassador,false,true,lottery_1_8,Highmark Stadium,"Orchard Park, NY",Royal Blue,#003DA5,Red,#C8102E,Emerald,#009B77
-36,CAR,Carolina,Comets,Eastern,East,7-1,1,active,true,true,standard,Bank of America Stadium,"Charlotte, NC",Carolina Blue,#0085CA,Black,#101820,Turquoise,#26A9A0
-2,DET,Detroit,Soul,Eastern,East,7-2,2,active,true,true,standard,Ford Field,"Detroit, MI",Honolulu Blue,#0076B6,Silver,#B0B7BC,Turquoise,#26A9A0
-14,WAS,Washington,Commandos,Eastern,East,7-3,3,active,true,true,standard,Northwest Stadium,"Landover, MD",Burgundy,#773141,Gold,#D3BC8D,Turquoise,#26A9A0
-28,PIT,Pittsburgh,Riviters,Eastern,East,7-4,4,active,true,true,standard,Acrisure Stadium,"Pittsburgh, PA",Black,#101820,Light Blue,#83C9EF,Turquoise,#26A9A0
-15,CLE,Cleveland,Mud Dawgs,Eastern,East,7-5,5,active,true,true,standard,Huntington Bank Field,"Cleveland, OH",Brown,#311D00,Orange,#FF5F05,Turquoise,#26A9A0
-32,BAL,Baltimore,Rooks,Eastern,East,,6,ambassador,false,true,lottery_1_8,M&T Bank Stadium,"Baltimore, MD",Purple,#4F2683,Black,#000000,Turquoise,#26A9A0
+3,GBP,Green Bay,Glamour,Eastern,Great Lakes,5-1,1,active,true,true,standard,Lambeau Field,"Green Bay, WI",Green,#203731,Gold,#D3BC8D,Aquamarine,#55C5D8
+9,CHI,Chicago,Foxes,Eastern,Great Lakes,5-2,2,active,true,true,standard,Soldier Field,"Chicago, IL",Navy,#002244,Orange,#FF5F05,Aquamarine,#55C5D8
+2,DET,Detroit,Soul,Eastern,Great Lakes,5-3,3,active,true,true,standard,Ford Field,"Detroit, MI",Honolulu Blue,#0076B6,Silver,#B0B7BC,Aquamarine,#55C5D8
+15,CLE,Cleveland,Mud Dawgs,Eastern,Great Lakes,5-4,4,active,true,true,standard,Huntington Bank Field,"Cleveland, OH",Brown,#311D00,Orange,#FF5F05,Aquamarine,#55C5D8
+46,TOR,Toronto,Sentinels,Eastern,Great Lakes,5-5,5,active,true,true,standard,GoldenRail Stadium,"Toronto, Canada",Crimson,#A6192E,Steel Gray,#78858B,Aquamarine,#55C5D8
+22,BUF,Buffalo,Brats,Eastern,Great Lakes,,6,ambassador,false,true,lottery_1_8,Highmark Stadium,"Orchard Park, NY",Royal Blue,#003DA5,Red,#C8102E,Aquamarine,#55C5D8
+47,MOS,Montreal,Storm,Eastern,Atlantic,6-1,1,active,true,true,standard,Evergreen Credit Stadium,"Montreal, Canada",Frost Silver,#B8C5D1,Nordic Blue,#245A81,Emerald,#009B77
+26,NEP,New England,Rebels,Eastern,Atlantic,6-2,2,active,true,true,standard,Gillette Stadium,"Foxborough, MA",Navy,#002244,Red,#C8102E,Emerald,#009B77
+10,NYG,New York,Gladiators,Eastern,Atlantic,6-3,3,active,true,true,standard,MetLife Stadium,"East Rutherford, NJ",Blue,#0B2265,Red,#C8102E,Emerald,#009B77
+12,PHI,Philadelphia,Harpies,Eastern,Atlantic,6-4,4,active,true,true,standard,Lincoln Financial Field,"Philadelphia, PA",Midnight Green,#004C54,Silver,#B0B7BC,Emerald,#009B77
+14,WAS,Washington,Commandos,Eastern,Atlantic,6-5,5,active,true,true,standard,Northwest Stadium,"Landover, MD",Burgundy,#773141,Gold,#D3BC8D,Emerald,#009B77
+32,BAL,Baltimore,Rooks,Eastern,Atlantic,,6,ambassador,false,true,lottery_1_8,M&T Bank Stadium,"Baltimore, MD",Purple,#4F2683,Black,#000000,Emerald,#009B77
+35,SLR,St. Louis,Archers,Eastern,Midland,7-1,1,active,true,true,standard,MetroAxis Field,"St. Louis, MO",Navy,#002244,Metallic Gold,#B3995D,Turquoise,#26A9A0
+38,TEN,Tennessee,Belles,Eastern,Midland,7-2,2,active,true,true,standard,Nissan Stadium,"Nashville, TN",Navy,#0C2340,Titans Blue,#4B92DB,Turquoise,#26A9A0
+23,CIN,Cincinnati,Shadow Katz,Eastern,Midland,7-3,3,active,true,true,standard,Paycor Stadium,"Cincinnati, OH",Orange,#FF5F05,Black,#000000,Turquoise,#26A9A0
+36,CAR,Carolina,Comets,Eastern,Midland,7-4,4,active,true,true,standard,Bank of America Stadium,"Charlotte, NC",Carolina Blue,#0085CA,Black,#101820,Turquoise,#26A9A0
+28,PIT,Pittsburgh,Riviters,Eastern,Midland,7-5,5,active,true,true,standard,Acrisure Stadium,"Pittsburgh, PA",Black,#101820,Light Blue,#83C9EF,Turquoise,#26A9A0
+24,IND,Indianapolis,Pit Vipers,Eastern,Midland,,6,ambassador,false,true,lottery_1_8,Lucas Oil Stadium,"Indianapolis, IN",Racing Red,#D71920,Electric Lime,#C6FF00,Turquoise,#26A9A0
 48,ALA,Alabama,Thunder,Eastern,Southeast,8-1,1,active,true,true,standard,Granite Stadium,"Birmingham, AL",Dark Thunder Blue,#102A43,Lightning Yellow,#F5D547,Alexandrite,#7040A0
-37,JAX,Florida,Fangs,Eastern,Southeast,8-2,2,active,true,true,standard,EverBank Stadium,"Jacksonville, FL",Teal,#006778,Black,#101820,Alexandrite,#7040A0
+37,HAV,Havana,Mariposas,Eastern,Southeast,8-2,2,active,true,true,standard,Estadio Panamericano,"Havana, Cuba",Teal,#006778,Black,#101820,Alexandrite,#7040A0
 25,MIA,Miami,Monsters,Eastern,Southeast,8-3,3,active,true,true,standard,Hard Rock Stadium,"Miami Gardens, FL",Aqua,#008E97,Orange,#FF5F05,Alexandrite,#7040A0
 8,ATL,Atlanta,Mavericks,Eastern,Southeast,8-4,4,active,true,true,standard,Mercedes-Benz Stadium,"Atlanta, GA",Black,#000000,Red,#C8102E,Alexandrite,#7040A0
 11,NOS,New Orleans,Mayfairs,Eastern,Southeast,8-5,5,active,true,true,standard,Caesars Superdome,"New Orleans, LA",Black,#000000,Old Gold,#9F8958,Alexandrite,#7040A0
@@ -177,263 +179,263 @@ Season 1, which is the bed template. Sorted week → game. 360 rows; weeks 1–1
 
 ```
 week,game,date,kickoff,away,home
-1,1,2000-07-01,17:30,Oklahoma City,St. Louis
+1,1,2000-07-01,17:30,Oklahoma City,Green Bay
 1,2,2000-07-02,10:00,Las Vegas,New Orleans
-1,3,2000-07-02,10:00,Arizona,Pittsburgh
+1,3,2000-07-02,10:00,Arizona,Carolina
 1,4,2000-07-02,10:00,Kansas City,Philadelphia
-1,5,2000-07-02,10:00,Seattle,Florida
+1,5,2000-07-02,10:00,Seattle,Havana
 1,6,2000-07-02,10:00,Mexico City,Chicago
-1,7,2000-07-02,10:00,Dakota,Tennessee
+1,7,2000-07-02,10:00,Dakota,Detroit
 1,8,2000-07-02,10:00,Calgary,Atlanta
-1,9,2000-07-02,10:00,Denver,Cincinnati
+1,9,2000-07-02,10:00,Denver,Toronto
 1,10,2000-07-02,10:00,Omaha,New England
-1,11,2000-07-02,10:00,Montana,Carolina
+1,11,2000-07-02,10:00,Montana,St. Louis
 1,12,2000-07-02,13:00,Sacramento,Miami
 1,13,2000-07-02,13:00,San Francisco,Alabama
-1,14,2000-07-02,13:00,San Antonio,Green Bay
-1,15,2000-07-02,13:00,San Diego,Detroit
+1,14,2000-07-02,13:00,San Antonio,Cleveland
+1,15,2000-07-02,13:00,San Diego,Tennessee
 1,16,2000-07-02,13:00,Houston,Montreal
-1,17,2000-07-02,13:00,Utah,Washington
-1,18,2000-07-02,17:30,New Mexico,New York
-1,19,2000-07-02,17:30,Idaho,Cleveland
-1,20,2000-07-03,17:30,Dallas,Toronto
+1,17,2000-07-02,13:00,Utah,Cincinnati
+1,18,2000-07-02,17:30,New Mexico,Washington
+1,19,2000-07-02,17:30,Idaho,Pittsburgh
+1,20,2000-07-03,17:30,Dallas,New York
 2,1,2000-07-08,17:30,Chicago,Omaha
 2,2,2000-07-09,10:00,Montreal,Oklahoma City
-2,3,2000-07-09,10:00,New York,Denver
-2,4,2000-07-09,10:00,Detroit,Seattle
-2,5,2000-07-09,10:00,Washington,Sacramento
-2,6,2000-07-09,10:00,Pittsburgh,Calgary
-2,7,2000-07-09,10:00,Cleveland,Las Vegas
+2,3,2000-07-09,10:00,Washington,Denver
+2,4,2000-07-09,10:00,Tennessee,Seattle
+2,5,2000-07-09,10:00,Cincinnati,Sacramento
+2,6,2000-07-09,10:00,Carolina,Calgary
+2,7,2000-07-09,10:00,Pittsburgh,Las Vegas
 2,8,2000-07-09,10:00,Philadelphia,San Antonio
-2,9,2000-07-09,10:00,Tennessee,Dallas
+2,9,2000-07-09,10:00,Detroit,Dallas
 2,10,2000-07-09,10:00,New England,Mexico City
-2,11,2000-07-09,10:00,Carolina,San Francisco
+2,11,2000-07-09,10:00,St. Louis,San Francisco
 2,12,2000-07-09,13:00,Alabama,Montana
-2,13,2000-07-09,13:00,Green Bay,Kansas City
-2,14,2000-07-09,13:00,Florida,San Diego
+2,13,2000-07-09,13:00,Cleveland,Kansas City
+2,14,2000-07-09,13:00,Havana,San Diego
 2,15,2000-07-09,13:00,New Orleans,Idaho
 2,16,2000-07-09,13:00,Miami,Utah
 2,17,2000-07-09,13:00,Atlanta,Arizona
-2,18,2000-07-09,17:30,St. Louis,Houston
-2,19,2000-07-09,17:30,Toronto,Dakota
-2,20,2000-07-10,17:30,Cincinnati,New Mexico
-3,1,2000-07-15,17:30,Montana,St. Louis
-3,2,2000-07-16,10:00,Washington,Dallas
-3,3,2000-07-16,10:00,Carolina,Houston
-3,4,2000-07-16,10:00,Arizona,Green Bay
+2,18,2000-07-09,17:30,Green Bay,Houston
+2,19,2000-07-09,17:30,New York,Dakota
+2,20,2000-07-10,17:30,Toronto,New Mexico
+3,1,2000-07-15,17:30,Montana,Green Bay
+3,2,2000-07-16,10:00,Cincinnati,Dallas
+3,3,2000-07-16,10:00,St. Louis,Houston
+3,4,2000-07-16,10:00,Arizona,Cleveland
 3,5,2000-07-16,10:00,Seattle,New England
 3,6,2000-07-16,10:00,San Francisco,Montreal
 3,7,2000-07-16,10:00,New Orleans,Denver
-3,8,2000-07-16,10:00,Florida,Mexico City
+3,8,2000-07-16,10:00,Havana,Mexico City
 3,9,2000-07-16,10:00,Miami,Dakota
 3,10,2000-07-16,10:00,Calgary,Philadelphia
 3,11,2000-07-16,10:00,San Diego,Chicago
-3,12,2000-07-16,13:00,Sacramento,Toronto
-3,13,2000-07-16,13:00,Idaho,Cincinnati
+3,12,2000-07-16,13:00,Sacramento,New York
+3,13,2000-07-16,13:00,Idaho,Toronto
 3,14,2000-07-16,13:00,Alabama,Oklahoma City
-3,15,2000-07-16,13:00,Las Vegas,New York
+3,15,2000-07-16,13:00,Las Vegas,Washington
 3,16,2000-07-16,13:00,Atlanta,San Antonio
-3,17,2000-07-16,13:00,Cleveland,New Mexico
-3,18,2000-07-16,17:30,Utah,Tennessee
-3,19,2000-07-16,17:30,Pittsburgh,Kansas City
-3,20,2000-07-17,17:30,Detroit,Omaha
+3,17,2000-07-16,13:00,Pittsburgh,New Mexico
+3,18,2000-07-16,17:30,Utah,Detroit
+3,19,2000-07-16,17:30,Carolina,Kansas City
+3,20,2000-07-17,17:30,Tennessee,Omaha
 4,1,2000-07-22,17:30,Chicago,Seattle
 4,2,2000-07-23,10:00,New England,San Diego
-4,3,2000-07-23,10:00,Tennessee,Sacramento
-4,4,2000-07-23,10:00,San Antonio,Pittsburgh
-4,5,2000-07-23,10:00,Cincinnati,Las Vegas
-4,6,2000-07-23,10:00,Green Bay,Calgary
-4,7,2000-07-23,10:00,Denver,Cleveland
-4,8,2000-07-23,10:00,Omaha,Florida
-4,9,2000-07-23,10:00,St. Louis,San Francisco
-4,10,2000-07-23,10:00,Dakota,Washington
+4,3,2000-07-23,10:00,Detroit,Sacramento
+4,4,2000-07-23,10:00,San Antonio,Carolina
+4,5,2000-07-23,10:00,Toronto,Las Vegas
+4,6,2000-07-23,10:00,Cleveland,Calgary
+4,7,2000-07-23,10:00,Denver,Pittsburgh
+4,8,2000-07-23,10:00,Omaha,Havana
+4,9,2000-07-23,10:00,Green Bay,San Francisco
+4,10,2000-07-23,10:00,Dakota,Cincinnati
 4,11,2000-07-23,10:00,Kansas City,Atlanta
-4,12,2000-07-23,13:00,Toronto,Utah
-4,13,2000-07-23,13:00,New York,Idaho
+4,12,2000-07-23,13:00,New York,Utah
+4,13,2000-07-23,13:00,Washington,Idaho
 4,14,2000-07-23,13:00,Dallas,Miami
 4,15,2000-07-23,13:00,New Mexico,New Orleans
 4,16,2000-07-23,13:00,Philadelphia,Arizona
-4,17,2000-07-23,13:00,Mexico City,Detroit
-4,18,2000-07-23,17:30,Oklahoma City,Carolina
+4,17,2000-07-23,13:00,Mexico City,Tennessee
+4,18,2000-07-23,17:30,Oklahoma City,St. Louis
 4,19,2000-07-23,17:30,Montreal,Montana
 4,20,2000-07-24,17:30,Houston,Alabama
-5,1,2000-08-05,17:30,Florida,New Orleans
-5,2,2000-08-06,10:00,New York,Montreal
+5,1,2000-08-05,17:30,Havana,New Orleans
+5,2,2000-08-06,10:00,Washington,Montreal
 5,3,2000-08-06,10:00,San Francisco,Montana
 5,4,2000-08-06,10:00,Kansas City,Omaha
-5,5,2000-08-06,10:00,Toronto,Philadelphia
-5,6,2000-08-06,10:00,Carolina,New England
-5,7,2000-08-06,10:00,Atlanta,Washington
+5,5,2000-08-06,10:00,New York,Philadelphia
+5,6,2000-08-06,10:00,St. Louis,New England
+5,7,2000-08-06,10:00,Atlanta,Cincinnati
 5,8,2000-08-06,10:00,Arizona,Idaho
 5,9,2000-08-06,10:00,San Antonio,Las Vegas
 5,10,2000-08-06,10:00,Dakota,Oklahoma City
-5,11,2000-08-06,10:00,Tennessee,Detroit
+5,11,2000-08-06,10:00,Detroit,Tennessee
 5,12,2000-08-06,13:00,San Diego,Utah
 5,13,2000-08-06,13:00,New Mexico,Houston
 5,14,2000-08-06,13:00,Mexico City,Sacramento
 5,15,2000-08-06,13:00,Alabama,Chicago
-5,16,2000-08-06,13:00,St. Louis,Cincinnati
-5,17,2000-08-06,13:00,Pittsburgh,Cleveland
+5,16,2000-08-06,13:00,Green Bay,Toronto
+5,17,2000-08-06,13:00,Carolina,Pittsburgh
 5,18,2000-08-06,17:30,Seattle,Dallas
-5,19,2000-08-06,17:30,Miami,Green Bay
+5,19,2000-08-06,17:30,Miami,Cleveland
 5,20,2000-08-07,17:30,Calgary,Denver
 6,1,2000-08-12,17:30,San Francisco,Mexico City
 6,2,2000-08-13,10:00,Denver,Oklahoma City
 6,3,2000-08-13,10:00,San Antonio,Utah
-6,4,2000-08-13,10:00,Cincinnati,Tennessee
+6,4,2000-08-13,10:00,Toronto,Detroit
 6,5,2000-08-13,10:00,Omaha,Dakota
 6,6,2000-08-13,10:00,Las Vegas,Kansas City
 6,7,2000-08-13,10:00,New Mexico,Idaho
 6,8,2000-08-13,10:00,Alabama,Atlanta
-6,9,2000-08-13,10:00,Miami,Pittsburgh
-6,10,2000-08-13,10:00,New Orleans,Cleveland
-6,11,2000-08-13,10:00,Montreal,St. Louis
+6,9,2000-08-13,10:00,Miami,Carolina
+6,10,2000-08-13,10:00,New Orleans,Pittsburgh
+6,11,2000-08-13,10:00,Montreal,Green Bay
 6,12,2000-08-13,13:00,Montana,Houston
 6,13,2000-08-13,13:00,Sacramento,Seattle
 6,14,2000-08-13,13:00,Dallas,Calgary
-6,15,2000-08-13,13:00,Philadelphia,New York
-6,16,2000-08-13,13:00,New England,Toronto
-6,17,2000-08-13,13:00,Green Bay,Chicago
+6,15,2000-08-13,13:00,Philadelphia,Washington
+6,16,2000-08-13,13:00,New England,New York
+6,17,2000-08-13,13:00,Cleveland,Chicago
 6,18,2000-08-13,17:30,Arizona,San Diego
-6,19,2000-08-13,17:30,Detroit,Washington
-6,20,2000-08-14,17:30,Florida,Carolina
-7,1,2000-08-19,17:30,Detroit,Miami
-7,2,2000-08-20,10:00,Washington,Carolina
+6,19,2000-08-13,17:30,Tennessee,Cincinnati
+6,20,2000-08-14,17:30,Havana,St. Louis
+7,1,2000-08-19,17:30,Tennessee,Miami
+7,2,2000-08-20,10:00,Cincinnati,St. Louis
 7,3,2000-08-20,10:00,Idaho,Montana
 7,4,2000-08-20,10:00,Omaha,Denver
 7,5,2000-08-20,10:00,Mexico City,New Mexico
 7,6,2000-08-20,10:00,Dallas,San Antonio
 7,7,2000-08-20,10:00,Dakota,Calgary
-7,8,2000-08-20,10:00,Green Bay,Toronto
-7,9,2000-08-20,10:00,Cleveland,Cincinnati
-7,10,2000-08-20,10:00,St. Louis,Alabama
+7,8,2000-08-20,10:00,Cleveland,New York
+7,9,2000-08-20,10:00,Pittsburgh,Toronto
+7,10,2000-08-20,10:00,Green Bay,Alabama
 7,11,2000-08-20,10:00,Chicago,Montreal
 7,12,2000-08-20,13:00,Oklahoma City,Seattle
 7,13,2000-08-20,13:00,Utah,Arizona
 7,14,2000-08-20,13:00,San Diego,Houston
-7,15,2000-08-20,13:00,Tennessee,Florida
-7,16,2000-08-20,13:00,Atlanta,New York
-7,17,2000-08-20,13:00,Pittsburgh,New Orleans
+7,15,2000-08-20,13:00,Detroit,Havana
+7,16,2000-08-20,13:00,Atlanta,Washington
+7,17,2000-08-20,13:00,Carolina,New Orleans
 7,18,2000-08-20,17:30,Las Vegas,San Francisco
 7,19,2000-08-20,17:30,Philadelphia,New England
 7,20,2000-08-21,17:30,Kansas City,Sacramento
 8,1,2000-08-26,17:30,Denver,San Antonio
-8,2,2000-08-27,10:00,Carolina,Pittsburgh
+8,2,2000-08-27,10:00,St. Louis,Carolina
 8,3,2000-08-27,10:00,Miami,Alabama
 8,4,2000-08-27,10:00,Oklahoma City,Omaha
 8,5,2000-08-27,10:00,New Mexico,Dallas
 8,6,2000-08-27,10:00,Dakota,Mexico City
 8,7,2000-08-27,10:00,Seattle,Utah
-8,8,2000-08-27,10:00,New York,New Orleans
-8,9,2000-08-27,10:00,Washington,Florida
-8,10,2000-08-27,10:00,Cleveland,Atlanta
+8,8,2000-08-27,10:00,Washington,New Orleans
+8,9,2000-08-27,10:00,Cincinnati,Havana
+8,10,2000-08-27,10:00,Pittsburgh,Atlanta
 8,11,2000-08-27,10:00,Montana,San Diego
 8,12,2000-08-27,13:00,Idaho,Kansas City
 8,13,2000-08-27,13:00,Houston,San Francisco
 8,14,2000-08-27,13:00,Arizona,Las Vegas
-8,15,2000-08-27,13:00,Toronto,Detroit
-8,16,2000-08-27,13:00,St. Louis,Green Bay
+8,15,2000-08-27,13:00,New York,Tennessee
+8,16,2000-08-27,13:00,Green Bay,Cleveland
 8,17,2000-08-27,13:00,Montreal,New England
 8,18,2000-08-27,17:30,Calgary,Sacramento
-8,19,2000-08-27,17:30,Cincinnati,Chicago
-8,20,2000-08-28,17:30,Tennessee,Philadelphia
+8,19,2000-08-27,17:30,Toronto,Chicago
+8,20,2000-08-28,17:30,Detroit,Philadelphia
 9,1,2000-09-02,17:30,Miami,Atlanta
 9,2,2000-09-03,10:00,Utah,Omaha
 9,3,2000-09-03,10:00,Dallas,Houston
 9,4,2000-09-03,10:00,San Francisco,Arizona
 9,5,2000-09-03,10:00,Las Vegas,Sacramento
 9,6,2000-09-03,10:00,Kansas City,Denver
-9,7,2000-09-03,10:00,Toronto,Montreal
-9,8,2000-09-03,10:00,Green Bay,Cincinnati
-9,9,2000-09-03,10:00,Detroit,Cleveland
-9,10,2000-09-03,10:00,New England,New York
-9,11,2000-09-03,10:00,Carolina,Alabama
+9,7,2000-09-03,10:00,New York,Montreal
+9,8,2000-09-03,10:00,Cleveland,Toronto
+9,9,2000-09-03,10:00,Tennessee,Pittsburgh
+9,10,2000-09-03,10:00,New England,Washington
+9,11,2000-09-03,10:00,St. Louis,Alabama
 9,12,2000-09-03,13:00,Idaho,San Antonio
 9,13,2000-09-03,13:00,Seattle,Dakota
 9,14,2000-09-03,13:00,Calgary,New Mexico
-9,15,2000-09-03,13:00,Pittsburgh,Tennessee
-9,16,2000-09-03,13:00,Chicago,Washington
+9,15,2000-09-03,13:00,Carolina,Detroit
+9,16,2000-09-03,13:00,Chicago,Cincinnati
 9,17,2000-09-03,13:00,New Orleans,Philadelphia
 9,18,2000-09-03,17:30,Mexico City,Montana
-9,19,2000-09-03,17:30,Florida,St. Louis
+9,19,2000-09-03,17:30,Havana,Green Bay
 9,20,2000-09-04,17:30,Oklahoma City,San Diego
 10,1,2000-09-16,17:30,New Mexico,Arizona
-10,2,2000-09-17,10:00,Pittsburgh,Detroit
-10,3,2000-09-17,10:00,Cleveland,Carolina
+10,2,2000-09-17,10:00,Carolina,Tennessee
+10,3,2000-09-17,10:00,Pittsburgh,St. Louis
 10,4,2000-09-17,10:00,Idaho,Seattle
 10,5,2000-09-17,10:00,Sacramento,San Francisco
 10,6,2000-09-17,10:00,Chicago,Miami
-10,7,2000-09-17,10:00,Florida,Toronto
+10,7,2000-09-17,10:00,Havana,New York
 10,8,2000-09-17,10:00,San Antonio,Dakota
 10,9,2000-09-17,10:00,Denver,Las Vegas
-10,10,2000-09-17,10:00,Philadelphia,Cincinnati
+10,10,2000-09-17,10:00,Philadelphia,Toronto
 10,11,2000-09-17,10:00,Kansas City,Utah
 10,12,2000-09-17,13:00,Mexico City,Oklahoma City
 10,13,2000-09-17,13:00,Dallas,San Diego
 10,14,2000-09-17,13:00,Montana,Calgary
-10,15,2000-09-17,13:00,New York,Green Bay
-10,16,2000-09-17,13:00,New England,Washington
-10,17,2000-09-17,13:00,Tennessee,St. Louis
+10,15,2000-09-17,13:00,Washington,Cleveland
+10,16,2000-09-17,13:00,New England,Cincinnati
+10,17,2000-09-17,13:00,Detroit,Green Bay
 10,18,2000-09-17,17:30,Houston,Omaha
 10,19,2000-09-17,17:30,Alabama,Montreal
 10,20,2000-09-18,17:30,Atlanta,New Orleans
-11,1,2000-09-23,17:30,New England,Tennessee
-11,2,2000-09-24,10:00,Florida,Miami
+11,1,2000-09-23,17:30,New England,Detroit
+11,2,2000-09-24,10:00,Havana,Miami
 11,3,2000-09-24,10:00,Arizona,Dallas
 11,4,2000-09-24,10:00,Las Vegas,New Mexico
 11,5,2000-09-24,10:00,Oklahoma City,Houston
 11,6,2000-09-24,10:00,Montana,Utah
 11,7,2000-09-24,10:00,Calgary,Seattle
-11,8,2000-09-24,10:00,Washington,Philadelphia
-11,9,2000-09-24,10:00,Green Bay,Cleveland
-11,10,2000-09-24,10:00,New York,Pittsburgh
-11,11,2000-09-24,10:00,Detroit,Montreal
+11,8,2000-09-24,10:00,Cincinnati,Philadelphia
+11,9,2000-09-24,10:00,Cleveland,Pittsburgh
+11,10,2000-09-24,10:00,Washington,Carolina
+11,11,2000-09-24,10:00,Tennessee,Montreal
 11,12,2000-09-24,13:00,Omaha,San Francisco
 11,13,2000-09-24,13:00,Dakota,Kansas City
 11,14,2000-09-24,13:00,San Diego,Sacramento
-11,15,2000-09-24,13:00,St. Louis,Carolina
-11,16,2000-09-24,13:00,Toronto,Chicago
+11,15,2000-09-24,13:00,Green Bay,St. Louis
+11,16,2000-09-24,13:00,New York,Chicago
 11,17,2000-09-24,13:00,New Orleans,Alabama
 11,18,2000-09-24,17:30,Denver,Idaho
-11,19,2000-09-24,17:30,Cincinnati,Atlanta
+11,19,2000-09-24,17:30,Toronto,Atlanta
 11,20,2000-09-25,17:30,San Antonio,Mexico City
 12,1,2000-09-30,17:30,Las Vegas,Calgary
 12,2,2000-10-01,10:00,Oklahoma City,Kansas City
 12,3,2000-10-01,10:00,Denver,Dakota
 12,4,2000-10-01,10:00,Mexico City,Dallas
 12,5,2000-10-01,10:00,Utah,Idaho
-12,6,2000-10-01,10:00,Pittsburgh,Toronto
+12,6,2000-10-01,10:00,Carolina,New York
 12,7,2000-10-01,10:00,Miami,New England
-12,8,2000-10-01,10:00,Detroit,St. Louis
-12,9,2000-10-01,10:00,Carolina,Chicago
-12,10,2000-10-01,10:00,New Orleans,Cincinnati
+12,8,2000-10-01,10:00,Tennessee,Green Bay
+12,9,2000-10-01,10:00,St. Louis,Chicago
+12,10,2000-10-01,10:00,New Orleans,Toronto
 12,11,2000-10-01,10:00,San Francisco,San Diego
 12,12,2000-10-01,13:00,Omaha,Montana
 12,13,2000-10-01,13:00,Houston,Seattle
 12,14,2000-10-01,13:00,Sacramento,Arizona
-12,15,2000-10-01,13:00,Atlanta,Tennessee
-12,16,2000-10-01,13:00,Alabama,Florida
+12,15,2000-10-01,13:00,Atlanta,Detroit
+12,16,2000-10-01,13:00,Alabama,Havana
 12,17,2000-10-01,13:00,Montreal,Philadelphia
 12,18,2000-10-01,17:30,San Antonio,New Mexico
-12,19,2000-10-01,17:30,Washington,Green Bay
-12,20,2000-10-02,17:30,Cleveland,New York
-13,1,2000-10-07,17:30,Cincinnati,Pittsburgh
+12,19,2000-10-01,17:30,Cincinnati,Cleveland
+12,20,2000-10-02,17:30,Pittsburgh,Washington
+13,1,2000-10-07,17:30,Toronto,Carolina
 13,2,2000-10-08,10:00,San Diego,Las Vegas
 13,3,2000-10-08,10:00,Houston,San Antonio
-13,4,2000-10-08,10:00,Chicago,Tennessee
-13,5,2000-10-08,10:00,New York,Toronto
+13,4,2000-10-08,10:00,Chicago,Detroit
+13,5,2000-10-08,10:00,Washington,New York
 13,6,2000-10-08,10:00,New Mexico,Denver
 13,7,2000-10-08,10:00,Sacramento,Omaha
-13,8,2000-10-08,10:00,Alabama,Detroit
+13,8,2000-10-08,10:00,Alabama,Tennessee
 13,9,2000-10-08,10:00,Montana,Oklahoma City
-13,10,2000-10-08,10:00,St. Louis,New England
-13,11,2000-10-08,10:00,Green Bay,New Orleans
+13,10,2000-10-08,10:00,Green Bay,New England
+13,11,2000-10-08,10:00,Cleveland,New Orleans
 13,12,2000-10-08,13:00,Utah,Mexico City
 13,13,2000-10-08,13:00,Dallas,Kansas City
 13,14,2000-10-08,13:00,Calgary,Idaho
-13,15,2000-10-08,13:00,Montreal,Carolina
-13,16,2000-10-08,13:00,Cleveland,Washington
-13,17,2000-10-08,13:00,Atlanta,Florida
+13,15,2000-10-08,13:00,Montreal,St. Louis
+13,16,2000-10-08,13:00,Pittsburgh,Cincinnati
+13,17,2000-10-08,13:00,Atlanta,Havana
 13,18,2000-10-08,17:30,Seattle,San Francisco
 13,19,2000-10-08,17:30,Philadelphia,Miami
 13,20,2000-10-09,17:30,Dakota,Arizona
@@ -442,40 +444,40 @@ week,game,date,kickoff,away,home
 14,3,2000-10-15,10:00,Seattle,Montana
 14,4,2000-10-15,10:00,Utah,Calgary
 14,5,2000-10-15,10:00,Houston,Mexico City
-14,6,2000-10-15,10:00,Chicago,St. Louis
-14,7,2000-10-15,10:00,Tennessee,Green Bay
-14,8,2000-10-15,10:00,Carolina,Detroit
+14,6,2000-10-15,10:00,Chicago,Green Bay
+14,7,2000-10-15,10:00,Detroit,Cleveland
+14,8,2000-10-15,10:00,St. Louis,Tennessee
 14,9,2000-10-15,10:00,San Diego,Dakota
-14,10,2000-10-15,10:00,Philadelphia,Cleveland
-14,11,2000-10-15,10:00,Montreal,Florida
+14,10,2000-10-15,10:00,Philadelphia,Pittsburgh
+14,11,2000-10-15,10:00,Montreal,Havana
 14,12,2000-10-15,13:00,Idaho,Las Vegas
 14,13,2000-10-15,13:00,San Francisco,Oklahoma City
 14,14,2000-10-15,13:00,Arizona,Denver
-14,15,2000-10-15,13:00,Cincinnati,New York
-14,16,2000-10-15,13:00,Toronto,Atlanta
+14,15,2000-10-15,13:00,Toronto,Washington
+14,16,2000-10-15,13:00,New York,Atlanta
 14,17,2000-10-15,13:00,New Orleans,Miami
 14,18,2000-10-15,17:30,Sacramento,San Antonio
 14,19,2000-10-15,17:30,New England,Alabama
-14,20,2000-10-16,17:30,Washington,Pittsburgh
+14,20,2000-10-16,17:30,Cincinnati,Carolina
 15,1,2000-10-28,17:30,Philadelphia,Montreal
-15,2,2000-10-29,10:00,Pittsburgh,Carolina
+15,2,2000-10-29,10:00,Carolina,St. Louis
 15,3,2000-10-29,10:00,Atlanta,Alabama
-15,4,2000-10-29,10:00,New York,New England
+15,4,2000-10-29,10:00,Washington,New England
 15,5,2000-10-29,10:00,Kansas City,Oklahoma City
 15,6,2000-10-29,10:00,New Mexico,Mexico City
 15,7,2000-10-29,10:00,Arizona,San Francisco
 15,8,2000-10-29,13:00,Calgary,Montana
 15,9,2000-10-29,13:00,Denver,Omaha
 15,10,2000-10-29,13:00,San Antonio,Houston
-15,11,2000-10-29,13:00,Chicago,Cincinnati
-15,12,2000-10-29,13:00,Green Bay,St. Louis
-15,13,2000-10-29,13:00,Cleveland,Detroit
+15,11,2000-10-29,13:00,Chicago,Toronto
+15,12,2000-10-29,13:00,Cleveland,Green Bay
+15,13,2000-10-29,13:00,Pittsburgh,Tennessee
 15,14,2000-10-29,17:30,Las Vegas,San Diego
-15,15,2000-10-29,17:30,New Orleans,Florida
+15,15,2000-10-29,17:30,New Orleans,Havana
 15,16,2000-10-30,17:30,Seattle,Idaho
 16,1,2000-11-04,17:30,Dakota,Denver
-16,2,2000-11-05,10:00,Washington,Cleveland
-16,3,2000-11-05,10:00,Florida,Atlanta
+16,2,2000-11-05,10:00,Cincinnati,Pittsburgh
+16,3,2000-11-05,10:00,Havana,Atlanta
 16,4,2000-11-05,10:00,Miami,New Orleans
 16,5,2000-11-05,10:00,Seattle,Calgary
 16,6,2000-11-05,10:00,Idaho,Utah
@@ -483,32 +485,32 @@ week,game,date,kickoff,away,home
 16,8,2000-11-05,13:00,Sacramento,Las Vegas
 16,9,2000-11-05,13:00,Mexico City,San Antonio
 16,10,2000-11-05,13:00,Dallas,New Mexico
-16,11,2000-11-05,13:00,Tennessee,Cincinnati
+16,11,2000-11-05,13:00,Detroit,Toronto
 16,12,2000-11-05,13:00,New England,Philadelphia
-16,13,2000-11-05,13:00,Detroit,Pittsburgh
+16,13,2000-11-05,13:00,Tennessee,Carolina
 16,14,2000-11-05,17:30,Omaha,Kansas City
-16,15,2000-11-05,17:30,Toronto,New York
-16,16,2000-11-06,17:30,Chicago,Green Bay
-17,1,2000-11-11,17:30,Carolina,Washington
+16,15,2000-11-05,17:30,New York,Washington
+16,16,2000-11-06,17:30,Chicago,Cleveland
+17,1,2000-11-11,17:30,St. Louis,Cincinnati
 17,2,2000-11-12,10:00,New Orleans,Atlanta
-17,3,2000-11-12,10:00,St. Louis,Tennessee
-17,4,2000-11-12,10:00,New York,Philadelphia
+17,3,2000-11-12,10:00,Green Bay,Detroit
+17,4,2000-11-12,10:00,Washington,Philadelphia
 17,5,2000-11-12,10:00,Houston,Dallas
 17,6,2000-11-12,10:00,Idaho,Calgary
 17,7,2000-11-12,10:00,New Mexico,San Antonio
 17,8,2000-11-12,13:00,Las Vegas,Arizona
 17,9,2000-11-12,13:00,San Francisco,Sacramento
 17,10,2000-11-12,13:00,Denver,Kansas City
-17,11,2000-11-12,13:00,Cincinnati,Green Bay
-17,12,2000-11-12,13:00,Montreal,Toronto
+17,11,2000-11-12,13:00,Toronto,Cleveland
+17,12,2000-11-12,13:00,Montreal,New York
 17,13,2000-11-12,13:00,Alabama,Miami
 17,14,2000-11-12,17:30,Oklahoma City,Dakota
-17,15,2000-11-12,17:30,Cleveland,Pittsburgh
+17,15,2000-11-12,17:30,Pittsburgh,Carolina
 17,16,2000-11-13,17:30,Utah,Montana
 18,1,2000-11-18,17:30,Kansas City,Dakota
-18,2,2000-11-19,10:00,Green Bay,Tennessee
-18,3,2000-11-19,10:00,Florida,Alabama
-18,4,2000-11-19,10:00,Philadelphia,Toronto
+18,2,2000-11-19,10:00,Cleveland,Detroit
+18,3,2000-11-19,10:00,Havana,Alabama
+18,4,2000-11-19,10:00,Philadelphia,New York
 18,5,2000-11-19,10:00,Mexico City,Houston
 18,6,2000-11-19,10:00,San Antonio,Dallas
 18,7,2000-11-19,10:00,Arizona,Sacramento
@@ -516,26 +518,26 @@ week,game,date,kickoff,away,home
 18,9,2000-11-19,13:00,San Diego,San Francisco
 18,10,2000-11-19,13:00,Omaha,Oklahoma City
 18,11,2000-11-19,13:00,Atlanta,Miami
-18,12,2000-11-19,13:00,St. Louis,Chicago
-18,13,2000-11-19,13:00,Pittsburgh,Washington
+18,12,2000-11-19,13:00,Green Bay,Chicago
+18,13,2000-11-19,13:00,Carolina,Cincinnati
 18,14,2000-11-19,17:30,Calgary,Utah
-18,15,2000-11-19,17:30,Detroit,Carolina
+18,15,2000-11-19,17:30,Tennessee,St. Louis
 18,16,2000-11-20,17:30,New England,Montreal
-19,1,2000-11-25,17:30,Carolina,Cleveland
-19,2,2000-11-26,10:00,Miami,Florida
-19,3,2000-11-26,10:00,Washington,Detroit
-19,4,2000-11-26,10:00,Cincinnati,St. Louis
+19,1,2000-11-25,17:30,St. Louis,Pittsburgh
+19,2,2000-11-26,10:00,Miami,Havana
+19,3,2000-11-26,10:00,Cincinnati,Tennessee
+19,4,2000-11-26,10:00,Toronto,Green Bay
 19,5,2000-11-26,10:00,Sacramento,San Diego
 19,6,2000-11-26,10:00,Oklahoma City,Denver
 19,7,2000-11-26,10:00,Montana,Idaho
 19,8,2000-11-26,13:00,Utah,Seattle
 19,9,2000-11-26,13:00,Dakota,Omaha
 19,10,2000-11-26,13:00,Houston,New Mexico
-19,11,2000-11-26,13:00,Montreal,New York
-19,12,2000-11-26,13:00,Toronto,New England
+19,11,2000-11-26,13:00,Montreal,Washington
+19,12,2000-11-26,13:00,New York,New England
 19,13,2000-11-26,13:00,Alabama,New Orleans
 19,14,2000-11-26,17:30,Dallas,Mexico City
-19,15,2000-11-26,17:30,Tennessee,Chicago
+19,15,2000-11-26,17:30,Detroit,Chicago
 19,16,2000-11-27,17:30,San Francisco,Las Vegas
 ```
 
@@ -659,13 +661,13 @@ League brand,Diamond,#B9F2FF,Primary league gemstone
 League brand,Amethyst,#9966CC,Secondary league gemstone
 Western Conference,Sapphire,#0F52BA,Conference gemstone
 Eastern Conference,Ruby,#E0115F,Conference gemstone
-Western/Northwest,Topaz,#E6A32E,Division gemstone
-Western/Southwest,Peridot,#A5C83B,Division gemstone
+Western/Northwest,Peridot,#A5C83B,Division gemstone
+Western/Southwest,Topaz,#E6A32E,Division gemstone
 Western/Central,Tourmaline,#D94B89,Division gemstone
 Western/Southern,Garnet,#9A1B36,Division gemstone
-Eastern/Midwest,Aquamarine,#55C5D8,Division gemstone
-Eastern/Northeast,Emerald,#009B77,Division gemstone
-Eastern/East,Turquoise,#26A9A0,Division gemstone
+Eastern/Great Lakes,Aquamarine,#55C5D8,Division gemstone
+Eastern/Atlantic,Emerald,#009B77,Division gemstone
+Eastern/Midland,Turquoise,#26A9A0,Division gemstone
 Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 ```
 
@@ -688,7 +690,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Formations, route landmarks, blocking rules, coverage responsibilities, reads and reactions come from the league concept vocabulary. A coach assembles a playbook; a weekly game plan selects a subset against perceived opposition.
 - Familiarity belongs to assignments and teammates and develops through repetition. Designated players may check before the snap, with limited reach and delay.
 - Fixed physics timestep 0.05 s. Decision checks are event-driven with a maximum 0.10 s interval.
-- At neutral sites the nominal home is assigned by the fixture template, or by higher seed with a seeded tie.
+- At neutral sites the nominal home is assigned by the fixture template, or by higher seed with a seeded tie. The Diamond Coronation is the exception: it is always neutral, always at Amethyst Aloha Stadium, and its nominal home is the finalist of the conference designated after Week 4 (§3). A neutral site gives no home-field edge.
 - Uncommon penalties may be implemented partially; gaps are recorded in an implementation coverage register (`docs/ENGINE_COVERAGE.md`, written in Edition 8.46).
 - Spatial engine (Edition 8.48, owner's go-ahead of 2026-10-26 to finish Phase 3; the numbers are data in `data/engine/spatial/`). Each scrimmage play is played out by 22 players on a field of 100 yards plus two 10-yard end zones and 53⅓ yards wide, hashes 6 yards apart, at the fixed timestep and decision interval of §0. A player is a point with a position and a velocity, a top speed, an acceleration and a deceleration taken from her hidden speed, acceleration and agility, steering toward a target point set by her assignment. Nothing is scripted to succeed: separation, pressure, tackles and yards come from what the players do.
 - Formations, plays and coverage (Edition 8.48): the offense lines up in a formation (`FORMATIONS.json`) and runs a play from the catalogue (`PLAYS.json`): inside zone, outside zone, power, draw and quarterback sneak; quick game, curl-flat, mesh, smash, four verticals, deep shot, play-action, flood and screen. Routes are numeric landmarks (stem depth, break angle, length after the break, `ROUTES.json`). The defense lines up in a front and a coverage (`COVERAGES.json`): cover 0 (man, all-out pressure), cover 1, cover 2, cover 3 and cover 4, with up to two extra rushers. A zone defender covers the receiver inside her landmark (depth and width); a man defender follows her receiver, seeing him as he was 0.15 to 0.35 s ago (awareness and coverage skill). Play calling uses down, distance, field position, score and clock; the coaches' ratings move the odds slightly, capped.
@@ -719,29 +721,30 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Dead money counts against the cap. Release or trade immediately accelerates every uncharged bonus onto the original club's current cap.
 - **Viability invariant.** For every club-year: `dead money + required-minimum roster cost (48 × $5 = $240) + reserve ≤ cap`, so **dead money ≤ $735**. Checked before every signing, release, trade and restructure, for the current and every committed future year. "Dead money" here is the strict reading: everything the club would owe in that year if every contract were released at the start of it (guarantees, earned base, every uncharged bonus accelerated, and dead charges already booked). In the current year the replacement cost is pro-rated to the paid weeks still to come. A move is rejected if it leaves a year over the limit and raises that year's figure; time alone (earned salary accruing) does not freeze a club.
 - **Transactions.** A move is rejected if it breaks a roster rule, the viability invariant, or (from the final cut) the cap as stated under Cap timing. Nothing else rejects a move: no league vote and no fairness veto.
-- **Restructure.** Converts part of a current or future year's base salary into a bonus prorated evenly over the contract's remaining years (at most five). Base salary may not fall below the minimum salary. It is a transaction like any other and is subject to the viability invariant and the cap timing rule.
-- **Split release.** Once per club per league year, one release's uncharged bonus accelerates 50/50 across the current and next year instead of in full.
+- **Restructure.** Converts part of a current or future year's base salary into a bonus prorated evenly over the contract's remaining years (at most five). Base salary may not fall below the minimum salary. It is a transaction like any other and is subject to the viability invariant and the cap timing rule. *Edition 8.55 (owner's ruling of 2026-10-30): only the current year's base salary can be restructured; restructuring a future year's base is deferred and not built.*
+- **Split release.** Once per club per league year, one release's uncharged bonus accelerates 50/50 across the current and next year instead of in full. *Edition 8.55 (owner's ruling of 2026-10-30): the release year's own bonus portion stays in the release year; only the later portions divide 50/50 between that year and the next.*
 - **Viability margin** = cap − dead money − minimum-roster cost − reserve, logged per club-year; flag below $50.
 - Contract shapes: steady, rising or declining. At most five covered years and five bonus proration years. Bonus is paid on signing and cap-prorated evenly. The receiving club assumes unpaid base and attached guarantees, never the bonus.
 - Removed: incentives, roster bonuses, June 1 designation, franchise tag, restricted and exclusive-rights free agency, no-trade clauses, conditional compensation, cap-space trades.
 - Rookie reserve (NFL rookie-pool principle): until a draft pick is made, the pick's rookie-scale cap hit (rounds 8 and 9 at the round-7 scale, $5) counts in the owning club's cap number for the year of that draft, so a club always keeps room to sign its class; the reserve moves with a traded pick and is replaced by the real contract when the pick is made. It adds no committed money, because rookie contracts carry no guarantees.
-- Rookies accept selection and sign four fixed years at $25/$18/$14/$11/$9/$7/$5. First-round option salary $35. Within-round slot rank breaks otherwise equal terms.
+- Rookies accept selection and sign four fixed years at $25/$18/$14/$11/$9/$7/$5. Within-round slot rank breaks otherwise equal terms.
+- **First-round option (Edition 8.55, owner's ruling of 2026-10-30).** A first-round contract carries the club's option on a fifth year at $35; the option is not a covered year until exercised. Whether to exercise it is the club's decision, taken by its general manager: the GM exercises when the market price of the overall the club believes the player has (the club's own view, which carries the GM's evaluation) is at least $35, and otherwise declines; the rule draws no random numbers. The deadline is the opening of Draft Round 1 in the league year of the player's fourth contract year (the last Thursday of April), before the first pick. Exercising adds one covered year at $35 that is **guaranteed in full** from that moment, so it counts at once toward the viability invariant for that year and a club that could not carry it declines; the year costs nothing in the current year's cap. Declining, or missing the deadline, lets the contract end with the year and the player becomes a free agent a year earlier. Every decision is saved (year, club, player, decision, salary, year covered, guarantee, reason). The option follows a traded or claimed player to his new club.
 - **Jersey numbers (Editions 8.14, 8.15).** A number tells a viewer the position. Primary blocks: 1-9 K, P, LS · 10-14 QB · 15-19 TE · 20-29 CB · 30-39 HB, FB · 40-49 FS, SS · 50-59 ROLB, MLB, LOLB · 60-79 LT, LG, C, RG, RT · 80-89 WR · 90-99 LE, RE, DT. Zero and double zero are not used. A number is unique among everyone on a club's roster, practice squad and injured reserve.
   - *Overflow*, only when the primary block is full: WR may use open numbers 15-19, TE open 80-89, LB open 40-49, DL open 70-79. A player in her primary block has priority: an overflow holder is reassigned when a primary player needs her number.
   - *Camp*: before the final cut any open number from 1 to 99 is legal. At the final cut anyone outside her primary and overflow blocks is reassigned.
   - Capacity check: a normal 53 plus 16 needs at most 10 numbers in any block, and WR and TE together fit comfortably with the overflow.
   - *Stewardship*: a number is assigned to a player when she joins a club (signing, draft, waiver claim, trade) and is hers for as long as she is with that club, including through the club's exile and its return. It is freed when she leaves. A traded or claimed player keeps her number if it is free at the new club and legal, otherwise she is given another. A player who leaves and later signs again with the same club takes her old number back if it is free (builder's default). A new arrival takes the lowest open number in her primary block.
   - *No retired numbers*: a freed number is open to anyone at once.
-- Extensions require two completed seasons and mutual consent.
-- Salary prorates over the 22 paid regular-season weeks, same denominator for active and ambassador clubs. Midseason deals pay remaining weeks only and expire at year close. Postseason-only replacements pay one salary-week equivalent.
-- Released players enter one simulated-day waiver period, except a player with the §0 number of credited seasons or more, who goes straight to free agency (NFL vested-veteran rule); her guarantees and bonus stay with the releasing club. Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands.
+- Extensions require two completed seasons and mutual consent. **Not built.** Rules are proposed in `docs/OWNER_RULINGS_NEEDED.md` (L4) and await the owner's approval; until then every contract simply runs out.
+- Salary prorates over the 22 paid regular-season weeks, same denominator for active and ambassador clubs. Midseason deals pay remaining weeks only and expire at year close. Postseason-only replacements pay one salary-week equivalent. **Not built:** the rules that stop them being used to upgrade a roster or bypass contract and cap restrictions are proposed in `docs/OWNER_RULINGS_NEEDED.md` (L4) and await the owner's approval.
+- Released players enter one simulated-day waiver period, except a player with the §0 number of credited seasons or more, who goes straight to free agency (NFL vested-veteran rule); her guarantees and bonus stay with the releasing club. Priority is last season's draft order until four league weeks finish, then weekly from current standings, with Tour standings in their prior draft bands. *Edition 8.55 (owner's ruling of 2026-10-30): "prior draft slot" is the club's own slot in last season's draft order, never a traded pick; trading picks never transfers waiver priority. Worked example for all 48 clubs: `docs/WAIVER_PRIORITY_EXAMPLE.md`.*
 - Future-year minimum-salary reservations are feasibility checks, not charges.
 
 ## §12 Draft, trades, waivers
 - Seven rounds, 48 ordinary selections per round, 336 total.
 - Order: non-playoff clubs, then clubs by elimination round, then runner-up and champion; worse regular-season record first, relevant tiebreakers reversed.
 - Returning ambassadors receive first-round slots 1–8 by an equal-chance seeded lottery; the lottery identity follows the original pick through trades and supplies their later-round order too.
-- **Second draft of a returner (Edition 8.19, restoring the owner's ruling of 2026-10-04).** A club in its first season back from exile has already had its lottery pick. If it misses the playoffs it picks, in every round, as a block at the end of the non-playoff clubs (slots 35 minus the block size through 34), worst record first inside the block, so it never picks ahead of its record. If it makes the playoffs it is placed by its playoff exit like any other club. Season 1 has no returners.
+- **Second draft of a returner (Edition 8.19, restoring the owner's ruling of 2026-10-04).** A club in its first season back from exile has already had its lottery pick. If it misses the playoffs it picks, in every round, as a block at the end of the non-playoff clubs (slots 37 minus the block size through 36), worst record first inside the block, so it never picks ahead of its record. If it makes the playoffs it is placed by its playoff exit like any other club. Season 1 has no returners.
 - Compensatory picks follow round seven, at most two per club and 48 league-wide. Qualifying movements require a first-year base ≥ $75 on the contract signed, and, for a departure, a top-quarter snap share (ranked by her coaches' judged overall, Edition 8.37, not her true overall) at the old club. A club's qualifying signings cancel its qualifying departures, highest value first (NFL netting, so a club cannot churn free agents for picks); each unmatched departure earns a pick, best value first, ties to the club picking earlier. Compensation is for free-agent losses only; parity is the job of draft order, the lottery and place-based scheduling (see §20).
 - Trade assets are named players and owned picks in the next three not-yet-completed drafts.
 - Trading opens at the global close of leadership hiring. In competition, finalise only Tuesday 00:01 through Friday 23:59 league time, ending Friday 23:59 before the first game of numbered week 9. The ledger itself enforces the window (owner ruling of 2026-10-29): a trade is rejected in January before it opens, after it closes, in the postseason and through December. Saved state from earlier builds has no recorded window; on import or upgrade it is settled from the events the league has fired (open exactly between that year's trading opening and its close).
@@ -812,7 +815,7 @@ Eastern/Southeast,Alexandrite,#7040A0,Division gemstone
 - Reserve/commit ensures money, picks, roster places and contracts cannot be assigned twice.
 - Full-rate traces record positions, ball state, intent references and decisive events at 0.05 s with lossless chunk compression. Rendering is a flat top-down chalkboard with medallion sprites and a persistent geometric intent overlay.
 - Traces are stored as played (Edition 8.51, owner's ruling of 2026-10-27): every snap's trace is written to the game archive when the game is decided and is kept permanently, unchanged, beside the game's data and the players' portraits. An animation is drawn only from a stored trace, never regenerated from a seed, so a later change to the engine can never make an old game show a play that did not happen. The trace is stored with the rule version and engine version that played it. The archive grows by about half a gigabyte a season at the format of Edition 8.48 (measured, about 4 KB a snap); the owner accepts paying for the storage. A tighter encoding may be adopted later only if it is lossless and the stored traces decode to the same positions.
-- The year-end handoff carries season ID, next season ID, seeds and exiles, living references, contracts and schedules, pending waivers and obligations, owned picks and lottery identity, relationships and memory summaries, medical state, governance state, fan cards, future fixtures and venue decisions, career records and honour references, random counters, the next event queue and the rule version.
+- The year-end handoff carries season ID, next season ID, seeds and exiles, living references, contracts and schedules, pending waivers and obligations, owned picks and lottery identity, relationships and memory summaries, medical state, governance state, fan cards, future fixtures and the saved Week 4 Coronation designation, career records and honour references, random counters, the next event queue and the rule version.
 - Season completion, its snapshot and permission to start the next season commit in one durable transaction; the permission is consumed once.
 - History is archived once and never copied wholesale into every handoff.
 - Same inputs, rule version, event ID and seeded key reproduce the same result.
@@ -832,14 +835,14 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 
 **ROTATION** — in every season the eight divisions fill beds 1–8 exactly once; each division moves one bed on inside its block; the conferences flip every fourth season and the pattern repeats every eight; seeds 1–4 are the previous season's ranks 1–4, seed 5 is the returning ambassador, and each division's last-place club is the next ambassador; every generated season passes every check above, with each season's final order produced by `src/dfl/standings.py` from simulated results.
 
-**STANDINGS** — `tests/test_standings.py` passes: tie handling (standings versus statistics), the cascade including the wins-before-win % order, the division and conference step skips and the sorted-once rule, the seeded draw, playoff seeding and bracket, exile and seed hand-off, the Coronation window, and invariants over 150 simulated seasons on the real schedule (every club 18 games, wins equal losses, point differentials sum to zero, input order irrelevant).
+**STANDINGS** — `tests/test_standings.py` passes: tie handling (standings versus statistics), the cascade including the wins-before-win % order and the point-differential, strength-of-schedule, strength-of-victory order, the division and conference step skips and the sorted-once rule, the seeded draw, six-club playoff seeding and the reseeded bracket, exile and seed hand-off, the Week 4 conference designation (wins, point differential, aggregate strength of schedule and of victory, the seeded draw, ties, only weeks 1–4 read), and invariants over 150 simulated seasons on the real schedule (every club 18 games, wins equal losses, point differentials sum to zero, input order irrelevant).
 
 **CROSS-FILE** — every Schedule and Tour city resolves to exactly one `team_city` (a stadium town such as Minneapolis does not); no ambassador appears in the Schedule; the eight ambassadors equal the eight `lottery_1_8` clubs; gemstone hexes match between `TEAMS` and `COLOR_REGISTRY`.
 
 **CAP** — for every club-state in a multi-season run, at least one legal transaction exists; dead money never exceeds $735; the positional minimums total 48; the viability margin is logged every club-year.
 
 ## §19 Changelog and supersession policy
-- One normative block, fenced with an edition stamp, date and content hash. Edition 8.54 supersedes Editions 8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37, 8.38, 8.39, 8.40, 8.41, 8.42, 8.43, 8.44, 8.45, 8.46, 8.47, 8.48, 8.49, 8.50, 8.51, 8.52 and 8.53 and everything prior.
+- One normative block, fenced with an edition stamp, date and content hash. Edition 8.55 supersedes Editions 8, 8, 8.54.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 8.34, 8.35, 8.36, 8.37, 8.38, 8.39, 8.40, 8.41, 8.42, 8.43, 8.44, 8.45, 8.46, 8.47, 8.48, 8.49, 8.50, 8.51, 8.52 and 8.53 and everything prior.
 - Every rule has a stable ID. A change rewrites the value under that ID and touches nothing else.
 - A changelog table records `date | rule ID | old → new | reason | edition`. The old "Audit changes" list is generated from this table and never hand-written. To verify the content hash, remove the hash line, then take SHA-256 of the remaining file (UTF-8, LF); `tools/validate.py --doc` does this.
 - Superseded text is deleted or tagged `superseded by <ID> @ ed.N`. Historical rationale is kept only where it still explains a live choice.
@@ -865,7 +868,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §6, §18 | kickoff-slot points rule added (33–38 per club) | league owner's rule; Season 1 already satisfies it (range 33–38, all 40 clubs) | 8.3 |
 | 2026-10-22 | §20 | items 7–10 added | open after the review | 8.3 |
 | 2026-10-22 | §3, §4, §5, §18 | seed-bed rotation written down; `bed_id` `division_code-rank` → `bed-rank` | owner's rule; a division code cannot be the durable slot once divisions move between beds | 8.4 |
-| 2026-10-22 | §3 | playoffs at the higher seed's home venue; Coronation venue by fictitious fan vote, no repeat within 40 years | owner's rule | 8.4 |
+| 2026-10-22 | §3 | playoffs at the higher seed's home venue; Coronation venue by fictitious fan vote, no repeat within 40 years (the Coronation venue part is superseded by §3 @ ed.8.55) | owner's rule | 8.4 |
 | 2026-10-22 | §0, §11, §18 | required places 36 → 47; Bowl discretionary places 17 → 6; dead-money ceiling $795 → $740 | the owner's positional minimums total 47 | 8.4 |
 | 2026-10-22 | §11 | positional minimums added | owner's list | 8.4 |
 | 2026-10-22 | §20 | rotation, postseason-venue and league-minimum items closed; new items added; renumbered | resolved by the owner | 8.4 |
@@ -873,7 +876,7 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-22 | §3 | Coronation venue drawn from the 48 DFL club venues; a finalist whose venue wins plays at home | owner's rule | 8.5 |
 | 2026-10-22 | §20 | wins-before-win% order, long snapper, Tour template and bed-order items closed; tie-frequency calibration item added | confirmed by the owner | 8.5 |
 | 2026-10-22 | §3 | a tied game is not played in the standings but is played for statistics (games, points, point differential) | owner's rule | 8.6 |
-| 2026-10-22 | §3 | Coronation vote decided by a seeded random draw among the nine eligible venues | owner's rule (simplest method) | 8.6 |
+| 2026-10-22 | §3 | Coronation vote decided by a seeded random draw among the nine eligible venues (superseded by §3 @ ed.8.55: permanent venue, no vote) | owner's rule (simplest method) | 8.6 |
 | 2026-10-22 | §11 | emergency fill-ins: game-day roster, injured reserve, practice-squad elevation, between-game signings and a per-position emergency list | owner asked for a system; NFL defaults | 8.6 |
 | 2026-10-22 | §18 | `standings.py` and `test_standings.py` added; `rotation.py` now ranks simulated results with `standings.py` | first test round | 8.6 |
 | 2026-10-22 | §20 | vote-weighting and emergency fill-in items closed; fill-in parameters and standings assumptions added | resolved or restated | 8.6 |
@@ -941,6 +944,15 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 | 2026-10-29 | §3 | higher strength of schedule and of victory rank higher, no decisions = 0, cascade unchanged; the last step is one stable seeded priority per club per season, the same in every ranking; draft order is its exact reverse | owner's ruling of 2026-10-29 (item 9) | 8.53 |
 | 2026-10-29 | §2, §12 | offseason dates approved after checking against the leadership, contract-expiry and 31 December honours rules; Coronation-to-1 January gap stated correctly (0 to 6 days); the ledger rejects trades outside the window | owner's ruling of 2026-10-29 (item 14) | 8.53 |
 | 2026-10-29 | §7, §20 | Bowl ballots and final-53 construction marked incomplete (item 4 is ruled for replacement and rings only) | owner's instruction of 2026-10-29; no rule changed | 8.54 |
+| 2026-10-30 | §3, §0, §2 | playoffs: seven clubs a conference → six (four division winners, two wild cards), seeds 1 and 2 on byes, 3 hosts 6 and 4 hosts 5, divisional round reseeded (1 hosts the lowest survivor, 2 the other), higher remaining seed hosts the conference championship; four-round calendar kept; 14 clubs and 13 games → 12 clubs and 11 games | owner's ruling of 2026-10-30 (new approved design change 1) | 8.55 |
+| 2026-10-30 | §3, §2, §10 | Diamond Coronation: venue vote, rotation and 40-year window removed; permanent neutral venue Amethyst Aloha Stadium, owned and renovated by the DFL; no home-field edge; the year has 47 dated events, not 49 | owner's ruling of 2026-10-30 (change 2) | 8.55 |
+| 2026-10-30 | §3, §9, §10 | nominal home of the Coronation designated after Week 4: interconference games of weeks 1–4 pooled into two aggregate conference teams ranked by the cascade without its division and conference steps (aggregation of strength of schedule and victory defined), the winner's finalist is nominal home, frozen and saved; it controls only the kickoff and uniform rules | owner's ruling of 2026-10-30 (change 3) | 8.55 |
+| 2026-10-30 | §3 | cascade: point differential moves ahead of strength of schedule and strength of victory (wins, win %, division, conference, point differential, strength of schedule, strength of victory, seeded draw), league-wide | owner's ruling of 2026-10-30 (change 4) | 8.55 |
+| 2026-10-30 | §4, §5, §6, §9 | team data reconciled with the owner's workbook of 2026-10-30: Eastern divisions Midwest, Northeast, East → Great Lakes, Atlantic, Midland (Southeast unchanged) and bed order; club, venue and gemstone changes (Havana, Peridot/Topaz swapped between the Northwest and Southwest, Turquoise for Midland); team_id preserved on every club | owner's ruling of 2026-10-30; details in `docs/WORKBOOK_RECONCILIATION_20261030.md` | 8.55 |
+| 2026-10-30 | §11 | first-round fifth-year option is the club's decision by its general manager before Draft Round 1 of the player's fourth contract year; exercising adds a fully guaranteed $35 year; decisions saved | owner's ruling of 2026-10-30 (L3) | 8.55 |
+| 2026-10-30 | §11 | split release: the release year's own bonus portion stays in that year, only the later portions divide 50/50 | owner's ruling of 2026-10-30 (L2) | 8.55 |
+| 2026-10-30 | §11 | waiver priority retained provisionally; "prior draft slot" is the club's own slot, never a traded pick | owner's ruling of 2026-10-30 (L1) | 8.55 |
+| 2026-10-30 | §11, §20 | extensions and postseason injury replacements included in scope, rules proposed (not built); restructuring a future year's base deferred | owner's ruling of 2026-10-30 (L4) | 8.55 |
 
 ## §20 Open items
 1. Analytics definitions: approved by the owner on 2026-10-24 and built in Edition 8.30 (§15); every number is a placeholder (item 29).
@@ -993,3 +1005,4 @@ Reference implementation: `tools/validate.py <tables_dir> [--season N]`; exit co
 48. Decided (Edition 8.50, owner's ruling of 2026-10-27): the spatial engine becomes the default only when it passes all 24 bands; the animation is a view of the engine's trace and sits on top of it (section 16). Done in Edition 8.52 (item 50): the seven missed bands are closed, the Phase 4 fairness measurement was re-run with the 22-player engine, and the default is switched.
 49. Trace archive (Edition 8.51): the archive format (one file per game, or one per season, with an index by game and snap), the storage service and its cost are not chosen; the trace itself and its decoder exist (`dfl.engine.spatial.trace`). Decide with the website work.
 50. 22-player engine as the default (Edition 8.52, measured). Game level, `tools/calibrate_engine.py --spatial --procs 2`: 24 of 24 bands pass at the default check (seed 1, 1,000 games) and at seeds 14 and 15 (1,500 games each). Founding leagues with stronger offenses overrun a few caps by a hair: seed 16 completion rate 0.674 and yards per attempt 7.63 (limits 0.67 and 7.6), seed 17 completion 0.675, yards per attempt 7.65 and yards per carry 4.95 (limit 4.8); the play-level engine also misses two or three bands on some seeds, but the spread is wider here, because the field engine is more sensitive to a league's average ratings. How the seven misses closed: run defenders fill at a spread of depths and blockers start with a spread of leverage; passes carry an accuracy error that grows with distance and a catch penalty on long throws; defenders turn with a delay; a receiver keeps a share of her speed after the catch; a quarterback on third down wants his target past the first-down marker; first-down calls no longer boost deep concepts; the pass-concept mix is weighted toward the plays that move the chains (play-action succeeded 35 percent of the time and was sacked 12 percent, quick slants 64 percent and 0.5); the spatial engine has its own injury rate and a fumble rate near the NFL's; the physics were refit three times (`tools/fit_spatial.py`). Phase 4 fairness with the 22-player engine (`tools/fairness.py run`, two leagues of 12 seasons, first 3 dropped; fewer seasons than the 36 of the play-level measurement because a season takes about 12 minutes): no band fails. The two bands that the game engine drives most are where they were with the play-level engine: win-percentage spread 0.206 (0.207 before; limit 0.21) and close-game share 0.415 (0.423; limits 0.35 to 0.55); year-to-year correlation 0.281 passes; the rest are UNCLEAR or NO DATA for want of seasons. Open: a full 36-season, six-league fairness run (about 35 hours of computing); making the engine less sensitive to a league's average ratings so that seeds 16 and 17 pass too; keeping traces for league games, which depends on item 49.
+51. Extensions and postseason injury replacements (Edition 8.55, L4): included in scope by the owner on 2026-10-30; concise rules that prevent postseason roster upgrading and any bypass of contract and cap restrictions are proposed in `docs/OWNER_RULINGS_NEEDED.md` and are not built until approved. Restructuring a future year's base salary is deferred.

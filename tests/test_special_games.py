@@ -1,6 +1,7 @@
 """Regression tests for four defects found in the audit (see PROJECT_COMPLETION_PLAN.md, section 8):
 1. special games ignored the venue rules (the Eastern finalist was always the Coronation's home side, whatever the venue; neutral
-   venues gave their nominal home side the home-field edge);
+   venues gave their nominal home side the home-field edge). Edition 8.55 replaced the rotating, voted Coronation venue with one
+   permanent neutral venue; the nominal home finalist is now designated after Week 4 (see CoronationVenue);
 2. Tiaras went to injured-reserve players as well as the final 53;
 3. awarding Tiaras twice inflated the summary counter;
 4. CI hid crashes of the spatial smoke run behind `|| true`."""
@@ -34,10 +35,10 @@ class Recorder(PlaceholderResolver):
         return super().resolve(game, rng, decisive)
 
 
-def run_with_recorder(seed="v", season=1):
+def run_with_recorder(seed="v", season=1, rng_seed=1):
     tpl = league.Template(TABLES)
     rec = Recorder()
-    run = league.SeasonRun(tpl, tpl.initial_state(), season, rec, random.Random(1), {}, seed=seed)
+    run = league.SeasonRun(tpl, tpl.initial_state(), season, rec, random.Random(rng_seed), seed=seed)
     for n in sorted(run.week_rows):
         run.play_week(n)
     for i in range(1, 8):
@@ -51,68 +52,64 @@ def run_with_recorder(seed="v", season=1):
 
 
 class CoronationVenue(unittest.TestCase):
+    """Edition 8.55: the Diamond Coronation is always played at Amethyst Aloha Stadium and is always neutral. The finalist from the
+    conference designated after Week 4 is the nominal home side, which controls kickoff and uniform rules but gives no home-field edge."""
+
     @classmethod
     def setUpClass(cls):
         cls.tpl, cls.srun, cls.rec = run_with_recorder()
 
-    def sides(self, run, venue, w_seed, e_seed, year=None):
-        w, e = run.champs["Western"], run.champs["Eastern"]
-        run.by_seed = {"Western": {w_seed: w}, "Eastern": {e_seed: e}}
-        if year:
-            run.year = year
-        return run.coronation_sides(venue)
+    def test_the_venue_is_the_permanent_one_and_the_game_is_neutral(self):
+        cor = self.srun.coronation
+        self.assertEqual(league.CORONATION_VENUE, "Amethyst Aloha Stadium")
+        self.assertEqual((cor["venue"], cor["neutral"]), (league.CORONATION_VENUE, True))
+        self.assertNotIn("home_club", cor)                      # nobody hosts: there is no home ground
 
-    def test_a_finalist_whose_own_venue_wins_plays_at_home_even_if_western(self):
-        run = self.srun
-        w, e = run.champs["Western"], run.champs["Eastern"]
-        # Defect: the Eastern finalist was always the engine's home side. A Western host must now be the home side.
-        away, home, host = self.sides(run, self.tpl.venue[w], 1, 1)
-        self.assertEqual((away, home, host), (e, w, w))
-        away, home, host = self.sides(run, self.tpl.venue[e], 7, 1)
-        self.assertEqual((away, home, host), (w, e, e))
-
-    def test_a_neutral_venue_has_no_host_and_the_higher_seed_is_nominal_home(self):
-        run = self.srun
-        w, e = run.champs["Western"], run.champs["Eastern"]
-        other = next(v for c, v in self.tpl.venue.items() if c not in (w, e))
-        away, home, host = self.sides(run, other, 1, 3)
-        self.assertEqual((away, home, host), (e, w, None))      # the Western champion is the higher seed
-        away, home, host = self.sides(run, other, 4, 2)
-        self.assertEqual((away, home, host), (w, e, None))
-
-    def test_equal_seeds_at_a_neutral_venue_go_to_a_seeded_draw_that_favours_neither_conference(self):
-        run = self.srun
-        w, e = run.champs["Western"], run.champs["Eastern"]
-        other = next(v for c, v in self.tpl.venue.items() if c not in (w, e))
-        homes = [self.sides(run, other, 1, 1, year=2000 + y)[1] for y in range(60)]
-        self.assertEqual(homes, [self.sides(run, other, 1, 1, year=2000 + y)[1] for y in range(60)])      # deterministic
-        self.assertIn(w, homes)
-        self.assertIn(e, homes)
-
-    def test_the_engine_is_told_whether_the_coronation_is_neutral(self):
+    def test_the_engine_is_told_the_coronation_is_neutral(self):
         cor = self.srun.coronation
         game = self.rec.seen[-1]                                # the Coronation is the last game played
-        self.assertEqual((game["away"], game["home"]), (cor["away"], cor["home"]))
-        self.assertEqual(game["neutral"], cor["home_club"] is None)
-        self.assertEqual(cor["neutral"], cor["home_club"] is None)
-        if cor["home_club"] is not None:
-            self.assertEqual(cor["home"], cor["home_club"])
-            self.assertEqual(self.tpl.venue[cor["home"]], cor["venue"])
+        self.assertEqual((game["away"], game["home"], game["id"]), (cor["away"], cor["home"], "coronation"))
+        self.assertIs(game["neutral"], True)
 
-    def test_over_many_seasons_the_home_side_follows_the_venue_rule(self):
-        hosted = neutral = 0
-        for s in range(1, 41):
-            tpl, run, rec = run_with_recorder(seed=f"m{s}", season=1)
-            cor = run.coronation
-            owners = [c for c in run.champs.values() if tpl.venue[c] == cor["venue"]]
-            if owners:
-                hosted += 1
-                self.assertEqual((cor["home"], cor["neutral"]), (owners[0], False))
-            else:
-                neutral += 1
-                self.assertTrue(cor["neutral"] and cor["home_club"] is None)
-        self.assertGreater(neutral, 0)                          # a host is rare (nine of 48 venues are eligible, two finalists)
-        self.assertEqual(hosted + neutral, 40)
+    def test_the_finalist_of_the_conference_designated_after_week_4_is_the_nominal_home_side(self):
+        run, cor = self.srun, self.srun.coronation
+        d = run.coronation_designation
+        self.assertEqual(cor["home"], run.champs[d["home_conference"]])
+        self.assertEqual(cor["away"], next(c for conf, c in run.champs.items() if conf != d["home_conference"]))
+        self.assertEqual(cor["home_conference"], d["home_conference"])
+
+    def test_the_designation_is_made_from_weeks_1_to_4_alone_and_then_frozen(self):
+        from dfl import standings
+        tpl = league.Template(TABLES)
+        run = league.SeasonRun(tpl, tpl.initial_state(), 1, PlaceholderResolver(), random.Random(7), seed="frozen")
+        for n in (1, 2, 3):
+            run.play_week(n)
+            self.assertIsNone(run.coronation_designation)       # nothing is decided before Week 4 is complete
+        run.play_week(4)
+        saved = run.coronation_designation
+        self.assertIsNotNone(saved)
+        self.assertEqual(saved["through_week"], 4)
+        self.assertEqual(saved, standings.conference_designation(run.active, run.games, "frozen|season1"))
+        self.assertEqual(saved["interconference_games"], 80)
+        for n in sorted(run.week_rows)[4:]:
+            run.play_week(n)
+        self.assertIs(run.coronation_designation, saved)        # the rest of the season cannot reopen it
+        self.assertEqual(run.designate_coronation_home(), saved)
+        self.assertEqual(run.coronation_designation, standings.conference_designation(run.active, run.games, "frozen|season1"))
+
+    def test_the_saved_decision_is_in_the_season_result(self):
+        result, _ = self.srun.handoff()
+        self.assertEqual(result["coronation_designation"], self.srun.coronation_designation)
+        self.assertEqual((result["coronation_venue"], result["coronation_home"]), (league.CORONATION_VENUE, self.srun.coronation["home"]))
+
+    def test_over_many_seasons_neither_conference_is_always_the_nominal_home_and_every_game_is_neutral(self):
+        confs = set()
+        for s in range(1, 25):
+            _, run, rec = run_with_recorder(seed=f"m{s}", season=1, rng_seed=s)
+            confs.add(run.coronation_designation["home_conference"])
+            self.assertTrue(run.coronation["neutral"] and rec.seen[-1]["neutral"])
+            self.assertEqual(run.coronation["venue"], league.CORONATION_VENUE)
+        self.assertEqual(confs, {"Western", "Eastern"})
 
 
 class OtherSpecialGames(unittest.TestCase):
@@ -130,7 +127,7 @@ class OtherSpecialGames(unittest.TestCase):
             elif not g.get("neutral"):
                 n_reg += 1
         self.assertEqual(n_tour, 28)
-        self.assertEqual(sum(1 for g in seen if g.get("neutral")), 28 + 1 + (1 if self.srun.coronation["neutral"] else 0))
+        self.assertEqual(sum(1 for g in seen if g.get("neutral")), 28 + 1 + 1)       # the Tour, the Bowl and the Coronation
         self.assertGreater(n_reg, 256)
 
     def test_the_bowl_is_neutral_and_neither_conference_is_always_the_nominal_home(self):
@@ -143,9 +140,9 @@ class OtherSpecialGames(unittest.TestCase):
 
     def test_playoff_games_stay_at_the_higher_seeds_venue_and_are_not_neutral(self):
         decisive = [g for g in self.rec.seen if g["decisive"]]
-        self.assertEqual(len(decisive), 12 + 1 + 1)             # twelve playoff games, the Bowl and the Coronation
-        self.assertFalse(any(g.get("neutral") for g in decisive[:12]))
-        self.assertEqual(len(self.srun.playoff_log), 12)
+        self.assertEqual(len(decisive), 10 + 1 + 1)             # ten playoff games, the Bowl and the Coronation
+        self.assertFalse(any(g.get("neutral") for g in decisive[:10]))
+        self.assertEqual(len(self.srun.playoff_log), 10)
         for conf, away, home, a, h in self.srun.playoff_log:
             seed = {c: s for s, c in self.srun.by_seed[conf].items()}
             self.assertLess(seed[home], seed[away])

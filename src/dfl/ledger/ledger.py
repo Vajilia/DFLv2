@@ -89,6 +89,7 @@ class Club:
 
 class Ledger:
     trading = False                    # class default: a ledger without a recorded window (an old saved state) trades only where neutral.ADAPTERS says
+    options_closed = None              # the league year whose option deadline has passed (close_options); None before the first
 
     def __init__(self, cids, year=2000, cap=None):
         self.cap = R.CAP if cap is None else cap        # this league's salary cap: owned by the league (parity profiles set it), never read from a module global
@@ -100,6 +101,7 @@ class Ledger:
         self.waivers = {}              # pid -> dict(from=cid, relief={year: amount})
         self.events = []
         self.fa_moves = []             # free agents who changed clubs this offseason (feeds compensatory picks)
+        self.option_log = []           # the saved record of every fifth-year option decision, in the order made (never edited or dropped)
         self.retired = {"pool": 0, "age": 0}     # characters removed from the list, by reason (career records go to the people layer)
         self._next_pid = 1
         for c in cids:
@@ -226,6 +228,52 @@ class Ledger:
             del self.events[n_events:]
             del self.fa_moves[n_moves:]
             raise
+
+    # ---------- fifth-year options (Edition 8.55, L3)
+    def options_due(self, cid=None):
+        """[(cid, pid)] of players whose first-round contract still carries an unexercised option and is in its fourth and last covered year, so
+        the club must decide now: before the draft of this league year opens (`close_options`)."""
+        if self.phase != "offseason" or self.options_closed == self.year:
+            return []
+        return [(c.cid, pid) for c in self.clubs.values() if cid in (None, c.cid) for pid in sorted(c.all_pids())
+                if self.players[pid].contract and self.players[pid].contract.option is not None and self.players[pid].contract.end_year == self.year]
+
+    def _decide_option(self, cid, pid, decision, note, exercise):
+        p = self.players[pid]
+        if self.phase != "offseason" or self.options_closed == self.year:
+            raise Rejected("the option deadline has passed (the draft opens it)")
+        if (cid, pid) not in self.options_due(cid):
+            raise Rejected("no option to decide for that club and player")
+        salary = p.contract.option
+        year = self.year
+
+        def go():
+            if exercise:
+                try:
+                    p.contract = p.contract.with_option_exercised()
+                except ContractError as e:
+                    raise Rejected(str(e))
+            else:
+                p.contract = p.contract.without_option()
+            self.log("option_" + decision, club=cid, pid=pid, salary=str(salary))
+        self._txn([cid], [pid], go, "option")
+        self.option_log.append({"year": year, "club": cid, "pid": pid, "pos": p.pos, "decision": decision, "option_salary": str(salary),
+                                "covers": year + 1 if exercise else None, "guaranteed": str(salary) if exercise and R.R1_OPTION_GUARANTEED else "0",
+                                "note": note})
+        return self.option_log[-1]
+
+    def exercise_option(self, cid, pid, note=""):
+        """Add the option year (the club's decision): the base salary is the option's, guaranteed in full, and the year counts toward the
+        viability invariant from now on, so a club that could not carry it is refused (`Rejected`, nothing changes)."""
+        return self._decide_option(cid, pid, "exercised", note, True)
+
+    def decline_option(self, cid, pid, note=""):
+        """Let the option go: the contract ends with this year and the player becomes a free agent when the year turns."""
+        return self._decide_option(cid, pid, "declined", note, False)
+
+    def close_options(self):
+        """The deadline: from here no option of this year can be exercised. Any still undecided lapses as a decline, with a record, at the year turn."""
+        self.options_closed = self.year
 
     # ---------- roster counts
     def room(self, cid, slot):
@@ -666,6 +714,9 @@ class Ledger:
                 p = self.players[pid]
                 p.snap_top = pid in top
                 if p.contract.end_year < self.year:
+                    if p.contract.option is not None:        # the deadline passed with no decision: the option lapses, and the record says so
+                        self.option_log.append({"year": self.year - 1, "club": c.cid, "pid": pid, "pos": p.pos, "decision": "lapsed",
+                                                "option_salary": str(p.contract.option), "covers": None, "guaranteed": "0", "note": "no decision by the deadline"})
                     self._lists(c.cid)[p.where].remove(pid)
                     p.prev_club = c.cid
                     self._release_number(p, c.cid)

@@ -35,14 +35,12 @@ class Universe:
         self.resolver = LedgerEngine(self.world, spatial=spatial) if engine else PlaceholderResolver()
         self.rng = random.Random(f"{seed}|league")
         self.seed_str = f"dfl{seed}"
-        self.history = {}
         self.season = 0
         self.draft_order = None
         self.last_results = {}            # club -> win percentage of the season just finished (leadership window input)
         self.fired = []                   # (year, date, key) in firing order
         self.reports = []
         self.run = None
-        self.vote = None
         self.paid_week = 0
         self.cursor = None                # (year, index of the next event) while a year is open, else None
         self.archive_buffer = [] if archive else None     # records for the permanent archive (archive.py), drained after every event
@@ -64,8 +62,7 @@ class Universe:
         if self.cursor is None:
             self.season += 1
             self.cursor = (league.FOUNDING_YEAR + self.season - 1, 0)
-            self.run, self.vote, self.paid_week, self.comps = None, None, 0, []
-            self.venues = sorted({self.tpl.venue[c] for c in self.tpl.division_of})
+            self.run, self.paid_week, self.comps = None, 0, []
         year, i = self.cursor
         events = C.year_events(year)
         date, key, phase, _ = events[i]
@@ -136,6 +133,7 @@ class Universe:
         self.world.free_agency_open()
 
     def on_draft_round_1(self, year, date, key):
+        self.world.decide_options()                      # the fifth-year option deadline: before the first pick of the draft
         order = self.draft_order
         self.comps = draft.compensatory(self.L.fa_moves, order) if order else []
         self.world.start_draft(order, self.comps)
@@ -152,9 +150,6 @@ class Universe:
     def on_camp_open(self, year, date, key):
         self.world.camp_open()
         assert self.L.phase == "camp"
-
-    def on_venue_vote(self, year, date, key):
-        self.vote = standings.coronation_pick(self.history, self.venues, year, self.seed_str)
 
     def on_final_cuts(self, year, date, key):
         self.world.final_cuts()
@@ -182,9 +177,8 @@ class Universe:
 
     # ------------------------------------------------------------------ the season
     def _begin_season(self, year):
-        assert self.vote is not None, "the venue vote precedes the season"
         self.world.start_season()
-        self.run = league.SeasonRun(self.tpl, self.state, self.season, self.resolver, self.rng, self.history, self.seed_str,
+        self.run = league.SeasonRun(self.tpl, self.state, self.season, self.resolver, self.rng, self.seed_str,
                                     returner_block=self.returner_block)
         assert self.run.year == year
 
@@ -220,9 +214,6 @@ class Universe:
         self.L.close_trading()
         self._closing = True
 
-    def on_venue_announce(self, year, date, key):
-        assert self.vote is not None
-
     # ------------------------------------------------------------------ postseason
     def on_wild_card(self, year, date, key):
         assert self.paid_week == R.PAID_WEEKS and not self.L.trade_open()
@@ -245,7 +236,7 @@ class Universe:
 
     def on_coronation(self, year, date, key):
         c = self.run.play_coronation()
-        assert c["venue"] == self.vote, "the Coronation is held where the June vote said"
+        assert c["venue"] == league.CORONATION_VENUE and c["neutral"]
         assert (date.weekday(), date) == (6, C.coronation(year))
 
     def on_year_close(self, year, date, key):

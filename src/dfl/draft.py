@@ -22,7 +22,7 @@ def lottery(returning, seed):
 def elimination_rounds(playoff_log, coronation):
     """Derive each playoff club's exit from play_playoffs' log plus the Coronation.
 
-    playoff_log: [(conference, away, home, away_score, home_score)] in play order, per conference 3 wild card games,
+    playoff_log: [(conference, away, home, away_score, home_score)] in play order, per conference 2 wild card games,
     2 divisional games, then the conference championship. coronation: (away, home, away_score, home_score).
     """
     out = {}
@@ -30,10 +30,10 @@ def elimination_rounds(playoff_log, coronation):
     for conf, away, home, a, h in playoff_log:
         per_conf.setdefault(conf, []).append((away, home, a, h))
     for conf, games in per_conf.items():
-        assert len(games) == 6, (conf, len(games))
+        assert len(games) == 5, (conf, len(games))
         for i, (away, home, a, h) in enumerate(games):
             loser = away if a < h else home
-            out[loser] = "wild_card" if i < 3 else "divisional" if i < 5 else "conference"
+            out[loser] = "wild_card" if i < 2 else "divisional" if i < 4 else "conference"
     away, home, a, h = coronation
     out[away if a < h else home] = "runner_up"
     out[home if h > a else away] = "champion"
@@ -44,7 +44,7 @@ def base_order(ranked, elimination, returning, seed, returned=(), returner_block
     """The order of the 48 original clubs for every round, pick 1 first.
 
     ranked: all clubs that played the regular season, best first by the standings cascade (so the reverse is worst first,
-    with every tiebreaker reversed). elimination: {club: exit round} for the 14 playoff clubs. returning: the eight
+    with every tiebreaker reversed). elimination: {club: exit round} for the 12 playoff clubs. returning: the eight
     ambassadors coming back, who take slots 1-8 by lottery. returned: clubs in their first season back from exile, who have
     already had their lottery pick: one that missed the playoffs picks as a block at the end of the non-playoff clubs
     (never ahead of her record), worst record first inside the block (Edition 8.19). A returned club that made the playoffs

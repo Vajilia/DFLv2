@@ -98,5 +98,36 @@ class InjuredReserve(unittest.TestCase):
         self.assertEqual(L.cap_number("C0"), O.cap_number(L, "C0"))
 
 
+class SplitReleaseL2(unittest.TestCase):
+    """Owner ruling L2 (Edition 8.55): the release year's own bonus portion stays in that year; only the FUTURE portions are split 50/50 between
+    that year and the next. The independent oracle states the same reading (tests/ledger_oracle.py, READING A)."""
+
+    def test_this_years_portion_stays_and_only_the_future_portions_divide(self):
+        c = Contract(2000, (20,) * 4, (), ((40, 0, 4),))                      # a $40 bonus: $10 charged each year
+        self.assertEqual(c.release_charges(2000, 0, split=True), {2000: 10 + 15, 2001: 15})      # $10 stays; the later $30 divides 15 / 15
+        # released at the start of 2001: this year's $10 stays, the later $20 (2002 and 2003) divides 10 / 10 between 2001 and 2002
+        self.assertEqual(c.release_charges(2001, 0, split=True), {2001: 10 + 10, 2002: 10})
+        self.assertEqual(c.release_charges(2001, 0), {2001: 30})                          # without the split all of it lands in 2001
+
+    def test_the_alternative_reading_would_have_split_the_whole_uncharged_bonus(self):
+        c = Contract(2000, (20,) * 4, (), ((40, 0, 4),))
+        whole = F(40) / 2                                                             # the rejected reading: half of everything uncharged, this year's portion included
+        got = c.release_charges(2000, 0, split=True)
+        self.assertNotEqual(got[2000] - 10, whole)                                    # the built (approved) reading charges the release year $5 more
+        self.assertEqual(got[2000] - 10, F(15))
+        self.assertEqual(sum(got.values()), sum(c.release_charges(2000, 0).values()))     # the same money in total, only its timing differs
+
+    def test_the_oracle_agrees_on_a_grid_of_contracts_and_weeks(self):
+        for years in ((20,) * 4, (15, 20, 25), (30,) * 2):
+            for bonus in (0, 10, 40):
+                n = len(years)
+                c = Contract(2000, years, (), ((bonus, 0, n),) if bonus else (), 0, "steady" if len(set(years)) == 1 else "rising")
+                for y in range(2000, 2000 + n):
+                    for week in (0, 5, 11, 22):
+                        self.assertEqual(c.release_charges(y, week, split=True), O.dead_if_released(c, y, week, True, True), (years, bonus, y, week))
+                        if y == 2000 + n - 1:                                         # no later portion: split changes nothing
+                            self.assertEqual(c.release_charges(y, week, split=True), c.release_charges(y, week, split=False))
+
+
 if __name__ == "__main__":
     unittest.main()

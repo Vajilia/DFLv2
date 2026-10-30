@@ -38,13 +38,13 @@ def main():
         resolver = EngineResolver({c: Squad(c, pop["clubs"][c]["roster"] + pop["clubs"][c]["ps"]) for c in clubs})
     else:
         resolver = PlaceholderResolver()
-    history, problems = {}, []
+    problems = []
     wins_sd, ties, exiles, cor_venues, champs = [], [], {}, [], {}
     prev_pct, yoy_x, yoy_y, pct_sd = {}, [], [], []
-    cor_home, seed1_titles = 0, 0
+    cor_home_west, cor_decided, seed1_titles = 0, {}, 0
     os.makedirs(a.out, exist_ok=True)
     for season in range(1, a.seasons + 1):
-        res, state = league.play_season(tpl, state, season, resolver, rng, history, seed=f"run{a.seed}")
+        res, state = league.play_season(tpl, state, season, resolver, rng, seed=f"run{a.seed}")
         out = res["outcome"]
         if season % a.validate_every == 0:
             d = f"{a.out}/tables/s{season:03d}"
@@ -65,13 +65,14 @@ def main():
         for c in out["exiled"].values():
             exiles[c] = exiles.get(c, 0) + 1
         cor_venues.append(res["coronation_venue"])
-        cor_home += res["coronation_home_club"] is not None
+        d = res["coronation_designation"]
+        cor_home_west += d["home_conference"] == "Western"
+        cor_decided[d["decided_by"]] = cor_decided.get(d["decided_by"], 0) + 1
         champ = res["coronation_winner"]
         champs[champ] = champs.get(champ, 0) + 1
         seed1_titles += champ in (out["seeds"]["Western"][0], out["seeds"]["Eastern"][0])
     n = a.seasons
-    gaps_ok = all(b - a_ >= 40 for v in set(cor_venues)
-                  for a_, b in zip(*(lambda ys: (ys, ys[1:]))([i for i, x in enumerate(cor_venues) if x == v])))
+    venue_ok = set(cor_venues) == {league.CORONATION_VENUE}                 # one permanent neutral venue
     report = {
         "seasons": n, "seed": a.seed, "validated_seasons": n // a.validate_every, "validator_failures": len(problems),
         "win_pct_sd_mean": round(statistics.mean(pct_sd), 3),
@@ -81,8 +82,9 @@ def main():
         "clubs_never_exiled": 48 - len(exiles) if len(exiles) < 48 else 0,
         "champions_distinct": len(champs), "champion_max_titles": max(champs.values()),
         "top_seed_in_final_pct": round(100 * seed1_titles / n, 1),
-        "coronation_distinct_venues": len(set(cor_venues)), "coronation_40_year_rule_ok": gaps_ok,
-        "coronation_finalist_at_home_pct": round(100 * cor_home / n, 1),
+        "coronation_venue_is_the_permanent_one": venue_ok,
+        "coronation_western_finalist_nominal_home_pct": round(100 * cor_home_west / n, 1),
+        "coronation_designation_decided_by": dict(sorted(cor_decided.items())),
     }
     json.dump(report, open(f"{a.out}/report.json", "w"), indent=2)
     with open(f"{a.out}/report.md", "w") as f:
@@ -92,7 +94,7 @@ def main():
         for s, fl in problems[:10]:
             f.write(f"\nFAIL season {s}: {fl}\n")
     print(open(f"{a.out}/report.md").read())
-    return len(problems) + (0 if gaps_ok else 1)
+    return len(problems) + (0 if venue_ok else 1)
 
 
 if __name__ == "__main__":

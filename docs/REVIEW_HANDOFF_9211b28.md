@@ -99,7 +99,7 @@ DFL_DIAG_DIR=out/diag python3 -I -m unittest discover -s tests # same, writing m
 python3 -m unittest tests.test_state_digest tests.test_format3_upgrade tests.test_parity tests.test_digest   # the persistence verification tests
 python3 -I tools/diag_digest_stability.py --iterations 200 --seed 4   # bounded stability loop (exit 1 if any copy digests differently)
 python3 -I tools/diag_profile_leak.py --events 8                      # does a second league alter the first? (exit 1 if so; --src <older checkout>/src to compare)
-python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.54.md   # 75 checks
+python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.55.md   # 75 checks
 python3 -I tools/run_ledger_soak.py --years 3 --seed 1
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 4 --play-level
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 3          # 22-player engine, about an hour
@@ -148,7 +148,7 @@ Results at the commit that carries this handoff (save schema 4):
 
 ## 9. Next stage
 
-The owner's next step after 7 (the plan's itinerary is in `PROJECT_COMPLETION_PLAN.md` section 6). Live pacing remains deferred. The Bowl's ballots and final-53 construction remain incomplete.
+Step 8: completing Ambassador Bowl voting and roster construction (the plan's itinerary is in `PROJECT_COMPLETION_PLAN.md` section 6). Live pacing remains deferred. The Bowl's ballots and final-53 construction remain incomplete until Step 8 is done.
 
 ## 10. Step 7: roster, contract and transaction verification (2026-10-30)
 
@@ -163,3 +163,43 @@ Full account: `docs/STEP7_LEDGER_VERIFICATION.md` (method, results, rule-by-rule
 Not built, listed so nothing is claimed that is not there: extensions, postseason-only replacements, restructuring a future year's base. The committed-money cache `Club._cmap` is still part of the state digest (a derived cache; coherent in every sequence run; excluding it needs a digest-algorithm and schema change, recommended for the next format change).
 
 **What this does to the open item (section 2).** Nothing changes its status. A second source of process-to-process difference was found and fixed in the simulation, but the original failure compared a decoded state with the state exported and stepped no event, so this defect cannot be its cause.
+
+## 11. Step 7 follow-up: owner rulings L1 to L4 and the 2026-10-30 design changes (spec Edition 8.55)
+
+Nothing is committed to `main`, merged or deployed. The batch is on `audit/completion-plan`. The original `StateMismatch` (section 2) is **still OPEN**, unchanged: its corrected evidence and diagnostics are in sections 2 to 4 and nothing in this batch touches the code path that could explain it.
+
+**What was built** (details: `docs/OWNER_RULINGS_NEEDED.md`, spec §0, §2, §3, §10, §11, §19):
+
+| Item | Result |
+| --- | --- |
+| L1 waiver order | Kept. `docs/WAIVER_PRIORITY_EXAMPLE.md` is generated from a real Season 2 (`tools/show_waiver_example.py`): all 48 clubs, Ambassadors marked, before and after Week 4. "Prior draft slot" is the club's own slot, never a traded pick; `tests/test_waiver_priority.py` proves a first-round pick swap between places 1 and 48 moves nothing. |
+| L2 split release | Current-year bonus portion stays in the current year; only future portions split under the established rule. Documented and tested (`SplitReleaseL2`). |
+| L3 fifth-year option | Built: club decision by a deterministic GM decider (`World.decide_options`), deadline = opening of Draft Round 1 in the player's fourth contract year, saved record `Ledger.option_log`. **One detail the owner did not specify:** an exercised option is fully guaranteed (`rules.R1_OPTION_GUARANTEED`, one constant). 14 tests. |
+| L4 extensions, postseason replacements | **Proposed rules only** (E1 to E6, P1 to P7 in `OWNER_RULINGS_NEEDED.md`), not implemented, as instructed. Restructuring a future year's base salary deferred. |
+| Playoffs | 6 clubs a conference, #1 and #2 byes, 3v6 and 4v5, reseed in the Divisional Round, four-round calendar unchanged. |
+| Coronation | Permanent neutral venue (Amethyst Aloha Stadium); venue vote, rotating host and the 40-year rule removed (47 dated events a year, was 49). Home designation from pooled Week 1 to 4 interconference games, frozen and saved at Week 4. |
+| Tiebreaks | One league-wide cascade (spec §3); SOS and SOV aggregation defined and tested; ties treated as before. |
+| Team data | Workbook reconciled (`docs/WORKBOOK_RECONCILIATION_20261030.md`), team IDs preserved, three obvious typos in the workbook *not* imported (listed there). |
+
+**Checks on the final code**
+
+- Full suite: 600 tests. The first complete run had 4 failures, all stale test code (three `test_engine` season tests still passed the removed `history` argument; one `test_archive` test expected the old division name `Eastern/East`). Fixed; both modules re-run and pass (15 and 21 tests). No rule code changed after that run, so the other 596 results stand. The full suite was **not** re-run end to end after those two one-line test edits.
+- Validator: `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.55.md` 75 of 75.
+- Restore soaks on the 47-event year, all PASS with identical journal digests at every event and identical final and archive digests for the uninterrupted, killed-and-resumed and restored-backup runs: placeholder (4 deaths), play-level (4 deaths), 22-player (3 deaths, 37 minutes).
+- Ledger soak, 12 years, 48 clubs: PASS. Its "viability margin min" is negative (-402.6) but so was the baseline's (-426.1) from the same command on the previous commit: not new.
+
+**Expected outcome changes versus regressions** (160 seasons, seed 1, placeholder resolver, previous commit against this one; `tools/run_seasons.py`)
+
+Expected, by design:
+
+- Every trajectory and every digest differs (new divisions, 47 events, fewer playoff clubs, new cascade). Old digests are meaningless against the new code.
+- Titles by conference seed, Coronation winners (old / new, out of 160): seed 1 75 / 55, seed 2 26 / 44, seeds 1 and 2 together 101 / 99. The #1 seed's edge is now shared with #2, which also has a bye; the pair's combined share is unchanged.
+- Playoff clubs 14 to 12; the draft's elimination rounds adapted (12 clubs, 5 games a conference).
+- Coronation: always one venue; "finalist at home" is replaced by the designation. Western designated home in 80 of 160 seasons; the designation was decided on wins 151 times and on point differential 9 times (equal wins), never needing SOS, SOV or the draw in this sample. Those later steps are covered by unit tests only.
+- Calendar: 49 events became 47; saves from schema 3 can be carried to schema 4 but not continued (old clubs and calendar). Development saves only.
+
+Not explained away, so recorded: year-to-year win-percentage correlation fell from 0.213 to 0.167 and the spread of per-club win percentage from 0.154 to 0.150 (ties per season and wins spread are unchanged: 1.46 to 1.45, 2.77 to 2.71). Two plausible causes (the draft now sees 12 rather than 14 playoff clubs, so more clubs share the early picks; the changed divisions change schedules) but this was not isolated. The fairness measurement (`tools/fairness.py`, engine-based, hours) was **not re-run**; run it before any claim about parity under the new format. The validator passes on 16 of 16 sampled seasons in each run and every other check in the harness agrees with the baseline.
+
+**Where a reviewer should look first for this batch:** `standings.rank` and `standings.conference_designation`; `league.SeasonRun.play_week` (Week 4 freeze) and `play_coronation`; `Ledger._decide_option` and `World.decide_options`; `Universe.waiver_priority`; the new spec paragraphs in §3 and §11.
+
+**Open or deferred:** L4 rules await the owner's approval (decisions listed at the end of the L section of `OWNER_RULINGS_NEEDED.md`); the New York name direction (Goliaths to Gladiators) follows the workbook and is recorded as a team-data change; the fully-guaranteed option is a builder's choice awaiting confirmation.

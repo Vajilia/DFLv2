@@ -23,11 +23,11 @@ SEASONS = 48                                    # six full eight-season cycles, 
 
 def generate(n, seed=21):
     tpl = league.Template(TABLES)
-    state, rng, res, hist = tpl.initial_state(), random.Random(seed), PlaceholderResolver(), {}
+    state, rng, res = tpl.initial_state(), random.Random(seed), PlaceholderResolver()
     seasons = []
     for s in range(1, n + 1):
         before = state
-        r, state = league.play_season(tpl, state, s, res, rng, hist, seed=f"rot{seed}")
+        r, state = league.play_season(tpl, state, s, res, rng, seed=f"rot{seed}")
         seasons.append((s, before, r))
     return tpl, seasons
 
@@ -69,7 +69,7 @@ class Rotation(unittest.TestCase):
         self.assertEqual({dv: league.bed_of(*dv, 1) for dv in league.DIVISIONS}, want)
         for n in (5, 6, 7, 8):                                           # after four seasons the conferences have flipped
             self.assertEqual(league.bed_of("Western", "Northwest", n), n)
-            self.assertEqual(league.bed_of("Eastern", "Midwest", n), n - 4)
+            self.assertEqual(league.bed_of("Eastern", "Great Lakes", n), n - 4)
 
 
 class EverySeason(unittest.TestCase):
