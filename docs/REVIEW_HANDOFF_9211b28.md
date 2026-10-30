@@ -99,7 +99,7 @@ DFL_DIAG_DIR=out/diag python3 -I -m unittest discover -s tests # same, writing m
 python3 -m unittest tests.test_state_digest tests.test_format3_upgrade tests.test_parity tests.test_digest   # the persistence verification tests
 python3 -I tools/diag_digest_stability.py --iterations 200 --seed 4   # bounded stability loop (exit 1 if any copy digests differently)
 python3 -I tools/diag_profile_leak.py --events 8                      # does a second league alter the first? (exit 1 if so; --src <older checkout>/src to compare)
-python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.56.md   # 75 checks
+python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.57.md   # 75 checks
 python3 -I tools/run_ledger_soak.py --years 3 --seed 1
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 4 --play-level
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 3          # 22-player engine, about an hour
@@ -184,7 +184,7 @@ Nothing is committed to `main`, merged or deployed. The batch is on `audit/compl
 **Checks on the final code**
 
 - Full suite: 600 tests. The first complete run had 4 failures, all stale test code (three `test_engine` season tests still passed the removed `history` argument; one `test_archive` test expected the old division name `Eastern/East`). Fixed; both modules re-run and pass (15 and 21 tests). No rule code changed after that run, so the other 596 results stand. The full suite was **not** re-run end to end after those two one-line test edits.
-- Validator: `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.56.md` 75 of 75.
+- Validator: `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.57.md` 75 of 75.
 - Restore soaks on the 47-event year, all PASS with identical journal digests at every event and identical final and archive digests for the uninterrupted, killed-and-resumed and restored-backup runs: placeholder (4 deaths), play-level (4 deaths), 22-player (3 deaths, 37 minutes).
 - Ledger soak, 12 years, 48 clubs: PASS. Its "viability margin min" is negative (-402.6) but so was the baseline's (-426.1) from the same command on the previous commit: not new.
 

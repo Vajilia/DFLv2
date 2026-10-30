@@ -174,7 +174,7 @@ Built from your outline (per-position ranked ballots, every candidate ranked, Dr
 | f | The count is the weighted inclusive Gregory transfer (surplus passes on in proportion), exact fractions | unweighted/random transfer, or no transfer (top-N by first preferences) |
 | g | "The order of the original ballot" used for replacements = the order of the count (elected, then reverse elimination) | a fixed overall ranking by total votes |
 | h | Players who joined the four clubs after the vote are never chosen (not on the ballot) | allow them from the free-agent/roster pool |
-| i | All 53 are dressed in the Bowl | the normal 48/47 game-day limit |
+| i | **APPROVED 2026-10-30.** All 53 are dressed in the Bowl | the normal 48/47 game-day limit |
 | j | Rings go to the whole locked roster (all medically available an hour before kickoff) and the four Bowl coaches | exclude anyone who did not take a snap |
 
 Not claimed: that the vote picks the players a real league would. The judged-overall error model is a placeholder. In the one placeholder year examined (seed 1, Season 1) the lock needed no repair; the repair and exhausted-ballot rules are exercised by tests with deliberate damage (`tests/test_bowl.py`).

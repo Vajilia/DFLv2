@@ -6,7 +6,7 @@ The owner attached `22468576-DFL_Workbook_20261030.xlsx` with the instruction to
 1. Read every sheet of the workbook (Teams, Schedule, colour registry, postseason dates) with cached cell values, and compared each Teams row to the repository's `TEAMS.csv` by `team_id`.
 2. Applied only the differences the workbook states. Every `team_id` is unchanged (48 ids, 1–48, one per club); no club was added or removed; the 40 active / 8 ambassador split and the ambassador in each division are unchanged.
 3. Rebuilt `SCHEDULE.csv` by mapping the club names of the old template onto the new ones through the stable ids, and checked it against the workbook's own Schedule sheet: **identical in all 360 rows** (week, game, date, kickoff, away, home).
-4. Checked the result with `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.56.md` (75 checks, all passing).
+4. Checked the result with `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.57.md` (75 checks, all passing).
 
 ## Division membership after reconciliation
 
@@ -55,6 +55,6 @@ The workbook's Schedule sheet lists the postseason dates (wild card 2000-12-03, 
 - The column header "abreviation" for `abbr`.
 
 ## For the owner to confirm (nothing here blocks anything)
-- **New York's name** is **Gladiators** in the workbook and was Goliaths in the repository; the workbook's value was adopted.
+- **New York's name (team 10) is Gladiators.** The workbook says Gladiators; the repository said Goliaths before this batch and now says Gladiators (`data/season1/TEAMS.csv`, pinned by `tests/test_team_identity.py`). Direction of the change: Goliaths → Gladiators; nothing was reversed.
 - Havana's venue, **Estadio Panamericano**, was taken from the workbook as written.
 - The eight ambassadors keep their identities (Portland, Los Angeles, Minnesota, Baja, Buffalo, Baltimore, Indianapolis, Tampa Bay); the realignment moved Buffalo (Northeast → Great Lakes) and Baltimore (East → Atlantic) with their divisions.
