@@ -62,8 +62,11 @@ from . import neutral
 from .neutral import deep_digest          # re-exported: the exhaustive state digest
 from .year import Universe
 
-FORMAT_VERSION = 3                      # the save schema this code writes
-SUPPORTED_FORMATS = (3,)                # the save schemas this code can read (formats 1 and 2 were development builds; see _refuse)
+FORMAT_VERSION = 4                      # the save schema this code writes
+SUPPORTED_FORMATS = (4,)                # the save schemas this code opens and continues
+UPGRADABLE_FORMATS = (3,)               # development schemas this code cannot open but can carry forward with `upgrade(..., run_originating_code=True)`
+FORMAT_DIGESTS = {3: 1, 4: neutral.DIGEST_VERSION}   # the state-digest algorithm each schema's journal was written with (3: a partial digest, 4: the full one)
+assert FORMAT_DIGESTS[FORMAT_VERSION] == neutral.DIGEST_VERSION, "change the save schema whenever the journal's digest changes"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -242,18 +245,17 @@ def loads(raw):
     return _Unpickler(io.BytesIO(zlib.decompress(raw))).load()
 
 
-def quick_digest(u):
-    """The per-event digest in the journal: the ledger digest plus the cursors, the random streams and the books that decide the
-    future. Cheap (milliseconds); `deep_digest` is the exhaustive check used when asked and in tests."""
-    hh = hashlib.sha256()
-    hh.update(u.L.digest().encode())
-    hh.update(repr((u.season, u.cursor, u.paid_week, len(u.fired), len(u.reports), sorted(u.history.items()))).encode())
-    for rng in (u.rng, u.world.rng):
-        hh.update(hashlib.sha256(repr(rng.getstate()).encode()).digest())
-    st = u.world.stats
-    hh.update(json.dumps(st, sort_keys=True, default=str).encode())
-    hh.update(repr((getattr(u.resolver, "games_played", None), getattr(u.resolver, "injuries_seen", None))).encode())
-    return hh.hexdigest()
+def journal_digest(u):
+    """The digest the journal records after every event (save schema 4). It is the complete state digest (`neutral.deep_digest`): every
+    attribute of the universe and everything reachable from it (the ledger and every player; the world with all its generators, cards,
+    estimates and books; the season run and the resolver) except the cache-like names `neutral.EXCLUDED`, each of which is excluded with a
+    stated reason; all six random generators, each by its complete state. Replaying an event from a snapshot must reproduce it exactly.
+
+    What lies outside the universe and so outside this digest: the data tables and the code (covered by the file's code fingerprint), the
+    archive of games (covered by the journal's per-event record count and digest and the archive's own chain), and the league's seed and
+    construction arguments (stored in the file's meta). Until schema 4 the journal held a partial digest of the ledger, the cursors, two of
+    the six generators and a few books (`quick_digest`); it could not see the other four generators or most of the world."""
+    return neutral.deep_digest(u)
 
 
 # ---------------------------------------------------------------------------------------------------------------- the file
@@ -404,21 +406,23 @@ def _judge_archive(path, chk, window_floor, repair_archive, allow_archive_ahead)
 # ---------------------------------------------------------------------------------------------------------------- compatibility
 def compatibility(path):
     """Two questions about a league file, answered without loading any snapshot (so it works under any code):
-    `schema`: "ok" if this code reads the file's save schema, else "unsupported";
+    `schema`: "ok" if this code reads the file's save schema; "upgradable" if it is a development schema this code cannot open but can carry
+              forward (`upgrade` with the originating code); else "unsupported";
     `code`:   "exact" if the file was written by exactly this source and data, else "differs" (with the files that differ).
     `usable` is True only when both hold."""
     db = connect(path, readonly=True)
     try:
         meta = read_meta(db)
         have = meta.get("fingerprint")
-        row = db.execute("SELECT manifest FROM code WHERE fingerprint = ?", (have,)).fetchone() if meta.get("format") in SUPPORTED_FORMATS else None
+        row = (db.execute("SELECT manifest FROM code WHERE fingerprint = ?", (have,)).fetchone()
+               if meta.get("format") in SUPPORTED_FORMATS + UPGRADABLE_FORMATS else None)
     finally:
         db.close()
     fmt = meta.get("format")
     out = {"format": fmt, "supported_formats": list(SUPPORTED_FORMATS), "file_fingerprint": have, "current_fingerprint": None,
-           "schema": "ok" if fmt in SUPPORTED_FORMATS else "unsupported", "code": None, "changed_files": None,
-           "created_with": meta.get("created_with"), "lineage": meta.get("lineage", [])}
-    if out["schema"] == "ok":
+           "upgradable_formats": list(UPGRADABLE_FORMATS), "schema": "ok" if fmt in SUPPORTED_FORMATS else "upgradable" if fmt in UPGRADABLE_FORMATS else "unsupported",
+           "code": None, "changed_files": None, "created_with": meta.get("created_with"), "lineage": meta.get("lineage", [])}
+    if out["schema"] in ("ok", "upgradable"):
         mine = code_manifest()
         out["current_fingerprint"] = fingerprint(manifest=mine)
         out["code"] = "exact" if have == out["current_fingerprint"] else "differs"
@@ -430,8 +434,19 @@ def compatibility(path):
     return out
 
 
+def _digest_note(fmt):
+    return (f"Its journal digests are algorithm {FORMAT_DIGESTS.get(fmt, '?')}; this code writes and checks algorithm {neutral.DIGEST_VERSION}, "
+            "which also covers all six random generators and the rest of the state, so the two cannot be mixed in one journal.")
+
+
 def _refuse(path, c):
     fmt = c["format"]
+    if c["schema"] == "upgradable":
+        raise UnsupportedFormat(
+            f"{path} has development save schema {fmt}; this code opens schema {c['supported_formats']}. {_digest_note(fmt)} The file is not "
+            "damaged and is not modified: carry it forward with  league_store.py upgrade OLD NEW --run-originating-code  (the file's own "
+            "recorded code exports it, this code imports it, the imported state is checked by value against the export, and the original "
+            "is kept untouched). 'status' and 'verify' read it as before.")
     if c["schema"] == "unsupported":
         if not isinstance(fmt, int) or fmt < min(SUPPORTED_FORMATS):
             raise UnsupportedFormat(
@@ -485,7 +500,7 @@ class Runner:
         from . import archive as A
         manifest = code_manifest()
         fp = fingerprint(manifest=manifest)
-        meta = dict(meta, format=FORMAT_VERSION, fingerprint=fp, base={"seq": base_seq, "chain": base_chain}, lineage=list(lineage),
+        meta = dict(meta, format=FORMAT_VERSION, digest_algorithm=neutral.DIGEST_VERSION, fingerprint=fp, base={"seq": base_seq, "chain": base_chain}, lineage=list(lineage),
                     created_with={"how": how, "format": FORMAT_VERSION, "fingerprint": fp, "rule_version": rule_version()})
         db = connect(path)
         db.executescript(SCHEMA)
@@ -578,7 +593,7 @@ class Runner:
         for seq, year, n_fired, key, digest, n_rec, rec_digest in rows:
             at = self.u.cursor
             fired = self.u.step_event()
-            if fired != key or quick_digest(self.u) != digest:
+            if fired != key or journal_digest(self.u) != digest:
                 raise ReplayDivergence(f"replaying event {seq} ({key}) did not reproduce the journal (cursor was {at})")
             records = self.u.take_archive()
             if self.archive is not None:
@@ -614,7 +629,7 @@ class Runner:
         memory is reloaded from the file, so the runner never holds a state the file does not."""
         try:
             key = self.u.step_event()
-            digest = quick_digest(self.u)
+            digest = journal_digest(self.u)
             self._commit(key, digest)
         except BaseException:
             self._reload()
@@ -713,9 +728,20 @@ class Runner:
         if code_changed and not accept_code_change:
             raise CodeMismatch(f"the state was exported from code {str(m['fingerprint'])[:12]} and this is {mine[:12]}; importing starts a new "
                                "code epoch for the league, which must be asked for explicitly (accept_code_change)")
-        u = neutral.decode(doc["state"])
+        if m.get("digest_algorithm") != neutral.DIGEST_VERSION:
+            raise neutral.NeutralError(f"the state document's digests use algorithm {m.get('digest_algorithm')}, this code checks algorithm "
+                               f"{neutral.DIGEST_VERSION}; re-export it with this code's exporter (persist.upgrade does)")
+        synthesized = set()
+        u = neutral.decode(doc["state"], synthesized)
         u.rebind(tables or _tables_path(m["tables"]))
         d = neutral.deep_digest(u)
+        adapted = sorted(synthesized)
+        if d != m["deep_digest"] and adapted:
+            # Attributes the newer code expects and the exporting code did not have were filled in by adapters (neutral.ADAPTERS). The
+            # exporter's digest could not contain them, so compare everything else: that is still a check by value of all the old state.
+            rest = neutral.deep_digest(u, neutral.DIGEST_IGNORE + tuple(adapted))
+            if rest == m["deep_digest"]:
+                d = rest
         state_changed = d != m["deep_digest"]
         if state_changed and not accept_state_change:
             rep = mismatch_report(doc, u, d, source=doc_path)
@@ -729,7 +755,7 @@ class Runner:
             "from_fingerprint": m["fingerprint"], "from_format": m["league_format"], "from_rule_version": m.get("rule_version"),
             "from_seq": m["seq"], "from_chain": m["chain"], "source_file_sha256": source_file_sha256,
             "state_document_sha256": neutral.state_digest(raw), "state_digest": m["deep_digest"],
-            "code_changed": code_changed, "state_changed": state_changed}]
+            "code_changed": code_changed, "state_changed": state_changed, "adapted_attributes": adapted}]
         meta = {k: m[k] for k in ("seed", "snapshot_every", "keep", "universe_args", "tables", "league_id")}
         meta["archive"] = None
         if m.get("archive"):
@@ -950,7 +976,18 @@ spec = importlib.util.spec_from_file_location("dfl_neutral_current", neutral_pat
 N = importlib.util.module_from_spec(spec)
 sys.modules["dfl_neutral_current"] = N
 spec.loader.exec_module(N)
+import json, sqlite3
+_db = sqlite3.connect(db_copy)
+_args = dict(_db.execute("SELECT key, value FROM meta")).get("universe_args")
+_db.close()
+_profile = (json.loads(_args) if _args else {}).get("profile")
 from dfl import persist as P
+if _profile:
+    # code that kept the parity profile in module constants (before it belonged to the league) does not re-apply it when a file is opened,
+    # so replaying such a file only reproduces its journal if the profile it was written under is applied first
+    from dfl import parity as _parity
+    if hasattr(_parity, "apply"):
+        _parity.apply(_profile)
 r = P.Runner.open(db_copy, heal=False, with_archive=False)
 with open(out, "wb") as f:
     f.write(N.dumps_doc(r.u, N.runner_manifest(r)))
@@ -1005,10 +1042,11 @@ def upgrade(old, new, run_originating_code=False, accept_state_change=False, arc
     code is extracted and the export is run under it in a separate process, which executes code from the file, so it must be asked for
     (`run_originating_code`). Either way the import checks the rebuilt state by value against the export. Returns a report."""
     c = compatibility(old)
-    if c["schema"] != "ok":
+    if c["schema"] == "unsupported":
         _refuse(old, c)
-    if c["code"] != "exact" and not run_originating_code:
-        _refuse(old, c)
+    if c["schema"] == "upgradable" or c["code"] != "exact":
+        if not run_originating_code:
+            _refuse(old, c)
     before = _file_sha256(old)
     work = tempfile.mkdtemp(prefix="dflupgrade")
     try:

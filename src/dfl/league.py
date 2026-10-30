@@ -151,8 +151,9 @@ class SeasonRun:
 
     TOUR_SLOTS = 7
 
-    def __init__(self, tpl, state, season, resolver, rng, history, seed="dfl"):
+    def __init__(self, tpl, state, season, resolver, rng, history, seed="dfl", returner_block=True):
         self.tpl, self.state, self.season, self.resolver, self.rng, self.history, self.seed = tpl, state, season, resolver, rng, history, seed
+        self.returner_block = returner_block        # the league's own setting (parity profile), used by its draft order
         self.year = FOUNDING_YEAR + season - 1
         self.cal = {r["note"]: r["sunday"] for r in C.season_weeks(self.year) if r["phase"] in ("postseason", "ambassadors")}   # round -> its Sunday
         self.teams, self.sched, self.tour = season_tables(tpl, state, season)
@@ -310,7 +311,7 @@ class SeasonRun:
         ret = sorted(returning if returning is not None else self.ambassadors)
         # clubs in their first season back (last season's ambassadors, seed 5 now); Season 1's seed 5s were never exiled
         returned = [] if self.season == 1 else [self.state[dv]["seeds"][5] for dv in self.state]
-        return draft.base_order(ranked, elim, ret, f"{self.seed}|draft{self.season}", returned)
+        return draft.base_order(ranked, elim, ret, f"{self.seed}|draft{self.season}", returned, self.returner_block)
 
     def handoff(self):
         new_state = {}

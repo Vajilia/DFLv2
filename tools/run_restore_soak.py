@@ -61,7 +61,7 @@ def main():
     ref = []
     for n in range(total):
         u.step_event()
-        ref.append(persist.quick_digest(u))
+        ref.append(persist.journal_digest(u))
         recs = u.take_archive()
         if recs:
             ref_arch.put_batch(n + 1, recs)

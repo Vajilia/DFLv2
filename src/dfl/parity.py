@@ -7,12 +7,14 @@
   rigged  a deliberate control, not a design option: no cap, and two clubs always get first pick of every free-agent class. A league
           that is fair on purpose must fail the bands here, otherwise the bands cannot see unfairness at all.
 
-A profile changes module-level constants, so a process applies one profile and keeps it (the tools run one league per process);
-`apply("tight")` restores the shipped values, which is what the tests do after trying another.
+A profile belongs to the league that was created with it. `settings(name)` only *returns* the profile's values; nothing here changes a
+module constant, so creating, restoring or running another league in the same process cannot alter an existing one (before Edition 8.54's
+persistence work a profile rewrote `rules.CAP` and `draft.RETURNER_BLOCK` for the whole process, and a league restored from a file did not
+re-apply its profile). The values are copied into the league's own state: the cap onto its ledger (`Ledger.cap`), the returner rule onto
+the universe and its season run (`returner_block`), the priority clubs onto its world (`World.priority`).
 """
 from fractions import Fraction as F
 
-from . import draft
 from .ledger import rules as R
 
 PROFILES = {
@@ -21,21 +23,13 @@ PROFILES = {
     "rigged": {"cap": F(10 ** 7), "returner_block": False, "priority_clubs": 2},
 }
 NAMES = tuple(PROFILES)
-_SHIPPED = {"cap": R.CAP, "returner_block": draft.RETURNER_BLOCK if hasattr(draft, "RETURNER_BLOCK") else True}
-_current = "tight"
+SHIPPED = {"cap": R.CAP, "returner_block": True}      # the rules as written; a profile overrides some of these
 
 
-def apply(name="tight"):
-    """Set the profile's constants and return its settings (for the World)."""
-    global _current
+def settings(name="tight"):
+    """The profile's complete settings: {"cap", "returner_block", "priority_clubs"}. Pure; changes nothing."""
     if name not in PROFILES:
         raise ValueError(f"unknown parity profile {name!r} (one of {', '.join(NAMES)})")
     spec = PROFILES[name]
-    R.CAP = spec.get("cap", _SHIPPED["cap"])
-    draft.RETURNER_BLOCK = spec.get("returner_block", _SHIPPED["returner_block"])
-    _current = name
-    return dict(spec)
-
-
-def current():
-    return _current
+    return {"cap": spec.get("cap", SHIPPED["cap"]), "returner_block": spec.get("returner_block", SHIPPED["returner_block"]),
+            "priority_clubs": spec.get("priority_clubs", 0)}

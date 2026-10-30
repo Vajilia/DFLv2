@@ -44,7 +44,7 @@ def signals(world, cid, win_pct):
     g, L = G(world), world.L
     card = world.fans[cid]
     res = max(-1.0, min(1.0, (win_pct - 0.5) / g["results_range"]))
-    pay = float(L.cap_number(cid)) / float(R.CAP)
+    pay = float(L.cap_number(cid)) / float(L.cap)
     inv = max(-1.0, min(1.0, (pay - g["spend_ref"]) / g["spend_range"]))
     if card["core"]:
         here = set(L.clubs[cid].all_pids())

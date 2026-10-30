@@ -51,7 +51,7 @@ def ask(player):
 
 
 class World:
-    def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False, priority=()):
+    def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False, priority=(), cap=None):
         self.rng = random.Random(seed)
         self.dev_rng = random.Random(f"{seed}|develop")
         self.soul_rng = random.Random(f"{seed}|soul")
@@ -77,7 +77,7 @@ class World:
         self.rooms, self.room_seq, self._tape = [], 0, None          # meeting-room transcripts of the last few league years (Edition 8.29)
         self.form = {}                                            # club -> win percentage of its last season (what candidates see)
         self.trade_log = []                                       # every proposal, counter, rejection and deal (the engine replays this)
-        self.L = Ledger(cids, year)
+        self.L = Ledger(cids, year, cap=cap)
         self.reckless = set(reckless)
         self.priority = list(priority)             # clubs that always shop first in free agency (a parity-test control only)
         self.tables = tables or load_tables()
@@ -541,7 +541,7 @@ class World:
         order = [c for c in self.priority if c in L.clubs] + [c for c in order if c not in self.priority]
         for cid in order:
             self.fix_minimums(cid)
-            budget_floor = R.CAP - R.RESERVE - F(90)
+            budget_floor = self.L.cap - R.RESERVE - F(90)
             for _ in range(40):
                 if (not L.room(cid, "roster") or L.cap_number(cid) >= budget_floor and cid not in self.reckless
                         or len(L.clubs[cid].roster) + len(L.clubs[cid].ps) >= R.PRESEASON_CEILING - 9):    # leave room for 7 picks + 2 comps
@@ -559,7 +559,7 @@ class World:
                         break
                 if p is None:
                     continue
-                if cid not in self.reckless and L.cap_number(cid) + v > R.CAP - R.RESERVE:
+                if cid not in self.reckless and L.cap_number(cid) + v > L.cap - R.RESERVE:
                     continue
                 self.try_sign(cid, p, value=v)
             self.fill_squad(cid)
@@ -600,7 +600,7 @@ class World:
             if done >= N["upgrade_max"] or not L.room(cid, "roster"):
                 break
             v = self.negotiate(cid, best)
-            if v is None or (cid not in self.reckless and L.cap_number(cid) + v > R.CAP - R.RESERVE):
+            if v is None or (cid not in self.reckless and L.cap_number(cid) + v > L.cap - R.RESERVE):
                 continue
             done += self.try_sign(cid, best, value=v)
         self.stats["upgrades"] = self.stats.get("upgrades", 0) + done

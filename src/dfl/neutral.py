@@ -9,10 +9,10 @@ code's league.
 What it preserves, exactly: every int and float (floats by `repr`, which round-trips), every exact `Fraction` (the ledger's money), strings,
 bytes, tuples, lists, dicts **in insertion order**, sets, `random.Random` generator state, numpy arrays and scalars, dates, and any object
 of a `dfl` class with its attributes. Shared references and cycles are kept (two names for one list stay two names for one list).
-Derived caches listed in `IGNORE` are written as None, as in `deep_digest`.
+Derived caches listed in `IGNORE` are written as None; `EXCLUDED` lists, with reasons, every attribute the state digest leaves out.
 
 What it does not do: it does not translate between versions of the code. If a class gained, lost or renamed an attribute, `RENAMES` and
-`ADAPTERS` are the places to say how; `RENAMES` is empty and `ADAPTERS` holds only the ledger's trading window (below). Export alone is not a migration: see persist.upgrade, which exports under
+`ADAPTERS` are the places to say how; `RENAMES` is empty and `ADAPTERS` holds only the ledger's trading window and the league-owned parity settings (below). Export alone is not a migration: see persist.upgrade, which exports under
 the code that wrote the league, imports under the new code, checks the state by value and records the change.
 """
 import base64
@@ -25,14 +25,24 @@ import random
 import sys
 import types
 from collections import OrderedDict, defaultdict, deque
+from itertools import chain
 from fractions import Fraction
 
 import numpy as np
 
 DOC_FORMAT = "dfl-state"
-DOC_VERSION = 1
-IGNORE = ("_units",)            # derived caches: written as None, left out of digests
-DIGEST_IGNORE = ("_units", "dir", "archive_buffer", "archive")   # `dir`: where this machine keeps the tables. archive*: the per-event hand-off to the archive, empty whenever a digest is taken; logging never changes league state
+DOC_VERSION = 2                 # 2: digests use algorithm 2 (below); version 1 documents carry algorithm-1 digests and are refused
+DIGEST_VERSION = 2              # the state digest algorithm; recorded in every league file and state document
+IGNORE = ("_units",)            # derived caches: written as None in a state document, and left out of digests
+EXCLUDED = {                    # attribute names the state digest leaves out, and why; everything else reachable from the universe is in it
+    "_units": "squad cache of unit ratings, recomputed on demand from the cards; written as None",
+    "_memo": "contract cache of release charges, recomputed on demand from the contract's own fields",
+    "dir": "where this machine keeps the data tables; the tables themselves are covered by the code fingerprint",
+    "archive_buffer": "the per-event hand-off to the permanent archive: filled during an event, drained into the journal's commit, "
+                      "and covered there by the batch's record count and digest (a journal column) and the archive's own chain",
+    "archive": "the resolver's alias of that same buffer",
+}
+DIGEST_IGNORE = tuple(EXCLUDED)
 RENAMES = {}        # {"old.module.Class": "new.module.Class"} for classes that moved between versions
 ADAPTERS = {}       # {"new.module.Class": callable(obj, attrs_dict)} to fill attributes a newer class expects
 
@@ -54,8 +64,47 @@ def _universe_trading_window(obj, attrs):
         L.trading = "trading_open" in keys and "trade_close" not in keys and L.phase != "post"
 
 
-ADAPTERS["dfl.ledger.ledger.Ledger"] = _ledger_trading_window
-ADAPTERS["dfl.year.Universe"] = _universe_trading_window
+def _ledger_owned_config(obj, attrs):
+    """State written before the cap belonged to the league (it was then the module constant `rules.CAP`, rewritten process-wide by
+    the parity profile) has no `cap`. It is marked unknown (None) and `_universe_owned_config` settles it from the league's profile."""
+    if "cap" not in attrs:
+        attrs["cap"] = None
+
+
+def _season_run_owned_config(obj, attrs):
+    """Likewise the returner rule of a season run (it was the module constant `draft.RETURNER_BLOCK`)."""
+    if "returner_block" not in attrs:
+        attrs["returner_block"] = None
+
+
+def _universe_owned_config(obj, attrs):
+    """Settle the league-owned parity settings that an older state did not carry, from the profile name it does carry."""
+    from . import parity
+    name = attrs.get("profile", "tight")
+    s = parity.settings(name)
+    if "returner_block" not in attrs:
+        attrs["returner_block"] = s["returner_block"]
+    L = getattr(attrs.get("world"), "L", None)
+    if L is not None and getattr(L, "cap", 0) is None:
+        L.cap = s["cap"]
+    run = attrs.get("run")
+    if run is not None and getattr(run, "returner_block", 0) is None:
+        run.returner_block = s["returner_block"]
+
+
+def _universe_adapter(obj, attrs):
+    _universe_trading_window(obj, attrs)
+    _universe_owned_config(obj, attrs)
+
+
+def _ledger_adapter(obj, attrs):
+    _ledger_trading_window(obj, attrs)
+    _ledger_owned_config(obj, attrs)
+
+
+ADAPTERS["dfl.ledger.ledger.Ledger"] = _ledger_adapter
+ADAPTERS["dfl.year.Universe"] = _universe_adapter
+ADAPTERS["dfl.league.SeasonRun"] = _season_run_owned_config
 
 
 class NeutralError(Exception):
@@ -64,67 +113,83 @@ class NeutralError(Exception):
 
 # ---------------------------------------------------------------------------------------------------------------- digest
 def deep_digest(obj, ignore=DIGEST_IGNORE):
-    """A digest of an entire object graph that does not depend on dict or set order, memory addresses or hash randomisation, so two
-    leagues that hold the same values have the same digest whichever process built them. Random generators contribute their full
-    state. `ignore` names derived caches that may or may not be filled without changing any outcome."""
-    memo = {}
-    alive = []             # every object seen stays alive until the digest is finished: the memo is keyed by address, and a temporary
-    #                        (the tuple `Random.getstate()` returns) freed early would let a later object reuse its address and inherit its digest
+    """The state digest (algorithm `DIGEST_VERSION`): a SHA-256 over an entire object graph that depends only on the values in it, not on
+    memory addresses, hash randomisation or which process built it. It is the journal's per-event check as well as the exhaustive one, so
+    it covers every attribute of every object reached from `obj` except the names in `EXCLUDED` (each with its reason), and:
+
+      * every random generator contributes its complete state (Mersenne words, position and the cached Gaussian);
+      * dicts and lists count in order (code iterates them, so their order is state); sets count as sets (their iteration order is not
+        part of the state: it depends on hashing, and code must not rely on it);
+      * a shared object is digested once, and every object stays alive until the digest is done: the memo is keyed by address, and a
+        temporary (the tuple `Random.getstate()` returns) freed early would let a later object reuse its address and inherit its digest.
+
+    Strings are built bottom-up and hashed once per object, which is what makes a full digest cheap enough to take after every event."""
+    seen = {}
+    alive = []
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
 
-    def prim(tag, body):
-        b = body if isinstance(body, bytes) else str(body).encode()
-        return tag + str(len(b)).encode() + b":" + b
+    def plain(seq):
+        return set(map(type, seq)) <= _PLAIN
 
-    def comb(tag, parts):
-        hh = hashlib.sha256(tag)
-        for p in parts:
-            hh.update(len(p).to_bytes(4, "big"))
-            hh.update(p)
-        return b"h" + hh.digest()
-
-    def h(o):
+    def enc(o):
         t = type(o)
-        if o is None:
-            return b"N"
-        if t is bool or t is int:
-            return prim(b"i", repr(o))
-        if t is float:
-            return prim(b"f", repr(o))
-        if t is str:
-            return prim(b"s", o.encode())
+        if t in _PLAIN:
+            return repr(o)
         if t is bytes:
-            return prim(b"b", o)
+            return "b" + repr(o)
         i = id(o)
-        if i in memo:
-            return memo[i]
-        memo[i] = b"cycle"
+        r = seen.get(i)
+        if r is not None:
+            return r
+        seen[i] = "~"                                 # in progress: a cycle meets this marker
         alive.append(o)
-        name = f"{t.__module__}.{t.__qualname__}".encode()
-        if isinstance(o, random.Random):
-            r = comb(b"random" + name, [h(o.getstate())])
+        if t is list or t is tuple:
+            r = repr(o) if plain(o) else ("[" if t is list else "(") + ",".join(map(enc, o)) + "]"
+        elif t is dict:
+            ks, vs = set(map(type, o)), set(map(type, o.values()))
+            if ks <= _PLAIN and vs <= _PLAIN or (ks == {tuple} and vs <= _PLAIN and plain(list(chain.from_iterable(o)))):
+                r = repr(o)
+            else:
+                r = "{" + ",".join([enc(k) + ":" + enc(v) for k, v in o.items()]) + "}"
+        elif t is Fraction:
+            r = "F%d/%d" % (o.numerator, o.denominator)
+        elif t is set or t is frozenset:
+            r = t.__name__ + "<" + ",".join(sorted(map(enc, o))) + ">"
+        elif isinstance(o, random.Random):
+            r = "R" + hashlib.blake2b(repr(o.getstate()).encode(), digest_size=20).hexdigest()
         elif isinstance(o, np.ndarray):
-            r = comb(b"nd", [str(o.dtype).encode(), repr(o.shape).encode(), o.tobytes()])
+            r = "A" + str(o.dtype) + repr(o.shape) + hashlib.blake2b(o.tobytes(), digest_size=20).hexdigest()
         elif isinstance(o, np.generic):
-            r = prim(b"g", repr(o))
+            r = "g" + repr(o)
         elif isinstance(o, dict):
-            r = comb(b"dict" + name, sorted(h(k) + b"=" + h(v) for k, v in o.items()))
+            r = "D" + t.__qualname__ + "{" + ",".join([enc(k) + ":" + enc(v) for k, v in o.items()]) + "}"
         elif isinstance(o, (set, frozenset)):
-            r = comb(b"set" + name, sorted(h(x) for x in o))
-        elif isinstance(o, (list, tuple)) or t.__name__ == "deque":
-            r = comb(b"seq" + name, [h(x) for x in o])
+            r = "S" + t.__qualname__ + "<" + ",".join(sorted(map(enc, o))) + ">"
+        elif isinstance(o, (list, tuple, deque)):
+            r = "Q" + t.__qualname__ + "[" + ",".join(map(enc, o)) + "]"
         elif isinstance(o, (int, float, str, bytes)):
-            r = comb(b"sub" + name, [repr(o).encode()])
+            r = "s" + t.__qualname__ + repr(o)
         elif isinstance(o, (type, types.FunctionType, types.MethodType, types.BuiltinFunctionType)):
-            r = prim(b"c", f"{getattr(o, '__module__', '')}.{getattr(o, '__qualname__', repr(o))}")
+            r = "c" + getattr(o, "__module__", "") + "." + getattr(o, "__qualname__", repr(o))
         elif hasattr(o, "__dict__") or hasattr(t, "__slots__"):
-            r = comb(b"obj" + name, sorted(h(k) + b"=" + h(v) for k, v in _attrs(o).items() if k not in ignore))
+            prim, rest = [], []
+            for k, v in _attrs(o).items():
+                if k not in ignore:
+                    (prim if type(v) in _PLAIN else rest).append((k, v))
+            prim.sort(key=_first)
+            rest.sort(key=_first)
+            body = repr(prim) + "|" + ",".join([k + "=" + enc(v) for k, v in rest])
+            r = "H" + hashlib.blake2b((t.__module__ + "." + t.__qualname__ + "{" + body + "}").encode(), digest_size=20).hexdigest()
         else:
-            r = prim(b"o", f"{name!r}:{o!r}")
-        memo[i] = r
+            r = f"o{t.__module__}.{t.__qualname__}:{o!r}"
+        seen[i] = r
         return r
 
-    return hashlib.sha256(h(obj)).hexdigest()
+    return hashlib.sha256(enc(obj).encode()).hexdigest()
+
+
+_PLAIN = frozenset({type(None), bool, int, float, str})
+_first = lambda kv: kv[0]       # noqa: E731
 
 
 def _attrs(o):
@@ -365,8 +430,10 @@ def _cls(name):
     raise NeutralError(f"class {name} does not exist in this version of the code")
 
 
-def decode(doc):
-    """Rebuild the object graph. Raises NeutralError on anything it does not recognise."""
+def decode(doc, synthesized=None):
+    """Rebuild the object graph. Raises NeutralError on anything it does not recognise. If `synthesized` is a set, the names of attributes
+    that an ADAPTER supplied because the document did not carry them are added to it (so an importer can check the rest of the state
+    against the exporter's digest, which could not have included them)."""
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
     memo = {}
 
@@ -439,7 +506,10 @@ def decode(doc):
                 attrs[k] = dec(v)
             fill = ADAPTERS.get(RENAMES.get(d["$o"], d["$o"]))
             if fill:
+                before = set(attrs)
                 fill(out, attrs)
+                if synthesized is not None:
+                    synthesized.update(set(attrs) - before)
             for k, v in attrs.items():
                 object.__setattr__(out, k, v)
             return out
@@ -470,7 +540,9 @@ def loads_doc(raw):
     if doc.get("format") != DOC_FORMAT:
         raise NeutralError("not a dfl state document")
     if doc.get("version") != DOC_VERSION:
-        raise NeutralError(f"state document version {doc.get('version')} is not supported (this code reads version {DOC_VERSION})")
+        raise NeutralError(f"state document version {doc.get('version')} is not supported (this code reads version {DOC_VERSION}; version 1 "
+                           "carried digests of an older algorithm that could not see every part of the state). Re-export the league "
+                           "with this code's exporter: persist.upgrade does that")
     return doc
 
 
@@ -507,4 +579,4 @@ def runner_manifest(r):
             "snapshot_every": m.get("snapshot_every"), "keep": m.get("keep"), "universe_args": m.get("universe_args"),
             "tables": m.get("tables"), "lineage": m.get("lineage", []), "created_with": m.get("created_with"), "rule_version": rule,
             "archive": m.get("archive"), "league_id": m.get("league_id"), "archive_chain": _archive_chain_of(r),
-            "deep_digest": deep_digest(r.u), "digest_parts": digest_parts(r.u), "rng_states": rng_states(r.u)}
+            "digest_algorithm": DIGEST_VERSION, "deep_digest": deep_digest(r.u), "digest_parts": digest_parts(r.u), "rng_states": rng_states(r.u)}

@@ -2,7 +2,7 @@
 
 For an independent reviewer. Written 2026-10-29. Nothing here is merged or deployed. Branch `audit/completion-plan` (from `milestone-1-league-layer` @ `4232e22`) in `Vajilia/DFLv2`.
 
-> **Correction of 2026-10-29.** The exhaustive state digest cited below as proof ("identical exhaustive digest") could not see most random generators' states and could answer differently for identical input; one unexplained `StateMismatch` in a full test run is open. Read section 4 as weaker than written and see `docs/REVIEW_HANDOFF_9211b28.md` section 2 and `PROJECT_COMPLETION_PLAN.md` section 15.
+> **Correction of 2026-10-29.** The exhaustive state digest cited below as proof ("identical exhaustive digest") could not see most random generators' states and could answer differently for identical input; one unexplained `StateMismatch` in a full test run is open. Read section 4 as weaker than written and see `docs/REVIEW_HANDOFF_9211b28.md` section 2 and `PROJECT_COMPLETION_PLAN.md` section 15. Also: the journal's per-event digest of that period (`quick_digest`, save schema 3 and earlier) covered only two of the six random generators and part of the world; "journal digests identical" proved less than written. Save schema 4 replaced it with a complete state digest (`docs/PERSISTENCE.md`, "The state digest"; `PROJECT_COMPLETION_PLAN.md` section 16).
 
 ## 1. Commits
 

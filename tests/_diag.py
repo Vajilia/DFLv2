@@ -22,11 +22,8 @@ _INSTALLED = []
 def _globals():
     out = {}
     try:
-        from dfl import draft, parity
         from dfl.ledger import rules as R
-        out["rules.CAP"] = str(R.CAP)
-        out["draft.RETURNER_BLOCK"] = getattr(draft, "RETURNER_BLOCK", None)
-        out["parity.current"] = parity.current()
+        out["rules.CAP"] = str(R.CAP)                   # module constants: nothing a league does may change them any more
         from dfl.engine import production, squad
         out["production._CACHE.keys"] = sorted(production._CACHE)
         out["squad._TABLES.loaded"] = squad._TABLES is not None

@@ -159,7 +159,7 @@ class RoundTrip(Base):
 
     def test_export_import_preserves_state_identifiers_money_and_random_streams(self):
         r = self.league()
-        a_digest, a_quick = persist.deep_digest(r.u), persist.quick_digest(r.u)
+        a_digest, a_quick = persist.deep_digest(r.u), persist.journal_digest(r.u)
         fr, rg = fractions_in(r.u), rngs_in(r.u)
         ids = (sorted(r.u.L.players), sorted(r.u.L.clubs), sorted(r.u.world.cards))
         self.assertGreater(len(fr), 0, "the test needs real exact money in the state")
@@ -170,7 +170,7 @@ class RoundTrip(Base):
         persist.export_state(self.path("old"), doc)
         n = persist.Runner.import_state(doc, self.path("new"), source_file_sha256=sha256_file(self.path("old")))
         self.assertEqual(persist.deep_digest(n.u), a_digest)                                # every value, by value
-        self.assertEqual(persist.quick_digest(n.u), a_quick)
+        self.assertEqual(persist.journal_digest(n.u), a_quick)
         self.assertEqual(fractions_in(n.u), fr)                                             # exact money: same numerators and denominators
         self.assertTrue(all(type(f) is fractions.Fraction for f in walk(n.u) if isinstance(f, fractions.Fraction)))
         self.assertEqual(rngs_in(n.u), rg)                                                  # every generator's full state
@@ -286,7 +286,7 @@ class RoundTrip(Base):
         write(future, gzip.compress(json.dumps(raw).encode()))
         with self.assertRaises(neutral.NeutralError):                                     # a document format this code does not read
             persist.Runner.import_state(future, self.path("other"))
-        raw["version"] = 1
+        raw["version"] = neutral.DOC_VERSION
         raw["manifest"]["fingerprint"] = "2" * 64
         foreign = self.path("old") + ".foreign.gz"
         write(foreign, gzip.compress(json.dumps(raw).encode()))
@@ -342,7 +342,7 @@ class Upgrade(Base):
         cls.ref_digests = []
         for _ in range(K + MORE):
             cls.ref.step_event()
-            cls.ref_digests.append(persist.quick_digest(cls.ref))
+            cls.ref_digests.append(persist.journal_digest(cls.ref))
 
     def test_the_old_file_is_refused_here_until_an_upgrade_is_asked_for(self):
         self.assertNotEqual(self.old_fp, persist.fingerprint())
@@ -380,7 +380,7 @@ class Upgrade(Base):
         self.assertEqual(fp, self.old_fp)
         self.assertEqual(persist.fingerprint(out), self.old_fp)    # byte-identical source and data, recorded inside the file
         self.assertEqual(persist.verify(self.old), [])
-        res = run_in_tree(out, f"r = persist.Runner.open({self.old!r}, heal=False); print(r.seq, persist.quick_digest(r.u)); r.close()")
+        res = run_in_tree(out, f"r = persist.Runner.open({self.old!r}, heal=False); print(r.seq, persist.journal_digest(r.u)); r.close()")
         self.assertEqual(res.split()[0], str(K))                   # the old file is still a live league under its own code
         self.assertEqual(res.split()[1], self.ref_digests[K - 1])
 

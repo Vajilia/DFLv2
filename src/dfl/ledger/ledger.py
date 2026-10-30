@@ -90,7 +90,8 @@ class Club:
 class Ledger:
     trading = False                    # class default: a ledger without a recorded window (an old saved state) trades only where neutral.ADAPTERS says
 
-    def __init__(self, cids, year=2000):
+    def __init__(self, cids, year=2000, cap=None):
+        self.cap = R.CAP if cap is None else cap        # this league's salary cap: owned by the league (parity profiles set it), never read from a module global
         self.year, self.week, self.phase = year, 0, "offseason"
         self.trading = False           # the trading window (opened by open_trading, closed by close_trading, the year turn and the end of the season)
         self.draft_completed = year - 1
@@ -155,7 +156,7 @@ class Ledger:
         return sum(hits, F(0)) + c.dead.get(year, F(0))
 
     def overage(self, cid):
-        return max(F(0), self.cap_number(cid) - R.CAP)
+        return max(F(0), self.cap_number(cid) - self.cap)
 
 
     def committed(self, cid):
@@ -185,7 +186,7 @@ class Ledger:
         repl = R.REQUIRED_PLACES * R.MIN_SALARY
         if year == self.year:
             repl = repl * F(R.PAID_WEEKS - self.week, R.PAID_WEEKS)
-        return R.CAP - R.RESERVE - repl
+        return self.cap - R.RESERVE - repl
 
     def viability_margin(self, cid):
         m = self.committed(cid)
@@ -212,7 +213,7 @@ class Ledger:
                     raise Rejected(f"{label}: breaks the viability invariant for {c}")
                 if capcheck:
                     now = self.cap_number(c)
-                    if now > R.CAP and now > cap_before[c]:
+                    if now > self.cap and now > cap_before[c]:
                         raise Rejected(f"{label}: breaks the cap for {c}")
             return out
         except Exception:

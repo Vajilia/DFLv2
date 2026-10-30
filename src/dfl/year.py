@@ -26,9 +26,11 @@ class Universe:
         self.tpl = league.Template(tables)
         self.clubs = sorted(t["team_city"] for t in self.tpl.teams)
         self.profile = profile
-        settings = parity.apply(profile)
-        priority = self.clubs[-settings["priority_clubs"]:] if settings.get("priority_clubs") else ()
-        self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR, engine_injuries=engine, priority=priority)
+        settings = parity.settings(profile)               # copied into this league's own state, never into a module global
+        self.returner_block = settings["returner_block"]
+        priority = self.clubs[-settings["priority_clubs"]:] if settings["priority_clubs"] else ()
+        self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR, engine_injuries=engine,
+                           priority=priority, cap=settings["cap"])
         self.state = self.tpl.initial_state()
         self.resolver = LedgerEngine(self.world, spatial=spatial) if engine else PlaceholderResolver()
         self.rng = random.Random(f"{seed}|league")
@@ -168,7 +170,8 @@ class Universe:
     def _begin_season(self, year):
         assert self.vote is not None, "the venue vote precedes the season"
         self.world.start_season()
-        self.run = league.SeasonRun(self.tpl, self.state, self.season, self.resolver, self.rng, self.history, self.seed_str)
+        self.run = league.SeasonRun(self.tpl, self.state, self.season, self.resolver, self.rng, self.history, self.seed_str,
+                                    returner_block=self.returner_block)
         assert self.run.year == year
 
     def _paid(self):

@@ -77,7 +77,7 @@ class SpatialWeek(Base):
         cls.plain = []
         for _ in range(cls.n):
             u.step_event()
-            cls.plain.append(persist.quick_digest(u))
+            cls.plain.append(persist.journal_digest(u))
         cls.a = A.Archive.open(cls.p + ".archive")
 
     @classmethod
@@ -172,7 +172,7 @@ class Retry(Base):
         digests = []
         for k in range(n):
             u.step_event()
-            digests.append(persist.quick_digest(u))
+            digests.append(persist.journal_digest(u))
             recs = u.take_archive()
             if recs:
                 ref.put_batch(k + 1, recs)

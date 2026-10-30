@@ -41,7 +41,7 @@ class Base(unittest.TestCase):
         cls.ref_deep = {}
         for i in range(1, N + 1):
             u.step_event()
-            cls.ref.append(persist.quick_digest(u))
+            cls.ref.append(persist.journal_digest(u))
             if i in (13, H, N):
                 cls.ref_deep[i] = persist.deep_digest(u)
 
@@ -70,7 +70,7 @@ class Equivalence(Base):
         r.db.close()                                           # killed the instant the year closes
         r = persist.Runner.open(self.path("a"))
         self.assertEqual((r.seq, r.u.cursor), (49, None))
-        self.assertEqual(persist.quick_digest(r.u), self.ref[48])
+        self.assertEqual(persist.journal_digest(r.u), self.ref[48])
         r.run_events(N - 49)                                   # the next year opens on the first event after the restart
         self.assertEqual(self.journal(r.path), self.ref)
         self.assertEqual(persist.deep_digest(r.u), self.ref_deep[N])
@@ -81,7 +81,7 @@ class Equivalence(Base):
         a = Universe(TABLES, seed=1, engine=False)
         a.play_year()                                           # the original whole-year entry point
         self.assertIsNone(a.cursor)
-        self.assertEqual(persist.quick_digest(a), self.ref[48])  # the reference was built one event at a time
+        self.assertEqual(persist.journal_digest(a), self.ref[48])  # the reference was built one event at a time
 
     def test_killed_and_restored_at_any_point_ends_in_the_same_league(self):
         # 13: week 1 has just been played, the exact state is compared with the reference's at that moment;
@@ -95,7 +95,7 @@ class Equivalence(Base):
                 del r
                 r2 = persist.Runner.open(self.path(name))
                 self.assertEqual(r2.seq, k)
-                self.assertEqual(persist.quick_digest(r2.u), self.ref[k - 1])
+                self.assertEqual(persist.journal_digest(r2.u), self.ref[k - 1])
                 if k in self.ref_deep:
                     self.assertEqual(persist.deep_digest(r2.u), self.ref_deep[k])
                 r2.run_events(goal - k)
@@ -123,7 +123,7 @@ class Atomicity(Base):
     def test_an_exception_inside_an_event_changes_nothing_and_the_retry_is_exact(self):
         r = self.new("exc")
         r.run_events(10)
-        before_u, before_seq = persist.quick_digest(r.u), r.seq
+        before_u, before_seq = persist.journal_digest(r.u), r.seq
         real = Universe.on_venue_vote                          # event 10 is the venue vote... fire the next, event 11 (final_cuts)
         real_cuts = Universe.on_final_cuts
 
@@ -137,7 +137,7 @@ class Atomicity(Base):
         finally:
             Universe.on_final_cuts = real_cuts
         self.assertEqual(r.seq, before_seq)
-        self.assertEqual(persist.quick_digest(r.u), before_u)  # the half-changed league was thrown away and reloaded
+        self.assertEqual(persist.journal_digest(r.u), before_u)  # the half-changed league was thrown away and reloaded
         self.assertEqual(len(self.journal(r.path)), 10)
         r.run_events(H - 10)
         self.assertEqual(self.journal(r.path), self.ref[:H])
@@ -221,7 +221,7 @@ class Damage(Base):
         self.assertTrue(any("snapshot 15" in p for p in persist.verify(self.path("snap"))))
         r2 = persist.Runner.open(self.path("snap"))            # snapshot 10, replay 11 to 18
         self.assertEqual(r2.seq, 18)
-        self.assertEqual(persist.quick_digest(r2.u), self.ref[17])
+        self.assertEqual(persist.journal_digest(r2.u), self.ref[17])
         r2.run_events(H - 18)
         self.assertEqual(persist.deep_digest(r2.u), self.ref_deep[H])
         r2.close()
@@ -291,7 +291,7 @@ class BackupRestore(Base):
         self.assertEqual(persist.status(b)["events"], 14)
         r2 = persist.restore(b, self.path("restored"))
         self.assertEqual(r2.seq, 14)
-        self.assertEqual(persist.quick_digest(r2.u), self.ref[13])
+        self.assertEqual(persist.journal_digest(r2.u), self.ref[13])
         r2.run_events(H - 14)
         self.assertEqual(persist.deep_digest(r2.u), persist.deep_digest(r.u))     # restored and never-stopped runs agree
         self.assertEqual(persist.deep_digest(r2.u), self.ref_deep[H])
@@ -331,10 +331,12 @@ class BackupRestore(Base):
 
 
 class DeepDigest(unittest.TestCase):
-    def test_it_ignores_order_and_identity_but_sees_every_value(self):
+    def test_it_ignores_set_order_and_identity_but_sees_every_value_and_dict_order(self):
         a = {"x": [1, 2, {3, 4, 5}], "y": {"b": 1, "a": 2}, "r": random.Random(5)}
-        b = {"r": random.Random(5), "y": {"a": 2, "b": 1}, "x": [1, 2, {5, 4, 3}]}
+        b = {"x": [1, 2, {5, 4, 3}], "y": {"b": 1, "a": 2}, "r": random.Random(5)}
         self.assertEqual(persist.deep_digest(a), persist.deep_digest(b))
+        reordered = {"x": [1, 2, {3, 4, 5}], "y": {"a": 2, "b": 1}, "r": random.Random(5)}
+        self.assertNotEqual(persist.deep_digest(a), persist.deep_digest(reordered))      # code iterates dicts in order, so the order is state
         b["r"].random()                                         # a generator one draw further on is a different league
         self.assertNotEqual(persist.deep_digest(a), persist.deep_digest(b))
         c = {"x": [1, 2, {3, 4, 6}], "y": {"b": 1, "a": 2}, "r": random.Random(5)}

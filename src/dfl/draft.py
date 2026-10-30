@@ -9,7 +9,6 @@ ROUNDS = 7
 COMP_LEAGUE_MAX = 48
 COMP_CLUB_MAX = 2
 COMP_BASE_MIN = 75          # first-year base, in the document's money units (section 0: comp threshold)
-RETURNER_BLOCK = True       # Edition 8.19; a parity test bed (parity.py) may switch it off
 ELIMINATION_ORDER = ("wild_card", "divisional", "conference", "runner_up", "champion")
 
 
@@ -41,7 +40,7 @@ def elimination_rounds(playoff_log, coronation):
     return out
 
 
-def base_order(ranked, elimination, returning, seed, returned=()):
+def base_order(ranked, elimination, returning, seed, returned=(), returner_block=True):
     """The order of the 48 original clubs for every round, pick 1 first.
 
     ranked: all clubs that played the regular season, best first by the standings cascade (so the reverse is worst first,
@@ -55,7 +54,7 @@ def base_order(ranked, elimination, returning, seed, returned=()):
     worst_first = list(reversed(ranked))
     order = lottery(returning, seed)
     non_playoff = [c for c in worst_first if c not in elimination]
-    returned = returned if RETURNER_BLOCK else ()
+    returned = returned if returner_block else ()      # Edition 8.19; a parity test bed (parity.py) may switch the block off for its league
     order += [c for c in non_playoff if c not in returned] + [c for c in non_playoff if c in returned]
     for stage in ELIMINATION_ORDER:
         order += [c for c in worst_first if elimination.get(c) == stage]

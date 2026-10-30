@@ -123,7 +123,7 @@ def main(argv=None):
             else:
                 for _ in range(a.years):
                     fired += r.run_year()
-            res = {"events": r.seq, "fired": fired, "quick": persist.quick_digest(r.u), "chain": r.chain}
+            res = {"events": r.seq, "fired": fired, "journal": persist.journal_digest(r.u), "chain": r.chain}
             if a.deep:
                 res["deep"] = persist.deep_digest(r.u)
             out(**res)
@@ -146,7 +146,7 @@ def main(argv=None):
             out(restored=a.dest, events=r.seq)
         elif a.cmd == "digest":
             r = persist.Runner.open(a.file, heal=False)
-            out(events=r.seq, quick=persist.quick_digest(r.u), deep=persist.deep_digest(r.u))
+            out(events=r.seq, journal=persist.journal_digest(r.u), deep=persist.deep_digest(r.u))
         elif a.cmd == "compat":
             out(**persist.compatibility(a.file))
         elif a.cmd == "export":
