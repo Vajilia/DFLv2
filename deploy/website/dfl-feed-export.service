@@ -1,0 +1,18 @@
+[Unit]
+Description=DFLv2 public feed export (reads a copy of the league file, publishes a feed release)
+After=network.target
+
+[Service]
+Type=oneshot
+User=dflv2
+Group=dflv2
+Nice=15
+IOSchedulingClass=idle
+MemoryMax=900M
+ProtectSystem=strict
+ReadWritePaths=/srv/dflv2/feed
+ReadOnlyPaths=/srv/dflv2/league /srv/dflv2/repo
+PrivateTmp=true
+NoNewPrivileges=true
+Environment=BASE=/srv/dflv2
+ExecStart=/srv/dflv2/repo/deploy/website/refresh.sh /srv/dflv2/league/league.db

@@ -138,5 +138,11 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 4. Verification gaps: a 100-year soak on the spatial default, the full 36-season by six-league fairness measurement, a second platform for numpy determinism, trace archive (spec §20 item 49), spatial extensions (item 47).
 5. Open owner rulings in spec section 20 (items 4 to 9, 14, 49 among them); see `PROJECT_COMPLETION_PLAN.md` section 5.
 
+## Website milestone (2026-10-30, branch `audit/completion-plan`; not merged, not deployed)
+Built: public feed exporter (`src/dflsite/feed.py`, format `dfl-public-feed` v1, allowlist schemas), atomic publisher and reader (`publish.py`), CLI (`tools/export_public_feed.py`,
+`tools/preview_site.py`), static site (`site/`, presentation reused from the proof-of-concept site, no simulation code), curated rules summary tied to spec Ed 8.57
+(`docs/public/RULES_SUMMARY.md`), deployment scripts and plan (`deploy/website/`, `docs/WEBSITE_DEPLOYMENT_PLAN.md`), 52 tests. Not built: live game view, statistics, box scores, draft
+pages, transactions, awards and halls, media; per-kickoff reveal (needs the live clock); the map (not yet supplied). The server was not inspected or touched.
+
 ## Not imported
 The 339-file `DFL-vBeta_source_snapshot_2026-10-20.zip` is not in this repository and has not been seen. Nothing here claims to include it.

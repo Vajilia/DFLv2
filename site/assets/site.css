@@ -1,0 +1,54 @@
+/* Components specific to the DFLv2 viewer. Tokens and base components are in base.css. */
+.devbanner { background: #3A2A08; border-bottom: 2px solid var(--accent); color: #FFE9A6; padding: 8px 16px; font-size: 15px; text-align: center; }
+.devbanner b { font-family: var(--display); font-style: italic; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
+.wrapper { padding-inline: 16px; }
+header.top { padding-inline: 16px; }
+.status { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; color: var(--muted); font-family: var(--mono); font-size: 15px; }
+.status b { color: var(--ink); font-weight: 600; }
+.updated { margin-left: auto; }
+.updated.fresh { color: var(--accent); }
+.progress { height: 10px; background: var(--soft); border: 1px solid var(--line); position: relative; }
+.progress > i { position: absolute; inset: 0 auto 0 0; background: var(--los); display: block; }
+.progress.reg > i { background: var(--turf2); }
+.big { font-family: var(--display); font-weight: 800; font-style: italic; font-size: 34px; text-transform: uppercase; line-height: 1.05; }
+.sub { color: var(--muted); }
+.kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kpi b { display: block; font-family: var(--display); font-weight: 800; font-style: italic; font-size: 30px; line-height: 1.05; }
+.kpi span { color: var(--muted); font-size: 14px; font-family: var(--mono); }
+.notice { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--los); padding: 8px 14px; font-size: 15px; color: var(--muted); max-width: none; }
+.notice.important { border-left-color: var(--accent); color: var(--ink); }
+.badge { background: var(--t, var(--soft)); color: var(--tx, var(--ink)); }
+.badge.lg { font-size: 30px; }
+.champ { border: 1px solid var(--gold); background: linear-gradient(100deg, #3A3010 0%, var(--gold-bg) 60%, #1B1808 100%); padding: 14px 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.champ .eyebrow { color: var(--gold); }
+.teamhead { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; }
+.teamhead h1 { font-size: clamp(30px, 5vw, 52px); }
+.stripe3 { display: flex; height: 8px; width: 120px; transform: skewX(-24deg); }
+.stripe3 i { flex: 1; }
+td.num, th.num { text-align: right; }
+td.l, th.l { text-align: left; }
+td a, .game a { text-decoration: none; }
+td a:hover, .game a:hover { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.bracket { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
+.slot { border: 1px solid var(--line); background: var(--surface); }
+.slot .game { border-bottom: 0; }
+.slot + .slot { margin-top: 8px; }
+.pill { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 0 6px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+.pill.live { border-color: var(--accent); color: var(--accent); }
+.sched { font-size: 15px; }
+.muted { color: var(--muted); }
+.empty { padding: 18px; color: var(--muted); }
+.rules h2 { margin-top: 8px; }
+.rules p { margin: 8px 0 0; }
+.chips.weeks .chip { min-width: 40px; text-align: center; padding-inline: 8px; }
+.mapslot { border: 2px dashed var(--line); padding: 40px 16px; text-align: center; color: var(--muted); }
+.tabsmall { display: flex; flex-wrap: wrap; gap: 6px; }
+.err { background: #3A1414; border: 1px solid var(--loss); color: #FFD6D6; padding: 14px 16px; }
+.srconly { position: absolute; left: -9999px; }
+footer { padding-inline: 16px; padding-bottom: 32px; }
+@media (max-width: 640px) { .big { font-size: 28px; } nav.tabs a { font-size: 17px; padding-inline: 11px; } .updated { margin-left: 0; } .stripe3 { width: 80px; } }
+.confs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.confs > *, .stack > *, .grid > *, .card { min-width: 0; }
+.kv dd { overflow-wrap: anywhere; }
+body { overflow-x: hidden; }
+@media (max-width: 760px) { .confs { grid-template-columns: minmax(0, 1fr); } }

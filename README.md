@@ -30,6 +30,14 @@ python3 tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.5
 ```
 The specification lives in `docs/spec/` and wins over any v1 behaviour.
 
+## Website (development preview) — see `docs/PUBLIC_FEED_FORMAT.md` and `docs/WEBSITE_DEPLOYMENT_PLAN.md`
+```
+python3 -I tools/export_public_feed.py league.db --out feed/      # publish the newest committed state of a league as a public feed (reads a copy)
+python3 -I tools/preview_site.py --feed feed/ --port 8080          # look at it: http://127.0.0.1:8080/  (read-only server)
+python3 -I tools/preview_site.py --feed feed/ --single-file preview.html   # one self-contained page, opens by double-click
+```
+Nothing is deployed. The exporter and site live outside `src/dfl` so changing them never invalidates a league file.
+
 ## Production safety
 
 Existing production site: https://diamondfootballleague.com

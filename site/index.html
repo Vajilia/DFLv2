@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Diamond Football League · Development League</title>
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<div class="devbanner" id="devbanner" role="note"><b>Development league</b> · <span id="devtext">This league is a test of the simulation as it is built. Everything here may be reset.</span></div>
+<header class="top">
+  <a class="brand" href="#/"><i></i>DFL</a>
+  <div class="status" id="status" aria-live="polite"></div>
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <a href="#/" data-route="">Home</a>
+    <a href="#/schedule" data-route="schedule">Schedule</a>
+    <a href="#/standings" data-route="standings">Standings</a>
+    <a href="#/playoffs" data-route="playoffs">Playoffs</a>
+    <a href="#/teams" data-route="teams">Teams</a>
+    <a href="#/calendar" data-route="calendar">Calendar</a>
+    <a href="#/history" data-route="history">History</a>
+    <a href="#/rules" data-route="rules">Rules</a>
+    <a href="#/map" data-route="map">Map</a>
+  </nav>
+</header>
+<main class="wrap wrapper"><div class="stack" id="app"><p class="empty">Loading the league…</p></div></main>
+<footer class="wrap"><div id="foot"></div></footer>
+<noscript><p class="err">This page needs JavaScript to show the league.</p></noscript>
+<script src="assets/app.js"></script>
+</body>
+</html>
