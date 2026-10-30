@@ -6,7 +6,7 @@ management (injured reserve, replacements, waivers) reacts to them. Nothing here
 """
 import random
 
-from ..ledger import coaching, gameday
+from ..ledger import bowl, coaching, gameday
 from .game import play_game
 from .squad import Squad, Staff
 
@@ -43,8 +43,22 @@ class LedgerEngine:
         return Squad(cid, cards, self.staff(cid), seen, emergency=gd.emergency)
 
     def all_star_side(self, name, clubs):
-        """A composite squad: the best healthy player at each position across `clubs` (the people layer will pick All-Stars by vote)."""
+        """The Bowl side of one conference. With the ballots cast (after the last Tour round) it is the locked, voted roster of 53 (ledger/bowl.py),
+        coached by the conference's best Tour club (`clubs[0]`: head coach and three coordinators), who judge the starters. Without a vote (a bare
+        league with no Tour ballots) it falls back to the composite of the best healthy players at each position."""
         w = self.w
+        conf = name.split()[0]
+        vote = w.bowl_vote
+        if (vote is not None and vote["year"] == w.L.year and conf in vote["conferences"]
+                and set(clubs) == set(vote["conferences"][conf]["clubs"])):          # the ballots were cast for exactly these four clubs
+            final = bowl.lock(w, conf)
+            est = lambda q: coaching.judged(w, clubs[0], q)
+            P = w.L.players
+            seen = {pid: est(P[pid]) for pid in final["roster"]}
+            final["staff_club"] = clubs[0]
+            self.sides[name] = Squad(name, [w.cards[pid] for pid in final["roster"]], self.staff(clubs[0]), seen,
+                                     emergency=bowl.emergency(w, final, est))
+            return
         best = {}
         for c in clubs:
             for pid in w.L.clubs[c].roster:

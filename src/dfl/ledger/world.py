@@ -76,6 +76,9 @@ class World:
         self.hall = {"reg": {}, "ever": {}, "fan": [], "log": []}       # section 15 halls (honours.py)
         self.persona = {}                                         # card id -> (name, official position), kept for the halls after retirement
         self.tiaras = {}                                          # card id -> league years of her Tiaras (honours.py)
+        self.rings = {}                                           # card id -> league years of her Tour Rings (honours.py)
+        self.bowl_vote = None                                     # this year's frozen Bowl ballots and counts (bowl.py); replaced each year
+        self.bowl_final = {}                                      # conference -> the locked Bowl roster record of this year
         self.rooms, self.room_seq, self._tape = [], 0, None          # meeting-room transcripts of the last few league years (Edition 8.29)
         self.form = {}                                            # club -> win percentage of its last season (what candidates see)
         self.trade_log = []                                       # every proposal, counter, rejection and deal (the engine replays this)

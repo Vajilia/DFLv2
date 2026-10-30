@@ -18,7 +18,7 @@ A league `league.db` has its archive beside it (`league.db.archive` by default; 
 | `batches` | league event that produced records | event number, record count, digest of the records' ids and hashes |
 | `games` | game | game id, season, kind, teams, engine, rule version, number of traces, SHA-256 of the record, the record (JSON, zlib) |
 | `traces` | traced snap | game id, play index, SHA-256 and size of the container, the container (zlib) |
-| `records` | season | `S001/summary`: results, standings, seeds, playoff and Tour results, Bowl, Coronation, venues, draft order (JSON, zlib) |
+| `records` | season | `S001/summary`: results, standings, seeds, playoff and Tour results, Bowl (with the locked rosters), Coronation, venues, draft order, and from Edition 8.56 the frozen Bowl ballots and counts (`bowl_vote`) and locked rosters with their repairs (`bowl_final`) (JSON, zlib) |
 
 Game ids: `S001/reg:w03:g07` (regular season, week, game), `S001/tour:r4:g02`, `S001/po:Western:wild_card:s6v3`, `S001/bowl`, `S001/coronation`. They come from the league layer, not from the engine, so they are the same whichever engine plays.
 

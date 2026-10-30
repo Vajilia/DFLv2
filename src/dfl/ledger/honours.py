@@ -49,6 +49,22 @@ def award_tiara(world, year, winner):
     return got
 
 
+def award_rings(world, year, conf, staff_club):
+    """Tour Rings (spec section 7): the winning Bowl side's final 53 (everyone on the locked roster, all medically available when the roster
+    locked an hour before kickoff, so present and ready at kickoff) and the four Bowl coaches, the head coach and three coordinators of the
+    conference's best Tour club. Idempotent per year. Returns the set of card ids."""
+    got = set(world.bowl_final[conf]["roster"])
+    got |= {c.identity.id for r, c in world.leaders[staff_club].items() if r in ("hc", "oc", "dc", "stc") and c is not None}
+    new = 0
+    for pid in sorted(got):
+        years = world.rings.setdefault(pid, set())
+        if year not in years:
+            years.add(year)
+            new += 1
+    world.stats["rings"] = world.stats.get("rings", 0) + new
+    return got
+
+
 def eligible(world, pid):
     return bool(world.tiaras.get(pid)) and len(world.credited.get(pid, ())) >= int(tables()["a"]["hall_min_seasons"])
 

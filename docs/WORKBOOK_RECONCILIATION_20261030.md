@@ -6,7 +6,7 @@ The owner attached `22468576-DFL_Workbook_20261030.xlsx` with the instruction to
 1. Read every sheet of the workbook (Teams, Schedule, colour registry, postseason dates) with cached cell values, and compared each Teams row to the repository's `TEAMS.csv` by `team_id`.
 2. Applied only the differences the workbook states. Every `team_id` is unchanged (48 ids, 1–48, one per club); no club was added or removed; the 40 active / 8 ambassador split and the ambassador in each division are unchanged.
 3. Rebuilt `SCHEDULE.csv` by mapping the club names of the old template onto the new ones through the stable ids, and checked it against the workbook's own Schedule sheet: **identical in all 360 rows** (week, game, date, kickoff, away, home).
-4. Checked the result with `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.55.md` (75 checks, all passing).
+4. Checked the result with `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.56.md` (75 checks, all passing).
 
 ## Division membership after reconciliation
 

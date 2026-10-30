@@ -83,7 +83,7 @@ Not wrong, but worth stating: the earlier validator, ledger soak (`9fdf159d…`)
 ## 5. Rulings of 2026-10-29 as implemented
 
 Details in `docs/OWNER_RULINGS_NEEDED.md` and `PROJECT_COMPLETION_PLAN.md` section 13; spec Ed 8.53 (Ed 8.54 adds only the Bowl-incomplete marker).
-- Item 4 (Bowl): replacement and ring rules written; **INCOMPLETE: ballots and final-53 construction not built and not fully specified**; the Bowl plays composite All-Star sides.
+- Item 4 (Bowl): replacement and ring rules written; ballots and final-53 construction were incomplete at that time and were built in Step 8 (section 12 below).
 - Item 8 (rosters): values confirmed; inactive players replace injured players only before the roster locks; emergency list covers every position, adapts as injuries happen, no player in two positions; **the out-of-position penalty is not built**.
 - Item 9 (standings): one seeded priority per club per season in every scope; draft is the exact reverse.
 - Item 14 (calendar): dates approved; year close and 1 January gap stated correctly; **the ledger itself keeps the trading window**; older saved state is settled from the fired events and an upgrade across it requires `accept_state_change`.
@@ -99,7 +99,7 @@ DFL_DIAG_DIR=out/diag python3 -I -m unittest discover -s tests # same, writing m
 python3 -m unittest tests.test_state_digest tests.test_format3_upgrade tests.test_parity tests.test_digest   # the persistence verification tests
 python3 -I tools/diag_digest_stability.py --iterations 200 --seed 4   # bounded stability loop (exit 1 if any copy digests differently)
 python3 -I tools/diag_profile_leak.py --events 8                      # does a second league alter the first? (exit 1 if so; --src <older checkout>/src to compare)
-python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.55.md   # 75 checks
+python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.56.md   # 75 checks
 python3 -I tools/run_ledger_soak.py --years 3 --seed 1
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 4 --play-level
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 3          # 22-player engine, about an hour
@@ -128,7 +128,7 @@ Results at the commit that carries this handoff (save schema 4):
 ## 7. Not verified, or verified only partly
 
 1. **The cause of the original failure (section 2).** The suite has been run four times in all (once before the digest fix, three times after) and the failure has not recurred, which is evidence of nothing without knowing the rate.
-2. The Bowl ballots and final-53 (not built). The out-of-position penalty (not built).
+2. The Bowl ballots and final-53 are built (section 12) with builder's readings awaiting ratification. The out-of-position penalty (not built).
 3. Real storage faults, authentication, cross-machine behaviour, scale (100-year soak not run), concurrency across machines; upgrade across a real previous release is now tested for schema 3 with the exact earlier source, still on short leagues (12 events) and on the placeholder engine; the schema-3 file with a 22-player-engine history, an archive, or many years was not tried. See `docs/REVIEW_HANDOFF_STEPS_3_4.md` section 5.
 4. The complete digest is checked after every event, but it can only see state that is reachable from the universe: anything a future change hides in a module global, a closure or a file outside the league would not be seen. `tests/test_state_digest.py` fails when an attribute is added and excluded without a reason, not when state is hidden elsewhere. The audit of module-level state (section 3.2) is a snapshot of today.
 5. Dict order is now state in the digest. It was checked under several hash seeds and across processes; a code path that builds a dict in set-iteration order would show up as a replay divergence, not silently, but none was found.
@@ -184,7 +184,7 @@ Nothing is committed to `main`, merged or deployed. The batch is on `audit/compl
 **Checks on the final code**
 
 - Full suite: 600 tests. The first complete run had 4 failures, all stale test code (three `test_engine` season tests still passed the removed `history` argument; one `test_archive` test expected the old division name `Eastern/East`). Fixed; both modules re-run and pass (15 and 21 tests). No rule code changed after that run, so the other 596 results stand. The full suite was **not** re-run end to end after those two one-line test edits.
-- Validator: `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.55.md` 75 of 75.
+- Validator: `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.56.md` 75 of 75.
 - Restore soaks on the 47-event year, all PASS with identical journal digests at every event and identical final and archive digests for the uninterrupted, killed-and-resumed and restored-backup runs: placeholder (4 deaths), play-level (4 deaths), 22-player (3 deaths, 37 minutes).
 - Ledger soak, 12 years, 48 clubs: PASS. Its "viability margin min" is negative (-402.6) but so was the baseline's (-426.1) from the same command on the previous commit: not new.
 
@@ -203,3 +203,36 @@ Not explained away, so recorded: year-to-year win-percentage correlation fell fr
 **Where a reviewer should look first for this batch:** `standings.rank` and `standings.conference_designation`; `league.SeasonRun.play_week` (Week 4 freeze) and `play_coronation`; `Ledger._decide_option` and `World.decide_options`; `Universe.waiver_priority`; the new spec paragraphs in §3 and §11.
 
 **Open or deferred:** L4 rules await the owner's approval (decisions listed at the end of the L section of `OWNER_RULINGS_NEEDED.md`); the New York name direction (Goliaths to Gladiators) follows the workbook and is recorded as a team-data change; the fully-guaranteed option is a builder's choice awaiting confirmation.
+
+## 12. Step 8: Ambassador Bowl ballots and rosters (2026-10-30, spec Edition 8.56)
+
+Nothing is merged or deployed. The original `StateMismatch` (section 2) is still OPEN and untouched. Spec §7 no longer says INCOMPLETE; §20 item 4 now lists ten builder's readings for the owner to ratify (also the last table of `docs/OWNER_RULINGS_NEEDED.md`).
+
+**What was built**
+
+| Part | Where | Notes |
+| --- | --- | --- |
+| Ranked-ballot count | `src/dfl/stv.py` | Droop quota, weighted inclusive Gregory transfer, exact fractions, seeded ties among the tied alone, full order (elected, then reverse elimination). Pure, no hash-order dependence. |
+| Ballots, counts, lock, repair | `src/dfl/ledger/bowl.py` | Eight head coaches vote on both conferences right after the last Tour round (`Universe.on_tour_round`); 22 positional counts (48 places) then one 5-place discretionary count; the frozen record is `World.bowl_vote`. At the Bowl the roster locks (`bowl.lock`), replacing unavailable players from the count's order, falling back to the spec's exhausted-ballot rule with its validation log. |
+| The Bowl side | `engine/ledger_engine.all_star_side` | The locked 53, coached by the conference's best Tour club, whose judgement picks starters; emergency list as for a club. The composite of "best four per position" remains only for a league with no vote (the standalone harness, ad-hoc sides). |
+| Rings | `honours.award_rings` | Whole locked roster of the winning side plus the four Bowl coaches; idempotent; `World.rings`. |
+| Record | `Universe.season_record` | The archive summary now carries `bowl_vote` (every ballot, quota, count log and draw) and `bowl_final` (rosters, repairs, exceptions, validation). |
+
+No calendar change: still 47 events a year (the ballots are cast inside the existing `tour_round_7` event, the lock inside `ambassador_bowl`).
+
+**Checks**
+
+- New: `tests/test_bowl_stv.py` (12 tests, including an independent second implementation of the count compared on 3,600 random ballot sets, hand-worked counts, Droop properties, and identical results under different hash seeds) and `tests/test_bowl.py` (29 tests: ballots follow the voters' judgement; places and quotas are the spec numbers; the 53 are distinct players of the four clubs; a recount from the saved ballots reproduces the saved result; injured, departed, traded-within-conference and traded-away winners; a position with nobody left (K), two positions emptied at once, no halfbacks, too few players; only ballot candidates can be chosen; the engine's Bowl squad is the voted roster; rings; the archive record; same vote under different hash seeds).
+- Full suite on the final Step 8 code except one guard edit: 641 tests, one error (`test_living.test_all_star_sides_use_ledger_players`: an ad-hoc side named "X" met a league that had a vote; the engine now uses the vote only for exactly the four clubs it was cast for). That module (71 tests) and `test_bowl.py` were re-run after the edit and pass; the other 541 tests were not re-run after it, and the edit is a condition on one branch.
+- Validator against Edition 8.56: 75 of 75.
+- Restore soaks on the 47-event year, run **before** the guard edit above: placeholder (4 kills), play-level (4 kills) and 22-player (3 kills, 37 minutes) all PASS, identical journal digests at every event and identical final and archive digests for the uninterrupted, killed-and-resumed and restored-backup runs. Kills at events 25, 27, 39 and 42 fall after the ballots (event 41) and before the lock (event 45), so a league that dies in between resumes to the same vote and the same Bowl.
+
+**What this does not establish**
+
+- The ten readings (a to j) are the builder's, not the owner's. The judged-overall error model that makes the ballots is a placeholder, so the vote is only as good as that.
+- In the placeholder year examined (seed 1, Season 1) the lock needed no repair; the repair paths are exercised by deliberately damaged copies, not by a league that happened to need them. Whether repairs occur at a sensible rate across many seasons, and whether the discretionary count's cross-position comparison of overalls favours some positions, were not measured.
+- The fairness and 160-season measurements were not re-run: the Bowl does not enter the regular-season or playoff results those measure.
+- A save made by Edition 8.55 code cannot be continued past a season's last Tour round on this code (it lacks the new world fields); development saves only.
+- Not built, as before: the out-of-position penalty; L4 extensions and postseason replacements (rules proposed only).
+
+**Where a reviewer should look first:** `stv.count` against the paragraph in spec §7 item 6; `bowl.cast` (candidate pool, ballot ranking, the discretionary field); `bowl.lock` (the order of replacements and the exhausted-ballot fallback, which is the intricate part); `Universe.on_tour_round` and `on_ambassador_bowl`.

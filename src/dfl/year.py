@@ -14,7 +14,7 @@ import random
 
 from . import calendar as C
 from . import draft, league, parity, standings
-from .ledger import analytics, coaching, governance, honours
+from .ledger import analytics, bowl, coaching, governance, honours
 from .ledger import rules as R
 from .ledger.world import World
 from .engine.ledger_engine import LedgerEngine
@@ -92,7 +92,11 @@ class Universe:
             if isinstance(o, (list, tuple)):
                 return [plain(x) for x in o]
             return o
-        return {"type": "season", "rid": f"S{self.season:03d}/summary", "season": self.season, "result": plain(keep)}
+        rec = {"type": "season", "rid": f"S{self.season:03d}/summary", "season": self.season, "result": plain(keep)}
+        if self.world.bowl_vote is not None and self.world.bowl_vote["year"] == self.world.L.year:
+            rec["bowl_vote"] = plain(self.world.bowl_vote)                  # the frozen ballots and counts, and the locked rosters, as saved
+            rec["bowl_final"] = plain(self.world.bowl_final)
+        return rec
 
     def take_archive(self):
         """The archive records produced since the last call (games, season summaries), removed from the league. [] when not archiving."""
@@ -208,6 +212,11 @@ class Universe:
         i = int(key.split("_")[2])
         assert self.paid_week == C.TOUR_CALENDAR_WEEKS[i - 1], (key, self.paid_week)
         self.run.play_tour_round(i)
+        if i == self.run.TOUR_SLOTS:                     # "All eight ambassador HCs vote after the Tour" (spec section 7): cast, count, freeze
+            conferences = {}
+            for club, (conf, _) in sorted(self.run.ambassadors.items()):
+                conferences.setdefault(conf, []).append(club)
+            bowl.cast(self.world, year, conferences)
 
     def on_trade_close(self, year, date, key):
         assert self.paid_week == R.TRADE_LAST_PAID_WEEK and self.L.trade_open()       # the last open day
@@ -231,7 +240,16 @@ class Universe:
         self.world.heal_round()
 
     def on_ambassador_bowl(self, year, date, key):
-        self.run.play_bowl()
+        _, by_conf = self.run.tour_standings()
+        for conf in sorted(by_conf):                      # rosters lock one simulated hour before kickoff (spec section 7)
+            bowl.lock(self.world, conf)
+        b = self.run.play_bowl()
+        winner_side = b["away"] if b["away_score"] > b["home_score"] else b["home"]
+        won = winner_side.split()[0]
+        staff = b["staff_clubs"][won]
+        b["rosters"] = {conf: list(self.world.bowl_final[conf]["roster"]) for conf in sorted(by_conf)}
+        b["winner"] = f"{won} All-Stars"
+        honours.award_rings(self.world, year, won, staff)
         self.world.heal_round()
 
     def on_coronation(self, year, date, key):
