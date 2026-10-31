@@ -397,14 +397,14 @@
   }
 
   // The official map is an ordinary file the league owner supplies: site/assets/map/map.json names it ({"file": "dfl-map.png", "alt": "...", "caption": "..."}).
-  // Without that file the page says so; nothing is drawn in its place.
+  // The shipped map.json says {"file": null}: the page then says no map has been added; nothing is drawn in its place.
   function pageMap() {
     var box = h('div', { class: 'mapslot' }, h('p', { class: 'muted', text: 'Loading the map…' }));
     fetch('assets/map/map.json', { cache: 'no-store' }).then(function (r) {
       if (!r.ok) throw new Error('none');
       return r.json();
     }).then(function (m) {
-      if (!m || typeof m.file !== 'string' || !/^[A-Za-z0-9._-]+$/.test(m.file)) throw new Error('none');
+      if (!m || typeof m.file !== 'string' || !/^[A-Za-z0-9._-]+$/.test(m.file) || m.file === 'map.json') throw new Error('none');
       var src = 'assets/map/' + m.file;
       clear(box);
       add(box, h('a', { href: src, target: '_blank', rel: 'noopener', title: 'Open the map at full size' },

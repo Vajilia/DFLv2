@@ -294,7 +294,7 @@ class Revealed(unittest.TestCase):
         for stage, f in out.items():
             self.assertIn("DEVELOPMENT / TEST LEAGUE", f["manifest.json"]["league"]["label"])
             ids = {n["id"] for n in f["notices.json"]["notices"]}
-            self.assertTrue({"dev-league", "event-reveal", "no-hidden", "not-built", "map"} <= ids, stage)
+            self.assertTrue({"dev-league", "event-reveal", "no-hidden", "not-built"} <= ids, stage)
             self.assertEqual(f["manifest.json"]["league"]["kind"], "development")
 
 

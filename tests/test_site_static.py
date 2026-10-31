@@ -47,7 +47,7 @@ class Static(unittest.TestCase):
         for ref in re.findall(r'(?:href|src)="(assets/[^"]+)"', html):
             self.assertTrue(os.path.exists(os.path.join(SITE, ref)), ref)
         js = text("assets", "app.js")
-        self.assertEqual(re.findall(r"fetch\(([^)]*)\)", js), ["url, fresh ? { cache: 'no-store' } : {}"])
+        self.assertEqual(re.findall(r"fetch\(([^)]*)\)", js), ["url, fresh ? { cache: 'no-store' } : {}", "'assets/map/map.json', { cache: 'no-store' }"])   # the feed, and the site's own map description
         self.assertIn("var BASE = 'feed/';", js)
         self.assertNotIn("POST", js)
         self.assertNotIn("method:", js)

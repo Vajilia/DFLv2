@@ -511,7 +511,10 @@ class Viewer(unittest.TestCase):
 
     def setUp(self):
         shutil.rmtree(self.feed, ignore_errors=True)
-        shutil.rmtree(os.path.join(self.site, "assets", "map"), ignore_errors=True)
+        shutil.copy(os.path.join(ROOT, "site", "assets", "map", "map.json"), os.path.join(self.site, "assets", "map", "map.json"))
+        for n in os.listdir(os.path.join(self.site, "assets", "map")):
+            if n not in ("map.json", "README.txt"):
+                os.remove(os.path.join(self.site, "assets", "map", n))
 
     def url(self, route=""):
         return f"http://127.0.0.1:{self.port}/#/{route}"
@@ -581,7 +584,6 @@ class Viewer(unittest.TestCase):
         self.assertIn("has not been added", page.inner_text("#app"))
         self.assertEqual(page.locator("img.dflmap").count(), 0)
         d = os.path.join(self.site, "assets", "map")
-        os.makedirs(d)
         with open(os.path.join(d, "dfl-map.png"), "wb") as f:
             f.write(tiny_png())
         touch(os.path.join(d, "map.json"), json.dumps({"file": "dfl-map.png", "alt": "Test map", "caption": "A test caption"}))

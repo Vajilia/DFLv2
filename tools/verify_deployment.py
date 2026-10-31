@@ -122,9 +122,16 @@ def check_site(base, rep, profile, require_map):
     if st == 200:
         try:
             m = json.loads(b)
+            if m.get("file") is None:
+                raise LookupError("no map")
             st2, h3, b3 = fetch(f"{base}/assets/map/{m['file']}")
             rep.check(st2 == 200 and h3.get("content-type", "").startswith(("image/", "application/pdf")), "the official map file is served",
                       f"{m['file']}, {len(b3)} bytes, {h3.get('content-type')}", f"HTTP {st2} {h3.get('content-type')}")
+        except LookupError:
+            if require_map:
+                rep.fail("the official map is installed", "assets/map/map.json says file: null")
+            else:
+                rep.warn("the official map is not installed yet", "the Map page will say so")
         except (ValueError, KeyError):
             rep.fail("the map description is readable")
     elif require_map:

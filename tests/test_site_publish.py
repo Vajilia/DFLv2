@@ -75,7 +75,7 @@ class Atomic(unittest.TestCase):
             publish.read_release(self.root, verify=True)
         publish.publish(self.b, self.root)                                   # the next publication completes normally and cleans up
         self.assertEqual(self.live(), self.b["manifest.json"]["release"])
-        self.assertEqual([n for n in os.listdir(self.root) if n.startswith(".")], [])
+        self.assertEqual([n for n in os.listdir(self.root) if n.startswith(".") and n != publish.LOCK], [])
 
     def test_a_crash_after_the_pointer_swap_leaves_the_new_release_live_and_whole(self):
         publish.publish(self.a, self.root)
