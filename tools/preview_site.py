@@ -20,13 +20,14 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     feed_root = None
+    site_root = SITE                      # tests point this at a copy of site/ (for example one that holds a map)
 
     def translate_path(self, path):
         path = path.split("?", 1)[0].split("#", 1)[0]
         parts = [p for p in os.path.normpath("/" + path.lstrip("/")).split("/") if p and p != ".."]
         if parts and parts[0] == "feed":
             return os.path.join(self.feed_root, *parts[1:])
-        return os.path.join(SITE, *parts) if parts else os.path.join(SITE, "index.html")
+        return os.path.join(self.site_root, *parts) if parts else os.path.join(self.site_root, "index.html")
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")

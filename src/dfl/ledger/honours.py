@@ -49,11 +49,15 @@ def award_tiara(world, year, winner):
     return got
 
 
-def award_rings(world, year, conf, staff_club):
-    """Tour Rings (spec section 7): the winning Bowl side's final 53 (everyone on the locked roster, all medically available when the roster
-    locked an hour before kickoff, so present and ready at kickoff) and the four Bowl coaches, the head coach and three coordinators of the
-    conference's best Tour club. Idempotent per year. Returns the set of card ids."""
-    got = set(world.bowl_final[conf]["roster"])
+def award_rings(world, year, conf, staff_club, ready=None):
+    """Tour Rings (spec section 7, Edition 8.58): the winning Bowl side's final 53 who were present and medically ready AT KICKOFF, and the
+    four Bowl coaches (head coach and three coordinators of the conference's best Tour club). `ready` is the list of pids found ready at
+    kickoff (bowl.ready_at_kickoff, evaluated just before the game); if it is not given it is evaluated now. A locked player who is not ready
+    at kickoff gets no ring. Idempotent per year. Returns the set of card ids."""
+    from . import bowl
+    if ready is None:
+        ready = bowl.ready_at_kickoff(world, conf)
+    got = set(ready) & set(world.bowl_final[conf]["roster"])
     got |= {c.identity.id for r, c in world.leaders[staff_club].items() if r in ("hc", "oc", "dc", "stc") and c is not None}
     new = 0
     for pid in sorted(got):

@@ -5,29 +5,91 @@ Layout under the feed root (the directory the web server serves as /feed/):
     latest.json                    the pointer: {"format", "format_version", "release", "manifest_sha256", "content_hash", "generated_at"}
     releases/<release>/manifest.json
     releases/<release>/<every file the manifest lists>
+    .publish.lock                  the publisher lock (an flock; see below). Never deleted.
 
 A release is written completely into a hidden temporary directory, every file is flushed, the directory is renamed to its final name, and only
 then is `latest.json` replaced (write temp file in the same directory, flush, `os.replace`). Readers follow the pointer, so they see the old
 release or the new one and never a mixture; a release directory is immutable once it has its name. A crash at any point leaves the previous
-`latest.json` in force; leftovers are temporary directories that the next publication removes. Old releases are pruned only after the new one is
-live, and the newest few are always kept so a page that is part-way through reading one does not lose it.
+`latest.json` in force.
+
+ONE PUBLISHER AT A TIME. Everything that writes under the feed root (publishing, sweeping leftovers, pruning) happens while holding an exclusive
+`flock` on `.publish.lock`. The operating system drops the lock when the holder dies, however it dies (even `kill -9`), so there is never a
+stale lock to clear. A second publisher does not wait by default: it raises `PublishBusy` at once and changes nothing, and the caller tries
+again later (the exporter exits 75 so the timer just runs again). Because the lock is held, a leftover `.tmp-*` directory found by the next
+publisher can only be the debris of a publisher that died; even so it is removed only if it is older than `STALE_TMP_SECONDS`, and a
+publisher removes nothing but its own temporary directory when it fails. A publisher never touches another live publisher's directory.
+
+PRUNING NEVER STRANDS A SLOW VIEWER. Old releases are removed only when they are beyond the newest `keep` AND have been on disk for longer than
+`PRUNE_GRACE_SECONDS` (default one hour), and never the live one. If a viewer nevertheless asks for a release that has gone, the site re-reads
+`latest.json` and carries on with the live release (site/assets/app.js, tested in a browser).
+
+THE FEED NEVER MOVES BACKWARDS. A release with fewer simulated events than the live one is refused unless `allow_older` is set (a restored
+league, rolled back on purpose).
 
 Nothing here reads or changes the league: it receives the dict that `feed.build` returned.
 """
+import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
+import time
 
 from . import feed
 
 KEEP = 6
 POINTER = "latest.json"
+LOCK = ".publish.lock"
+PRUNE_GRACE_SECONDS = 3600          # a superseded release stays at least this long, so a page part-way through reading it is not stranded
+STALE_TMP_SECONDS = 600             # a leftover temporary directory this old, found while holding the lock, is the debris of a dead publisher
 
 
 class PublishError(Exception):
     pass
+
+
+class PublishBusy(PublishError):
+    """Another publisher holds the feed's lock. Nothing was changed; try again later."""
+
+
+class PublisherLock:
+    """The exclusive publisher lock of a feed root (`with PublisherLock(root): ...`). `wait` is how many seconds to keep trying (0 = fail at
+    once with PublishBusy). Not re-entrant: pass the held lock to `publish(lock=...)` instead of taking it twice."""
+
+    def __init__(self, root, wait=0):
+        self.root, self.wait, self.fd = root, wait, None
+
+    def __enter__(self):
+        os.makedirs(self.root, exist_ok=True)
+        fd = os.open(os.path.join(self.root, LOCK), os.O_RDWR | os.O_CREAT, 0o644)
+        deadline = time.monotonic() + self.wait
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    os.close(fd)
+                    raise PublishBusy(f"another publisher holds {os.path.join(self.root, LOCK)}; nothing was changed")
+                time.sleep(0.05)
+        self.fd = fd
+        try:                                                        # informational only: who holds it, since when
+            os.ftruncate(fd, 0)
+            os.write(fd, json.dumps({"pid": os.getpid(), "since": time.time()}).encode())
+        except OSError:
+            pass
+        return self
+
+    def __exit__(self, *exc):
+        if self.fd is not None:
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_UN)
+            finally:
+                os.close(self.fd)
+                self.fd = None
+        return False
 
 
 class FeedError(Exception):
@@ -59,9 +121,47 @@ def _fsync_dir(path):
         os.close(fd)
 
 
-def publish(files, root, keep=KEEP, crash_hook=None):
+def _events_of(release):
+    m = re.match(r"^e(\d+)-", release or "")
+    return int(m.group(1)) if m else None
+
+
+def _live_release(root):
+    try:
+        with open(os.path.join(root, POINTER), "rb") as f:
+            return json.loads(f.read())["release"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def _sweep_stale(root, rel_dir, older_than):
+    """Remove leftovers of dead publishers: temporary directories and pointer temp files older than `older_than` seconds. Only called while
+    holding the lock. Returns the names removed."""
+    now, gone = time.time(), []
+    for base, prefix in ((rel_dir, ".tmp-"), (root, f".{POINTER}.tmp-")):
+        for name in os.listdir(base):
+            path = os.path.join(base, name)
+            if name.startswith(prefix) and now - os.path.getmtime(path) > older_than:
+                shutil.rmtree(path, ignore_errors=True) if os.path.isdir(path) else _unlink(path)
+                gone.append(name)
+    return gone
+
+
+def _unlink(path):
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def publish(files, root, keep=KEEP, crash_hook=None, lock=None, wait=0, grace=PRUNE_GRACE_SECONDS, allow_older=False, stale_tmp=STALE_TMP_SECONDS):
     """Publish a built feed under `root`. Returns {"release", "published": bool, "pruned": [...]}. A release that is already live (same name and
-    content) is left alone. `crash_hook(point)` is for tests: it may raise to stop at "release_written", "pointer_written" or "pointer_replaced"."""
+    content) is left alone. Holds the publisher lock throughout (pass an already-held `lock` to reuse it; `wait` seconds of patience otherwise,
+    then PublishBusy). `crash_hook(point)` is for tests: it may raise or block at "lock_held", "release_written", "pointer_written" or
+    "pointer_replaced"."""
+    if lock is None:
+        with PublisherLock(root, wait) as held:
+            return publish(files, root, keep, crash_hook, held, wait, grace, allow_older, stale_tmp)
     hook = crash_hook or (lambda point: None)
     errs = feed.check_public(files)
     if errs:
@@ -72,13 +172,17 @@ def publish(files, root, keep=KEEP, crash_hook=None):
         raise PublishError("the manifest does not describe this format version")
     rel_dir = os.path.join(root, "releases")
     os.makedirs(rel_dir, exist_ok=True)
-    for name in os.listdir(rel_dir):                                   # leftovers of an interrupted publication
-        if name.startswith(".tmp-"):
-            shutil.rmtree(os.path.join(rel_dir, name), ignore_errors=True)
+    hook("lock_held")
+    live, mine, theirs = _live_release(root), _events_of(release), None
+    theirs = _events_of(live)
+    if not allow_older and mine is not None and theirs is not None and mine < theirs:
+        raise PublishError(f"refusing to move the feed backwards: {release} has {mine} events, the live release {live} has {theirs} "
+                           "(publish with allow_older only after restoring an older league on purpose)")
+    _sweep_stale(root, rel_dir, stale_tmp)
     final = os.path.join(rel_dir, release)
     published = False
     if not os.path.isdir(final):
-        tmp = tempfile.mkdtemp(prefix=".tmp-" + release + "-", dir=rel_dir)
+        tmp = tempfile.mkdtemp(prefix=f".tmp-{release}-{os.getpid()}-", dir=rel_dir)         # ours alone: only this call ever removes it
         try:
             body = {}
             for name in sorted(files):
@@ -109,23 +213,82 @@ def publish(files, root, keep=KEEP, crash_hook=None):
     os.replace(ptmp, os.path.join(root, POINTER))
     _fsync_dir(root)
     hook("pointer_replaced")
-    return {"release": release, "published": published, "pruned": prune(root, keep)}
+    return {"release": release, "published": published, "pruned": prune(root, keep, grace)}
 
 
-def prune(root, keep=KEEP):
-    """Remove releases beyond the newest `keep` (by name, which sorts by event count); never the one `latest.json` names."""
+def prune(root, keep=KEEP, grace=PRUNE_GRACE_SECONDS):
+    """Remove releases beyond the newest `keep` (by name, which sorts by event count) that have also been on disk longer than `grace` seconds;
+    never the one `latest.json` names. Call it only while holding the publisher lock (`publish` does)."""
     rel_dir = os.path.join(root, "releases")
-    live = None
-    try:
-        with open(os.path.join(root, POINTER), "rb") as f:
-            live = json.loads(f.read())["release"]
-    except (OSError, ValueError, KeyError):
-        pass
+    live = _live_release(root)
     names = sorted(n for n in os.listdir(rel_dir) if not n.startswith("."))
-    drop = [n for n in names[:-keep] if n != live] if keep > 0 else []
+    now = time.time()
+    drop = ([n for n in names[:-keep] if n != live and now - os.path.getmtime(os.path.join(rel_dir, n)) >= grace] if keep > 0 else [])
     for n in drop:
         shutil.rmtree(os.path.join(rel_dir, n), ignore_errors=True)
     return drop
+
+
+def install_release(src_root, dest_root, wait=0, allow_older=False):
+    """Install the live release of one feed root into another (for example a seed feed shipped with a deployment package). The source is read
+    and verified first (`read_release`), the release directory is copied under a name of its own, verified again at the destination, renamed into
+    place and only then is the destination's pointer replaced, all under the destination's publisher lock. Returns {"release", "installed": bool}."""
+    data = read_release(src_root, verify=True)
+    release = data["manifest.json"]["release"]
+    with PublisherLock(dest_root, wait):
+        rel_dir = os.path.join(dest_root, "releases")
+        os.makedirs(rel_dir, exist_ok=True)
+        live, mine, theirs = _live_release(dest_root), _events_of(release), None
+        theirs = _events_of(live)
+        if not allow_older and mine is not None and theirs is not None and mine < theirs:
+            raise PublishError(f"refusing to move the feed backwards: {release} has {mine} events, the live release {live} has {theirs}")
+        final = os.path.join(rel_dir, release)
+        installed = False
+        if not os.path.isdir(final):
+            tmp = tempfile.mkdtemp(prefix=f".tmp-{release}-{os.getpid()}-", dir=rel_dir)
+            try:
+                shutil.copytree(os.path.join(src_root, "releases", release), tmp, dirs_exist_ok=True)
+                for dirpath, _, names in os.walk(tmp):
+                    for n in names:
+                        fd = os.open(os.path.join(dirpath, n), os.O_RDONLY)
+                        try:
+                            os.fsync(fd)
+                        finally:
+                            os.close(fd)
+                    _fsync_dir(dirpath)
+                os.rename(tmp, final)
+                _fsync_dir(rel_dir)
+            except BaseException:
+                shutil.rmtree(tmp, ignore_errors=True)
+                raise
+            installed = True
+        with open(os.path.join(src_root, POINTER), "rb") as f:
+            pointer_raw = f.read()
+        ptmp = os.path.join(dest_root, f".{POINTER}.tmp-{os.getpid()}")
+        _write(ptmp, pointer_raw)
+        again = read_release_at(dest_root, release, json.loads(pointer_raw))        # what is now in place must be what was verified
+        if again != release:
+            os.unlink(ptmp)
+            raise PublishError("the installed release does not verify")
+        os.replace(ptmp, os.path.join(dest_root, POINTER))
+        _fsync_dir(dest_root)
+        return {"release": release, "installed": installed}
+
+
+def read_release_at(root, release, pointer):
+    """Verify a release directory against a given pointer without relying on the root's own latest.json. Returns the release name."""
+    base = os.path.join(root, "releases", release)
+    with open(os.path.join(base, "manifest.json"), "rb") as f:
+        raw = f.read()
+    if _sha(raw) != pointer["manifest_sha256"]:
+        raise FeedError(f"release {release}: manifest does not match the pointer")
+    manifest = json.loads(raw)
+    for name, entry in manifest["files"].items():
+        with open(os.path.join(base, name), "rb") as f:
+            body = f.read()
+        if len(body) != entry["bytes"] or _sha(body) != entry["sha256"]:
+            raise FeedError(f"release {release}: {name} does not match the manifest")
+    return release
 
 
 # ------------------------------------------------------------------------------------------------------------------- the reader

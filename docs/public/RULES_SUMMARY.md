@@ -1,6 +1,6 @@
 ---
-spec_edition: 8.57
-spec_hash: 4e5d7007ac6191676b387e5f386f7abcd0e8bc4ae6367a0ae342504bf2b29ae5
+spec_edition: 8.58
+spec_hash: 345a5cff35e8ceab03b2b1e74cdb9aee28defc703af12d08ea7d0a59ea935d68
 updated: 2026-10-30
 ---
 # Approved rules (public summary)
@@ -22,6 +22,7 @@ Six clubs per conference: the four division winners (seeds 1 to 4) and the two b
 
 ## The Diamond Coronation
 The two conference champions meet in the Diamond Coronation, the last Sunday of the year, always at Amethyst Aloha Stadium and always on neutral terms: neither finalist has a home-field edge. After Week 4 the league compares the two conferences on their games against each other and names which conference's finalist is the nominal home club; that decision is made once and not changed.
+The Coronation score is kept in the season's permanent record. For a season played before that record existed, the page shows its score only when the league's game archive holds the game, and otherwise says the score was not recorded.
 
 ## The Ambassador Tour and Bowl
 The eight Ambassadors play a seven-round, 28-game single round robin at international venues. Each round is played at one venue, and no venue is any club's home ground. The nominal home club kicks the first half.

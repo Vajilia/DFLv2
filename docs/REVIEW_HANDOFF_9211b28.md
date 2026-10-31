@@ -99,7 +99,7 @@ DFL_DIAG_DIR=out/diag python3 -I -m unittest discover -s tests # same, writing m
 python3 -m unittest tests.test_state_digest tests.test_format3_upgrade tests.test_parity tests.test_digest   # the persistence verification tests
 python3 -I tools/diag_digest_stability.py --iterations 200 --seed 4   # bounded stability loop (exit 1 if any copy digests differently)
 python3 -I tools/diag_profile_leak.py --events 8                      # does a second league alter the first? (exit 1 if so; --src <older checkout>/src to compare)
-python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.57.md   # 75 checks
+python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.58.md   # 75 checks
 python3 -I tools/run_ledger_soak.py --years 3 --seed 1
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 4 --play-level
 python3 -I tools/run_restore_soak.py --years 1 --seed 1 --kills 3          # 22-player engine, about an hour
@@ -184,7 +184,7 @@ Nothing is committed to `main`, merged or deployed. The batch is on `audit/compl
 **Checks on the final code**
 
 - Full suite: 600 tests. The first complete run had 4 failures, all stale test code (three `test_engine` season tests still passed the removed `history` argument; one `test_archive` test expected the old division name `Eastern/East`). Fixed; both modules re-run and pass (15 and 21 tests). No rule code changed after that run, so the other 596 results stand. The full suite was **not** re-run end to end after those two one-line test edits.
-- Validator: `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.57.md` 75 of 75.
+- Validator: `tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.58.md` 75 of 75.
 - Restore soaks on the 47-event year, all PASS with identical journal digests at every event and identical final and archive digests for the uninterrupted, killed-and-resumed and restored-backup runs: placeholder (4 deaths), play-level (4 deaths), 22-player (3 deaths, 37 minutes).
 - Ledger soak, 12 years, 48 clubs: PASS. Its "viability margin min" is negative (-402.6) but so was the baseline's (-426.1) from the same command on the previous commit: not new.
 
@@ -250,3 +250,12 @@ No calendar change: still 47 events a year (the ballots are cast inside the exis
 **What this does not establish.** Timings are from a busy 2-core sandbox, not the Droplet. The Caddy template and the shell scripts were not run on the server and the template was not validated with Caddy (no binary here); the install and rollback scripts were run in a temporary directory. Results show per committed event (a week at once), not per kickoff. The map was not supplied. Hidden-information safety is argued by the allowlist, the nets and the scramble test; it has had no outside review.
 
 **Still tracked, unchanged.** The original `StateMismatch` (section 2) is OPEN; persistence is not described as fully verified. The unexplained parity shift (section 11: year-to-year win-% correlation 0.213 to 0.167 after Ed 8.55, fairness not re-run) is open. Neither is touched by this milestone.
+
+
+## 14. Staging milestone (2026-10-30 evening, Edition 8.58)
+
+**Instructions answered.** (1) Coronation scores: `SeasonRun.handoff` now stores `coronation` {away, home, away_score, home_score} and `result_revision` 2 in the season result (so also in the archive's season summary); `dflsite.feed.coronation_score` takes a score from the result, or from the run that still holds it, or from the archive only if `S<season>/coronation` exists, passes its checksum and agrees with the report on season, kind, the two champions, nominal home side and winner; otherwise `score: null, score_source: "unavailable"`. State handling: the saved-file format is unchanged (4), the code fingerprint changes (so an old file is refused until `league_store.py upgrade OLD NEW --run-originating-code`); on the real preview league (event 73) the upgrade reported `state_changed: false` and recovered Season 1 = San Antonio 34, Havana 26 from the archive (checked directly against `Archive.game("S001/coronation")`, and the archive verifies clean). (2) Ring eligibility: `bowl.ready_at_kickoff` is evaluated immediately before `play_bowl`; `award_rings(..., ready)`; the Bowl record carries `ready_at_kickoff` and `not_ready_at_kickoff` (never exported); new tests hurt a locked player and release another between lock and kickoff. (3) Staging: package, runbook, scripts, verifier. (4) Snapshots: `src/dflsite/snapshot.py` (SQLite online backup, quick_check, atomic rename) plus `persist.backup` for the league; the pair is checked with `persist.archive_check`; tested with a real child runner blocked at `journal_written` and at `archive_written` (archive one batch ahead, never behind), and the exporter command run in the middle of a commit. (5) Publisher: `PublisherLock` (flock), `publish(... wait, grace, allow_older, stale_tmp)`, exporter exit 75 when busy, temp cleanup only under the lock and by age, prune grace one hour; viewer `recover()` in `site/assets/app.js`, browser-tested.
+
+**Found while building.** (a) A SQLite WAL database cannot be opened by a user without write access to its folder when no runner has it open ("attempt to write a readonly database"), so the shipped unit grants the exporter write access to the league folder and the runner and exporter must be the same user. (b) The first draft of the publisher deleted every `.tmp-*` directory it found, which would have removed a second publisher's work; replaced by the lock and age rule. (c) The map attachment did not arrive.
+
+**What this does not establish.** Nothing was run on the Droplet; DNS was not inspected (the sandbox cannot resolve the domain and its proxy blocks it); the Caddy block was not validated by Caddy (a downloaded binary was not run, per the environment's policy) and HTTPS issuance is unproven; Python 3.12 and apt numpy on the Droplet are untried; the exporter timer is not part of staging.

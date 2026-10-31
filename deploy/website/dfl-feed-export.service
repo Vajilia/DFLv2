@@ -10,8 +10,13 @@ Nice=15
 IOSchedulingClass=idle
 MemoryMax=900M
 ProtectSystem=strict
-ReadWritePaths=/srv/dflv2/feed
-ReadOnlyPaths=/srv/dflv2/league /srv/dflv2/repo
+# The feed is the only place this unit writes content. The league directory is listed as writable ONLY because SQLite must be able to create its
+# "-shm" index file to read a write-ahead-log database at all (tested: as a read-only user it fails with "attempt to write a readonly database"
+# whenever no league runner happens to have the file open). The exporter opens the league read-only and writes nothing into the database; it makes a
+# private copy and reads that. The league runner MUST run as this same user (dflv2), or a file created here could lock the runner out.
+ReadWritePaths=/srv/dflv2/feed /srv/dflv2/league
+ReadOnlyPaths=/srv/dflv2/repo
+SuccessExitStatus=75
 PrivateTmp=true
 NoNewPrivileges=true
 Environment=BASE=/srv/dflv2

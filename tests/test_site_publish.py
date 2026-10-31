@@ -107,7 +107,7 @@ class Atomic(unittest.TestCase):
         publish.publish(self.a, self.root)
         os.makedirs(os.path.join(self.root, "releases", ".tmp-leftover-xyz"))
         open(os.path.join(self.root, "releases", ".tmp-leftover-xyz", "x"), "w").write("partial")
-        publish.publish(self.b, self.root)
+        publish.publish(self.b, self.root, stale_tmp=0)                # (the age limit is lifted here: the leftover was just made)
         self.assertFalse([n for n in os.listdir(os.path.join(self.root, "releases")) if n.startswith(".")])
 
     def test_a_reader_running_during_publications_always_gets_one_whole_release(self):
@@ -128,7 +128,7 @@ class Atomic(unittest.TestCase):
         t.start()
         try:
             for f in (self.b, self.c, self.a, self.b, self.c):
-                publish.publish(f, self.root, keep=3)
+                publish.publish(f, self.root, keep=3, grace=0, allow_older=True)
         finally:
             stop.set()
             t.join()
@@ -139,7 +139,7 @@ class Atomic(unittest.TestCase):
         for f in (self.a, self.b, self.c):
             publish.publish(f, self.root, keep=10)
         self.assertEqual(len(os.listdir(os.path.join(self.root, "releases"))), 3)
-        publish.publish(self.a, self.root, keep=1)           # the live one is the oldest by name; it must survive
+        publish.publish(self.a, self.root, keep=1, grace=0, allow_older=True)           # the live one is the oldest by name; it must survive
         names = os.listdir(os.path.join(self.root, "releases"))
         self.assertIn(self.a["manifest.json"]["release"], names)
         self.assertLessEqual(len(names), 2)

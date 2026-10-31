@@ -142,6 +142,8 @@ def play_playoffs(seeds_by_conf, resolver, rng):
 ROUND_NOTE = {"wild_card": "wild card round", "divisional": "divisional round", "conference": "conference championships"}
 
 
+RESULT_REVISION = 2          # 1: a season result carried the Coronation winner but not its score; 2 (Edition 8.58): it carries the score too
+
 class SeasonRun:
     """One season played step by step, in the order the calendar fires the events (calendar.py).
 
@@ -320,6 +322,8 @@ class SeasonRun:
                   "games": self.games, "outcome": self.outcome, "champions": self.champs, "playoff_log": self.playoff_log,
                   "coronation_venue": c["venue"], "coronation_designation": self.coronation_designation, "coronation_home": c["home"],
                   "coronation_winner": c["winner"],
+                  "coronation": {k: c[k] for k in ("away", "home", "away_score", "home_score")},       # the score is kept for good (Edition 8.58)
+                  "result_revision": RESULT_REVISION,
                   "tour_games": self.tour_games, "bowl": self.bowl, "venues": self.venues, "draft_order": self.draft_order()}
         return result, new_state
 

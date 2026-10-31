@@ -42,6 +42,9 @@ td a:hover, .game a:hover { text-decoration: underline; text-decoration-color: v
 .rules p { margin: 8px 0 0; }
 .chips.weeks .chip { min-width: 40px; text-align: center; padding-inline: 8px; }
 .mapslot { border: 2px dashed var(--line); padding: 40px 16px; text-align: center; color: var(--muted); }
+.mapslot:has(img) { border: 0; padding: 0; }
+.dflmap { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.simdate b, .updated b { font-weight: 700; }
 .tabsmall { display: flex; flex-wrap: wrap; gap: 6px; }
 .err { background: #3A1414; border: 1px solid var(--loss); color: #FFD6D6; padding: 14px 16px; }
 .srconly { position: absolute; left: -9999px; }

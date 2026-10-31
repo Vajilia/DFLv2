@@ -200,11 +200,64 @@ class Revealed(unittest.TestCase):
         self.assertEqual(len(s["exiled"]), 8)
         self.assertEqual(len(s["playoff_games"]), 10)
         self.assertEqual(len(s["standings"]), 8)
-        self.assertIsNotNone(s["score"])                    # the finished run still holds the Coronation
+        self.assertIsNotNone(s["score"])
         later = out["next_year"]["history.json"]["seasons"]
         self.assertEqual(later[0]["champion"], s["champion"])
-        self.assertIsNone(later[0]["score"])                # the report does not keep it; the feed says so and the notice explains it
-        self.assertTrue(any("not yet recorded" in n["text"] for n in out["next_year"]["notices.json"]["notices"]))
+        self.assertEqual(later[0]["score"], s["score"])     # Edition 8.58: the season result keeps the score for good, so it survives the new year
+        self.assertEqual(later[0]["score_source"], "recorded")
+        self.assertTrue(any("recorded permanently" in n["text"] for n in out["next_year"]["notices.json"]["notices"]))
+
+    def test_the_recorded_score_is_the_score_that_was_played(self):
+        u, _, _ = S()
+        rep = u.reports[0]
+        c = rep["result"]["coronation"]
+        self.assertEqual(rep["result"]["result_revision"], 2)
+        self.assertEqual({c["home"], c["away"]}, set(rep["result"]["champions"].values()))
+        self.assertEqual(c["home"], rep["result"]["coronation_home"])
+        self.assertEqual(c["home"] if c["home_score"] > c["away_score"] else c["away"], rep["winner"])
+        self.assertEqual(feed.coronation_score(u, rep)[0], f'{max(c["away_score"], c["home_score"])}-{min(c["away_score"], c["home_score"])}')
+
+    def _old_report(self, u):
+        """A season report as the code before Edition 8.58 wrote it: no Coronation score and no result revision."""
+        import copy
+        rep = copy.copy(u.reports[0])
+        rep["result"] = {k: v for k, v in u.reports[0]["result"].items() if k not in ("coronation", "result_revision")}
+        return rep
+
+    def _fake_archive(self, rep, **over):
+        r = rep["result"]
+        away = next(c for c in r["champions"].values() if c != r["coronation_home"])
+        game = {"type": "game", "kind": "coronation", "season": rep["season"], "home": r["coronation_home"], "away": away,
+                "score": [31, 17] if rep["winner"] == r["coronation_home"] else [17, 31], "winner": rep["winner"]}
+        game.update(over)
+
+        class A:
+            def game(self, gid):
+                if gid != f'S{rep["season"]:03d}/coronation':
+                    raise KeyError(gid)
+                return game
+        return A()
+
+    def test_an_old_report_without_a_score_says_unavailable_and_is_never_estimated(self):
+        u, _, _ = S()
+        score, src = feed.coronation_score(u, self._old_report(u))
+        self.assertEqual((score, src), (None, "unavailable"))
+
+    def test_an_old_report_recovers_its_score_only_from_a_matching_archived_game(self):
+        u, _, _ = S()
+        rep = self._old_report(u)
+        self.assertEqual(feed.coronation_score(u, rep, self._fake_archive(rep)), ("31-17", "archive"))
+        for bad in ({"kind": "game"}, {"season": 9}, {"home": "Nowhere"}, {"winner": "Nowhere"}, {"score": [20, 20]},
+                    {"score": [17, 31] if rep["winner"] == rep["result"]["coronation_home"] else [31, 17]}):
+            self.assertEqual(feed.coronation_score(u, rep, self._fake_archive(rep, **bad)), (None, "unavailable"), bad)
+
+    def test_a_missing_archived_game_is_unavailable_not_invented(self):
+        u, _, _ = S()
+
+        class Empty:
+            def game(self, gid):
+                raise KeyError(gid)
+        self.assertEqual(feed.coronation_score(u, self._old_report(u), Empty()), (None, "unavailable"))
 
     def test_new_year_resets_the_season_views_but_not_the_history(self):
         _, out, _ = S()

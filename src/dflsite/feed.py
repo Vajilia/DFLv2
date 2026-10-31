@@ -27,7 +27,7 @@ from dfl.ledger import trading
 
 FORMAT = "dfl-public-feed"
 FORMAT_VERSION = 1          # the major version: a reader that does not know it must refuse the feed
-FORMAT_MINOR = 0            # additions that older v1 readers may ignore
+FORMAT_MINOR = 1            # additions that older v1 readers may ignore
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RULES_SUMMARY = os.path.join(ROOT, "docs", "public", "RULES_SUMMARY.md")
@@ -58,12 +58,12 @@ NOTICES = [
      "text": "Not built yet: the live game view and play-by-play, player and team statistics, box scores, the draft pages, a transactions feed, "
              "awards and halls, and the media coverage."},
     {"id": "history-scope", "level": "info",
-     "text": "History covers only the seasons played in this development league so far. Earlier Diamond Coronation scores are not yet "
-             "recorded in the league's season reports, so only the latest season shows one."},
+     "text": "History covers only the seasons played in this development league so far. A Diamond Coronation score is recorded permanently "
+             "from the edition that added it; an earlier season shows its score only when the league's verified game archive holds that game, "
+             "and otherwise says the score was not recorded. No score is ever estimated."},
     {"id": "bowl", "level": "info", "text": "The Ambassador Bowl rosters and result appear after the game. How they were chosen is not published."},
     {"id": "rules-pending", "level": "info",
      "text": "Some rule details still await the owner's ruling; the Rules page lists only what is approved."},
-    {"id": "map", "level": "info", "text": "The official DFL map has not been added to this preview yet."},
 ]
 
 
@@ -173,7 +173,7 @@ SCHEMAS = {
         "coronation": Opt(PLAYOFF_GAME), "coronation_home_conference": Opt(str), "champion": Opt(str), "bowl": Opt(BOWL),
     },
     "history": {"seasons": Many({
-        "season": int, "year": int, "champion": str, "runner_up": str, "score": Opt(str), "venue": str,
+        "season": int, "year": int, "champion": str, "runner_up": str, "score": Opt(str), "score_source": Opt(str), "venue": str,
         "bowl_winner": Opt(str), "bowl_score": Opt(str), "exiled": Many(str),
         "division_winners": Many({"conference": str, "division": str, "abbr": str}), "seeds": Map(Many(str)),
         "standings": Many({"conference": str, "division": str, "clubs": Many(CLUB_LINE)}),
@@ -495,7 +495,50 @@ def playoffs_file(u, abbr, venues, year):
             "coronation_home_conference": d["home_conference"] if d else None, "champion": abbr[c["winner"]] if c else None, "bowl": bowl}
 
 
-def history_file(u, year_now):
+def coronation_score(u, rep, archive=None):
+    """(score text "W-L", source) for one finished season. Sources, in order: "recorded" (the season result carries the score, Edition 8.58, or the
+    season's run still holds it); "archive" (the league's verified game archive holds that Coronation game, and the game matches the season
+    report in every checkable particular); else (None, "unavailable"). A score is never estimated or reconstructed."""
+    r = rep["result"]
+    c = r.get("coronation")
+    src = "recorded"
+    if c is None and u.run is not None and u.run.year == rep["year"] and u.run.coronation:
+        c = u.run.coronation
+    if c is None and archive is not None:
+        try:
+            g = archive.game(f'S{rep["season"]:03d}/coronation')
+        except KeyError:
+            g = None
+        if g is not None and _archive_game_matches(g, rep):
+            hi, lo = sorted(g["score"], reverse=True)
+            return f"{hi}-{lo}", "archive"
+    if c is None:
+        return None, "unavailable"
+    return f'{max(c["away_score"], c["home_score"])}-{min(c["away_score"], c["home_score"])}', src
+
+
+def seasons_needing_archive(u):
+    """The finished seasons whose Coronation score is not in the league's own state, so only the game archive could supply it."""
+    return [rep["season"] for rep in u.reports if rep["result"].get("coronation") is None
+            and not (u.run is not None and u.run.year == rep["year"] and u.run.coronation)]
+
+
+def _archive_game_matches(g, rep):
+    """True only if the archived game is this season's Coronation: same season, kind, sides (the two conference champions, the nominal home
+    side the one the report names), and a winner and score that agree with the report's winner."""
+    r = rep["result"]
+    champs = set(r["champions"].values())
+    try:
+        home, away = g["home"], g["away"]
+        sh, sa = g["score"]
+        return (g["type"] == "game" and g["kind"] == "coronation" and g["season"] == rep["season"] and {home, away} == champs
+                and home == r["coronation_home"] and sh != sa and (home if sh > sa else away) == rep["winner"]
+                and g.get("winner") == rep["winner"])
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def history_file(u, year_now, archive=None):
     seasons = []
     for rep in u.reports:
         r = rep["result"]
@@ -505,8 +548,7 @@ def history_file(u, year_now):
         champs = list(r["champions"].values())
         winner = rep["winner"]
         runner = next(c for c in champs if c != winner)
-        run = u.run if (u.run is not None and u.run.year == rep["year"] and u.run.coronation) else None
-        score = f'{max(run.coronation["away_score"], run.coronation["home_score"])}-{min(run.coronation["away_score"], run.coronation["home_score"])}' if run else None
+        score, score_source = coronation_score(u, rep, archive)
         stand, winners = [], []
         for dv in sorted(o["division_orders"]):
             order = o["division_orders"][dv]
@@ -517,7 +559,7 @@ def history_file(u, year_now):
         games = [dict(g, away=ab[g["away"]], home=ab[g["home"]]) for conf in sorted(per) for name, _, _, _ in ROUNDS for g in per[conf][name]]
         b = rep["bowl"]
         seasons.append({
-            "season": rep["season"], "year": rep["year"], "champion": ab[winner], "runner_up": ab[runner], "score": score, "venue": rep["venue"],
+            "season": rep["season"], "year": rep["year"], "champion": ab[winner], "runner_up": ab[runner], "score": score, "score_source": score_source, "venue": rep["venue"],
             "bowl_winner": b.get("winner") if b else None,
             "bowl_score": f'{b["away"]} {b["away_score"]}, {b["home"]} {b["home_score"]}' if b else None,
             "exiled": sorted(ab[c] for c in rep["exiled"]), "division_winners": winners,
@@ -550,10 +592,11 @@ def venues_file(u):
 
 
 # ------------------------------------------------------------------------------------------------------------------- the build
-def build(u, league_id, league_name="DFL Development League", engine="dfl", generated_at=None):
+def build(u, league_id, league_name="DFL Development League", engine="dfl", generated_at=None, archive=None):
     """Build every public file from a Universe in its committed state. Returns {path: value}; `manifest.json` lists the others by byte size
     and SHA-256 and carries the release name. `generated_at` (an ISO time) is the only wall-clock value; everything else is a function of the
-    league. Raises ValueError if anything in the result is not public."""
+    league. `archive` (an open game archive, optional) lets history recover a Coronation score the season report never recorded; see
+    `coronation_score`. Raises ValueError if anything in the result is not public."""
     rows = _teams_rows(u)
     by_city = {r["team_city"]: r for r in rows}
     abbr = {c: r["abbr"] for c, r in by_city.items()}
@@ -563,7 +606,7 @@ def build(u, league_id, league_name="DFL Development League", engine="dfl", gene
     files = {"season.json": season, "calendar.json": calendar_file(u, year),
              "notices.json": {"development_label": DEVELOPMENT_LABEL, "notices": NOTICES}, "teams.json": teams_file(u, year),
              "schedule.json": schedule_file(u, abbr, venues, year), "standings.json": standings_file(u, abbr, year),
-             "playoffs.json": playoffs_file(u, abbr, venues, year), "history.json": history_file(u, year), "venues.json": venues_file(u),
+             "playoffs.json": playoffs_file(u, abbr, venues, year), "history.json": history_file(u, year, archive), "venues.json": venues_file(u),
              "rules.json": rules_file()}
     for cid in sorted(u.world.L.clubs):
         files[f"rosters/{abbr[cid]}.json"] = roster_file(u, cid, abbr, by_city[cid], year)

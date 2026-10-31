@@ -1,5 +1,7 @@
 # The DFLv2 viewer: a static site plus a static feed. Nothing here runs the league; Caddy only serves files.
-# __HOST__ is filled in on the server (never committed). Validate before use:  caddy validate --config /etc/caddy/Caddyfile
+# __HOST__ is filled in on the server (never committed): install_staging.sh renders this file for preview.diamondfootballleague.com into
+# /etc/caddy/conf.d/dflv2-preview.caddy. HTTPS is Caddy's automatic certificate (it needs the host's DNS to point at this server
+# and ports 80 and 443 open). Validate before use:  caddy validate --config /etc/caddy/Caddyfile
 # (This file was written without a Caddy binary to hand: it is unvalidated until `caddy validate` has been run on the server.)
 __HOST__ {
 	encode gzip
@@ -19,6 +21,9 @@ __HOST__ {
 		header Cache-Control "no-cache"
 		header @release Cache-Control "public, max-age=31536000, immutable"
 		header @latest Cache-Control "no-store"
+		# nothing whose name starts with a dot is ever served (the publisher lock, temporary files)
+		@hidden path_regexp (^|/)\.[^/]
+		respond @hidden 404
 		root * /srv/dflv2/site/current
 		root @feed /srv/dflv2
 		file_server

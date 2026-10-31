@@ -1,4 +1,11 @@
-# Website deployment plan (prepared 2026-10-30; nothing is deployed, nothing is merged)
+# Website deployment plan (prepared 2026-10-30, staging package added the same evening; nothing is deployed, nothing is merged)
+
+> **Staging first.** The step-by-step procedure for `preview.diamondfootballleague.com` (inspection, DNS, rollback copy, install, verification,
+> rollback) is `docs/STAGING_RUNBOOK.md`, and its package is built by `tools/build_staging_package.py`. The production hostname is untouched by it.
+> What changed in the design since the first version of this plan: one publisher at a time (an `flock` held from before the snapshot until after
+> the pointer moves), pruning only after a one-hour grace period, a viewer that recovers by itself when its release has been pruned, snapshots of the
+> league and its archive by SQLite's online backup, Coronation scores recorded permanently with verified archive recovery for earlier seasons, and a
+> Map page that shows the official map once the file is supplied. Sections 1 to 7 below are the original plan and are still the plan for cutover.
 
 Scope: put the DFLv2 viewer (`site/` plus a published feed) on the existing Droplet at https://diamondfootballleague.com/, replacing the
 proof-of-concept site, **after the owner has reviewed the local preview and says go**. Until then this document is a plan and the scripts in
@@ -30,8 +37,19 @@ Caddy  ──serves──▶  /           site/current → site/releases/<id>/  
 ```
 
 - The website process is Caddy serving files. There is no application server, no API, no write path; any method but GET, HEAD or OPTIONS is answered 405.
-- The league file is opened only by the exporter, on a **copy** made by SQLite's online backup, with no healing snapshot and no archive. The live league is never touched
-  (tested: the league file's SHA-256 and chain are identical before and after an export).
+- The league file is opened only by the exporter, on a **copy** made by SQLite's online backup, with no healing snapshot. The live league is never touched
+  (tested: the league file's SHA-256 and chain are identical before and after an export). When some finished season's Coronation score was never recorded
+  (seasons before Edition 8.58) and the league has a game archive, the exporter takes a second online-backup copy of the **archive after** the league copy
+  (the runner writes the archive batch before it commits the event, so the archive is never behind the league), checks the pair with the league's own
+  `archive_check`, and reads a score only from a checksummed archived game that matches the season report; otherwise the score is shown as not recorded.
+  Both snapshots were tested while a real runner process was parked inside its commit (journal row written, uncommitted; and archive batch durable, league
+  not yet committed): the copy was the last committed event, whole, and the pair consistent.
+- **One publisher.** Exporter runs and any other writer take an exclusive lock on `feed/.publish.lock` first; a second one exits 75 at once and changes
+  nothing (the systemd unit treats 75 as success). The operating system releases the lock when its holder dies, even by `kill -9`. Leftover temporary
+  directories are removed only under the lock and only if older than ten minutes; a failing publisher removes only its own. Tested with real processes.
+- **Pruning** keeps the newest six releases and anything younger than an hour, never the live one. A viewer whose release was pruned anyway re-reads
+  `latest.json`, switches wholly to the live release and redraws (browser-tested); if the live release itself lacks the file, it shows the error and does not loop.
+- The feed never moves backwards (a release with fewer events than the live one is refused) unless `--allow-older` is given after restoring an older league on purpose.
 - The old `/api/*` control endpoints, `dfl-control`, `dfl-live` and `dfl-chronicle` have no counterpart in the new site. They stay as they are until cutover and are stopped, not deleted, afterwards.
 - The site is published as `noindex` (header and meta) until the owner says it is public.
 
@@ -102,5 +120,5 @@ I/O priority and a run that finds nothing new publishes nothing. **These figures
 1. A staging hostname (or accept port 8088 on the Droplet's IP) for step 4.
 2. Whether the new site goes on the real hostname at cutover or on a new one.
 3. Who runs the server steps: they need shell access to the Droplet, which this session does not have.
-4. The official DFL map (the Map page is a labelled placeholder).
-5. Whether history should carry Coronation scores for every season: that needs a small engine change (a report field), which alters league state digests, so it is not made without your approval.
+4. The official DFL map: the attachment did not arrive with the 2026-10-30 evening request (only the old consolidated-document text and the Teams / Schedule / Color Registry workbook did). The Map page is ready for it (`site/assets/map/README.txt`); until a file is supplied it says the map has not been added.
+5. ~~Coronation scores for every season~~ Done in Edition 8.58 (see `docs/PUBLIC_FEED_FORMAT.md`, Known limits).

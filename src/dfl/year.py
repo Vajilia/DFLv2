@@ -243,13 +243,16 @@ class Universe:
         _, by_conf = self.run.tour_standings()
         for conf in sorted(by_conf):                      # rosters lock one simulated hour before kickoff (spec section 7)
             bowl.lock(self.world, conf)
+        ready = {conf: bowl.ready_at_kickoff(self.world, conf) for conf in sorted(by_conf)}       # ring eligibility is judged at kickoff (Edition 8.58)
         b = self.run.play_bowl()
         winner_side = b["away"] if b["away_score"] > b["home_score"] else b["home"]
         won = winner_side.split()[0]
         staff = b["staff_clubs"][won]
         b["rosters"] = {conf: list(self.world.bowl_final[conf]["roster"]) for conf in sorted(by_conf)}
         b["winner"] = f"{won} All-Stars"
-        honours.award_rings(self.world, year, won, staff)
+        b["ready_at_kickoff"] = ready
+        b["not_ready_at_kickoff"] = {conf: [pid for pid in self.world.bowl_final[conf]["roster"] if pid not in ready[conf]] for conf in sorted(by_conf)}
+        honours.award_rings(self.world, year, won, staff, ready[won])
         self.world.heal_round()
 
     def on_coronation(self, year, date, key):

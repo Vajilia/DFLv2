@@ -151,6 +151,17 @@ def lock(world, conf):
     return out
 
 
+def ready_at_kickoff(world, conf):
+    """The locked roster's players who are present and medically ready at kickoff (spec section 7, Edition 8.58): still on a roster of the
+    conference's four Ambassador clubs and `out_weeks == 0` at the moment this is called. The roster locks an hour earlier; ring eligibility is
+    judged here, at kickoff, so the caller evaluates it immediately before the Bowl is played. Returns pids in roster order."""
+    final = world.bowl_final[conf]
+    clubs = set(world.bowl_vote["conferences"][conf]["clubs"])
+    P = world.L.players
+    in_play = {pid for c in sorted(clubs) for pid in world.L.clubs[c].roster}
+    return [pid for pid in final["roster"] if pid in in_play and P[pid].out_weeks == 0]
+
+
 def _why(world, pid, ok):
     p = world.L.players.get(pid)
     if p is None or p.where != "roster":

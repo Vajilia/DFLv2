@@ -1,6 +1,6 @@
 # Pending rulings, for review (2026-10-30)
 
-None of the items below is approved or implemented as a rule unless marked. Approved 2026-10-30 and recorded in spec Edition 8.57: **all 53 selected players dress for the Ambassador Bowl** (reading i) and **an exercised first-round fifth-year option is guaranteed in full**. The wording below is copied from `docs/OWNER_RULINGS_NEEDED.md`; recommendations are mine.
+None of the items below is approved or implemented as a rule unless marked. Approved 2026-10-30 and recorded in spec Edition 8.57: **all 53 selected players dress for the Ambassador Bowl** (reading i) and **an exercised first-round fifth-year option is guaranteed in full**. The wording below is copied from `docs/OWNER_RULINGS_NEEDED.md`; recommendations are mine. **Approved 2026-10-30 (second set) and recorded in spec Edition 8.58:** Tour Rings need the winning final 53 present and medically ready **at kickoff**, not merely at the lock an hour earlier (built and tested; reading j below is superseded), and the Diamond Coronation score is recorded permanently from now on.
 
 ## 1. Fullbacks and the backfield rule: reconciling reading (d) with §11
 
@@ -26,7 +26,7 @@ None of the items below is approved or implemented as a rule unless marked. Appr
 | f | The count is the weighted inclusive Gregory transfer (surplus passes on in proportion), exact fractions | unweighted/random transfer, or no transfer (top-N by first preferences) | Accept. It is the standard form of the count you described, and it is exact and reproducible. |
 | g | "The order of the original ballot" used for replacements = the order of the count (elected, then reverse elimination) | a fixed overall ranking by total votes | Accept. It gives one order per position without rerunning the count. |
 | h | Players who joined the four clubs after the vote are never chosen (not on the ballot) | allow them from the free-agent/roster pool | Accept. The ballot is frozen at the vote; choosing unballoted players would reopen it. |
-| j | Rings go to the whole locked roster (all medically available an hour before kickoff) and the four Bowl coaches | exclude anyone who did not take a snap | Accept. Every locked player is medically available an hour before kickoff, so none can be excluded on that ground. |
+| j | ~~Rings go to the whole locked roster (all medically available an hour before kickoff)~~ **Superseded by the owner's instruction of 2026-10-30, built in Edition 8.58:** rings go to the locked players who are present (still on one of the conference's four clubs' rosters) and medically ready **at kickoff**, checked immediately before the game; the roster is not reopened and the four Bowl coaches are unaffected | | Done. |
 
 ## 3. L4: extensions and postseason injury replacements (proposed, not built)
 

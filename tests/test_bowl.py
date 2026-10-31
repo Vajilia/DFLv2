@@ -14,7 +14,7 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
-from dfl import stv  # noqa: E402
+from dfl import calendar as C, stv  # noqa: E402
 from dfl.ledger import bowl, honours  # noqa: E402
 from dfl.ledger.positions import MINIMUMS  # noqa: E402
 from dfl.year import Universe  # noqa: E402
@@ -312,6 +312,56 @@ class Ballots(unittest.TestCase):
             for pos, n in MINIMUMS.items():
                 self.assertGreaterEqual(counts.get(pos, 0), n, (conf, pos))
             self.assertGreaterEqual(counts.get("HB", 0), 3)
+
+
+class RingsNeedKickoffReadiness(unittest.TestCase):
+    """Edition 8.58: a ring goes to the winning final 53 who are present and medically ready AT KICKOFF, not merely at the lock an hour earlier."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.u = Universe(TABLES, seed=1, engine=False, spatial=False)
+        u = cls.u
+        run_to(u, "tour_round_7")
+        while C.year_events(u.cursor[0])[u.cursor[1]][1] != "ambassador_bowl":      # stop with the Bowl as the very next event
+            u.step_event()
+        w = cls.w = u.world
+        _, by_conf = u.run.tour_standings()
+        for conf in sorted(by_conf):
+            bowl.lock(w, conf)                                   # locked an hour before kickoff
+        cls.hurt = {}
+        for conf in sorted(by_conf):                             # one hurt between the lock and kickoff, one released from the conference's clubs
+            roster = w.bowl_final[conf]["roster"]
+            hurt, gone = roster[0], roster[1]
+            w.L.players[hurt].out_weeks = 2
+            club = next(c for c in w.bowl_vote["conferences"][conf]["clubs"] if gone in w.L.clubs[c].roster)
+            w.L.release(club, gone)
+            cls.hurt[conf] = (hurt, gone)
+        run_to(cls.u, "ambassador_bowl")
+        cls.b = cls.u.run.bowl
+
+    def test_the_two_are_not_ready_and_are_named(self):
+        for conf, (hurt, gone) in self.hurt.items():
+            self.assertNotIn(hurt, self.b["ready_at_kickoff"][conf])
+            self.assertNotIn(gone, self.b["ready_at_kickoff"][conf])
+            self.assertEqual(set(self.b["not_ready_at_kickoff"][conf]), {hurt, gone})
+            self.assertEqual(len(self.b["ready_at_kickoff"][conf]), 51)
+            self.assertEqual(len(self.b["rosters"][conf]), 53)           # the roster itself is unchanged: the lock stands
+
+    def test_only_the_ready_of_the_winning_side_get_rings(self):
+        won = self.b["winner"].split()[0]
+        staff = self.b["staff_clubs"][won]
+        coaches = {c.identity.id for r, c in self.w.leaders[staff].items() if r in ("hc", "oc", "dc", "stc") and c is not None}
+        got = {pid for pid, years in self.w.rings.items() if self.w.L.year in years}
+        self.assertEqual(got, set(self.b["ready_at_kickoff"][won]) | coaches)
+        self.assertNotIn(self.hurt[won][0], got)
+        self.assertNotIn(self.hurt[won][1], got)
+
+    def test_award_rings_defaults_to_judging_readiness_now(self):
+        won = self.b["winner"].split()[0]
+        new_year = self.w.L.year + 1000
+        got = honours.award_rings(self.w, new_year, won, self.b["staff_clubs"][won])
+        self.assertNotIn(self.hurt[won][0], got)
+        self.assertNotIn(self.hurt[won][1], got)
 
 
 class RingsAndRecord(unittest.TestCase):

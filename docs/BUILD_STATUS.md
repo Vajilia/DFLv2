@@ -5,7 +5,7 @@
 > **Edition 8.56 (2026-10-30, Step 8).** The Ambassador Bowl's ballots and voted rosters are built (`src/dfl/stv.py`, `src/dfl/ledger/bowl.py`); the "Bowl plays composite sides" notes in older sections no longer apply when the ledger is present. See `REVIEW_HANDOFF_9211b28.md` section 12.
 
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.57.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.58.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
@@ -140,9 +140,18 @@ Not built (people layer, engine): leadership hiring, All-Star voting and rosters
 
 ## Website milestone (2026-10-30, branch `audit/completion-plan`; not merged, not deployed)
 Built: public feed exporter (`src/dflsite/feed.py`, format `dfl-public-feed` v1, allowlist schemas), atomic publisher and reader (`publish.py`), CLI (`tools/export_public_feed.py`,
-`tools/preview_site.py`), static site (`site/`, presentation reused from the proof-of-concept site, no simulation code), curated rules summary tied to spec Ed 8.57
+`tools/preview_site.py`), static site (`site/`, presentation reused from the proof-of-concept site, no simulation code), curated rules summary tied to spec Ed 8.58
 (`docs/public/RULES_SUMMARY.md`), deployment scripts and plan (`deploy/website/`, `docs/WEBSITE_DEPLOYMENT_PLAN.md`), 52 tests. Not built: live game view, statistics, box scores, draft
 pages, transactions, awards and halls, media; per-kickoff reveal (needs the live clock); the map (not yet supplied). The server was not inspected or touched.
+
+### Staging milestone (2026-10-30 evening; Edition 8.58; not merged, not deployed)
+Built and tested locally: Coronation score recorded in every season result from now on (`result_revision` 2) and recovered for earlier seasons only from a checksummed,
+matching archived game (never invented); Tour Rings judged at kickoff (`bowl.ready_at_kickoff`); consistent SQLite snapshots of league and archive, tested while a real
+runner process was parked inside its commit; single-publisher lock, own-directory-only cleanup, pruning grace, no backwards moves; viewer recovery when its release is pruned;
+simulation date and last published update in the header; Map page that shows a supplied map; `tools/verify_deployment.py`, `tools/build_staging_package.py`,
+`tools/seed_feed.py`, `deploy/website/install_staging.sh` (and uninstall, DNS inspection), `docs/STAGING_RUNBOOK.md`. **Not done and not claimed:** nothing was run on the Droplet,
+its DNS and Caddy configuration were not inspected (no access from here), the generated Caddy block has never met a Caddy binary (the one downloaded for the purpose was not run,
+by the environment's policy), the official map was not supplied.
 
 ## Not imported
 The 339-file `DFL-vBeta_source_snapshot_2026-10-20.zip` is not in this repository and has not been seen. Nothing here claims to include it.

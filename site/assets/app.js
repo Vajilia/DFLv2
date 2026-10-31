@@ -53,6 +53,11 @@
     if (s < 129600) return Math.round(s / 3600) + ' h ago';
     return Math.round(s / 86400) + ' days ago';
   }
+  function fmtStamp(iso) {
+    var t = Date.parse(iso);
+    if (isNaN(t)) return iso || '';
+    return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
   function rec(c) { return c.w + '-' + c.l + (c.t ? '-' + c.t : ''); }
   function pct(c) { var d = c.w + c.l; return d ? (c.w / d).toFixed(3).replace(/^0/, '') : '.000'; }
 
@@ -62,7 +67,7 @@
     var e = embedded(url);
     if (e !== undefined) return Promise.resolve(e);
     return fetch(url, fresh ? { cache: 'no-store' } : {}).then(function (r) {
-      if (!r.ok) throw new Error(url + ' → HTTP ' + r.status);
+      if (!r.ok) { var err = new Error(url + ' → HTTP ' + r.status); err.status = r.status; throw err; }
       return r.json();
     });
   }
@@ -83,7 +88,21 @@
     if (S.cache[name]) return S.cache[name];
     var entry = S.manifest.files[name];
     if (!entry) return Promise.reject(new Error('This release has no ' + name));
-    return (S.cache[name] = getJSON(BASE + 'releases/' + S.ptr.release + '/' + name).catch(function (e) { delete S.cache[name]; throw e; }));
+    var rel = S.ptr.release;
+    return (S.cache[name] = getJSON(BASE + 'releases/' + rel + '/' + name).catch(function (e) {
+      delete S.cache[name];
+      if (e.status === 404 || e.status === 410) e.gone = rel;          // the release this page is reading has been removed from the server
+      throw e;
+    }));
+  }
+  // A release can be pruned while a slow viewer is still reading it. Recovery: forget everything read from it, ask for the live release, and
+  // carry on with that one (never mixing files of two releases on one page). If the live release is the very one that failed, the files are
+  // really missing and the error is shown.
+  function recover(goneRelease) {
+    return loadPointer().then(function (p) {
+      if (p.release === goneRelease) throw new Error('release ' + goneRelease + ' is missing from the server');
+      return loadRelease(p).then(function () { S.fresh = Date.now(); S.recovered = Date.now(); chrome(); });
+    });
   }
   function files() { return Promise.all(Array.prototype.map.call(arguments, file)); }
 
@@ -355,7 +374,7 @@
         var d = h('details', { class: 'card', open: idx === 0 },  h('summary', null, h('b', { text: 'Season ' + s.season + ' · ' + s.year + ' — ' }), (T[s.champion] ? T[s.champion].full_name : s.champion) + ' champions'));
         var kv = h('dl', { class: 'kv' });
         function row(k, v) { kv.appendChild(h('dt', { text: k })); kv.appendChild(h('dd', null, v)); }
-        row('Diamond Coronation', (T[s.champion] ? T[s.champion].full_name : s.champion) + ' over ' + (T[s.runner_up] ? T[s.runner_up].full_name : s.runner_up) + (s.score ? ', ' + s.score : '') + ' · ' + s.venue);
+        row('Diamond Coronation', (T[s.champion] ? T[s.champion].full_name : s.champion) + ' over ' + (T[s.runner_up] ? T[s.runner_up].full_name : s.runner_up) + (s.score ? ', ' + s.score + (s.score_source === 'archive' ? ' (recovered from the game archive)' : '') : ', score not recorded') + ' · ' + s.venue);
         if (s.bowl_score) row('Ambassador Bowl', s.bowl_score + (s.bowl_winner ? ' · ' + s.bowl_winner + ' won' : ''));
         row('Exiled', s.exiled.map(function (x) { return T[x] ? T[x].full_name : x; }).join(', '));
         row('Division winners', s.division_winners.map(function (w) { return w.division + ': ' + (T[w.abbr] ? T[w.abbr].city : w.abbr); }).join(' · '));
@@ -377,8 +396,25 @@
     });
   }
 
+  // The official map is an ordinary file the league owner supplies: site/assets/map/map.json names it ({"file": "dfl-map.png", "alt": "...", "caption": "..."}).
+  // Without that file the page says so; nothing is drawn in its place.
   function pageMap() {
-    return [h('h1', { text: 'Map' }), h('div', { class: 'mapslot' }, h('p', { text: 'The official DFL map has not been added to this preview yet.' }))];
+    var box = h('div', { class: 'mapslot' }, h('p', { class: 'muted', text: 'Loading the map…' }));
+    fetch('assets/map/map.json', { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('none');
+      return r.json();
+    }).then(function (m) {
+      if (!m || typeof m.file !== 'string' || !/^[A-Za-z0-9._-]+$/.test(m.file)) throw new Error('none');
+      var src = 'assets/map/' + m.file;
+      clear(box);
+      add(box, h('a', { href: src, target: '_blank', rel: 'noopener', title: 'Open the map at full size' },
+        h('img', { class: 'dflmap', src: src, alt: typeof m.alt === 'string' && m.alt ? m.alt : 'The official Diamond Football League map' })));
+      if (typeof m.caption === 'string' && m.caption) add(box, h('p', { class: 'muted', text: m.caption }));
+    }).catch(function () {
+      clear(box);
+      add(box, h('p', { text: 'The official DFL map has not been added to this site yet.' }));
+    });
+    return [h('h1', { text: 'Map' }), box];
   }
 
   // ---------------------------------------------------------------- shell
@@ -387,7 +423,10 @@
     var p = (location.hash || '#/').replace(/^#\/?/, '').split('/');
     return { name: p[0] || '', arg: p[1] ? decodeURIComponent(p[1]) : '' };
   }
-  function render() {
+  function showErr(app, e) {
+    clear(app); app.appendChild(h('div', { class: 'err', role: 'alert', text: 'This page could not be shown: ' + e.message }));
+  }
+  function render(again) {
     var app = document.getElementById('app'), r = parseRoute();
     S.route = r;
     var page = ROUTES[r.name] || pageHome;
@@ -401,7 +440,10 @@
       clear(app); add(app, content);
     }).catch(function (e) {
       if (token !== render.token) return;
-      clear(app); app.appendChild(h('div', { class: 'err', role: 'alert', text: 'This page could not be shown: ' + e.message }));
+      if (e.gone && !again) {
+        return recover(e.gone).then(function () { return render(true); }, function (e2) { showErr(app, e2); });
+      }
+      showErr(app, e);
     });
   }
   function chrome() {
@@ -410,8 +452,10 @@
     clear(st);
     st.appendChild(h('span', null, h('b', { text: m.league.name })));
     if (m.year) st.appendChild(h('span', { text: 'Season ' + m.season + ' · ' + m.year }));
-    if (m.simulation_date) st.appendChild(h('span', { text: 'Simulation date ' }, ' ', h('b', { text: fmtDate(m.simulation_date) })));
-    st.appendChild(h('span', { class: 'updated' + (S.fresh > Date.now() - 20000 ? ' fresh' : ''), title: m.generated_at, text: 'Updated ' + ago(m.generated_at) }));
+    if (m.simulation_date) st.appendChild(h('span', { class: 'simdate', title: 'The date inside the simulation: the day of its last completed event' }, 'Simulation date ', h('b', { text: fmtDate(m.simulation_date, true) })));
+    st.appendChild(h('span', { class: 'updated' + (S.fresh > Date.now() - 20000 ? ' fresh' : ''), title: 'Published ' + m.generated_at + ' (this is when the data last changed; a quiet league publishes nothing new)' },
+      'Last published update ', h('b', { text: fmtStamp(m.generated_at) }), ' (' + ago(m.generated_at) + ')'));
+    if (S.recovered && S.recovered > Date.now() - 30000) st.appendChild(h('span', { class: 'updated fresh', text: 'Switched to the newest release' }));
     clear(ft);
     ft.appendChild(h('p', { class: 'muted', style: 'font-size:14px;max-width:none' },
       'Release ' + m.release + ' · feed format ' + m.format_version + '.' + m.format_minor + ' · league ' + m.league.id.slice(0, 8) + ' · content ' + m.content_hash.slice(0, 10) + '. ',

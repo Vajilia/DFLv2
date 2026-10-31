@@ -46,7 +46,7 @@ require the feed to come out byte for byte the same, and they check that buildin
 ## Versioning
 
 - `format_version` is the major version. A reader must refuse a feed whose major version it does not know (the site does, and says so).
-- A minor version may add files and fields. Readers ignore what they do not know. A field may be added only as optional (`Opt`) in the schema.
+- Minor 1 added the optional `score_source` to each history season. A minor version may add files and fields. Readers ignore what they do not know. A field may be added only as optional (`Opt`) in the schema.
 - Removing or renaming a field, or making one required, needs a new major version and a new frozen fixture. The compatibility tests
   (`test_site_static.Compatibility`) fail if the current schemas stop accepting `tests/fixtures/feed_v1`. Do not regenerate the fixture to make them pass.
 - To add something to the feed: edit `feed.py` (the builder and `SCHEMAS`), add a test for what it reveals and when, update this file, and
@@ -55,9 +55,15 @@ require the feed to come out byte for byte the same, and they check that buildin
 ## Known limits (honest list)
 
 - Results appear per committed event, not per kickoff; the real-time clock is not built.
-- Earlier Diamond Coronation scores are not in the league's season reports (only the latest season's run still holds one); history shows
-  the champion and the Bowl score for every season and the Coronation score for the latest. Recording it needs a small engine change
-  (a report field), deliberately not made here because it changes league state digests.
+- Diamond Coronation scores (Edition 8.58, format minor 1): every season closed from Edition 8.58 on carries its Coronation score in its season
+  result (`result_revision` 2), and history shows it with `score_source: "recorded"`. A season closed earlier has no score in the league's own state; the
+  exporter then shows the score only if the league's game archive holds that game (`S<season>/coronation`, checksummed) and it matches the season report in
+  season, sides, nominal home side and winner (`score_source: "archive"`, and the page says it was recovered). Otherwise `score` is null with
+  `score_source: "unavailable"` and the page says the score was not recorded. A score is never estimated. Carrying a pre-8.58 league forward needs
+  the normal upgrade (`league_store.py upgrade OLD NEW --run-originating-code`); on the real preview league (event 73, one closed season) it reported
+  `state_changed: false` and the original file untouched.
+- Results appear per committed event (a whole week at a time in this milestone): the header shows the **simulation date** and the **last published update**
+  (the time the data last changed; a quiet league publishes nothing new, so this does not move).
 - No statistics, box scores, play-by-play, draft pages, transactions, awards or halls yet.
 - No player or team photos or logos; clubs show a coloured abbreviation badge.
-- The official map has not been supplied; the Map page says so.
+- The official map has not been supplied; the Map page says so and shows `site/assets/map/` content (`map.json` naming the file) once it exists.
