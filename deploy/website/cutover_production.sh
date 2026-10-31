@@ -47,8 +47,8 @@ SNAP="$(SNAP_ROOT="$SNAP_ROOT" CADDY_DIR="$CADDY_DIR" UNIT_DIR="$UNIT_DIR" sh "$
 chmod 700 "$SNAP"
 existing=""; for d in $OLD_DIRS; do [ -e "$d" ] && existing="$existing $d"; done
 if [ -n "$existing" ]; then
-  umask 077
-  rc=0; tar -czf "$SNAP/old_application.tgz" $existing 2>/dev/null || rc=$?
+  # a subshell: the private umask must not leak into the Caddy files written below (Caddy runs as its own user and must be able to read them)
+  rc=0; (umask 077; tar -czf "$SNAP/old_application.tgz" $existing 2>/dev/null) || rc=$?
   [ "$rc" -le 1 ] || die 3 "could not archive $existing (tar exit $rc)"
   chmod 600 "$SNAP/old_application.tgz"; tar -tzf "$SNAP/old_application.tgz" >/dev/null
 fi
@@ -92,6 +92,7 @@ if not re.search(r"^[ \t]*import[ \t]+(\./)?(conf\.d|%s)/\*" % re.escape(conf_d)
     text = text.rstrip("\n") + "\n\n# drop-in site blocks (DFLv2 preview and production)\nimport %s/*.caddy\n" % conf_d
 open(path, "w").write(text)
 PY
+chmod 644 "$SNIPPET.new"
 mv "$SNIPPET.new" "$SNIPPET"
 undo_caddy() {
   cp -a "$CADDYFILE.dfl-cutover.$stamp.bak" "$CADDYFILE"; rm -f "$SNIPPET"

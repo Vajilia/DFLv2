@@ -84,6 +84,7 @@ class Cutover(unittest.TestCase):
         shutil.rmtree(self.d, ignore_errors=True)
 
     def env(self, **extra):
+        os.umask(0o022)
         e = dict(os.environ, PATH=self.bin + os.pathsep + os.environ["PATH"], BASE=self.base, CADDY_DIR=self.cd, SNAP_ROOT=self.snaps, UNIT_DIR=self.units,
                  OLD_DIRS="%s %s" % (self.opt, self.etc), WEB_ROOT=os.path.join(self.d, "no_web_root"), ALLOW_NON_ROOT="1", SKIP_LOCAL_CHECK="1")
         e.update(extra)
@@ -116,6 +117,8 @@ class Cutover(unittest.TestCase):
         self.assertNotIn("__HOST__", snippet)
         self.assertIn("/srv/dflv2", snippet)
         self.assertNotIn("reverse_proxy", snippet)
+        for f in (self.caddyfile, os.path.join(self.conf_d, "dflv2-production.caddy")):
+            self.assertTrue(os.stat(f).st_mode & stat.S_IROTH, "Caddy runs as another user and must be able to read " + f)
         self.assertEqual(read(os.path.join(self.conf_d, "dflv2-preview.caddy")), "preview.example.com {\n\tfile_server\n}\n", "the preview site is untouched")
         calls = self.calls()
         v = [i for i, c in enumerate(calls) if c.startswith("caddy validate")]
