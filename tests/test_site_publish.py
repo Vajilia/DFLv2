@@ -59,6 +59,19 @@ class Atomic(unittest.TestCase):
             ptr = json.load(f)
         self.assertEqual((ptr["format"], ptr["format_version"], ptr["release"]), (feed.FORMAT, 1, self.a["manifest.json"]["release"]))
 
+    def test_a_published_release_can_be_read_by_another_user(self):
+        """Found on the Droplet 2026-10-31 at the first live event: mkdtemp made the release directory private (0700), so the web server (another user) answered 403."""
+        old = os.umask(0o022)
+        try:
+            publish.publish(self.a, self.root)
+        finally:
+            os.umask(old)
+        rel = os.path.join(self.root, "releases", self.a["manifest.json"]["release"])
+        for dirpath, dirs, names in os.walk(rel):
+            self.assertEqual(os.stat(dirpath).st_mode & 0o005, 0o005, dirpath)
+            for n in names:
+                self.assertTrue(os.stat(os.path.join(dirpath, n)).st_mode & 0o004, n)
+
     def test_publishing_the_same_release_again_changes_nothing(self):
         publish.publish(self.a, self.root)
         r = publish.publish(self.a, self.root)

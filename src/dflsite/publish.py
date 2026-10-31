@@ -183,6 +183,7 @@ def publish(files, root, keep=KEEP, crash_hook=None, lock=None, wait=0, grace=PR
     published = False
     if not os.path.isdir(final):
         tmp = tempfile.mkdtemp(prefix=f".tmp-{release}-{os.getpid()}-", dir=rel_dir)         # ours alone: only this call ever removes it
+        os.chmod(tmp, 0o755)                                                                  # mkdtemp makes it private (0700); the web server runs as another user and must be able to read the release
         try:
             body = {}
             for name in sorted(files):
@@ -255,6 +256,7 @@ def install_release(src_root, dest_root, wait=0, allow_older=False):
         installed = False
         if not os.path.isdir(final):
             tmp = tempfile.mkdtemp(prefix=f".tmp-{release}-{os.getpid()}-", dir=rel_dir)
+            os.chmod(tmp, 0o755)
             try:
                 shutil.copytree(os.path.join(src_root, "releases", release), tmp, dirs_exist_ok=True)
                 for dirpath, _, names in os.walk(tmp):
