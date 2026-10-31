@@ -511,7 +511,7 @@ class Viewer(unittest.TestCase):
 
     def setUp(self):
         shutil.rmtree(self.feed, ignore_errors=True)
-        shutil.copy(os.path.join(ROOT, "site", "assets", "map", "map.json"), os.path.join(self.site, "assets", "map", "map.json"))
+        touch(os.path.join(self.site, "assets", "map", "map.json"), json.dumps({"file": None, "alt": "", "caption": ""}))        # the "no map yet" state
         for n in os.listdir(os.path.join(self.site, "assets", "map")):
             if n not in ("map.json", "README.txt"):
                 os.remove(os.path.join(self.site, "assets", "map", n))

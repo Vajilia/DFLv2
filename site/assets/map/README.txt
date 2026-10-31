@@ -5,4 +5,4 @@ Where the official DFL map goes
      {"file": "dfl-map.png", "alt": "Map of the 48 Diamond Football League clubs", "caption": "Optional caption shown under the map."}
    "file" must be a plain file name (letters, digits, dot, dash, underscore); anything else is ignored.
 3. Install the site again (deploy/website/install_site.sh) or copy both files into the live site release.
-While map.json says "file": null the Map page says the official map has not been added. Nothing is drawn in its place.
+The shipped map is dfl-map.png (current alignment of 30 October 2026). If map.json ever says "file": null the Map page says the official map has not been added, and nothing is drawn in its place.

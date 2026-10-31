@@ -122,7 +122,7 @@ python3 /root/dfl-staging/repo/tools/verify_deployment.py https://preview.diamon
     --production https://diamondfootballleague.com --baseline /root/prod-baseline.json
 ```
 
-Every line must be PASS; the only WARN allowed is "the official map is not installed yet" until the map has been supplied. It checks: the page and
+Every line must be PASS (no WARN is expected: the official map ships in the package and the check requires it to be served). It checks: the page and
 its scripts answer; the feed pointer, manifest and all 58 feed files match their SHA-256 and size; the served data passes the public-data check (no
 hidden ratings or fields); POST, PUT and DELETE are refused; search engines are told not to index; the strict Content-Security-Policy; the pointer is
 never cached and a release is cached for good; hidden files such as the publisher lock are not served; path traversal is refused; the HTTPS
@@ -130,7 +130,7 @@ certificate verifies for this name and has days left; plain `http://` redirects 
 was at step 5**.
 
 Then look at it in a browser (phone and laptop) and check by eye: the header shows **Simulation date** and **Last published update**; Home,
-Schedule, Standings, Playoffs, Teams (open one team), Calendar, History (the Season 1 Coronation line shows its score), Rules and Map all open;
+Schedule, Standings, Playoffs, Teams (open one team), Calendar, History (the Season 1 Coronation line shows its score), Rules and Map all open (the Map page shows the official DFL map, current alignment of 30 October 2026, and selecting it opens the full-size image);
 the page says it is a development league.
 
 ## Step 8. Roll back (any time; each action is independent)
@@ -163,4 +163,4 @@ Removing the DNS record for `preview` finishes the withdrawal. None of these tou
   an exporter running as a different user could create a file that locks the runner out. The shipped unit file already grants the exporter write access to
   the league folder for that reason. Python on Ubuntu 24.04 is 3.12 (this was built and tested on 3.13), and numpy comes from `apt install python3-numpy`;
   neither has been tried against a real league there.
-* The official DFL map: the Map page is ready for it (see `site/assets/map/README.txt`); the file was not supplied.
+* A map update: the official map (`site/assets/map/dfl-map.png`, alignment of 30 October 2026) ships in the package. A later map is a new site release (replace the file and `map.json`, see `site/assets/map/README.txt`); it needs no change to the league or the feed.

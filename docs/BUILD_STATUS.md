@@ -148,10 +148,10 @@ pages, transactions, awards and halls, media; per-kickoff reveal (needs the live
 Built and tested locally: Coronation score recorded in every season result from now on (`result_revision` 2) and recovered for earlier seasons only from a checksummed,
 matching archived game (never invented); Tour Rings judged at kickoff (`bowl.ready_at_kickoff`); consistent SQLite snapshots of league and archive, tested while a real
 runner process was parked inside its commit; single-publisher lock, own-directory-only cleanup, pruning grace, no backwards moves; viewer recovery when its release is pruned;
-simulation date and last published update in the header; Map page that shows a supplied map; `tools/verify_deployment.py`, `tools/build_staging_package.py`,
+simulation date and last published update in the header; Map page showing the official DFL map (received 2026-10-30, alignment of 30 October 2026); `tools/verify_deployment.py`, `tools/build_staging_package.py`,
 `tools/seed_feed.py`, `deploy/website/install_staging.sh` (and uninstall, DNS inspection), `docs/STAGING_RUNBOOK.md`. **Not done and not claimed:** nothing was run on the Droplet,
 its DNS and Caddy configuration were not inspected (no access from here), the generated Caddy block has never met a Caddy binary (the one downloaded for the purpose was not run,
-by the environment's policy), the official map was not supplied.
+by the environment's policy).
 
 ## Not imported
 The 339-file `DFL-vBeta_source_snapshot_2026-10-20.zip` is not in this repository and has not been seen. Nothing here claims to include it.

@@ -5,7 +5,7 @@
 > What changed in the design since the first version of this plan: one publisher at a time (an `flock` held from before the snapshot until after
 > the pointer moves), pruning only after a one-hour grace period, a viewer that recovers by itself when its release has been pruned, snapshots of the
 > league and its archive by SQLite's online backup, Coronation scores recorded permanently with verified archive recovery for earlier seasons, and a
-> Map page that shows the official map once the file is supplied. Sections 1 to 7 below are the original plan and are still the plan for cutover.
+> Map page that shows the official DFL map (alignment of 30 October 2026). Sections 1 to 7 below are the original plan and are still the plan for cutover.
 
 Scope: put the DFLv2 viewer (`site/` plus a published feed) on the existing Droplet at https://diamondfootballleague.com/, replacing the
 proof-of-concept site, **after the owner has reviewed the local preview and says go**. Until then this document is a plan and the scripts in
@@ -120,5 +120,5 @@ I/O priority and a run that finds nothing new publishes nothing. **These figures
 1. A staging hostname (or accept port 8088 on the Droplet's IP) for step 4.
 2. Whether the new site goes on the real hostname at cutover or on a new one.
 3. Who runs the server steps: they need shell access to the Droplet, which this session does not have.
-4. The official DFL map: the attachment did not arrive with the 2026-10-30 evening request (only the old consolidated-document text and the Teams / Schedule / Color Registry workbook did). The Map page is ready for it (`site/assets/map/README.txt`); until a file is supplied it says the map has not been added.
+4. ~~The official DFL map~~ Added (received 2026-10-30 20:56, alignment of 30 October 2026, 4800x4400 PNG, `site/assets/map/dfl-map.png`); the Map page shows it and links the full-size image.
 5. ~~Coronation scores for every season~~ Done in Edition 8.58 (see `docs/PUBLIC_FEED_FORMAT.md`, Known limits).

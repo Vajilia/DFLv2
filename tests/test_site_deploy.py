@@ -260,14 +260,25 @@ class Verifier(unittest.TestCase):
     def verify(self, *args):
         return subprocess.run([sys.executable, "-I", VERIFY, *args], capture_output=True, text=True)
 
-    def test_a_good_site_passes_and_the_missing_map_is_only_a_warning(self):
-        r = self.verify(self.url, "--profile", "local")
+    def test_a_good_site_passes_and_the_official_map_is_served(self):
+        r = self.verify(self.url, "--profile", "local", "--require-map")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("WARN  the official map is not installed yet", r.stdout)
-        self.assertIn("all 59 feed files match" if "59" in r.stdout else "feed files match", r.stdout)
+        self.assertIn("PASS  the official map file is served", r.stdout)
+        self.assertIn("feed files match", r.stdout)
 
-    def test_requiring_the_map_fails_without_it(self):
-        self.assertEqual(self.verify(self.url, "--profile", "local", "--require-map").returncode, 1)
+    def test_a_site_without_a_map_only_warns_unless_the_map_is_required(self):
+        import preview_site
+        d = os.path.join(self.tmp, "nomap")
+        shutil.copytree(preview_site.SITE, d)
+        write(os.path.join(d, "assets", "map", "map.json"), json.dumps({"file": None}))
+        preview_site.Handler.site_root = d
+        try:
+            r = self.verify(self.url, "--profile", "local")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("WARN  the official map is not installed yet", r.stdout)
+            self.assertEqual(self.verify(self.url, "--profile", "local", "--require-map").returncode, 1)
+        finally:
+            preview_site.Handler.site_root = preview_site.SITE
 
     def test_a_damaged_feed_file_fails(self):
         rel = publish.read_release(self.feed)["manifest.json"]["release"]

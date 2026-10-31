@@ -66,4 +66,4 @@ require the feed to come out byte for byte the same, and they check that buildin
   (the time the data last changed; a quiet league publishes nothing new, so this does not move).
 - No statistics, box scores, play-by-play, draft pages, transactions, awards or halls yet.
 - No player or team photos or logos; clubs show a coloured abbreviation badge.
-- The official map has not been supplied; the Map page says so and shows `site/assets/map/` content (`map.json` naming the file) once it exists.
+- The official map is part of the site, not the feed: `site/assets/map/dfl-map.png`, named by `site/assets/map/map.json` (alignment of 30 October 2026). A new map is a new site release; the feed does not change.

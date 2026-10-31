@@ -250,8 +250,18 @@ class Browser(unittest.TestCase):
         self.assertIn("season 1", seen["history"][0].lower())
         self.assertIn("alabama thunder", seen["team/ALA"][0].lower())
         self.assertIn("team not found", seen["team/NOPE"][0].lower())
-        self.assertIn("official dfl map has not been added", seen["map"][0].lower())
+        self.assertIn("map", seen["map"][0].lower())
         self.assertIn("design document edition", seen["rules"][0].lower())
+
+    def test_the_official_map_is_shown(self):
+        page = self.browser.new_page(viewport={"width": 1200, "height": 900})
+        page.goto(f"http://127.0.0.1:{self.port}/#/map")
+        page.wait_for_selector("img.dflmap", timeout=15000)
+        self.assertTrue(page.evaluate("document.querySelector('img.dflmap').naturalWidth > 1000"))
+        self.assertIn("official diamond football league map", page.get_attribute("img.dflmap", "alt").lower())
+        self.assertIn("30 october 2026", page.inner_text("#app").lower())
+        self.assertNotIn("has not been added", page.inner_text("#app"))
+        page.close()
 
     def test_rosters_show_no_hidden_columns(self):
         page = self.browser.new_page(viewport={"width": 1200, "height": 900})
