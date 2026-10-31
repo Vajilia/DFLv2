@@ -16,7 +16,15 @@ __HOST__ {
 		}
 		@feed path /feed/*
 		@latest path /feed/latest.json /feed/status.json
-		@release path /feed/releases/*
+		# a release file is cached for good only if it EXISTS and can be read. An error answer (403 while a release is half-made or its permissions are wrong,
+		# 404 for a pruned or not-yet-existing one) must never be told "immutable": a browser would replay it for a year (found 2026-10-31, first live event).
+		# Caddy's `file` matcher is true only for a file it can stat, so those answers keep the plain `no-cache` below.
+		@release {
+			path /feed/releases/*
+			file {
+				root /srv/dflv2
+			}
+		}
 		# site files are revalidated each time; the pointer and the status heartbeat are never cached; a published release directory never changes, so it may be cached for long
 		header Cache-Control "no-cache"
 		header @release Cache-Control "public, max-age=31536000, immutable"

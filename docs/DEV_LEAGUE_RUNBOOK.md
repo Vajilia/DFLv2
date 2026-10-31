@@ -53,3 +53,7 @@ Settings live in `/etc/dflv2/league.env` (`DFL_PACE`, `DFL_UNTIL`). **`DFL_UNTIL
 ## Not decided here
 
 The pace (`DFL_PACE` in `/etc/dflv2/league.env`, read by `run_league.sh`) is a temporary development value only. The service ships with a conservative default (3600 s) and the league paused; `DFL_UNTIL` can cap the total events so the league stops by itself for review. The final season pacing is not set by any file in this repository.
+
+## Error answers and caching (found 2026-10-31)
+
+On the first live event the new release folder was private (HTTP 403 from the web server). The server had sent that 403 with the same one-year `immutable` caching headers as a good release, so a browser kept replaying it after the files were fixed. Three layers now stop that: the publisher makes each release folder readable (`publish.py`, tested); Caddy gives the `immutable` header only to a release file that exists and can be read, so any error answer keeps `no-cache` (`Caddyfile.template`, checked by `verify_deployment.py`); and the page asks again past its cache when a read fails and, if the first load still fails, keeps retrying every 10 seconds by itself with no hard refresh (`site/assets/app.js`, `tests/test_site_recovery.py`).

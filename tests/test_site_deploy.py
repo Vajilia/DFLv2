@@ -310,6 +310,16 @@ class FoundAtDeployment(unittest.TestCase):
         self.assertIn("root /srv/dflv2\n", t)
         self.assertIn("root /srv/dflv2/site/current\n", t)
 
+    def test_only_a_release_file_that_exists_gets_the_immutable_header(self):
+        """2026-10-31: the first live release answered 403 (private folder) with `immutable`, and a browser kept replaying the 403 for a year."""
+        t = read(os.path.join(DEPLOY, "Caddyfile.template"))
+        i = t.index("@release {")
+        block = t[i:t.index("}\n\t\t}", i)]
+        self.assertIn("path /feed/releases/*", block)
+        self.assertIn("file {", block, "the long-cache header applies only where Caddy can stat the file (an error answer keeps no-cache)")
+        self.assertIn('header @release Cache-Control "public, max-age=31536000, immutable"', t)
+        self.assertNotIn("@release path", t, "the one-line form matched error answers too")
+
     def test_the_status_heartbeat_is_never_cached_and_the_units_match_the_design(self):
         t = read(os.path.join(DEPLOY, "Caddyfile.template"))
         self.assertIn("@latest path /feed/latest.json /feed/status.json", t)

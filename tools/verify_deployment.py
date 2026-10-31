@@ -178,6 +178,8 @@ def check_caddy(base, host, rep):
     if ptr is not None:
         st, h, _ = fetch(f"{base}/feed/releases/{ptr['release']}/manifest.json")
         rep.check("immutable" in h.get("cache-control", ""), "a published release is cacheable for good", h.get("cache-control", ""), h.get("cache-control", "(none)"))
+        st, h, _ = fetch(f"{base}/feed/releases/e99999-doesnotexist/manifest.json")
+        rep.check(st in (403, 404) and "immutable" not in h.get("cache-control", ""), "an error answer for a release is never cached as immutable", f"HTTP {st}", f"HTTP {st}, cache-control: {h.get('cache-control', '(none)')}")
     st, h, b = fetch(base + "/feed/status.json")
     if st == 200:
         rep.check("no-store" in h.get("cache-control", ""), "the status heartbeat is never cached", h.get("cache-control", ""), h.get("cache-control", "(none)"))

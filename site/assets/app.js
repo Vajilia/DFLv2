@@ -66,10 +66,17 @@
   function getJSON(url, fresh) {
     var e = embedded(url);
     if (e !== undefined) return Promise.resolve(e);
-    return fetch(url, fresh ? { cache: 'no-store' } : {}).then(function (r) {
-      if (!r.ok) { var err = new Error(url + ' → HTTP ' + r.status); err.status = r.status; throw err; }
-      return r.json();
-    });
+    function get(opts) {
+      return fetch(url, opts).then(function (r) {
+        if (!r.ok) { var err = new Error(url + ' → HTTP ' + r.status); err.status = r.status; throw err; }
+        return r.json();
+      });
+    }
+    if (fresh) return get({ cache: 'no-store' });
+    // A release file may be cached hard by the browser, and an error answer given while a release was still being published (or while its permissions
+    // were wrong, 2026-10-31) can sit in that cache and be replayed for a year. So a failed read is asked again once past the cache ('reload' also
+    // replaces what the cache holds), which is what makes a temporary publication error heal on its own, without a hard refresh.
+    return get({}).catch(function () { return get({ cache: 'reload' }); });
   }
   function checkFormat(o, what) {
     if (!o || o.format !== FORMAT) throw new Error(what + ' is not a ' + FORMAT + ' feed');
@@ -497,7 +504,11 @@
       var first = !S.ptr;
       return loadRelease(p).then(function () { if (!first) S.fresh = Date.now(); chrome(); return render(); });
     }).catch(function (e) {
-      if (!S.manifest) { var app = document.getElementById('app'); clear(app); app.appendChild(h('div', { class: 'err', role: 'alert', text: 'The league feed could not be read: ' + e.message })); }
+      if (!S.manifest) {
+        var app = document.getElementById('app'); clear(app);
+        app.appendChild(h('div', { class: 'err', role: 'alert', text: 'The league feed could not be read: ' + e.message + '. Trying again automatically.' }));
+        if (!S.retrying && !window.DFL_EMBED) { S.retrying = true; setTimeout(function () { S.retrying = false; check(); }, window.DFL_RETRY_MS || 10000); }   // until it loads: no need to reload the page
+      }
       else { var st = document.getElementById('status'); st.appendChild(h('span', { class: 'updated', text: 'Could not check for updates' })); }
     });
   }
