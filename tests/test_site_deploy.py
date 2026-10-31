@@ -167,6 +167,31 @@ class Install(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.base, "site", "current", "index.html")))
         self.assertTrue([n for n in os.listdir(self.caddy_dir) if ".dfl-staging." in n and n.endswith(".bak")], "a backup of the Caddyfile is kept")
 
+    def test_the_seed_is_installed_by_an_unprivileged_user_when_the_package_sits_in_a_private_directory(self):
+        """Found at the first real deployment: the package is unpacked under /root (mode 700); the service user must not need to enter it."""
+        import pwd
+        if os.geteuid() != 0:
+            self.skipTest("needs root to switch user")
+        user = "dflseedtest"
+        made = subprocess.run(["useradd", "--system", "--shell", "/usr/sbin/nologin", user], capture_output=True).returncode == 0
+        if not made:
+            self.skipTest("cannot create a throwaway user")
+        self.addCleanup(lambda: subprocess.run(["userdel", user], capture_output=True))
+        private = tempfile.mkdtemp(prefix="dflprivate")                      # mkdtemp makes it mode 700, as /root is
+        try:
+            pkg = os.path.join(private, "pkg")
+            shutil.copytree(self.P.pkg, pkg)
+            os.chmod(self.d, 0o755)                                          # the scratch install tree itself must be enterable; the PACKAGE directory is not
+            r = self.run_install(pkg=pkg, SERVICE_USER=user)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            latest = os.path.join(self.base, "feed", "latest.json")
+            self.assertTrue(os.path.exists(latest))
+            self.assertEqual(pwd.getpwuid(os.stat(latest).st_uid).pw_name, user)
+            self.assertFalse(os.path.exists(os.path.join(self.base, ".seed-incoming")), "the staged seed copy is removed")
+            self.assertEqual(stat.S_IMODE(os.stat(private).st_mode), 0o700, "the private directory was not loosened")
+        finally:
+            shutil.rmtree(private, ignore_errors=True)
+
     def test_installing_twice_is_safe(self):
         self.assertEqual(self.run_install().returncode, 0)
         after_first = read(self.caddyfile)
@@ -235,6 +260,48 @@ class Install(unittest.TestCase):
                 self.assertEqual(r.returncode, 0, f"{n}: {r.stderr}")
 
 
+class FoundAtDeployment(unittest.TestCase):
+    """Regressions for what the first real deployment (2026-10-31) found."""
+
+    def test_the_caddy_block_serves_feed_and_site_with_one_root_each(self):
+        t = read(os.path.join(DEPLOY, "Caddyfile.template"))
+        self.assertNotIn("root @feed", t, "a second `root` with a matcher served 404 for every feed file on Caddy 2.11")
+        self.assertIn("file_server @feed {", t)
+        self.assertIn("root /srv/dflv2\n", t)
+        self.assertIn("root /srv/dflv2/site/current\n", t)
+
+    def _snapshot(self, tar_rc):
+        d = tempfile.mkdtemp(prefix="dflsnap")
+        try:
+            web = os.path.join(d, "www", "dfl")
+            os.makedirs(web)
+            write(os.path.join(web, "index.html"), "x")
+            bindir = os.path.join(d, "bin")
+            os.makedirs(bindir)
+            real = shutil.which("tar")
+            # a tar that behaves as the real one but exits `tar_rc` when it creates the archive (1 = "file changed as we read it")
+            write(os.path.join(bindir, "tar"), '#!/bin/sh\ncase "$*" in *-czf*) %s "$@"; rc=$?; [ "$rc" = 0 ] && exit %d; exit $rc;; esac\nexec %s "$@"\n' % (real, tar_rc, real), 0o755)
+            etc = os.path.join(d, "etc_caddy")
+            os.makedirs(etc)
+            env = dict(os.environ, PATH=bindir + os.pathsep + os.environ["PATH"], SNAP_ROOT=os.path.join(d, "snap"), WEB_ROOT=web)
+            r = subprocess.run(["sh", os.path.join(DEPLOY, "snapshot_config.sh")], capture_output=True, text=True, env=env)
+            made = sorted(os.listdir(os.path.join(d, "snap"))) if os.path.isdir(os.path.join(d, "snap")) else []
+            sums = os.path.exists(os.path.join(d, "snap", made[0], "SHA256SUMS")) if made else False
+            return r, sums
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_a_file_changing_while_the_web_root_is_archived_does_not_stop_the_rollback_copy(self):
+        r, sums = self._snapshot(1)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(sums, "the checksum list is written even when tar warned")
+
+    def test_a_real_tar_failure_still_stops_the_rollback_copy(self):
+        r, sums = self._snapshot(2)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(sums, "no checksum list means the installer will not accept this copy")
+
+
 class Verifier(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -279,6 +346,20 @@ class Verifier(unittest.TestCase):
             self.assertEqual(self.verify(self.url, "--profile", "local", "--require-map").returncode, 1)
         finally:
             preview_site.Handler.site_root = preview_site.SITE
+
+    def test_a_pointer_that_is_not_json_is_a_failure_not_a_crash(self):
+        import preview_site
+        empty = tempfile.mkdtemp(prefix="dflempty")
+        old = preview_site.Handler.feed_root
+        preview_site.Handler.feed_root = empty
+        try:
+            r = self.verify(self.url, "--profile", "caddy")
+            self.assertNotIn("Traceback", r.stdout + r.stderr)
+            self.assertEqual(r.returncode, 1)
+            self.assertIn("FAIL", r.stdout)
+        finally:
+            preview_site.Handler.feed_root = old
+            shutil.rmtree(empty, ignore_errors=True)
 
     def test_a_damaged_feed_file_fails(self):
         rel = publish.read_release(self.feed)["manifest.json"]["release"]
