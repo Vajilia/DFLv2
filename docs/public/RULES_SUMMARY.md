@@ -1,6 +1,6 @@
 ---
-spec_edition: 8.59
-spec_hash: 6cef850fad1453e0749a3d45c05f811faa91f52586567b1c619430b346530603
+spec_edition: 8.60
+spec_hash: b0c89f14d1a7b341f19605bbe6b954981dd146dc706605f1ac296124aad63cd0
 updated: 2026-10-31
 ---
 # Approved rules (public summary)

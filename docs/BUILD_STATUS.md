@@ -5,7 +5,7 @@
 > **Edition 8.56 (2026-10-30, Step 8).** The Ambassador Bowl's ballots and voted rosters are built (`src/dfl/stv.py`, `src/dfl/ledger/bowl.py`); the "Bowl plays composite sides" notes in older sections no longer apply when the ledger is present. See `REVIEW_HANDOFF_9211b28.md` section 12.
 
 
-**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.59.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
+**Authority.** The owner ruled on 2026-10-22 that anything decided in the Design Document (`docs/spec/DFL_Design_Document_Ed8.60.md`) takes priority over anything salvaged from `Vajilia/DFL` (v1). Where v1 code or docs disagree with the spec, the spec wins; v1 is a library of ideas, ported only after checking it against the spec.
 
 ## Milestone 1: league layer (this branch)
 Verified on a clean clone (`python3 -I -m unittest discover -s tests`, then `python3 -I tools/run_seasons.py`):
