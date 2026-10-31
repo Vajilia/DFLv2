@@ -7,9 +7,10 @@ SNAP_ROOT="${SNAP_ROOT:-/root/dfl-rollback}"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 dest="$SNAP_ROOT/$stamp"
 mkdir -p "$dest"
-[ -d /etc/caddy ] && cp -a /etc/caddy "$dest/caddy"
+CADDY_DIR="${CADDY_DIR:-/etc/caddy}"; UNIT_DIR="${UNIT_DIR:-/etc/systemd/system}"
+[ -d "$CADDY_DIR" ] && cp -a "$CADDY_DIR" "$dest/caddy"
 mkdir -p "$dest/systemd"
-for u in /etc/systemd/system/dfl-*; do [ -e "$u" ] && cp -a "$u" "$dest/systemd/"; done
+for u in "$UNIT_DIR"/dfl-*; do [ -e "$u" ] && cp -a "$u" "$dest/systemd/"; done
 if [ -d "${WEB_ROOT:-/var/www/dfl}" ]; then
   # tar exits 1 when a file changed while it was read (the live runner writes into the web root); that is a warning, not a failure. Exit 2 or more is.
   rc=0; tar -C "$(dirname "${WEB_ROOT:-/var/www/dfl}")" -czf "$dest/web_root.tgz" "$(basename "${WEB_ROOT:-/var/www/dfl}")" || rc=$?
