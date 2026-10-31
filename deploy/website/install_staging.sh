@@ -68,8 +68,12 @@ say "site installed: $(readlink "$BASE/site/current")"
 
 # ---- 6. the seed feed (verified before and after copying; the previous feed release, if any, stays)
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$BASE/feed"
-if command -v runuser >/dev/null 2>&1; then runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/seed_feed.py" "$PKG/seed-feed" "$BASE/feed"
-else su -s /bin/sh "$SERVICE_USER" -c "python3 -I '$BASE/repo/tools/seed_feed.py' '$PKG/seed-feed' '$BASE/feed'"; fi
+# The seed is read by the service user, who cannot enter /root (where the package is usually unpacked) and must not be given a way to: copy it to a
+# folder under $BASE that anyone may read, install from there, and remove the copy.
+seed_stage="$BASE/.seed-incoming"; rm -rf "$seed_stage"; cp -a "$PKG/seed-feed" "$seed_stage"; chmod -R a+rX "$seed_stage"
+if command -v runuser >/dev/null 2>&1; then runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/seed_feed.py" "$seed_stage" "$BASE/feed"
+else su -s /bin/sh "$SERVICE_USER" -c "python3 -I '$BASE/repo/tools/seed_feed.py' '$seed_stage' '$BASE/feed'"; fi
+rm -rf "$seed_stage"
 chmod -R a+rX "$BASE/site" "$BASE/feed" "$BASE/repo-releases"
 
 # ---- 7. Caddy: add one site block for the staging host in its own file; roll back at once if the configuration does not validate

@@ -10,7 +10,12 @@ mkdir -p "$dest"
 [ -d /etc/caddy ] && cp -a /etc/caddy "$dest/caddy"
 mkdir -p "$dest/systemd"
 for u in /etc/systemd/system/dfl-*; do [ -e "$u" ] && cp -a "$u" "$dest/systemd/"; done
-[ -d "${WEB_ROOT:-/var/www/dfl}" ] && tar -C "$(dirname "${WEB_ROOT:-/var/www/dfl}")" -czf "$dest/web_root.tgz" "$(basename "${WEB_ROOT:-/var/www/dfl}")"
+if [ -d "${WEB_ROOT:-/var/www/dfl}" ]; then
+  # tar exits 1 when a file changed while it was read (the live runner writes into the web root); that is a warning, not a failure. Exit 2 or more is.
+  rc=0; tar -C "$(dirname "${WEB_ROOT:-/var/www/dfl}")" -czf "$dest/web_root.tgz" "$(basename "${WEB_ROOT:-/var/www/dfl}")" || rc=$?
+  [ "$rc" -le 1 ] || { echo "tar failed with exit $rc" >&2; exit "$rc"; }
+  tar -tzf "$dest/web_root.tgz" >/dev/null
+fi
 systemctl list-units --type=service --no-pager > "$dest/services.txt" 2>/dev/null || true
 (cd "$dest" && find . -type f ! -name SHA256SUMS -exec sha256sum {} + > SHA256SUMS)
 echo "$dest"

@@ -151,9 +151,14 @@ def check_caddy(base, host, rep):
     rep.check(h.get("x-content-type-options", "").lower() == "nosniff", "X-Content-Type-Options: nosniff")
     st, h, _ = fetch(base + "/feed/latest.json")
     rep.check("no-store" in h.get("cache-control", ""), "the pointer is never cached", h.get("cache-control", ""), h.get("cache-control", "(none)"))
-    ptr = json.loads(fetch(base + "/feed/latest.json")[2])
-    st, h, _ = fetch(f"{base}/feed/releases/{ptr['release']}/manifest.json")
-    rep.check("immutable" in h.get("cache-control", ""), "a published release is cacheable for good", h.get("cache-control", ""), h.get("cache-control", "(none)"))
+    try:
+        ptr = json.loads(fetch(base + "/feed/latest.json")[2])
+    except ValueError:
+        ptr = None
+        rep.check(False, "feed pointer is readable JSON", "", "the pointer did not come back as JSON; the release caching check was skipped")
+    if ptr is not None:
+        st, h, _ = fetch(f"{base}/feed/releases/{ptr['release']}/manifest.json")
+        rep.check("immutable" in h.get("cache-control", ""), "a published release is cacheable for good", h.get("cache-control", ""), h.get("cache-control", "(none)"))
     st, _, b = fetch(base + "/feed/.publish.lock")
     rep.check(st == 404, "the publisher lock file is not served", f"HTTP {st}", f"HTTP {st}: {b[:60]!r}")
     st, h, b = fetch(base + "/feed/releases/../../etc/passwd")

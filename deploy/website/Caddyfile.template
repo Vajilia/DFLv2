@@ -24,8 +24,13 @@ __HOST__ {
 		# nothing whose name starts with a dot is ever served (the publisher lock, temporary files)
 		@hidden path_regexp (^|/)\.[^/]
 		respond @hidden 404
-		root * /srv/dflv2/site/current
-		root @feed /srv/dflv2
-		file_server
+		# two file servers, one root each. (Two `root` lines, the second with a matcher, were tried first and served 404 for every /feed/ file
+		# on the real Caddy 2.11 server: found at the first deployment, 2026-10-31.)
+		file_server @feed {
+			root /srv/dflv2
+		}
+		file_server {
+			root /srv/dflv2/site/current
+		}
 	}
 }
