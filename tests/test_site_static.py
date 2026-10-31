@@ -72,6 +72,7 @@ class Preview(unittest.TestCase):
         import preview_site
         cls.mod = preview_site
         preview_site.Handler.feed_root = FIXTURE
+        preview_site.Handler.site_root = preview_site.SITE
         socketserver.TCPServer.allow_reuse_address = True
         cls.srv = socketserver.TCPServer(("127.0.0.1", 0), preview_site.Handler)
         cls.port = cls.srv.server_address[1]
@@ -199,6 +200,7 @@ class Browser(unittest.TestCase):
         import socketserver
         import preview_site
         preview_site.Handler.feed_root = FIXTURE
+        preview_site.Handler.site_root = preview_site.SITE
         socketserver.TCPServer.allow_reuse_address = True
         cls.srv = socketserver.TCPServer(("127.0.0.1", 0), preview_site.Handler)
         cls.port = cls.srv.server_address[1]

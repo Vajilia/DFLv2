@@ -486,6 +486,7 @@ class Viewer(unittest.TestCase):
         import socketserver
         import preview_site
         cls.ps = preview_site
+        cls._saved = (preview_site.Handler.feed_root, preview_site.Handler.site_root)       # put back afterwards: the handler is shared by every test in one run
         _, out, _ = feedlab.stages()
         cls.a, cls.b = out["w6"], out["wild_card"]
         cls.tmp = tempfile.mkdtemp(prefix="dflview")
@@ -507,6 +508,7 @@ class Viewer(unittest.TestCase):
         cls.pw.stop()
         cls.srv.shutdown()
         cls.srv.server_close()
+        cls.ps.Handler.feed_root, cls.ps.Handler.site_root = cls._saved
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def setUp(self):
