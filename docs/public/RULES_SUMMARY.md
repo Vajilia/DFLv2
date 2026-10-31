@@ -1,7 +1,7 @@
 ---
-spec_edition: 8.58
-spec_hash: 345a5cff35e8ceab03b2b1e74cdb9aee28defc703af12d08ea7d0a59ea935d68
-updated: 2026-10-30
+spec_edition: 8.59
+spec_hash: 6cef850fad1453e0749a3d45c05f811faa91f52586567b1c619430b346530603
+updated: 2026-10-31
 ---
 # Approved rules (public summary)
 This page is a plain-language summary written by hand from the League's design document, checked against the edition and hash shown above. Where the document and this page differ, the document wins. Only approved rules are listed.
