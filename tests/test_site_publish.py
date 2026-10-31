@@ -106,6 +106,92 @@ class Atomic(unittest.TestCase):
             publish.publish(other, self.root)
         self.assertEqual(self.live(), self.a["manifest.json"]["release"])
 
+    # ---- release identity (2026-10-31: a changed rules edition at the same committed event must be a different release, and nothing already published may change)
+    def sealed_with_rules(self, files, edition):
+        f = {k: copy.deepcopy(v) for k, v in files.items() if k != "manifest.json"}
+        f["rules.json"]["spec_edition"] = edition
+        m = files["manifest.json"]
+        return feed.seal(f, m["league"]["id"], m["league"]["name"], m["league"]["engine"], int(m["release"][1:6]), generated_at=m["generated_at"])
+
+    def tree_bytes(self, release):
+        base = os.path.join(self.root, "releases", release)
+        out = {}
+        for d, _, ns in os.walk(base):
+            for n in ns:
+                with open(os.path.join(d, n), "rb") as f:
+                    out[os.path.relpath(os.path.join(d, n), base)] = f.read()
+        return out
+
+    def test_changed_rules_at_the_same_committed_event_are_a_different_release_and_the_old_one_is_untouched(self):
+        publish.publish(self.a, self.root)
+        old = self.a["manifest.json"]["release"]
+        before = self.tree_bytes(old)
+        changed = self.sealed_with_rules(self.a, "9.99")
+        new = changed["manifest.json"]["release"]
+        self.assertEqual(new[:6], old[:6], "the same event count")
+        self.assertNotEqual(new, old, "different rules, different release identity")
+        self.assertNotEqual(changed["manifest.json"]["content_hash"], self.a["manifest.json"]["content_hash"])
+        r = publish.publish(changed, self.root)
+        self.assertTrue(r["published"])
+        self.assertEqual(self.live(), new)
+        self.assertEqual(publish.read_release(self.root)["rules.json"]["spec_edition"], "9.99")
+        self.assertEqual(self.tree_bytes(old), before, "a published release is immutable")
+        # and going back to the original rules points at the original release again, byte for byte, without rewriting it
+        r = publish.publish(self.a, self.root)
+        self.assertFalse(r["published"])
+        self.assertEqual(self.live(), old)
+        self.assertEqual(self.tree_bytes(old), before)
+
+    def test_identical_content_republication_reuses_the_release_without_rewriting_a_byte(self):
+        publish.publish(self.a, self.root)
+        rel = self.a["manifest.json"]["release"]
+        base = os.path.join(self.root, "releases", rel)
+        before = self.tree_bytes(rel)
+        mtimes = {n: os.stat(os.path.join(base, n)).st_mtime_ns for n in before}
+        again = copy.deepcopy(self.a)
+        again["manifest.json"]["generated_at"] = "2099-01-01T00:00:00+00:00"
+        r = publish.publish(again, self.root)
+        self.assertEqual((r["published"], self.live()), (False, rel))
+        self.assertEqual(self.tree_bytes(rel), before)
+        self.assertEqual({n: os.stat(os.path.join(base, n)).st_mtime_ns for n in before}, mtimes)
+
+    def test_an_existing_release_whose_files_do_not_match_is_refused_and_the_pointer_stays(self):
+        publish.publish(self.a, self.root)
+        rel = self.a["manifest.json"]["release"]
+        base = os.path.join(self.root, "releases", rel)
+        with open(os.path.join(base, "rules.json"), "ab") as f:                       # damaged in place: same name, same manifest, other bytes
+            f.write(b" ")
+        with self.assertRaises(publish.PublishError) as cm:
+            publish.publish(self.a, self.root)
+        self.assertIn("differs", str(cm.exception))
+        with open(os.path.join(self.root, "latest.json")) as f:
+            self.assertEqual(json.load(f)["release"], rel)
+        os.unlink(os.path.join(base, "rules.json"))
+        with self.assertRaises(publish.PublishError) as cm:
+            publish.publish(self.a, self.root)
+        self.assertIn("missing", str(cm.exception))
+
+    def test_a_name_collision_with_different_file_contents_is_refused(self):
+        """Same release name (first ten hex digits), same content_hash claimed, but a different file index: never reused."""
+        publish.publish(self.a, self.root)
+        other = copy.deepcopy(self.a)
+        other["rules.json"]["spec_edition"] = "9.99"
+        other["manifest.json"]["files"]["rules.json"] = {"path": "rules.json", "bytes": 1, "sha256": "0" * 64}
+        with self.assertRaises(publish.PublishError):
+            publish.publish(other, self.root)
+        self.assertEqual(self.live(), self.a["manifest.json"]["release"])
+        self.assertEqual([n for n in os.listdir(os.path.join(self.root, "releases")) if n.startswith(".")], [])
+
+    def test_the_builder_inputs_record_follows_the_rules_and_never_leaves_temp_files(self):
+        publish.publish(self.a, self.root)
+        publish.write_inputs(self.root, self.a["manifest.json"]["release"], publish.build_inputs_id())
+        self.assertTrue(publish.inputs_current(self.root))
+        publish.write_inputs(self.root, self.a["manifest.json"]["release"], "something else")
+        self.assertFalse(publish.inputs_current(self.root), "a changed rules summary or builder code is noticed")
+        publish.write_inputs(self.root, "e99999-0000000000", publish.build_inputs_id())
+        self.assertFalse(publish.inputs_current(self.root), "a record for another release does not count")
+        self.assertEqual([n for n in os.listdir(self.root) if ".tmp-" in n], [])
+
     def test_a_crash_before_the_pointer_swap_leaves_the_old_release_live_and_whole(self):
         publish.publish(self.a, self.root)
         old = self.a["manifest.json"]["release"]

@@ -39,7 +39,7 @@ def main(argv=None):
     ap.add_argument("--league-name", default="DFL Development League")
     ap.add_argument("--keep", type=int, default=6, help="releases to keep (older ones are also kept for one hour after being superseded)")
     ap.add_argument("--wait", type=float, default=0, help="seconds to wait for another exporter to finish (default 0: exit 75 at once if one is running)")
-    ap.add_argument("--skip-if-current", action="store_true", help="do nothing (beyond the status heartbeat) if the league has committed no event the live release lacks")
+    ap.add_argument("--skip-if-current", action="store_true", help="do nothing (beyond the status heartbeat) if the league has committed no event the live release lacks and the rules summary and builder code are unchanged")
     ap.add_argument("--runner-status", help="the runner's runner_status.json, for the public status file (default: next to the league file)")
     ap.add_argument("--no-status", action="store_true", help="do not write feed/status.json")
     ap.add_argument("--allow-older", action="store_true", help="publish even if the league has fewer events than the live release (after restoring an older league on purpose)")
@@ -67,7 +67,11 @@ def main(argv=None):
             progress = {"league": None, "published": ST.published_events(a.out), "release": publish._live_release(a.out)}
             try:
                 progress["league"] = ST.league_events(a.league)
-                if a.skip_if_current and progress["published"] is not None and progress["league"] <= progress["published"]:
+                # Skip only when nothing the feed is built from has changed: no new event, AND the rules summary / builder code the live release was
+                # built with are still the ones in force (a changed rules edition at the same event must republish; found 2026-10-31). A league with FEWER
+                # events than the live release (restored older league) is still skipped, as before.
+                if (a.skip_if_current and progress["published"] is not None
+                        and (progress["league"] < progress["published"] or (progress["league"] == progress["published"] and publish.inputs_current(a.out)))):
                     if not a.no_status:
                         ST.update(a.out, progress["league"], progress["published"], progress["release"], True, seconds=round(time.time() - t0, 2), runner=runner, previous=previous)
                     print(json.dumps({"skipped": True, "events": progress["league"], "published_events": progress["published"], "release": progress["release"]}, sort_keys=True))
@@ -117,6 +121,7 @@ def _export(a, scratch, lock, t0, persist, feed, publish, snapshot, ST, previous
             arch.close()
     t3 = time.time()
     res = publish.publish(files, a.out, keep=a.keep, lock=lock, allow_older=a.allow_older)
+    publish.write_inputs(a.out, res["release"], publish.build_inputs_id())       # under the lock, after the pointer moved: what the live release was built from
     t4 = time.time()
     total = sum(v["bytes"] for v in files["manifest.json"]["files"].values())
     seconds = round(t4 - t0, 2)

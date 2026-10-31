@@ -249,6 +249,38 @@ class Updater(unittest.TestCase):
         self.assertEqual((s3["league_events"], s3["published_events"]), (3, 3))
         self.assertNotEqual(s3["release"], s1["release"])
 
+    def test_a_changed_rules_summary_at_the_same_event_is_republished_then_skipped_again(self):
+        """Found on the Droplet 2026-10-31: the skip check compared only event counts, so a new rules edition at the same event was never published."""
+        import contextlib
+        import io
+        from unittest import mock
+        sys.path.insert(0, TOOLS)
+        import export_public_feed
+        from dflsite import feed
+        self.run_to(2)
+        first = json.loads(self.export("--skip-if-current").stdout)
+        self.assertTrue(first["published"])
+        self.assertTrue(json.loads(self.export("--skip-if-current").stdout)["skipped"], "nothing changed: skipped")
+        with open(feed.RULES_SUMMARY, encoding="utf-8") as f:
+            edited = os.path.join(self.d, "RULES_SUMMARY.md")
+            with open(edited, "w", encoding="utf-8") as g:
+                g.write(f.read().replace("spec_edition: ", "spec_edition: 9.", 1))
+        def run_in_process():
+            buf = io.StringIO()
+            with mock.patch.object(feed, "RULES_SUMMARY", edited), contextlib.redirect_stdout(buf):
+                rc = export_public_feed.main([self.lg, "--out", self.feed, "--skip-if-current"])
+            self.assertEqual(rc, 0)
+            return json.loads(buf.getvalue().strip().splitlines()[-1])
+        second = run_in_process()
+        self.assertTrue(second.get("published"), "same event count, new rules: a new release is published")
+        self.assertNotEqual(second["release"], first["release"])
+        self.assertEqual(second["release"][:6], first["release"][:6])
+        self.assertTrue(run_in_process().get("skipped"), "and then it is current again")
+        back = json.loads(self.export("--skip-if-current").stdout)
+        self.assertEqual(back["release"], first["release"], "the original rules give the original release identity again")
+        self.assertFalse(back["published"], "which already exists with exactly this content: reused, not rewritten")
+        self.assertTrue(json.loads(self.export("--skip-if-current").stdout)["skipped"])
+
     def test_a_failed_export_is_reported_and_the_live_release_stays(self):
         self.run_to(2)
         self.export()

@@ -42,6 +42,7 @@ from . import feed
 KEEP = 6
 POINTER = "latest.json"
 LOCK = ".publish.lock"
+INPUTS = ".export_inputs.json"
 PRUNE_GRACE_SECONDS = 3600          # a superseded release stays at least this long, so a page part-way through reading it is not stranded
 STALE_TMP_SECONDS = 600             # a leftover temporary directory this old, found while holding the lock, is the debris of a dead publisher
 
@@ -138,13 +139,48 @@ def _sweep_stale(root, rel_dir, older_than):
     """Remove leftovers of dead publishers: temporary directories and pointer temp files older than `older_than` seconds. Only called while
     holding the lock. Returns the names removed."""
     now, gone = time.time(), []
-    for base, prefix in ((rel_dir, ".tmp-"), (root, f".{POINTER}.tmp-")):
+    for base, prefix in ((rel_dir, ".tmp-"), (root, f".{POINTER}.tmp-"), (root, f"{INPUTS}.tmp-")):
         for name in os.listdir(base):
             path = os.path.join(base, name)
             if name.startswith(prefix) and now - os.path.getmtime(path) > older_than:
                 shutil.rmtree(path, ignore_errors=True) if os.path.isdir(path) else _unlink(path)
                 gone.append(name)
     return gone
+
+
+def build_inputs_id():
+    """A fingerprint of everything the feed builder reads besides the league: the public rules summary (and the spec edition it names), the feed
+    builder's own code and the format version. If it changes, the feed must be rebuilt even when the league has committed no new event."""
+    h = hashlib.sha256()
+    h.update(feed.canonical(feed.rules_file()).encode("utf-8"))
+    h.update(json.dumps([feed.spec_edition(), feed.FORMAT, feed.FORMAT_VERSION, feed.FORMAT_MINOR]).encode("utf-8"))
+    with open(feed.__file__, "rb") as f:
+        h.update(f.read())
+    return h.hexdigest()
+
+
+def read_inputs(root):
+    """What the live release was last built from: {"release", "inputs"} or None. A private dotfile in the feed root (the web server never serves it)."""
+    try:
+        with open(os.path.join(root, INPUTS), "rb") as f:
+            d = json.loads(f.read())
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def write_inputs(root, release, inputs):
+    """Record, atomically and under the publisher lock, the builder fingerprint the live `release` was built (or checked) with."""
+    tmp = os.path.join(root, f"{INPUTS}.tmp-{os.getpid()}")
+    _write(tmp, feed.canonical({"release": release, "inputs": inputs}).encode("utf-8"))
+    os.replace(tmp, os.path.join(root, INPUTS))
+    _fsync_dir(root)
+
+
+def inputs_current(root):
+    """True if the live release was built with the builder inputs that are in force now."""
+    rec = read_inputs(root)
+    return bool(rec) and rec.get("release") == _live_release(root) and rec.get("inputs") == build_inputs_id()
 
 
 def _unlink(path):
@@ -208,13 +244,23 @@ def publish(files, root, keep=KEEP, crash_hook=None, lock=None, wait=0, grace=PR
     if published:
         raw_manifest, man = feed.canonical(manifest).encode("utf-8"), manifest
     else:
-        # The release already exists (same name = same content; only `generated_at` can differ). The pointer must describe the bytes ON DISK, never a
-        # fresh manifest that was not written (found on the Droplet 2026-10-31: the pointer's manifest_sha256 matched no file).
+        # The release already exists. Same name only means same first ten hex digits of the content hash, so it is reused ONLY if what is on disk is
+        # exactly what was built now: the same file index, and every file's bytes matching it (a changed rules summary, a damaged file or a name collision
+        # is refused and the pointer is not touched). Only `generated_at` may differ. The pointer must describe the bytes ON DISK, never a fresh manifest
+        # that was not written (found on the Droplet 2026-10-31: the pointer's manifest_sha256 matched no file).
         with open(os.path.join(final, "manifest.json"), "rb") as f:
             raw_manifest = f.read()
         man = json.loads(raw_manifest)
-        if man.get("content_hash") != manifest["content_hash"]:
+        if man.get("content_hash") != manifest["content_hash"] or man.get("files") != manifest["files"]:
             raise PublishError(f"release {release} exists with different content; refusing to point at it")
+        for name, entry in manifest["files"].items():
+            try:
+                with open(os.path.join(final, name), "rb") as f:
+                    raw = f.read()
+            except OSError:
+                raise PublishError(f"release {release} exists but {name} is missing; refusing to point at it") from None
+            if _sha(raw) != entry["sha256"] or len(raw) != entry["bytes"]:
+                raise PublishError(f"release {release} exists but {name} differs from what was built; refusing to point at it")
     pointer = {"format": feed.FORMAT, "format_version": feed.FORMAT_VERSION, "release": release, "manifest_sha256": _sha(raw_manifest),
                "content_hash": man["content_hash"], "generated_at": man["generated_at"]}
     ptmp = os.path.join(root, f".{POINTER}.tmp-{os.getpid()}")
