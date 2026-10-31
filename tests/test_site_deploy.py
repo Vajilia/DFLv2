@@ -323,6 +323,7 @@ class FoundAtDeployment(unittest.TestCase):
         inst = read(os.path.join(DEPLOY, "install_league.sh"))
         self.assertIn("pause", inst, "the league is installed paused")
         self.assertIn('[ -e "$LG" ]', inst, "an existing league is never overwritten")
+        self.assertNotIn("--snapshot-every", inst, "the default (a snapshot after every event) keeps the exporter from replaying game weeks")
 
     def _snapshot(self, tar_rc):
         d = tempfile.mkdtemp(prefix="dflsnap")

@@ -2,7 +2,8 @@
 # Install the development league's runner and the one-minute exporter, with the league PAUSED. Run as root on the server, after deploy_pinned.sh.
 #   install_league.sh [--seed N]       (BASE, SERVICE_USER may be set)
 # What it does: installs numpy from the distribution (the engine needs it); creates /srv/dflv2/league/league.db ONCE (never over an existing league)
-# as the service user, with the full 22-player engine and the permanent archive; creates the PAUSED file; installs and starts the exporter timer and
+# as the service user, with the full 22-player engine, the permanent archive and a snapshot after EVERY event (the exporter reads the newest
+# snapshot and replays what follows it: measured on the Droplet, a snapshot every 8 events made one export replay a 82-second game week and take 3 minutes); creates the PAUSED file; installs and starts the exporter timer and
 # the runner service. It does not touch Caddy, the production site, or the production runner. The league does not advance until
 #   python3 /srv/dflv2/repo/tools/league_control.py resume
 set -eu
@@ -16,7 +17,7 @@ python3 -c 'import numpy; print("numpy", numpy.__version__)'
 mkdir -p "$BASE/league"; chown "$SERVICE_USER":"$SERVICE_USER" "$BASE/league"; chmod 750 "$BASE/league"
 LG="$BASE/league/league.db"
 if [ -e "$LG" ]; then say "league exists, left alone: $LG"; else
-  runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/league_store.py" init "$LG" --seed "$SEED" --snapshot-every 8
+  runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/league_store.py" init "$LG" --seed "$SEED"
   say "league created: $LG (seed $SEED)"
 fi
 [ -e "$BASE/league/PAUSED" ] || runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/league_control.py" pause --dir "$BASE/league" --reason "installed; waiting for the owner to approve a pace"

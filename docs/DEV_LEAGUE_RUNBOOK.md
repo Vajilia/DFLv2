@@ -31,6 +31,13 @@ Pause is a file (`/srv/dflv2/league/PAUSED`): it survives restarts and reboots. 
 * The exporter works on a copy, so a crash or a full disk during an export leaves the live release untouched.
 * If the engine code on disk differs from the code that wrote the league, the league **refuses to open** (that protects it): the runner reports `error`, the page says so. Do not edit around it. Either redeploy the matching revision or start a new development league on purpose.
 
+## Measured on the Droplet (1 vCPU, 2 GB), 2026-10-31
+
+* A **game week** event takes about **82 s** of CPU (one process, ~150 MB peak memory); offseason events take 0.4–2.4 s; a tour round about 23 s.
+* The runner archive grows about **7 MB per game week**; the league file itself is small (2 MB after 12 events).
+* An export of a league whose newest snapshot is current takes about 1 s and ~70 MB. If the snapshot is several events behind, the exporter replays them: with a snapshot every 8 events one export took 183 s. **The league therefore takes a snapshot after every event** (the default; `install_league.sh` no longer overrides it).
+* While the runner is busy, the low-priority exporter gets about half a CPU; the web page and the production site answered in 0.09–0.25 s throughout.
+
 ## Installing
 
     sh /srv/dflv2/repo/deploy/website/deploy_pinned.sh <commit>      # code + site, verified against the commit
