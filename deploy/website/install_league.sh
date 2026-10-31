@@ -21,6 +21,8 @@ if [ -e "$LG" ]; then say "league exists, left alone: $LG"; else
   say "league created: $LG (seed $SEED)"
 fi
 [ -e "$BASE/league/PAUSED" ] || runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/league_control.py" pause --dir "$BASE/league" --reason "installed; waiting for the owner to approve a pace"
+# settings file: only if absent. The limit 0 means "advance nothing"; the owner's approved pace and limit are written by hand (docs/DEV_LEAGUE_RUNBOOK.md).
+if [ ! -e /etc/dflv2/league.env ]; then mkdir -p /etc/dflv2; printf '# written by install_league.sh; edit, then: systemctl restart dflv2-league\nDFL_PACE=900\nDFL_UNTIL=0\n' > /etc/dflv2/league.env; chmod 644 /etc/dflv2/league.env; fi
 for u in dfl-feed-export.service dfl-feed-export.timer dflv2-league.service; do cp "$BASE/repo/deploy/website/$u" "/etc/systemd/system/$u"; done
 systemctl daemon-reload
 systemctl enable dfl-feed-export.timer dflv2-league.service

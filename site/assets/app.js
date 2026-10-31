@@ -95,6 +95,7 @@
       return { level: 'bad', text: 'The last update attempt failed (' + ((ex.error && ex.error.type) || 'error') + '). The data shown is the last good release' + (ex.last_success_at ? ' (' + fmtStamp(ex.last_success_at) + ')' : '') + '.' };
     if (rn && rn.state === 'error') return { level: 'bad', text: 'The simulation runner stopped with an error (' + ((rn.error && rn.error.type) || 'error') + '). No new events until it is fixed.' };
     if (!rn) return { level: 'warn', text: 'No simulation runner status is available.' };
+    if (rn.limit_reached) return { level: 'paused', text: 'Review limit reached: the league stopped by design at ' + (rn.until_events != null ? rn.until_events : rn.events) + ' events and is waiting for the owner\u2019s review. It is not advancing.' };
     if (rn.state === 'paused') return { level: 'paused', text: 'Simulation paused. The league is not advancing.' };
     if (rn.state === 'stopped') return { level: 'paused', text: 'Simulation stopped. The league is not advancing.' };
     var ru = Date.parse(rn.updated_at);

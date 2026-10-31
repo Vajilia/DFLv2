@@ -46,6 +46,10 @@ Pause is a file (`/srv/dflv2/league/PAUSED`): it survives restarts and reboots. 
 First publication into a feed that holds the old fixed preview needs `--allow-older` once (the new league has fewer events than the seed):
 `EXPORT_ARGS="--allow-older" sh /srv/dflv2/repo/deploy/website/refresh.sh /srv/dflv2/league/league.db`.
 
+## The capped development trial
+
+Settings live in `/etc/dflv2/league.env` (`DFL_PACE`, `DFL_UNTIL`). **`DFL_UNTIL` is required**: a missing or malformed limit makes the service refuse to start (`none` removes it on purpose). The limit counts the league's *total* committed events and is checked before every event, so restarts and reboots cannot exceed it. The pace is a minimum gap between event *starts*, kept across restarts in `runner_status.json`: after any downtime at most one event fires, then the full gap is waited; there is no catch-up. At the limit the runner publishes nothing itself, stops (exit 0, no restart) and the page says *Review limit reached*; the exporter keeps running and publishes the final committed state. Every event appends a line to `/srv/dflv2/league/events.jsonl` (seconds, runner and machine memory, file sizes): private, for review.
+
 ## Not decided here
 
 The pace (`DFL_PACE` in `/etc/dflv2/league.env`, read by `run_league.sh`) is a temporary development value only. The service ships with a conservative default (3600 s) and the league paused; `DFL_UNTIL` can cap the total events so the league stops by itself for review. The final season pacing is not set by any file in this repository.

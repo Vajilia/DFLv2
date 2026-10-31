@@ -81,6 +81,40 @@ class Runner(unittest.TestCase):
         r = py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "3")                  # already there: fires nothing more
         self.assertEqual(chain_of(lg)["events"], 3)
 
+    def test_the_limit_is_on_total_events_and_holds_across_restarts(self):
+        lg = new_league(self.d)
+        for _ in range(3):                                                                            # restart again and again: nothing more than the limit ever fires
+            r = py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "2")
+            self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(chain_of(lg)["events"], 2)
+        s = self.rs()
+        self.assertEqual((s["state"], s["limit_reached"], s["until_events"], s["seq"]), ("stopped", True, 2, 2))
+        pub = ST.public_runner(s)
+        self.assertTrue(pub["limit_reached"])
+        r = py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "3")                   # raising the limit is the owner's deliberate act
+        self.assertEqual(chain_of(lg)["events"], 3)
+        self.assertEqual(self.rs()["seq"], 3)
+
+    def test_a_restart_never_fires_early_and_never_catches_up(self):
+        lg = new_league(self.d)
+        pace = 6
+        py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "1", "--pace", str(pace))
+        t_restart = time.time()
+        py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "2", "--pace", str(pace))   # restarted at once: must still wait out the pace
+        log = [json.loads(x) for x in open(os.path.join(self.d, "events.jsonl"))]
+        self.assertEqual([e["seq"] for e in log], [1, 2])
+        t = [time.mktime(time.strptime(e["started_at"], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone for e in log]
+        self.assertGreaterEqual(t[1] - t[0], pace - 1.5, "the second event started a full pace after the first (to the second)")
+
+    def test_every_event_leaves_a_measurement_line_and_nothing_private_is_public(self):
+        lg = new_league(self.d)
+        py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "2")
+        log = [json.loads(x) for x in open(os.path.join(self.d, "events.jsonl"))]
+        self.assertEqual(len(log), 2)
+        for k in ("seq", "key", "seconds", "vmrss_mb", "maxrss_mb", "mem_available_mb", "league_bytes", "archive_bytes", "started_at"):
+            self.assertIn(k, log[0])
+        self.assertNotIn("events.jsonl", json.dumps(ST.public_runner(self.rs())))
+
     def test_pause_stops_the_next_event_and_resume_carries_on(self):
         lg = new_league(self.d)
         p = self.start(lg, "--pace", "0.5")

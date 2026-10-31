@@ -104,6 +104,15 @@ class Health(unittest.TestCase):
         self.assertIn("not responding", r["text"])
         self.assertEqual(self.h(doc(runner="running", runner_age=-9 * 60))["level"], "ok")
 
+    def test_the_review_limit_is_shown_plainly(self):
+        d = doc(runner="stopped")
+        d["runner"].update(limit_reached=True, until_events=141, events=141)
+        r = self.h(d)
+        self.assertEqual(r["level"], "paused")
+        self.assertIn("Review limit reached", r["text"])
+        self.assertIn("141", r["text"])
+        self.assertIn("not advancing", r["text"])
+
     def test_a_missing_runner_status_is_a_warning_not_silence(self):
         self.assertEqual(self.h(doc(runner=None))["level"], "warn")
 

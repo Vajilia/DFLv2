@@ -69,7 +69,8 @@ def public_runner(rs):
         return None
     state = rs.get("state") if rs.get("state") in STATES else "error"
     out = {"state": state, "updated_at": rs.get("updated_at"), "pace_seconds": rs.get("pace_seconds"), "next_event_due": rs.get("next_event_due"),
-           "last_event_at": rs.get("last_event_at"), "events": rs.get("seq")}
+           "last_event_at": rs.get("last_event_at"), "events": rs.get("seq"), "until_events": rs.get("until_events"),
+           "limit_reached": bool(rs.get("limit_reached"))}
     err = rs.get("error")
     if isinstance(err, dict):
         out["error"] = {"type": re.sub(r"[^A-Za-z0-9_.]", "", str(err.get("type", "Error")))[:60], "at": err.get("at")}

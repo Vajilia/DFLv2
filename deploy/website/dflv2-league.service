@@ -21,8 +21,8 @@ ExecStart=/bin/sh /srv/dflv2/repo/deploy/website/run_league.sh
 TimeoutStopSec=300
 Restart=on-failure
 RestartSec=60
-# 75 = another runner already holds the lock: nothing to restart.
-RestartPreventExitStatus=75
+# 75 = another runner already holds the lock; 2 = the settings file is missing its limit: neither is cured by restarting.
+RestartPreventExitStatus=75 2
 
 [Install]
 WantedBy=multi-user.target
