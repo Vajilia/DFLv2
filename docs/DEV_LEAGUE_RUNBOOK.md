@@ -48,4 +48,4 @@ First publication into a feed that holds the old fixed preview needs `--allow-ol
 
 ## Not decided here
 
-The pace (`DFL_PACE`) is a temporary development value only. The service ships with a placeholder and the league paused. The final season pacing is not set by any file in this repository.
+The pace (`DFL_PACE` in `/etc/dflv2/league.env`, read by `run_league.sh`) is a temporary development value only. The service ships with a conservative default (3600 s) and the league paused; `DFL_UNTIL` can cap the total events so the league stops by itself for review. The final season pacing is not set by any file in this repository.

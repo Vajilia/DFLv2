@@ -314,7 +314,7 @@ class FoundAtDeployment(unittest.TestCase):
         t = read(os.path.join(DEPLOY, "Caddyfile.template"))
         self.assertIn("@latest path /feed/latest.json /feed/status.json", t)
         svc = read(os.path.join(DEPLOY, "dflv2-league.service"))
-        for need in ("User=dflv2", "ReadWritePaths=/srv/dflv2/league", "league_runner.py /srv/dflv2/league/league.db --pace", "RestartPreventExitStatus=75", "TimeoutStopSec="):
+        for need in ("User=dflv2", "ReadWritePaths=/srv/dflv2/league", "run_league.sh", "RestartPreventExitStatus=75", "TimeoutStopSec="):
             self.assertIn(need, svc)
         self.assertNotIn("/srv/dflv2/feed", svc, "the runner cannot write the public feed")
         exp = read(os.path.join(DEPLOY, "dfl-feed-export.service"))
@@ -324,6 +324,29 @@ class FoundAtDeployment(unittest.TestCase):
         self.assertIn("pause", inst, "the league is installed paused")
         self.assertIn('[ -e "$LG" ]', inst, "an existing league is never overwritten")
         self.assertNotIn("--snapshot-every", inst, "the default (a snapshot after every event) keeps the exporter from replaying game weeks")
+
+    def test_run_league_reads_pace_and_limit_from_the_env_file(self):
+        d = tempfile.mkdtemp(prefix="dflrl")
+        try:
+            os.makedirs(os.path.join(d, "repo", "tools"))
+            write(os.path.join(d, "repo", "tools", "league_runner.py"), "")
+            fake = os.path.join(d, "py")
+            write(fake, '#!/bin/sh\nprintf "%s\\n" "$@"\n', 0o755)
+            env_file = os.path.join(d, "league.env")
+
+            def run():
+                r = subprocess.run(["sh", os.path.join(DEPLOY, "run_league.sh")], capture_output=True, text=True,
+                                   env=dict(os.environ, BASE=d, PYTHON=fake, LEAGUE_ENV=env_file))
+                self.assertEqual(r.returncode, 0, r.stderr)
+                return r.stdout.split()
+            self.assertEqual(run()[-2:], ["--pace", "3600"], "no env file: the conservative default, no limit")
+            self.assertNotIn("--until-events", run())
+            write(env_file, "DFL_PACE=900\nDFL_UNTIL=141\n")
+            a = run()
+            self.assertEqual(a[a.index("--pace") + 1], "900")
+            self.assertEqual(a[a.index("--until-events") + 1], "141")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
 
     def _snapshot(self, tar_rc):
         d = tempfile.mkdtemp(prefix="dflsnap")

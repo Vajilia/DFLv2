@@ -23,5 +23,7 @@ fi
 [ -e "$BASE/league/PAUSED" ] || runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/league_control.py" pause --dir "$BASE/league" --reason "installed; waiting for the owner to approve a pace"
 for u in dfl-feed-export.service dfl-feed-export.timer dflv2-league.service; do cp "$BASE/repo/deploy/website/$u" "/etc/systemd/system/$u"; done
 systemctl daemon-reload
-systemctl enable --now dfl-feed-export.timer dflv2-league.service
+systemctl enable dfl-feed-export.timer dflv2-league.service
+# restart (not just start) so a changed unit takes effect; the runner stops cleanly and the PAUSED file keeps the league still
+systemctl restart dfl-feed-export.timer dflv2-league.service
 say "installed. The league is PAUSED. status:"; python3 -I "$BASE/repo/tools/league_control.py" status --dir "$BASE/league"
