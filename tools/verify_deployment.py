@@ -11,6 +11,7 @@ Standard library only (no league, no engine, no numpy), so it runs on the server
 Exit status 0 when nothing FAILED (warnings are listed), 1 otherwise.
 """
 import argparse
+import calendar
 import hashlib
 import http.client
 import json
@@ -141,6 +142,24 @@ def check_site(base, rep, profile, require_map):
     return ptr
 
 
+def check_status(raw, rep):
+    """The heartbeat the page turns into its health line: valid, public-safe, recent; says plainly what state the league is in."""
+    try:
+        d = json.loads(raw)
+        assert d["format"] == "dfl-feed-status" and d["format_version"] == 1
+    except (ValueError, KeyError, AssertionError, TypeError):
+        rep.fail("status heartbeat is a dfl-feed-status v1 file", "unreadable or not the expected format")
+        return
+    text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+    leaked = [w for w in ("/srv", "/tmp", "pid", "Traceback", "message") if w in text]
+    rep.check(not leaked, "the status heartbeat carries nothing private", "", f"contains {leaked}")
+    age = time.time() - calendar.timegm(time.strptime(d["checked_at"], "%Y-%m-%dT%H:%M:%SZ"))
+    ex, rn = d.get("export") or {}, d.get("runner") or {}
+    rep.check(age < 300, "the exporter reported within the last 5 minutes", f"{int(age)} s ago", f"{int(age)} s ago: updates look stalled")
+    rep.check(ex.get("ok") is True, "the last export succeeded", "", f"failed: {ex.get('error')}")
+    rep.ok("league state", f"runner {rn.get('state', 'none')}, {d.get('league_events')} events in the league, {d.get('published_events')} published")
+
+
 def check_caddy(base, host, rep):
     """What the Caddy configuration promises: headers, caching, HTTPS."""
     base = base.rstrip("/")
@@ -159,6 +178,12 @@ def check_caddy(base, host, rep):
     if ptr is not None:
         st, h, _ = fetch(f"{base}/feed/releases/{ptr['release']}/manifest.json")
         rep.check("immutable" in h.get("cache-control", ""), "a published release is cacheable for good", h.get("cache-control", ""), h.get("cache-control", "(none)"))
+    st, h, b = fetch(base + "/feed/status.json")
+    if st == 200:
+        rep.check("no-store" in h.get("cache-control", ""), "the status heartbeat is never cached", h.get("cache-control", ""), h.get("cache-control", "(none)"))
+        check_status(b, rep)
+    else:
+        rep.warn("no status heartbeat (feed/status.json)", f"HTTP {st}: the page shows no stale/error/paused line until the exporter has run once")
     st, _, b = fetch(base + "/feed/.publish.lock")
     rep.check(st == 404, "the publisher lock file is not served", f"HTTP {st}", f"HTTP {st}: {b[:60]!r}")
     st, h, b = fetch(base + "/feed/releases/../../etc/passwd")

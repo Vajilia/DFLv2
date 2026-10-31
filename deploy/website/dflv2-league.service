@@ -1,0 +1,28 @@
+[Unit]
+Description=DFLv2 development league runner (the only process that advances the league)
+After=network.target
+
+[Service]
+Type=simple
+User=dflv2
+Group=dflv2
+Nice=10
+MemoryMax=1200M
+ProtectSystem=strict
+ReadWritePaths=/srv/dflv2/league
+ReadOnlyPaths=/srv/dflv2/repo
+PrivateTmp=true
+NoNewPrivileges=true
+# Pace, in seconds between event starts. NOT decided: it is set only after the league owner approves a pace (see docs/DEV_LEAGUE_RUNBOOK.md). The unit is
+# installed with the league PAUSED (the file /srv/dflv2/league/PAUSED), so starting this service advances nothing until `league_control.py resume`.
+Environment=DFL_PACE=3600
+ExecStart=/usr/bin/python3 -I /srv/dflv2/repo/tools/league_runner.py /srv/dflv2/league/league.db --pace ${DFL_PACE}
+# SIGTERM makes the runner finish the event it is committing and stop; give it time to do that.
+TimeoutStopSec=300
+Restart=on-failure
+RestartSec=60
+# 75 = another runner already holds the lock: nothing to restart.
+RestartPreventExitStatus=75
+
+[Install]
+WantedBy=multi-user.target

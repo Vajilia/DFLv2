@@ -47,7 +47,7 @@ class Static(unittest.TestCase):
         for ref in re.findall(r'(?:href|src)="(assets/[^"]+)"', html):
             self.assertTrue(os.path.exists(os.path.join(SITE, ref)), ref)
         js = text("assets", "app.js")
-        self.assertEqual(re.findall(r"fetch\(([^)]*)\)", js), ["url, fresh ? { cache: 'no-store' } : {}", "'assets/map/map.json', { cache: 'no-store' }"])   # the feed, and the site's own map description
+        self.assertEqual(re.findall(r"fetch\(([^)]*)\)", js), ["url, fresh ? { cache: 'no-store' } : {}", "BASE + 'status.json', { cache: 'no-store' }", "'assets/map/map.json', { cache: 'no-store' }"])   # the feed, its status heartbeat, and the site's own map description
         self.assertIn("var BASE = 'feed/';", js)
         self.assertNotIn("POST", js)
         self.assertNotIn("method:", js)
@@ -199,7 +199,13 @@ class Browser(unittest.TestCase):
     def setUpClass(cls):
         import socketserver
         import preview_site
-        preview_site.Handler.feed_root = FIXTURE
+        cls.tmpfeed = tempfile.mkdtemp()                        # the frozen feed plus a status heartbeat, as a deployed feed has (a missing one is a logged 404)
+        shutil.copytree(FIXTURE, os.path.join(cls.tmpfeed, "f"))
+        from dflsite import status as ST
+        ST.write_atomic(os.path.join(cls.tmpfeed, "f", "status.json"), {"format": "dfl-feed-status", "format_version": 1, "checked_at": ST.now_iso(), "league_events": 1, "published_events": 1,
+                        "release": "x", "export": {"ok": True, "error": None, "last_success_at": ST.now_iso(), "last_publish_at": ST.now_iso(), "seconds": 1},
+                        "runner": {"state": "running", "updated_at": ST.now_iso(), "next_event_due": None, "events": 1, "pace_seconds": 60, "last_event_at": ST.now_iso()}})
+        preview_site.Handler.feed_root = os.path.join(cls.tmpfeed, "f")
         preview_site.Handler.site_root = preview_site.SITE
         socketserver.TCPServer.allow_reuse_address = True
         cls.srv = socketserver.TCPServer(("127.0.0.1", 0), preview_site.Handler)
@@ -214,6 +220,7 @@ class Browser(unittest.TestCase):
         cls.pw.stop()
         cls.srv.shutdown()
         cls.srv.server_close()
+        shutil.rmtree(cls.tmpfeed, ignore_errors=True)
 
     def visit(self, width, routes):
         page = self.browser.new_page(viewport={"width": width, "height": 900})

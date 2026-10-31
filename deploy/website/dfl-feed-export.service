@@ -20,4 +20,6 @@ SuccessExitStatus=75
 PrivateTmp=true
 NoNewPrivileges=true
 Environment=BASE=/srv/dflv2
+# Every minute the exporter only looks (and rewrites feed/status.json); it builds and publishes a release only when the league has a new committed event.
+Environment=EXPORT_ARGS=--skip-if-current
 ExecStart=/srv/dflv2/repo/deploy/website/refresh.sh /srv/dflv2/league/league.db

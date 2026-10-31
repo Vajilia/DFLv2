@@ -75,6 +75,33 @@
     if (!o || o.format !== FORMAT) throw new Error(what + ' is not a ' + FORMAT + ' feed');
     if (o.format_version !== VERSION) throw new Error(what + ' is feed version ' + o.format_version + '; this page reads version ' + VERSION + '. The site needs updating.');
   }
+  // feed/status.json is a heartbeat the exporter rewrites every minute; it is not part of a release. Its absence or a bad file is not an error of the
+  // league (an older deployment has none): the page then simply shows no health line beyond the publication time.
+  var STALE_MS = 5 * 60000, RUNNER_STALE_MS = 10 * 60000;
+  function loadStatus() {
+    if (window.DFL_EMBED) return Promise.resolve(null);
+    return fetch(BASE + 'status.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
+      return o && o.format === 'dfl-feed-status' && o.format_version === 1 ? o : null;
+    }).catch(function () { return null; });
+  }
+  // health(status, now) -> {level: 'ok'|'paused'|'warn'|'bad', text}. Pure, so it is tested on its own.
+  function health(st, now) {
+    if (!st) return null;
+    var chk = Date.parse(st.checked_at), ex = st.export || {}, rn = st.runner;
+    function age(ms) { var m = Math.round(ms / 60000); return m < 1 ? 'under a minute' : m < 90 ? m + ' min' : Math.round(m / 60) + ' h'; }
+    if (isNaN(chk) || now - chk > STALE_MS)
+      return { level: 'bad', text: 'Updates may be stalled: the update service last reported ' + (isNaN(chk) ? 'at an unknown time' : age(now - chk) + ' ago') + '. The data shown is the last published.' };
+    if (ex.ok === false)
+      return { level: 'bad', text: 'The last update attempt failed (' + ((ex.error && ex.error.type) || 'error') + '). The data shown is the last good release' + (ex.last_success_at ? ' (' + fmtStamp(ex.last_success_at) + ')' : '') + '.' };
+    if (rn && rn.state === 'error') return { level: 'bad', text: 'The simulation runner stopped with an error (' + ((rn.error && rn.error.type) || 'error') + '). No new events until it is fixed.' };
+    if (!rn) return { level: 'warn', text: 'No simulation runner status is available.' };
+    if (rn.state === 'paused') return { level: 'paused', text: 'Simulation paused. The league is not advancing.' };
+    if (rn.state === 'stopped') return { level: 'paused', text: 'Simulation stopped. The league is not advancing.' };
+    var ru = Date.parse(rn.updated_at);
+    if (isNaN(ru) || now - ru > RUNNER_STALE_MS) return { level: 'bad', text: 'The simulation runner is not responding (last heard ' + (isNaN(ru) ? 'never' : age(now - ru) + ' ago') + ').' };
+    var due = Date.parse(rn.next_event_due);
+    return { level: 'ok', text: 'Simulation running' + (!isNaN(due) && due > now ? '; next event about ' + fmtStamp(rn.next_event_due) : '') + '.' };
+  }
   function loadPointer() {
     return getJSON(BASE + 'latest.json', true).then(function (p) { checkFormat(p, 'latest.json'); return p; });
   }
@@ -456,13 +483,15 @@
     st.appendChild(h('span', { class: 'updated' + (S.fresh > Date.now() - 20000 ? ' fresh' : ''), title: 'Published ' + m.generated_at + ' (this is when the data last changed; a quiet league publishes nothing new)' },
       'Last published update ', h('b', { text: fmtStamp(m.generated_at) }), ' (' + ago(m.generated_at) + ')'));
     if (S.recovered && S.recovered > Date.now() - 30000) st.appendChild(h('span', { class: 'updated fresh', text: 'Switched to the newest release' }));
+    var hl = health(S.status, Date.now());
+    if (hl) st.appendChild(h('span', { class: 'health ' + hl.level, role: hl.level === 'bad' ? 'alert' : 'status', 'data-health': hl.level, text: hl.text }));
     clear(ft);
     ft.appendChild(h('p', { class: 'muted', style: 'font-size:14px;max-width:none' },
       'Release ' + m.release + ' · feed format ' + m.format_version + '.' + m.format_minor + ' · league ' + m.league.id.slice(0, 8) + ' · content ' + m.content_hash.slice(0, 10) + '. ',
       'This page only reads published data; it cannot change the league. It checks for a newer release every minute.'));
   }
   function check() {
-    return loadPointer().then(function (p) {
+    return loadStatus().then(function (stt) { S.status = stt; return loadPointer(); }).then(function (p) {
       if (S.ptr && p.release === S.ptr.release) { chrome(); return; }
       var first = !S.ptr;
       return loadRelease(p).then(function () { if (!first) S.fresh = Date.now(); chrome(); return render(); });
@@ -474,5 +503,5 @@
   window.addEventListener('hashchange', function () { if (S.manifest) { render(); window.scrollTo(0, 0); } });
   check();
   if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
-  window.DFL_VIEWER = { render: render, state: S };
+  window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome };
 })();

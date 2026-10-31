@@ -15,9 +15,9 @@ __HOST__ {
 			Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 		}
 		@feed path /feed/*
-		@latest path /feed/latest.json
+		@latest path /feed/latest.json /feed/status.json
 		@release path /feed/releases/*
-		# site files are revalidated each time; the pointer is never cached; a published release directory never changes, so it may be cached for long
+		# site files are revalidated each time; the pointer and the status heartbeat are never cached; a published release directory never changes, so it may be cached for long
 		header Cache-Control "no-cache"
 		header @release Cache-Control "public, max-age=31536000, immutable"
 		header @latest Cache-Control "no-store"

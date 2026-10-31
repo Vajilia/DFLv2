@@ -2,9 +2,9 @@
 Description=Refresh the DFLv2 public feed
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=5min
-AccuracySec=30s
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=5s
 
 [Install]
 WantedBy=timers.target

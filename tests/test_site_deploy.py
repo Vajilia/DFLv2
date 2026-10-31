@@ -310,6 +310,20 @@ class FoundAtDeployment(unittest.TestCase):
         self.assertIn("root /srv/dflv2\n", t)
         self.assertIn("root /srv/dflv2/site/current\n", t)
 
+    def test_the_status_heartbeat_is_never_cached_and_the_units_match_the_design(self):
+        t = read(os.path.join(DEPLOY, "Caddyfile.template"))
+        self.assertIn("@latest path /feed/latest.json /feed/status.json", t)
+        svc = read(os.path.join(DEPLOY, "dflv2-league.service"))
+        for need in ("User=dflv2", "ReadWritePaths=/srv/dflv2/league", "league_runner.py /srv/dflv2/league/league.db --pace", "RestartPreventExitStatus=75", "TimeoutStopSec="):
+            self.assertIn(need, svc)
+        self.assertNotIn("/srv/dflv2/feed", svc, "the runner cannot write the public feed")
+        exp = read(os.path.join(DEPLOY, "dfl-feed-export.service"))
+        self.assertIn("EXPORT_ARGS=--skip-if-current", exp)
+        self.assertIn("OnUnitInactiveSec=1min", read(os.path.join(DEPLOY, "dfl-feed-export.timer")))
+        inst = read(os.path.join(DEPLOY, "install_league.sh"))
+        self.assertIn("pause", inst, "the league is installed paused")
+        self.assertIn('[ -e "$LG" ]', inst, "an existing league is never overwritten")
+
     def _snapshot(self, tar_rc):
         d = tempfile.mkdtemp(prefix="dflsnap")
         try:

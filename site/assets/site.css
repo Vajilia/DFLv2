@@ -56,3 +56,8 @@ footer { padding-inline: 16px; padding-bottom: 32px; }
 .kv dd { overflow-wrap: anywhere; }
 body { overflow-x: hidden; }
 @media (max-width: 760px) { .confs { grid-template-columns: minmax(0, 1fr); } }
+
+.health { display: block; flex-basis: 100%; font-size: 15px; padding: 4px 10px; border-left: 4px solid var(--line); color: var(--muted); }
+.health.ok { border-left-color: var(--accent); color: inherit; }
+.health.paused, .health.warn { border-left-color: #C9A227; color: inherit; }
+.health.bad { border-left-color: var(--loss); background: #3A1414; color: #FFD6D6; }
