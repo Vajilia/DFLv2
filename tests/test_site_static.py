@@ -47,7 +47,7 @@ class Static(unittest.TestCase):
         for ref in re.findall(r'(?:href|src)="(assets/[^"]+)"', html):
             self.assertTrue(os.path.exists(os.path.join(SITE, ref)), ref)
         js = text("assets", "app.js")
-        self.assertEqual(re.findall(r"fetch\(([^)]*)\)", js), ["url, opts", "BASE + 'status.json', { cache: 'no-store' }", "'assets/map/map.json', { cache: 'no-store' }"])   # the feed (one helper, whose cache option is chosen inside it), its status heartbeat, and the site's own map description
+        self.assertEqual(re.findall(r"fetch\(\s*['\"]https?:", js), [], "the page never fetches an absolute address")   # what it actually requests is checked by behaviour in Browser.test_the_page_requests_only_the_feed_the_status_the_map_and_its_own_files
         self.assertIn("var BASE = 'feed/';", js)
         self.assertNotIn("POST", js)
         self.assertNotIn("method:", js)
@@ -262,6 +262,15 @@ class Browser(unittest.TestCase):
         self.assertIn("team not found", seen["team/NOPE"][0].lower())
         self.assertIn("map", seen["map"][0].lower())
         self.assertIn("design document edition", seen["rules"][0].lower())
+
+    def test_the_page_requests_only_the_feed_the_status_the_map_and_its_own_files(self):
+        """By behaviour, not by reading the source: every route is opened in a real browser and every request it makes must be the site's own file or a feed file."""
+        _, _, requests, _ = self.visit(1200, self.ROUTES)
+        base = f"http://127.0.0.1:{self.port}/"
+        allowed = re.compile(r"^" + re.escape(base) + r"(?:|index\.html|assets/[^?#]+|feed/latest\.json|feed/status\.json|feed/releases/[^/]+/(?:rosters/)?[^/]+\.json)(?:[?#].*)?$")
+        self.assertEqual([u for u in requests if not allowed.match(u)], [])
+        for need in ("feed/latest.json", "feed/status.json", "/manifest.json", "assets/map/map.json"):
+            self.assertTrue(any(need in u for u in requests), f"the page never requested {need}")
 
     def test_the_official_map_is_shown(self):
         page = self.browser.new_page(viewport={"width": 1200, "height": 900})
