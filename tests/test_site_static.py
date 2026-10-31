@@ -230,6 +230,7 @@ class Browser(unittest.TestCase):
         page.on("request", lambda r: requests.append(r.url))
         seen = {}
         for r in routes:
+            page.goto("about:blank")                                    # a full load per route: a hash-only change keeps the old page's h1 on screen, and a loaded machine could read it too early
             page.goto(f"http://127.0.0.1:{self.port}/#/{r}")
             page.wait_for_selector("#app h1, #app .err", timeout=15000)
             seen[r] = (page.inner_text("#app"), page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth"))
