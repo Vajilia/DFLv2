@@ -39,6 +39,9 @@ def main(argv=None):
     ap.add_argument("--league-name", default="DFL Development League")
     ap.add_argument("--keep", type=int, default=6, help="releases to keep (older ones are also kept for one hour after being superseded)")
     ap.add_argument("--wait", type=float, default=0, help="seconds to wait for another exporter to finish (default 0: exit 75 at once if one is running)")
+    ap.add_argument("--skip-if-current", action="store_true", help="do nothing (beyond the status heartbeat) if the league has committed no event the live release lacks")
+    ap.add_argument("--runner-status", help="the runner's runner_status.json, for the public status file (default: next to the league file)")
+    ap.add_argument("--no-status", action="store_true", help="do not write feed/status.json")
     ap.add_argument("--allow-older", action="store_true", help="publish even if the league has fewer events than the live release (after restoring an older league on purpose)")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--use-league-code", action="store_true", help="read the league under the code recorded in the league file")
@@ -55,40 +58,28 @@ def main(argv=None):
             sys.path.insert(0, os.path.join(os.path.abspath(engine_dir), "src"))     # dfl (the engine) from the league's own code
         from dfl import persist
         from dflsite import feed, publish, snapshot
+        from dflsite import status as ST
         t0 = time.time()
         with publish.PublisherLock(a.out, a.wait) as lock:           # one exporter at a time, from before the snapshot until after the pointer moves
-            copy = os.path.join(scratch, "league.db")
-            persist.backup(a.league, copy)
-            t1 = time.time()
-            r = persist.Runner.open(copy, heal=False, with_archive=False)
-            t2 = time.time()
-            warnings, arch, archive_used = [], None, False
+            status_path = os.path.join(a.out, ST.FILE)
+            previous = ST.read(status_path)
+            runner = ST.read(a.runner_status or os.path.join(os.path.dirname(os.path.abspath(a.league)), ST.RUNNER_FILE))
+            progress = {"league": None, "published": ST.published_events(a.out), "release": publish._live_release(a.out)}
             try:
-                league_id = r.meta.get("league_id") or "unknown"
-                fp = (r.meta.get("fingerprint") or "")[:12]
-                ed, _ = feed.spec_edition()
-                need = feed.seasons_needing_archive(r.u)
-                if need and r.meta.get("archive"):
-                    arch, w = _archive_pair(persist, snapshot, a.league, copy, r.meta, scratch)
-                    warnings += w
-                elif need:
-                    warnings.append(f"seasons {need} have no recorded Coronation score and this league has no archive: shown as not recorded")
-                archive_used = arch is not None
-                files = feed.build(r.u, league_id, a.league_name, engine=f"DFLv2 code {fp}, rules summary for spec {ed}", archive=arch)
-                events = r.seq
-            finally:
-                r.close()
-                if arch is not None:
-                    arch.close()
-            t3 = time.time()
-            res = publish.publish(files, a.out, keep=a.keep, lock=lock, allow_older=a.allow_older)
-            t4 = time.time()
-        total = sum(v["bytes"] for v in files["manifest.json"]["files"].values())
-        print(json.dumps({"release": res["release"], "published": res["published"], "pruned": res["pruned"], "events": events, "year": files["manifest.json"]["year"],
-                          "files": len(files), "feed_bytes": total, "archive_used": archive_used, "warnings": warnings, "seconds": {"copy": round(t1 - t0, 2), "open": round(t2 - t1, 2), "build": round(t3 - t2, 2),
-                                                                                "publish": round(t4 - t3, 2), "total": round(t4 - t0, 2)},
-                          "peak_memory_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}, sort_keys=True))
-        return 0
+                progress["league"] = ST.league_events(a.league)
+                if a.skip_if_current and progress["published"] is not None and progress["league"] <= progress["published"]:
+                    if not a.no_status:
+                        ST.update(a.out, progress["league"], progress["published"], progress["release"], True, seconds=round(time.time() - t0, 2), runner=runner, previous=previous)
+                    print(json.dumps({"skipped": True, "events": progress["league"], "published_events": progress["published"], "release": progress["release"]}, sort_keys=True))
+                    return 0
+                return _export(a, scratch, lock, t0, persist, feed, publish, snapshot, ST, previous, runner, progress)
+            except BaseException as e:
+                if not a.no_status:
+                    try:
+                        ST.update(a.out, progress["league"], progress["published"], progress["release"], False, error_type=type(e).__name__, runner=runner, previous=previous)
+                    except OSError:
+                        pass
+                raise
     except Exception as e:                                                    # a failed export changes nothing that is live
         if type(e).__name__ == "PublishBusy":                                 # another exporter is running: not an error, the next run will do
             print(json.dumps({"busy": True, "detail": str(e)}), file=sys.stderr)
@@ -97,6 +88,45 @@ def main(argv=None):
         return 1
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _export(a, scratch, lock, t0, persist, feed, publish, snapshot, ST, previous, runner, progress):
+    """The export proper (formerly the body of main). Returns the exit status."""
+    copy = os.path.join(scratch, "league.db")
+    persist.backup(a.league, copy)
+    t1 = time.time()
+    r = persist.Runner.open(copy, heal=False, with_archive=False)
+    t2 = time.time()
+    warnings, arch, archive_used = [], None, False
+    try:
+        league_id = r.meta.get("league_id") or "unknown"
+        fp = (r.meta.get("fingerprint") or "")[:12]
+        ed, _ = feed.spec_edition()
+        need = feed.seasons_needing_archive(r.u)
+        if need and r.meta.get("archive"):
+            arch, w = _archive_pair(persist, snapshot, a.league, copy, r.meta, scratch)
+            warnings += w
+        elif need:
+            warnings.append(f"seasons {need} have no recorded Coronation score and this league has no archive: shown as not recorded")
+        archive_used = arch is not None
+        files = feed.build(r.u, league_id, a.league_name, engine=f"DFLv2 code {fp}, rules summary for spec {ed}", archive=arch)
+        events = r.seq
+    finally:
+        r.close()
+        if arch is not None:
+            arch.close()
+    t3 = time.time()
+    res = publish.publish(files, a.out, keep=a.keep, lock=lock, allow_older=a.allow_older)
+    t4 = time.time()
+    total = sum(v["bytes"] for v in files["manifest.json"]["files"].values())
+    seconds = round(t4 - t0, 2)
+    if not a.no_status:
+        ST.update(a.out, events, ST.published_events(a.out), res["release"], True, seconds=seconds, published_now=bool(res["published"]), runner=runner, previous=previous)
+    print(json.dumps({"release": res["release"], "published": res["published"], "pruned": res["pruned"], "events": events, "year": files["manifest.json"]["year"],
+                      "files": len(files), "feed_bytes": total, "archive_used": archive_used, "warnings": warnings,
+                      "seconds": {"copy": round(t1 - t0, 2), "open": round(t2 - t1, 2), "build": round(t3 - t2, 2), "publish": round(t4 - t3, 2), "total": round(t4 - t0, 2)},
+                      "peak_memory_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}, sort_keys=True))
+    return 0
 
 
 def _archive_pair(persist, snapshot, league, league_copy, meta, scratch):
