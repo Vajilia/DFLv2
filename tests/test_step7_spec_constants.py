@@ -55,7 +55,7 @@ def money(s):
 
 class Section0(unittest.TestCase):
     def test_cap_reserve_minimum_comp_threshold(self):
-        cap, reserve, minimum, comp, ceo = [money(x) for x in row("Cap · reserve")]
+        cap, reserve, minimum, comp = [money(x) for x in row("Cap · reserve")]
         self.assertEqual((cap, reserve, minimum), (R.CAP, R.RESERVE, R.MIN_SALARY))
         self.assertEqual((cap, reserve, minimum), (O.CAP, O.RESERVE, O.MIN_SALARY))
         self.assertEqual(comp, 75)
