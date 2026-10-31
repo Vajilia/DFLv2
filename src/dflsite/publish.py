@@ -204,9 +204,18 @@ def publish(files, root, keep=KEEP, crash_hook=None, lock=None, wait=0, grace=PR
             raise
         published = True
     hook("release_written")
-    raw_manifest = feed.canonical(manifest).encode("utf-8")
+    if published:
+        raw_manifest, man = feed.canonical(manifest).encode("utf-8"), manifest
+    else:
+        # The release already exists (same name = same content; only `generated_at` can differ). The pointer must describe the bytes ON DISK, never a
+        # fresh manifest that was not written (found on the Droplet 2026-10-31: the pointer's manifest_sha256 matched no file).
+        with open(os.path.join(final, "manifest.json"), "rb") as f:
+            raw_manifest = f.read()
+        man = json.loads(raw_manifest)
+        if man.get("content_hash") != manifest["content_hash"]:
+            raise PublishError(f"release {release} exists with different content; refusing to point at it")
     pointer = {"format": feed.FORMAT, "format_version": feed.FORMAT_VERSION, "release": release, "manifest_sha256": _sha(raw_manifest),
-               "content_hash": manifest["content_hash"], "generated_at": manifest["generated_at"]}
+               "content_hash": man["content_hash"], "generated_at": man["generated_at"]}
     ptmp = os.path.join(root, f".{POINTER}.tmp-{os.getpid()}")
     _write(ptmp, feed.canonical(pointer).encode("utf-8"))
     hook("pointer_written")

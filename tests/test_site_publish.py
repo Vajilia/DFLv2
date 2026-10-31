@@ -65,6 +65,34 @@ class Atomic(unittest.TestCase):
         self.assertFalse(r["published"])
         self.assertEqual(sorted(os.listdir(os.path.join(self.root, "releases"))), [self.a["manifest.json"]["release"]])
 
+    def test_republishing_an_existing_release_with_a_new_timestamp_keeps_the_pointer_true_to_the_disk(self):
+        """Found on the Droplet 2026-10-31: the release directory existed (same content), the new manifest differed only in generated_at, and the pointer
+        carried the sha of a manifest that was never written."""
+        import copy
+        import hashlib
+        publish.publish(self.a, self.root)
+        again = copy.deepcopy(self.a)
+        again["manifest.json"]["generated_at"] = "2099-01-01T00:00:00+00:00"
+        r = publish.publish(again, self.root)
+        self.assertFalse(r["published"])
+        with open(os.path.join(self.root, "latest.json")) as f:
+            ptr = json.load(f)
+        with open(os.path.join(self.root, "releases", ptr["release"], "manifest.json"), "rb") as f:
+            raw = f.read()
+        self.assertEqual(ptr["manifest_sha256"], hashlib.sha256(raw).hexdigest(), "the pointer names the manifest bytes that are on disk")
+        self.assertEqual(ptr["generated_at"], json.loads(raw)["generated_at"])
+        self.assertNotEqual(ptr["generated_at"], "2099-01-01T00:00:00+00:00")
+        publish.read_release(self.root)                                   # and the whole release still verifies through the pointer
+
+    def test_a_release_name_that_exists_with_other_content_is_refused(self):
+        import copy
+        publish.publish(self.a, self.root)
+        other = copy.deepcopy(self.a)
+        other["manifest.json"]["content_hash"] = "0" * 64
+        with self.assertRaises(publish.PublishError):
+            publish.publish(other, self.root)
+        self.assertEqual(self.live(), self.a["manifest.json"]["release"])
+
     def test_a_crash_before_the_pointer_swap_leaves_the_old_release_live_and_whole(self):
         publish.publish(self.a, self.root)
         old = self.a["manifest.json"]["release"]
