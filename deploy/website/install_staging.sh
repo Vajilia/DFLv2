@@ -25,7 +25,7 @@ die() { code="$1"; shift; say "STOPPED: $*" >&2; exit "$code"; }
 # ---- 0. preconditions (nothing is changed before all of these hold)
 [ "$(id -u)" = 0 ] || [ "${ALLOW_NON_ROOT:-}" = 1 ] || die 2 "run as root"
 for c in caddy systemctl python3 sha256sum; do command -v "$c" >/dev/null 2>&1 || die 2 "missing command: $c"; done
-[ -f "$PKG/PACKAGE.json" ] && [ -f "$PKG/SHA256SUMS" ] && [ -d "$PKG/repo" ] && [ -d "$PKG/seed-feed" ] || die 2 "$PKG is not an unpacked deployment package"
+[ -f "$PKG/PACKAGE.json" ] && [ -f "$PKG/SHA256SUMS" ] && [ -d "$PKG/repo" ] || die 2 "$PKG is not an unpacked deployment package"
 (cd "$PKG" && sha256sum -c SHA256SUMS --quiet) || die 2 "the package does not match its SHA256SUMS: do not install it"
 PKGID="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$PKG/PACKAGE.json")"
 say "package $PKGID verified"
@@ -68,12 +68,16 @@ say "site installed: $(readlink "$BASE/site/current")"
 
 # ---- 6. the seed feed (verified before and after copying; the previous feed release, if any, stays)
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$BASE/feed"
-# The seed is read by the service user, who cannot enter /root (where the package is usually unpacked) and must not be given a way to: copy it to a
-# folder under $BASE that anyone may read, install from there, and remove the copy.
-seed_stage="$BASE/.seed-incoming"; rm -rf "$seed_stage"; cp -a "$PKG/seed-feed" "$seed_stage"; chmod -R a+rX "$seed_stage"
-if command -v runuser >/dev/null 2>&1; then runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/seed_feed.py" "$seed_stage" "$BASE/feed"
-else su -s /bin/sh "$SERVICE_USER" -c "python3 -I '$BASE/repo/tools/seed_feed.py' '$seed_stage' '$BASE/feed'"; fi
-rm -rf "$seed_stage"
+if [ -d "$PKG/seed-feed" ]; then
+  # The seed is read by the service user, who cannot enter /root (where a package is usually unpacked) and must not be given a way to: copy it to a
+  # folder under $BASE that anyone may read, install from there, and remove the copy.
+  seed_stage="$BASE/.seed-incoming"; rm -rf "$seed_stage"; cp -a "$PKG/seed-feed" "$seed_stage"; chmod -R a+rX "$seed_stage"
+  if command -v runuser >/dev/null 2>&1; then runuser -u "$SERVICE_USER" -- python3 -I "$BASE/repo/tools/seed_feed.py" "$seed_stage" "$BASE/feed"
+  else su -s /bin/sh "$SERVICE_USER" -c "python3 -I '$BASE/repo/tools/seed_feed.py' '$seed_stage' '$BASE/feed'"; fi
+  rm -rf "$seed_stage"
+else
+  say "no seed feed in this package: the feed folder is left as it is (a league exporter fills it)"
+fi
 chmod -R a+rX "$BASE/site" "$BASE/feed" "$BASE/repo-releases"
 
 # ---- 7. Caddy: add one site block for the staging host in its own file; roll back at once if the configuration does not validate
@@ -96,6 +100,14 @@ if ! systemctl reload caddy; then
   undo; caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1 && systemctl reload caddy || true
   die 6 "Caddy would not reload; the previous configuration was restored."
 fi
+python3 - "$PKG/PACKAGE.json" "$BASE" "$(sha256sum "$PKG/SHA256SUMS" | cut -d' ' -f1)" "$(readlink "$BASE/site/current")" <<'PY'
+import json, sys, time
+meta = json.load(open(sys.argv[1]))
+rec = {"commit": meta["commit"], "package_id": meta["id"], "package_sums_sha256": sys.argv[3], "site_release": sys.argv[4], "spec_edition": meta.get("spec_edition"),
+       "installed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "dirty": meta.get("dirty")}
+json.dump(rec, open(sys.argv[2] + "/DEPLOYED_REVISION.json.new", "w"), indent=1, sort_keys=True)
+PY
+mv "$BASE/DEPLOYED_REVISION.json.new" "$BASE/DEPLOYED_REVISION.json"; chmod 644 "$BASE/DEPLOYED_REVISION.json"
 say "Caddy reloaded with the staging block for $HOST (Caddyfile import line added: ${added:-no, it was already there}). Backup: $CADDYFILE.dfl-staging.$stamp.bak"
 say ""
 say "NEXT: from any computer run:  python3 $BASE/repo/tools/verify_deployment.py https://$HOST --production https://${PRODUCTION_HOST:-diamondfootballleague.com} --baseline <file saved before the install>"

@@ -33,9 +33,10 @@ def git(*args):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--seed-feed", required=True)
+    ap.add_argument("--seed-feed", help="a verified feed to ship so the site shows a league the moment it is installed (optional: a server that runs its own league needs none)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--allow-dirty", action="store_true")
+    ap.add_argument("--no-tar", action="store_true", help="leave the unpacked package directory in --out instead of a .tar.gz (what deploy_pinned.sh installs from)")
     ap.add_argument("--from-worktree", action="store_true", help="(tests) take the files of the working tree, tracked or not, instead of HEAD; implies --allow-dirty")
     a = ap.parse_args(argv)
     from dflsite import feed, publish
@@ -45,8 +46,8 @@ def main(argv=None):
     if dirty and not a.allow_dirty:
         print(json.dumps({"error": "the working tree has uncommitted changes; commit first (or --allow-dirty, which the package will say)"}), file=sys.stderr)
         return 1
-    seed = publish.read_release(a.seed_feed, verify=True)               # a damaged seed feed never gets into a package
-    rel = seed["manifest.json"]["release"]
+    seed = publish.read_release(a.seed_feed, verify=True) if a.seed_feed else None      # a damaged seed feed never gets into a package
+    rel = seed["manifest.json"]["release"] if seed else None
     commit = git("rev-parse", "HEAD").strip()
     branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
     ed, h = feed.spec_edition()
@@ -65,14 +66,15 @@ def main(argv=None):
         arch = subprocess.run(["git", "-C", ROOT, "archive", "--format=tar", "--prefix=repo/", "HEAD"], capture_output=True, check=True).stdout
         with tarfile.open(fileobj=io.BytesIO(arch)) as t:
             t.extractall(top, filter="data")
-    os.makedirs(os.path.join(top, "seed-feed", "releases"))
     import shutil
-    shutil.copytree(os.path.join(a.seed_feed, "releases", rel), os.path.join(top, "seed-feed", "releases", rel))
-    shutil.copy(os.path.join(a.seed_feed, "latest.json"), os.path.join(top, "seed-feed", "latest.json"))
+    if seed:
+        os.makedirs(os.path.join(top, "seed-feed", "releases"))
+        shutil.copytree(os.path.join(a.seed_feed, "releases", rel), os.path.join(top, "seed-feed", "releases", rel))
+        shutil.copy(os.path.join(a.seed_feed, "latest.json"), os.path.join(top, "seed-feed", "latest.json"))
     shutil.copy(os.path.join(ROOT, "docs", "STAGING_RUNBOOK.md"), os.path.join(top, "RUNBOOK.md"))
     meta = {"id": pid, "commit": commit, "branch": branch, "dirty": dirty, "built_at": built, "spec_edition": ed, "spec_hash": h,
-            "seed_release": rel, "seed_simulation_date": seed["manifest.json"].get("simulation_date"),
-            "what": "DFLv2 staging site: static viewer + seed feed. No league file, no secrets, no credentials. Not a production deployment."}
+            "seed_release": rel, "seed_simulation_date": seed["manifest.json"].get("simulation_date") if seed else None,
+            "what": "DFLv2 staging site: static viewer" + (" + seed feed" if seed else "") + ". No league file, no secrets, no credentials. Not a production deployment."}
     with open(os.path.join(top, "PACKAGE.json"), "w") as f:
         json.dump(meta, f, indent=1, sort_keys=True)
     sums = []
@@ -88,6 +90,13 @@ def main(argv=None):
     with open(os.path.join(top, "SHA256SUMS"), "w") as f:
         f.write("\n".join(sums) + "\n")
     os.makedirs(a.out, exist_ok=True)
+    if a.no_tar:
+        dest = os.path.join(a.out, os.path.basename(top))
+        shutil.rmtree(dest, ignore_errors=True)
+        shutil.copytree(top, dest)
+        shutil.rmtree(work, ignore_errors=True)
+        print(json.dumps({"tree": dest, "id": pid, "commit": commit, "files": len(sums), "seed_release": rel}, sort_keys=True))
+        return 0
     out = os.path.join(a.out, f"dfl-staging-package-{pid}.tar.gz")
     with tarfile.open(out, "w:gz") as t:
         t.add(top, arcname=f"dfl-staging-{pid}")

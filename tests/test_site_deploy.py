@@ -192,6 +192,46 @@ class Install(unittest.TestCase):
         finally:
             shutil.rmtree(private, ignore_errors=True)
 
+    def _head(self):
+        sha = subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        for f in ("tools/verify_revision.py", "deploy/website/deploy_pinned.sh"):
+            if subprocess.run(["git", "-C", ROOT, "cat-file", "-e", f"HEAD:{f}"], capture_output=True).returncode != 0:
+                self.skipTest("HEAD does not contain the pinned-deploy tools yet (commit them first)")
+        return sha
+
+    def _pinned(self, arg, **env):
+        e = dict(os.environ, PATH=self.bin + os.pathsep + os.environ["PATH"], BASE=self.base, CADDY_DIR=self.caddy_dir, ROLLBACK_ROOT=self.roll,
+                 SERVICE_USER="root", ALLOW_NON_ROOT="1", REPO_URL=ROOT, SRC=os.path.join(self.d, "src"), PKGS=os.path.join(self.d, "pkgs"))
+        e.update(env)
+        return subprocess.run(["sh", os.path.join(DEPLOY, "deploy_pinned.sh"), arg], capture_output=True, text=True, env=e)
+
+    def test_a_pinned_deploy_installs_exactly_that_commit_from_git_alone_and_the_check_notices_any_change(self):
+        sha = self._head()
+        r = self._pinned(sha)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("ALL MATCH", r.stdout)
+        rec = json.load(open(os.path.join(self.base, "DEPLOYED_REVISION.json")))
+        self.assertEqual(rec["commit"], sha)
+        verify = [sys.executable, "-I", os.path.join(ROOT, "tools", "verify_revision.py"), "--commit", sha, "--repo-url", ROOT, "--base", self.base,
+                  "--snippet", os.path.join(self.caddy_dir, "conf.d", "dflv2-preview.caddy")]
+        self.assertEqual(subprocess.run(verify, capture_output=True, text=True).returncode, 0)
+        with open(os.path.join(self.base, "repo", "tools", "validate.py"), "a") as f:                  # any edit on the server is noticed
+            f.write("# tampered\n")
+        r2 = subprocess.run(verify, capture_output=True, text=True)
+        self.assertEqual(r2.returncode, 1, r2.stdout)
+        self.assertIn("FAIL the installed code is the commit's code", r2.stdout)
+        with open(os.path.join(self.caddy_dir, "conf.d", "dflv2-preview.caddy"), "a") as f:
+            f.write("# hand edit\n")
+        self.assertIn("FAIL the Caddy block", subprocess.run(verify, capture_output=True, text=True).stdout)
+
+    def test_a_pinned_deploy_refuses_a_branch_name_or_an_abbreviation(self):
+        self._head()
+        for bad in ("main", "audit/completion-plan", "5a6bf27"):
+            r = self._pinned(bad)
+            self.assertEqual(r.returncode, 2, bad)
+            self.assertIn("40-character", r.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.base, "repo")), "nothing was installed")
+
     def test_installing_twice_is_safe(self):
         self.assertEqual(self.run_install().returncode, 0)
         after_first = read(self.caddyfile)
