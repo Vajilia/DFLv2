@@ -1,6 +1,6 @@
 """tools/verify_playback_against_archive.py must pass an honest export and name every kind of departure from the archive.
 
-The archive excerpt (tests/fixtures/playback_v1/archive_excerpt.db) holds one real archived game, S001/reg:w01:g02, with its 119 spatial traces; the
+The archive excerpt (tests/fixtures/playback_v1/archive_excerpt.sqlite) holds one real archived game, S001/reg:w01:g02, with its 119 spatial traces; the
 public file in tests/fixtures/playback_v1/playback is its export. Each case below changes the public file the way a faulty exporter or a hand edit
 could (and fixes up the index so the only thing wrong is the content) and expects the check to fail and to say what."""
 import base64
@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIX = os.path.join(ROOT, "tests", "fixtures", "playback_v1")
 TOOL = os.path.join(ROOT, "tools", "verify_playback_against_archive.py")
-ARCH = os.path.join(FIX, "archive_excerpt.db")
+ARCH = os.path.join(FIX, "archive_excerpt.sqlite")
 GID = "S001/reg:w01:g02"
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from dflsite import playback as PB  # noqa: E402

@@ -58,6 +58,7 @@ def single_file(feed_root, out):
     html = html.replace('<link rel="stylesheet" href="assets/base.css">', "<style>" + rd("assets", "base.css") + "</style>")
     html = html.replace('<link rel="stylesheet" href="assets/site.css">', "<style>" + rd("assets", "site.css") + "</style>")
     blob = json.dumps(embed, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
+    html = html.replace('<script src="assets/config.js"></script>\n', "")                       # production config is empty
     html = html.replace('<script src="assets/app.js"></script>', "<script>window.DFL_EMBED=" + blob + ";</script><script>" + rd("assets", "app.js").replace("</script", "<\\/script") + "</script>")
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)

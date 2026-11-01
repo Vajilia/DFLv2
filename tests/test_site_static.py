@@ -48,7 +48,8 @@ class Static(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(SITE, ref)), ref)
         js = text("assets", "app.js")
         self.assertEqual(re.findall(r"fetch\(\s*['\"]https?:", js), [], "the page never fetches an absolute address")   # what it actually requests is checked by behaviour in Browser.test_the_page_requests_only_the_feed_the_status_the_map_and_its_own_files
-        self.assertIn("var BASE = 'feed/';", js)
+        self.assertIn("var BASE = CFG.feed || 'feed/';", js)
+        self.assertEqual(text("assets", "config.js").count("window.DFL_CONFIG ="), 1, "production config.js sets nothing (the one assignment is in its comment)")
         self.assertNotIn("POST", js)
         self.assertNotIn("method:", js)
 

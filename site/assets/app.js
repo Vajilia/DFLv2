@@ -4,9 +4,10 @@
 (function () {
   'use strict';
   var FORMAT = 'dfl-public-feed', VERSION = 1, REFRESH_MS = 60000;
-  var BASE = 'feed/';
+  var CFG = window.DFL_CONFIG || {};                              // assets/config.js: empty in production; a review copy of the site points the same code at another feed
+  var BASE = CFG.feed || 'feed/';
   var S = { ptr: null, manifest: null, cache: {}, route: null, fresh: 0, error: null, pb: { index: null, at: 0, viewer: null, gid: null, loading: null } };
-  var PB_BASE = window.DFL_PLAYBACK_BASE || 'feed/playback/';   // published replay files (docs/PUBLIC_PLAYBACK_FORMAT.md); separate from the league feed
+  var PB_BASE = CFG.playback || (BASE + 'playback/');   // published replay files (docs/PUBLIC_PLAYBACK_FORMAT.md); separate from the league feed
 
   // ---------------------------------------------------------------- tiny DOM helpers
   function h(tag, attrs) {
