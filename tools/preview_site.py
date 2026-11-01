@@ -2,6 +2,7 @@
 """Look at the website on this computer, using a real exported feed.
 
   preview_site.py --feed FEED_ROOT [--port 8080]          serve site/ at / and FEED_ROOT at /feed/ (read-only; GET and HEAD only)
+  preview_site.py --feed FEED_ROOT --playback PLAYBACK_ROOT   also serve published replay files (index.json, games/) at /feed/playback/
   preview_site.py --feed FEED_ROOT --single-file OUT.html  write one self-contained page with the feed embedded (opens by double-click, no server)
 
 The server cannot change anything: it answers GET and HEAD from two directories and refuses every other method. It never runs the league.
@@ -20,11 +21,14 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     feed_root = None
+    playback_root = None                  # a directory of replay files (index.json, games/...), served at /feed/playback/
     site_root = SITE                      # tests point this at a copy of site/ (for example one that holds a map)
 
     def translate_path(self, path):
         path = path.split("?", 1)[0].split("#", 1)[0]
         parts = [p for p in os.path.normpath("/" + path.lstrip("/")).split("/") if p and p != ".."]
+        if parts[:2] == ["feed", "playback"] and self.playback_root:
+            return os.path.join(self.playback_root, *parts[2:])
         if parts and parts[0] == "feed":
             return os.path.join(self.feed_root, *parts[1:])
         return os.path.join(self.site_root, *parts) if parts else os.path.join(self.site_root, "index.html")
@@ -64,12 +68,14 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--feed", required=True)
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--playback")
     ap.add_argument("--single-file")
     a = ap.parse_args(argv)
     if a.single_file:
         print(json.dumps({"written": a.single_file, "bytes": single_file(a.feed, a.single_file)}))
         return 0
     Handler.feed_root = os.path.abspath(a.feed)
+    Handler.playback_root = os.path.abspath(a.playback) if a.playback else None
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", a.port), Handler) as srv:
         print(f"http://127.0.0.1:{a.port}/  (feed: {Handler.feed_root})", flush=True)

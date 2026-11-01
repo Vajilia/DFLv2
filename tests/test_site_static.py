@@ -201,6 +201,9 @@ class Browser(unittest.TestCase):
         import preview_site
         cls.tmpfeed = tempfile.mkdtemp()                        # the frozen feed plus a status heartbeat, as a deployed feed has (a missing one is a logged 404)
         shutil.copytree(FIXTURE, os.path.join(cls.tmpfeed, "f"))
+        os.makedirs(os.path.join(cls.tmpfeed, "f", "playback"))      # the replay index, as a deployed site has it (an exporter that has written no game yet publishes an empty one)
+        with open(os.path.join(cls.tmpfeed, "f", "playback", "index.json"), "w") as f:
+            json.dump({"format": "dfl-public-playback", "format_version": 1, "kind": "index", "league_id": None, "games": []}, f)
         from dflsite import status as ST
         ST.write_atomic(os.path.join(cls.tmpfeed, "f", "status.json"), {"format": "dfl-feed-status", "format_version": 1, "checked_at": ST.now_iso(), "league_events": 1, "published_events": 1,
                         "release": "x", "export": {"ok": True, "error": None, "last_success_at": ST.now_iso(), "last_publish_at": ST.now_iso(), "seconds": 1},
@@ -267,7 +270,7 @@ class Browser(unittest.TestCase):
         """By behaviour, not by reading the source: every route is opened in a real browser and every request it makes must be the site's own file or a feed file."""
         _, _, requests, _ = self.visit(1200, self.ROUTES)
         base = f"http://127.0.0.1:{self.port}/"
-        allowed = re.compile(r"^" + re.escape(base) + r"(?:|index\.html|assets/[^?#]+|feed/latest\.json|feed/status\.json|feed/releases/[^/]+/(?:rosters/)?[^/]+\.json)(?:[?#].*)?$")
+        allowed = re.compile(r"^" + re.escape(base) + r"(?:|index\.html|assets/[^?#]+|feed/latest\.json|feed/status\.json|feed/playback/index\.json|feed/releases/[^/]+/(?:rosters/)?[^/]+\.json)(?:[?#].*)?$")
         self.assertEqual([u for u in requests if not allowed.match(u)], [])
         for need in ("feed/latest.json", "feed/status.json", "/manifest.json", "assets/map/map.json"):
             self.assertTrue(any(need in u for u in requests), f"the page never requested {need}")

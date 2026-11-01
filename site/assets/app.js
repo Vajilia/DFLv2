@@ -5,7 +5,8 @@
   'use strict';
   var FORMAT = 'dfl-public-feed', VERSION = 1, REFRESH_MS = 60000;
   var BASE = 'feed/';
-  var S = { ptr: null, manifest: null, cache: {}, route: null, fresh: 0, error: null };
+  var S = { ptr: null, manifest: null, cache: {}, route: null, fresh: 0, error: null, pb: { index: null, at: 0, viewer: null, gid: null, loading: null } };
+  var PB_BASE = window.DFL_PLAYBACK_BASE || 'feed/playback/';   // published replay files (docs/PUBLIC_PLAYBACK_FORMAT.md); separate from the league feed
 
   // ---------------------------------------------------------------- tiny DOM helpers
   function h(tag, attrs) {
@@ -172,7 +173,15 @@
     if (g.venue) tail.push(h('div', { class: 'muted', style: 'font-size:14px', text: g.venue }));
     if (g.away_seed || g.home_seed) tail.push(h('div', { class: 'muted', style: 'font-size:14px', text: '#' + g.away_seed + ' at #' + g.home_seed }));
     if (g.note && g.kind !== 'regular' && g.kind !== 'playoff') tail.push(h('div', { class: 'muted', style: 'font-size:13px', text: g.note }));
+    var rp = done ? replayEntry(g, opt.season) : null;
+    if (rp) tags.push(h('a', { class: 'replay', href: '#/game/' + encodeURIComponent(rp.gid), title: 'Watch this game replayed from the recorded player movement' }, 'Replay'));
     return h('div', { class: 'game' }, h('div', { class: 't' }, when, tags), h('div', { class: 'teams' }, side(g.away, g.away_score, aw), side(g.home, g.home_score, hw), tail));
+  }
+  function replayEntry(g, season) {
+    var ix = S.pb.index;
+    if (!ix || !ix.by || !g.id) return null;
+    var e = ix.by[(season || (S.manifest && S.manifest.season)) + '|' + g.id];
+    return e && e.away === g.away && e.home === g.home && e.away_score === g.away_score && e.home_score === g.home_score ? e : null;   // only when it is the same game and the same result
   }
   function groupByDate(games) {
     var m = {}, order = [];
@@ -452,8 +461,60 @@
     return [h('h1', { text: 'Map' }), box];
   }
 
+  // ---------------------------------------------------------------- game replay (loaded on demand; reads feed/playback/ only)
+  function loadOnce(tag, url) {
+    S.pb.loading = S.pb.loading || {};
+    if (!S.pb.loading[url]) S.pb.loading[url] = new Promise(function (ok, bad) {
+      var el = tag === 'script' ? h('script', { src: url }) : h('link', { rel: 'stylesheet', href: url });
+      el.onload = function () { ok(); }; el.onerror = function () { delete S.pb.loading[url]; bad(new Error('the replay viewer could not be loaded')); };
+      document.head.appendChild(el);
+    });
+    return S.pb.loading[url];
+  }
+  function playbackReady() {
+    if (window.DFLPlayback) return Promise.resolve(window.DFLPlayback);
+    return Promise.all([loadOnce('link', 'assets/playback.css'), loadOnce('script', 'assets/playback.js')]).then(function () { return window.DFLPlayback; });
+  }
+  // The list of replayable games: one small file, read at most once a minute on pages that list games. Missing or incompatible only means "no Replay links".
+  // (Replay format: dfl-public-playback, version 1. The viewer code itself is not loaded until a replay is opened.)
+  function playbackIndex(force) {
+    var pb = S.pb;
+    if (!force && pb.index !== null && Date.now() - pb.at < 60000) return Promise.resolve(pb.index);
+    return fetch(PB_BASE + 'index.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
+      if (!o) return false;
+      if (o.format !== 'dfl-public-playback') return false;
+      if (o.format_version !== 1) return { incompatible: 'The replay files use format version ' + o.format_version + ', which this page does not read (it reads version 1). The site needs updating before replays can be shown.' };
+      var by = {};
+      (o.games || []).forEach(function (e) { by[e.gid] = e; by[e.season + '|' + e.id] = e; });
+      return { by: by };
+    }).catch(function () { return false; }).then(function (ix) { pb.index = ix; pb.at = Date.now(); return ix; });
+  }
+  function pageGame(gid) {
+    var tk = render.token, pb = S.pb;
+    var back = h('a', { class: 'pb-back', href: '#/schedule' }, '← Schedule');
+    function msg(text) { return [back, h('div', { class: 'err', role: 'alert', text: text })]; }
+    if (pb.viewer && pb.gid === gid) {                       // a release refresh re-renders the page: keep the viewer (and where it is) instead of loading again
+      pb.viewer.refresh();
+      return [back, pb.viewer.node];
+    }
+    return playbackIndex(true).then(function (ix) {
+      if (tk !== render.token) return [];
+      if (!ix) return msg('Replays are not available right now.');
+      if (ix.incompatible) return msg(ix.incompatible);
+      var entry = ix.by[gid];
+      if (!entry) return msg('There is no replay for this game. Replays exist only for games whose player movement was recorded and published.');
+      return playbackReady().then(function (P) {
+        if (tk !== render.token) return [];
+        destroyViewer();
+        pb.viewer = P.create({ base: PB_BASE, entry: entry }); pb.gid = gid;
+        return [back, pb.viewer.node];
+      });
+    }).catch(function (e) { return msg('This replay could not be shown: ' + e.message); });
+  }
+  function destroyViewer() { var pb = S.pb; if (pb.viewer) { pb.viewer.destroy(); pb.viewer = null; pb.gid = null; } }
+
   // ---------------------------------------------------------------- shell
-  var ROUTES = { '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
+  var ROUTES = { game: pageGame, '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
   function parseRoute() {
     var p = (location.hash || '#/').replace(/^#\/?/, '').split('/');
     return { name: p[0] || '', arg: p[1] ? decodeURIComponent(p[1]) : '' };
@@ -470,7 +531,9 @@
       if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     var token = (render.token = (render.token || 0) + 1);
-    return Promise.resolve(page(r.arg)).then(function (content) {
+    if (S.pb.viewer && (r.name !== 'game' || r.arg !== S.pb.gid)) destroyViewer();
+    var pre = /^(|schedule|playoffs|team|game)$/.test(r.name) ? playbackIndex(false) : Promise.resolve();
+    return pre.then(function () { return token === render.token ? page(r.arg) : null; }).then(function (content) {
       if (token !== render.token) return;
       clear(app); add(app, content);
     }).catch(function (e) {
@@ -515,5 +578,5 @@
   window.addEventListener('hashchange', function () { if (S.manifest) { render(); window.scrollTo(0, 0); } });
   check();
   if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
-  window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome };
+  window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome, replay: function () { return S.pb.viewer; } };
 })();
