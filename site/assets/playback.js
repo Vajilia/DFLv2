@@ -89,7 +89,7 @@
 
   // ---------------------------------------------------------------- the viewer
   function create(opts) {
-    // opts: { base: 'feed/playback/', entry: <index entry>, onClose }
+    // opts: { base: 'feed/playback/', entry: <index entry>, load: optional function -> promise of the game object }
     var base = opts.base, entry = opts.entry;
     var root = h('section', { class: 'pb', 'aria-label': 'Game replay' });
     var ac = window.AbortController ? new AbortController() : null;
@@ -99,7 +99,8 @@
     function fail(msg, cls) { root.textContent = ''; root.appendChild(h('div', { class: 'err ' + (cls || ''), role: 'alert', text: msg })); }
     root.appendChild(h('p', { class: 'muted', text: 'Loading the replay…' }));
 
-    fetchGame(base, entry, ac && ac.signal).then(function (g) {
+    // opts.load (optional): a function returning a promise of the game object, for a page that carries its game inside itself (the offline demonstration page)
+    (opts.load ? Promise.resolve().then(opts.load) : fetchGame(base, entry, ac && ac.signal)).then(function (g) {
       if (st.dead) return;
       checkFormat(g, 'This replay');
       if (g.gid !== entry.gid) throw new Error('the file holds a different game than the one requested');
