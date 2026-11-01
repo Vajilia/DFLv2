@@ -51,7 +51,7 @@ def build_games(season=1):
             for lo, hi in pairs:
                 away, home = c[hi - 1], c[lo - 1]
                 log.append([conf, away, home, 10, 20])
-                games.append((rd, game(season, f"po:{conf}:{rd}:s{hi}v{lo}", "playoff", away, home, [10, 20])))
+                games.append((rd, game(season, f"po:{conf}:{rd}:s{hi}v{lo}", "playoff", away, home, [20, 10])))
     return games, log
 
 
@@ -91,8 +91,8 @@ class Records(unittest.TestCase):
                 g = dict(g, score=[1, 2])
             recs.append(g)
         a.put_batch(seq, recs)
-        bowl = game(1, "bowl", "bowl", "West All-Stars", "East All-Stars", [7, 14])
-        cor = game(1, "coronation", "coronation", "E1", "W1", [21, 24])
+        bowl = game(1, "bowl", "bowl", "West All-Stars", "East All-Stars", [14, 7])
+        cor = game(1, "coronation", "coronation", "E1", "W1", [24, 21])
         a.put_batch(seq + 1, [] if "S001/bowl" in drop else [bowl])
         a.put_batch(seq + 2, [] if "S001/coronation" in drop else [cor])
         for k, e in enumerate(extra):
@@ -140,7 +140,7 @@ class Records(unittest.TestCase):
         rc, out = run(self.archive(extra=(extra,), wrong_score="S001/po:W:wild_card:s6v3"))
         self.assertEqual(rc, 1)
         self.assertIn("S001/po:E:conference:s9v9: in the archive and not in the S001 summary", out)
-        self.assertIn("stored score [1, 2], the summary says [10, 20]", out)
+        self.assertIn("stored score (home, away) [1, 2], the summary says home 20, away 10", out)
 
     def test_journal_comparison(self):
         path = self.archive()

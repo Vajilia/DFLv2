@@ -210,8 +210,8 @@ def main(argv=None):
                 if away is not None and (haway, hhome) != (away, home):
                     problems.append(f"{gid}: stored teams {haway} at {hhome}, the summary says {away} at {home}")
                 f = check_game(db, gid, problems)
-                if sa is not None and f.get("score") is not None and list(f["score"]) != [sa, sh]:
-                    problems.append(f"{gid}: stored score {f['score']}, the summary says {[sa, sh]}")
+                if sa is not None and f.get("score") is not None and list(f["score"]) != [sh, sa]:      # the game record holds [home, away]; the summary lists away, home
+                    problems.append(f"{gid}: stored score (home, away) {f['score']}, the summary says home {sh}, away {sa}")
                 f["seq"] = seq
                 facts.append(f)
             by_kind = {}
