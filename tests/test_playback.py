@@ -339,6 +339,24 @@ class Browser(unittest.TestCase):
         self.assertEqual(page.problems, [])
         page.close()
 
+    def test_pointing_at_a_player_names_them_from_the_public_roster(self):
+        page = self.watch()
+        i, g = self.first_trace_index()
+        page.evaluate(f"DFL_VIEWER.replay().goto({i}, 0.5)")
+        play = g["plays"][i]
+        for k in (0, 11):                                              # the quarterback and the first defender
+            x, y = page.evaluate(f"DFL_VIEWER.replay().playerAt({k})")
+            page.mouse.click(x, y)
+            who = page.inner_text("[data-k='who']")
+            info = g["roster"][str(play["trace"]["ids"][k])]
+            self.assertIn(info["name"], who)
+            self.assertIn(g["teams"][info["side"]]["abbr"], who)
+            self.assertIn("offense" if k < 11 else "defense", who)
+        page.evaluate("DFL_VIEWER.replay().goto(0)")
+        page.mouse.click(300, 300)
+        self.assertEqual(page.problems, [])
+        page.close()
+
     def test_plays_without_recorded_movement_are_shown_as_events_not_motion(self):
         page = self.watch()
         s = self.state(page)

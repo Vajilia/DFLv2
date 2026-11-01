@@ -135,6 +135,7 @@
       el.stage = h('div', { class: 'pb-stage' }, el.canvas, h('div', { class: 'pb-chipline', 'data-k': 'event', 'aria-hidden': 'true', text: '' }),
         h('div', { class: 'pb-card', 'data-k': 'card', hidden: true }));
       el.text = h('p', { class: 'pb-text', role: 'status', 'aria-live': 'polite', text: '' });
+      el.who = h('p', { class: 'pb-who', 'data-k': 'who', text: 'Point at or tap a player to see who it is.' });
       el.play = h('button', { type: 'button', class: 'pb-btn', 'aria-label': 'Play', text: '▶' });
       el.prev = h('button', { type: 'button', class: 'pb-btn', 'aria-label': 'Previous play', text: '⏮' });
       el.next = h('button', { type: 'button', class: 'pb-btn', 'aria-label': 'Next play', text: '⏭' });
@@ -154,7 +155,7 @@
         h('div', { class: 'sub', text: (g.date || '') + (g.neutral ? ' · neutral site' : '') + ' · final ' + g.final.away + '–' + g.final.home +
           (g.winner ? ' (' + g.teams[g.winner].abbr + ' win)' : ' (tie)') })));
       if (warn.length) root.appendChild(h('div', { class: 'err', role: 'alert', text: warn.join(' ') }));
-      root.appendChild(h('div', { class: 'pb-main' }, el.board, el.info, el.stage, el.text,
+      root.appendChild(h('div', { class: 'pb-main' }, el.board, el.info, el.stage, el.who, el.text,
         h('div', { class: 'pb-controls' }, el.prev, el.play, el.next, h('label', { class: 'pb-lab' }, 'Speed ', el.speed),
           h('label', { class: 'pb-lab grow' }, 'In this play ', el.scrub), h('label', { class: 'pb-lab grow' }, 'Play ', el.pick, el.pickout)),
         h('p', { class: 'pb-note muted', text: 'Replayed from what the league recorded: ' + g.traced_plays + ' of ' + g.plays.length + ' plays have recorded player movement' +
@@ -168,6 +169,18 @@
     }
 
     function wire() {
+      function whoAt(e) {
+        var tr = cur().trace && prepare(cur());
+        if (!tr || !st.hits) { q('who').textContent = 'No player movement is recorded for this play.'; return; }
+        var rc = el.canvas.getBoundingClientRect(), x = (e.clientX - rc.left) * el.canvas.width / rc.width, y = (e.clientY - rc.top) * el.canvas.height / rc.height, best = null, bd = 1e9;
+        st.hits.forEach(function (hh) { var d = Math.pow(hh[0] - x, 2) + Math.pow(hh[1] - y, 2); if (d < bd) { bd = d; best = hh; } });
+        var lim = Math.max(14, st.scale * 3.2);
+        if (!best || bd > lim * lim) return;
+        var pid = String(tr.ids[best[2]]), info = st.game.roster[pid] || {}, ab = st.game.teams[best[3]].abbr, role = (tr.roles[best[2]] || '').replace(/_/g, ' ').toUpperCase();
+        q('who').textContent = (info.number != null ? '#' + info.number + ' ' : '') + (info.name || ('player ' + pid + ' (no public name)')) + ' · ' + (info.pos || role) + ' · ' + ab + ' · ' + (best[2] < 11 ? 'offense' : 'defense') + ' (' + role + ' on this play)';
+      }
+      el.canvas.addEventListener('pointermove', whoAt);
+      el.canvas.addEventListener('click', whoAt);
       el.play.addEventListener('click', toggle);
       el.prev.addEventListener('click', function () { goto(st.idx - 1, 0, st.playing); });
       el.next.addEventListener('click', function () { goto(st.idx + 1, 0, st.playing); });
@@ -302,10 +315,12 @@
       vline(los, '#4DA3FF', Math.max(2, s * 0.25));
       if (p.down && p.dist) { var fd = abs(p, Math.min(100, tr.los + p.dist), 0)[0]; vline(fd, '#F2D43D', Math.max(2, s * 0.25)); }
       sampleAt(tr, st.t, buf);
-      var offSide = p.off, defSide = p.off === 'home' ? 'away' : 'home', r = Math.max(4, s * 1.35);
+      var offSide = p.off, defSide = p.off === 'home' ? 'away' : 'home', r = Math.max(5, s * 1.6);
+      st.hits = [];
       for (var k = 0; k < 22; k++) {
         var side = k < 11 ? offSide : defSide, pt = abs(p, buf.p[k * 2], buf.p[k * 2 + 1]), q = X(pt[0], pt[1]);
         var fill = col[side], ring = side === 'home' ? col.homeRing : col.awayRing;
+        st.hits.push([q[0], q[1], k, side]);
         c.beginPath(); c.arc(q[0], q[1], r, 0, Math.PI * 2); c.fillStyle = fill; c.fill(); c.lineWidth = Math.max(1, s * 0.22); c.strokeStyle = k < 11 ? '#FFFFFF' : ring; c.stroke();
         var pid = String(tr.ids[k]), info = g.roster[pid], label = info && info.number != null ? String(info.number) : (tr.roles[k] || '').replace(/_.*/, '').toUpperCase().slice(0, 2);
         if (r >= 6) { c.fillStyle = ink(fill); c.font = 'bold ' + Math.round(r * 0.95) + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, q[0], q[1] + 0.5); }
@@ -337,6 +352,7 @@
       state: function () { var p = st.game && cur(); return { loaded: !!st.game, index: st.idx, plays: st.game ? st.game.plays.length : 0, t: st.t, playing: st.playing, speed: st.speed, view: st.view,
         traced: !!(p && p.trace && prepare(p)), kind: p ? p.kind : null, gid: st.game ? st.game.gid : null }; },
       refresh: function () { if (st.game) resize(); },
+      playerAt: function (k) { var h0 = (st.hits || [])[k]; if (!h0) return null; var rc = el.canvas.getBoundingClientRect(); return [rc.left + h0[0] * rc.width / el.canvas.width, rc.top + h0[1] * rc.height / el.canvas.height]; },
       goto: function (i, t) { if (st.game) { goto(i, t || 0, false); if (t) { st.t = t; sync(); } } },
       advance: function (s) { if (st.game) { advance(s); sync(); } },
       play: function () { if (st.game && !st.playing) toggle(); },
