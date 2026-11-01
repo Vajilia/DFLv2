@@ -1,6 +1,6 @@
 # Public playback format and the replay viewer
 
-Status: first milestone, built locally (2026-11-01). Nothing here is deployed to the Droplet yet; see "Deployment" for what that will take.
+Status: first milestone (2026-11-01). Built and tested locally; a static review copy (viewer plus three real games) is on the Droplet under `/feed/review/` only. Nothing is deployed to production; see "Deployment".
 
 ## Why it is separate
 
@@ -109,3 +109,11 @@ On the Droplet the demonstration is run with `tools/cap_state.py fingerprint` be
    read access to the archive as the feed exporter has, and a check that the feed publisher's retention does not remove the folder).
 3. Caddy: the template now gives `/feed/playback/games/*` an immutable cache and `/feed/playback/index.json` no-store. This is a server configuration
    change and goes through the normal validate-then-reload path.
+
+## Review copy, verification tools and known limits (2026-11-01)
+
+* `site/assets/config.js` is empty in production. A review copy sets `window.DFL_CONFIG = {feed, playback}` so the same site code reads another feed and playback folder. Removing the copy: `rm -rf /srv/dflv2/feed/review`.
+* `python3 tools/verify_playback_against_archive.py --archive A --playback P` compares every exported game with the archive independently of the exporter (participants, recorded movement, scoring events, final score); exit 0 only if all pass.
+* `python3 tools/build_replay_demo.py` builds one offline HTML page (viewer, styles and chosen games inline; no network).
+* Player identification: pointer or tap on a player shows name, number, position, side and role on that play, from the public file only.
+* Limits: a player who has left a roster since the game appears as "player N" (names are not stored with the archive); plays without a stored trace show an event card, never invented motion.
