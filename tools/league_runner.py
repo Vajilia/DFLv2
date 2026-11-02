@@ -82,6 +82,41 @@ def _log_event(ctl, league, seq, key, started, seconds):
         f.write(json.dumps(rec, sort_keys=True) + "\n")
 
 
+def _recover_last_event(ctl, league, seq, prev, S):
+    """The last event as the committed state records it, for a runner that has not fired one yet (a restart at the limit, or while paused).
+    Which event it was comes from the journal (the league file itself). When it finished comes from the previous status file if that is for the same event,
+    else from the event log's line for that sequence number (start + duration); if neither exists the time is left empty rather than guessed."""
+    if not seq:
+        return {}
+    try:
+        from dfl import persist
+        db = persist.connect(league, readonly=True)
+        try:
+            row = db.execute("SELECT key FROM journal WHERE seq = ?", (seq,)).fetchone()
+        finally:
+            db.close()
+    except Exception:
+        return {}
+    if not row:
+        return {}
+    key = str(row[0])
+    out = {"last_event": key, "last_event_at": None, "last_event_source": "journal"}
+    if prev.get("seq") == seq and prev.get("last_event") == key and prev.get("last_event_at"):
+        out.update(last_event_at=prev["last_event_at"], last_event_seconds=prev.get("last_event_seconds"), last_event_source="journal+previous status")
+        return out
+    try:
+        import calendar
+        with open(os.path.join(ctl, EVENT_LOG)) as f:
+            for line in f:
+                rec = json.loads(line)
+                if rec.get("seq") == seq and rec.get("key") == key:
+                    t0 = calendar.timegm(time.strptime(rec["started_at"], "%Y-%m-%dT%H:%M:%SZ"))
+                    out.update(last_event_at=S.now_iso(t0 + float(rec["seconds"])), last_event_seconds=rec["seconds"], last_event_source="journal+event log")
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("league")
@@ -131,6 +166,8 @@ def main(argv=None):
                     os._exit(9)
         r = persist.Runner.open(a.league, crash_hook=hook)
         put(seq=r.seq)
+        if st["last_event"] is None:                                           # a process that has fired nothing yet still reports the league's last event
+            put(**_recover_last_event(ctl, a.league, r.seq, prev, S))
         last_start = st["last_start_epoch"]
         while not stop["flag"]:
             if a.until_events is not None and r.seq >= a.until_events:

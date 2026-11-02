@@ -106,6 +106,36 @@ class Runner(unittest.TestCase):
         t = [time.mktime(time.strptime(e["started_at"], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone for e in log]
         self.assertGreaterEqual(t[1] - t[0], pace - 1.5, "the second event started a full pace after the first (to the second)")
 
+    def test_a_restart_at_the_limit_still_reports_the_last_event_from_committed_state(self):
+        lg = new_league(self.d)
+        py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "3")
+        first = self.rs()
+        self.assertTrue(first["last_event"] and first["last_event_at"])
+        with open(os.path.join(self.d, "events.jsonl")) as f:
+            keys = [json.loads(x)["key"] for x in f]
+        self.assertEqual(first["last_event"], keys[-1])
+        for how in ("previous status", "event log", "journal only"):
+            if how == "event log":                                                                    # the status file is lost or blanked: the event log fills the time in
+                st = dict(self.rs(), last_event=None, last_event_at=None)
+                ST.write_atomic(os.path.join(self.d, ST.RUNNER_FILE), st)
+            if how == "journal only":                                                                 # no log either: the event is still named, the time is left empty
+                os.remove(os.path.join(self.d, "events.jsonl"))
+                ST.write_atomic(os.path.join(self.d, ST.RUNNER_FILE), dict(self.rs(), last_event=None, last_event_at=None))
+            r = py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "3")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            s = self.rs()
+            self.assertEqual((s["state"], s["seq"], s["limit_reached"], s["error"]), ("stopped", 3, True, None), how)
+            self.assertEqual(s["last_event"], keys[-1], how)
+            if how == "journal only":
+                self.assertIsNone(s["last_event_at"])
+            elif how == "previous status":
+                self.assertEqual(s["last_event_at"], first["last_event_at"], how)
+            else:                                                                                     # derived from the log (start + duration): right to within a second or two
+                t = lambda x: time.mktime(time.strptime(x, "%Y-%m-%dT%H:%M:%SZ"))
+                self.assertLessEqual(abs(t(s["last_event_at"]) - t(first["last_event_at"])), 2, how)
+            self.assertEqual(chain_of(lg)["events"], 3, "a restart at the limit fires nothing")
+        self.assertEqual(ST.public_runner(self.rs())["events"], 3)
+
     def test_every_event_leaves_a_measurement_line_and_nothing_private_is_public(self):
         lg = new_league(self.d)
         py(os.path.join(TOOLS, "league_runner.py"), lg, "--until-events", "2")
