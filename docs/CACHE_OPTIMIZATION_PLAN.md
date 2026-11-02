@@ -84,3 +84,14 @@ Method (`tools/memo_experiment.py`): the same real league (seed 7, play-level, n
 Memo entries held (all contracts): event 50 87,989 -> 13,891; event 90 167,942 -> 18,277; event 141 249,147 -> 22,851; largest memo on one contract 94 -> 7. Resident memory grew 131 MB over the three seasons before and 40 MB after. Event time over the three seasons (summed seconds; the two runs shared one machine, so treat as indicative): 213.2 s -> 184.9 s; season 3 alone 85.3 s -> 69.6 s. There was no slowdown from recomputing, because the memo only matters within one week.
 
 What this does not show: that the server's real league (about 2-3x larger contract counts, spatial engine) behaves the same; that is to be measured by loading the server copy's event-141 snapshot under the new code in a fresh process (`analyze_memory.py snap`, read-only) and by running further events on a scratch copy. Decisions still open for the owner are in section 6: any adoption changes the code fingerprint, so it belongs to the next league or an explicit migration.
+
+## 9. The same change on the real event-141 snapshot (server scratch copy, read-only, 2026-11-02)
+Source: the scratch restore of the verified backup (`/root/offsite-restore-test`, never the live league), event-141 snapshot, loaded in fresh processes, `nice`d, one process at a time. Old tree = be05f57, new tree = f6d4c08 (this branch), both as side checkouts on the Droplet; nothing deployed, the service untouched.
+| | old code | new code |
+|---|---|---|
+| state digest of the loaded snapshot equals the journal's digest at event 141 | yes | **yes** (same digest, so the stored chain is still consistent) |
+| snapshot rewritten by that code, compressed | 3,246,559 B | 2,767,463 B (-14.8%) |
+| fresh process, resident after loading and a garbage collection | 200.8 MB (peak 213.9) | 115.5 MB (peak 123.8): -85 MB, -42% |
+| objects alive after load (`analyze_memory.py`) | 447,274 | 126,697 |
+Caution found on the way: loading a snapshot *written by the old code* with the new code frees the memo but not the memory (resident after load 203 MB, as before: the process had already allocated the memo while reading). The saving appears once snapshots are written by the new code, which is the case for any new league.
+The runner's resident size in the event log (277.7 MB at event 141, against 165.3 MB for a fresh load by the earlier measurement) is still higher than any fresh-load figure; part of that gap, and the rest of the unexplained growth, remains unmeasured here.
