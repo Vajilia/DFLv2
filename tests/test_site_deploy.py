@@ -221,6 +221,8 @@ class Install(unittest.TestCase):
         self.assertIn("ALL MATCH", r.stdout)
         rec = json.load(open(os.path.join(self.base, "DEPLOYED_REVISION.json")))
         self.assertEqual(rec["commit"], sha)
+        site_rec = json.load(open(os.path.join(self.base, "SITE_REVISION.json")))          # a full deployment records the site's commit on its own too
+        self.assertEqual((site_rec["site_commit"], site_rec["engine_tools_commit"], site_rec["site_release"]), (sha, sha, os.path.basename(os.readlink(os.path.join(self.base, "site", "current")))))
         verify = [sys.executable, "-I", os.path.join(ROOT, "tools", "verify_revision.py"), "--commit", sha, "--repo-url", ROOT, "--base", self.base,
                   "--snippet", os.path.join(self.caddy_dir, "conf.d", "dflv2-preview.caddy")]
         self.assertEqual(subprocess.run(verify, capture_output=True, text=True).returncode, 0)
@@ -232,6 +234,56 @@ class Install(unittest.TestCase):
         with open(os.path.join(self.caddy_dir, "conf.d", "dflv2-preview.caddy"), "a") as f:
             f.write("# hand edit\n")
         self.assertIn("FAIL the Caddy block", subprocess.run(verify, capture_output=True, text=True).stdout)
+
+    def test_a_frontend_only_update_records_its_own_site_revision_and_leaves_the_engine_record_alone(self):
+        """The site can move to another commit without the engine/tools revision moving: two records, each checked against its own commit."""
+        a = self._head()
+        clone = os.path.join(self.d, "clone")
+        git = lambda *args: subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-C", clone, *args], capture_output=True, text=True, check=True).stdout.strip()
+        subprocess.run(["git", "clone", "-q", ROOT, clone], check=True, capture_output=True)
+        git("config", "uploadpack.allowAnySHA1InWant", "true")
+        with open(os.path.join(clone, "site", "assets", "app.js"), "a") as f:
+            f.write("\n/* a frontend-only change */\n")
+        git("commit", "-q", "-am", "site only")
+        b = git("rev-parse", "HEAD")
+        self.assertNotEqual(a, b)
+        self.assertEqual(git("diff", "--name-only", a, b).split("\n"), ["site/assets/app.js"])
+        r = self._pinned(a, REPO_URL=clone)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        engine_record = read(os.path.join(self.base, "DEPLOYED_REVISION.json"))
+        engine_tree = subprocess.run(f"cd {self.base}/repo/ && find . -type f | sort | xargs sha256sum | sha256sum", shell=True, capture_output=True, text=True).stdout
+        import time
+        time.sleep(1.1)                                                       # site release ids are timestamps to the second
+        e = dict(os.environ, BASE=self.base, SRC=os.path.join(self.d, "src"), REPO_URL=clone)
+        so = subprocess.run(["sh", os.path.join(self.base, "repo", "deploy", "website", "deploy_site_only.sh"), b], capture_output=True, text=True, env=e)
+        self.assertEqual(so.returncode, 0, so.stdout + so.stderr)               # the helper exists at its documented path inside the installed code
+        self.assertEqual(read(os.path.join(self.base, "DEPLOYED_REVISION.json")), engine_record, "the engine/tools record is not touched by a site-only update")
+        site_rec = json.load(open(os.path.join(self.base, "SITE_REVISION.json")))
+        self.assertEqual((site_rec["site_commit"], site_rec["engine_tools_commit"]), (b, a))
+        self.assertEqual(site_rec["site_release"], os.path.basename(os.readlink(os.path.join(self.base, "site", "current"))))
+        snippet = os.path.join(self.caddy_dir, "conf.d", "dflv2-preview.caddy")
+        verify = [sys.executable, "-I", os.path.join(ROOT, "tools", "verify_revision.py"), "--commit", a, "--repo-url", clone, "--base", self.base, "--snippet", snippet]
+        v = subprocess.run(verify, capture_output=True, text=True)
+        self.assertEqual(v.returncode, 0, v.stdout)                            # engine/tools checked against A, the served site against B
+        self.assertIn("not the engine/tools commit", v.stdout)
+        self.assertIn("served files match the tree hash", v.stdout)
+        rb = subprocess.run(["sh", os.path.join(self.base, "repo", "deploy", "website", "rollback.sh"), "--site"], capture_output=True, text=True, env=e)
+        self.assertEqual(rb.returncode, 0, rb.stderr)
+        back = json.load(open(os.path.join(self.base, "SITE_REVISION.json")))
+        self.assertEqual((back["site_commit"], back["engine_tools_commit"]), (a, a))     # the record follows the site back
+        self.assertEqual(read(os.path.join(self.base, "DEPLOYED_REVISION.json")), engine_record)
+        v2 = subprocess.run(verify, capture_output=True, text=True)
+        self.assertEqual(v2.returncode, 0, v2.stdout)
+        self.assertNotIn("not the engine/tools commit", v2.stdout)
+        engine_tree_after = subprocess.run(f"cd {self.base}/repo/ && find . -type f | sort | xargs sha256sum | sha256sum", shell=True, capture_output=True, text=True).stdout
+        self.assertEqual(engine_tree_after, engine_tree, "no file of the installed engine/tools changed")
+        # a hand edit of the served site is noticed against its own record
+        cur = os.path.realpath(os.path.join(self.base, "site", "current"))
+        with open(os.path.join(cur, "assets", "app.js"), "a") as f:
+            f.write("// tampered\n")
+        v3 = subprocess.run(verify, capture_output=True, text=True)
+        self.assertEqual(v3.returncode, 1)
+        self.assertIn("FAIL the served site", v3.stdout)
 
     def test_a_pinned_deploy_refuses_a_branch_name_or_an_abbreviation(self):
         self._head()

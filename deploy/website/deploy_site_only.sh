@@ -4,8 +4,10 @@
 # What it does: fetches exactly that commit (a commit id names its content), refuses anything but a clean checkout of it, copies the commit's site/ folder
 # in as a NEW site release (install_site.sh: a timestamped folder, then one atomic rename of the `current` link), and proves that the live site files are
 # byte-identical to that commit's site/ folder.
+# It records the commit of the served site in its own file, $BASE/SITE_REVISION.json (and one copy per release in $BASE/site-revisions/), apart from
+# $BASE/DEPLOYED_REVISION.json, which names the engine/tools revision and is left exactly as it was.
 # What it never does: it does not touch the league, the league runner or its timer, the feed or the exporter, the engine code ($BASE/repo), Caddy or any
-# configuration, and it restarts nothing. The previous site release stays, so the change is undone in one step:
+# configuration, DEPLOYED_REVISION.json, and it restarts nothing. The previous site release stays, so the change is undone in one step:
 #     sh $BASE/repo/deploy/website/rollback.sh --site
 # The pages read only published files, so a new site release cannot change a result; the league's saved state is not even opened.
 set -eu
@@ -33,6 +35,7 @@ id="$(BASE="$BASE" sh "$w/deploy/website/install_site.sh" "$w/site")"
 now="$(readlink "$BASE/site/current")"
 [ "$now" = "releases/$id" ] || die "the site link points at $now, expected releases/$id"
 diff -r "$w/site" "$BASE/site/current/" >/dev/null || die "the installed site differs from commit $COMMIT's site/ folder; roll back with: sh $BASE/repo/deploy/website/rollback.sh --site"
+python3 -I "$w/deploy/website/record_site_revision.py" --base "$BASE" --commit "$COMMIT" --release "$id" --site-dir "$w/site" --by deploy_site_only.sh
 echo "site installed and verified byte-identical to $COMMIT: $now"
 echo "previous release (for rollback): ${before:-none}"
 echo "undo with: sh $BASE/repo/deploy/website/rollback.sh --site"

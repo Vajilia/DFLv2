@@ -108,6 +108,9 @@ rec = {"commit": meta["commit"], "package_id": meta["id"], "package_sums_sha256"
 json.dump(rec, open(sys.argv[2] + "/DEPLOYED_REVISION.json.new", "w"), indent=1, sort_keys=True)
 PY
 mv "$BASE/DEPLOYED_REVISION.json.new" "$BASE/DEPLOYED_REVISION.json"; chmod 644 "$BASE/DEPLOYED_REVISION.json"
+# the site is recorded on its own as well, so that a later frontend-only update can change it without touching the engine/tools record above
+python3 -I "$BASE/repo/deploy/website/record_site_revision.py" --base "$BASE" --commit "$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$PKG/PACKAGE.json")" \
+  --release "$(basename "$(readlink "$BASE/site/current")")" --site-dir "$BASE/repo/site" --by install_staging.sh
 say "Caddy reloaded with the staging block for $HOST (Caddyfile import line added: ${added:-no, it was already there}). Backup: $CADDYFILE.dfl-staging.$stamp.bak"
 say ""
 say "NEXT: from any computer run:  python3 $BASE/repo/tools/verify_deployment.py https://$HOST --production https://${PRODUCTION_HOST:-diamondfootballleague.com} --baseline <file saved before the install>"

@@ -4,6 +4,7 @@ A throwaway git repository stands in for the project (its site/ and deploy/websi
 BASE with a "league" folder, a "feed" folder and an engine-code folder. After the update every file outside BASE/site/ is byte-identical, the live site
 equals the commit's site/ folder, and rollback.sh --site restores the previous release."""
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -24,6 +25,8 @@ def digest(root, skip=()):
         dirs[:] = sorted(x for x in dirs if os.path.join(d, x) not in skip)
         for n in sorted(files):
             p = os.path.join(d, n)
+            if p in skip:
+                continue
             h.update(os.path.relpath(p, root).encode())
             if os.path.islink(p):
                 h.update(os.readlink(p).encode())
@@ -39,7 +42,7 @@ class SiteOnly(unittest.TestCase):
         self.repo = os.path.join(self.tmp, "repo")
         shutil.copytree(os.path.join(ROOT, "site"), os.path.join(self.repo, "site"))
         os.makedirs(os.path.join(self.repo, "deploy", "website"))
-        for n in ("install_site.sh", "rollback.sh"):
+        for n in ("install_site.sh", "rollback.sh", "record_site_revision.py"):
             shutil.copy(os.path.join(ROOT, "deploy", "website", n), os.path.join(self.repo, "deploy", "website", n))
         self.git = lambda *a: run("git", "-c", "user.email=t@t", "-c", "user.name=t", *a, cwd=self.repo)
         self.git("init", "-q")
@@ -76,13 +79,16 @@ class SiteOnly(unittest.TestCase):
         subprocess.run(f"git -C {self.repo} archive {self.c1} site | tar -x -C {old}", shell=True, check=True)
         first = run("sh", os.path.join(self.repo, "deploy", "website", "install_site.sh"), os.path.join(old, "site"), env=self.env)
         self.assertEqual(first.returncode, 0, first.stderr)
-        outside = lambda: digest(self.base, skip=(os.path.join(self.base, "site"),))
+        outside = lambda: digest(self.base, skip=(os.path.join(self.base, "site"), os.path.join(self.base, "site-revisions"), os.path.join(self.base, "SITE_REVISION.json")))
         before_outside, before_site = outside(), os.readlink(os.path.join(self.base, "site", "current"))
         import time
         time.sleep(1.1)                                                      # release ids are timestamps to the second
         r = self.deploy(self.c2)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("byte-identical", r.stdout)
+        rec = json.load(open(os.path.join(self.base, "SITE_REVISION.json")))
+        self.assertEqual((rec["site_commit"], rec["site_release"]), (self.c2, os.readlink(os.path.join(self.base, "site", "current"))[len("releases/"):]))
+        self.assertTrue(os.path.exists(os.path.join(self.base, "site-revisions", rec["site_release"] + ".json")))
         self.assertEqual(outside(), before_outside, "nothing outside the site folder changed: not the league, the feed or the engine code")
         now = os.readlink(os.path.join(self.base, "site", "current"))
         self.assertNotEqual(now, before_site)
@@ -94,6 +100,9 @@ class SiteOnly(unittest.TestCase):
         with open(os.path.join(self.base, "site", "current", "assets", "app.js")) as f:
             self.assertNotIn("a frontend-only change", f.read())
         self.assertEqual(outside(), before_outside)
+        back = json.load(open(os.path.join(self.base, "SITE_REVISION.json")))
+        self.assertEqual(back["site_release"], before_site[len("releases/"):])      # the first release was installed without a record: said so, not guessed
+        self.assertIsNone(back["site_commit"])
 
     def test_refuses_a_branch_name_and_a_dirty_checkout(self):
         os.makedirs(os.path.join(self.base, "site"))

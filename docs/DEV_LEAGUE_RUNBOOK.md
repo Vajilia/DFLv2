@@ -86,4 +86,34 @@ Nothing here resumes or extends the league. Advancing again needs the owner's in
 ## Cleanup after the three-season trial (2026-11-01 / 11-02)
 **Backup with a manifest** (`tools/league_backup.py`, in revision 2535fb7): `create LEAGUE OUT [--include FILE ...]`, `verify DIR [--deep]`, `restore DIR DEST`. The folder holds `league.db`, `archive.db`, `config/` and `BACKUP_MANIFEST.json` (component file names, sizes, SHA-256, archive counts, journal head, code fingerprint). `verify` locates the archive through the manifest, never through the name recorded inside the league file, which is why the old check reported "archive missing" for a backup folder. It rejects missing, damaged, truncated, foreign, behind-the-league and lying components (`tests/test_league_backup.py`, 11 tests). A backup is kept outside the web and feed folders; to move it off the server, tar it, record `sha256sum`, and compare after the transfer. Do not put it in a public directory or the public repository.
 **Restart at the limit**: the runner now recovers `last_event` and `last_event_at` from the committed journal (plus the previous status or `events.jsonl` for the time), so a restart at 141 shows the final event instead of an empty field (`tests/test_league_runner.py`).
-**Deployment notes found on the live server**: (1) run deploys with `umask 022`; a shell left at `umask 077` makes `install_staging.sh` write the Caddy snippet 0600, Caddy cannot read it, the reload fails and the script restores the old configuration (it did so correctly on 2026-11-02, but it leaves the new code and site release linked and `DEPLOYED_REVISION.json` stale until the deploy is run again). (2) `deploy_site_only.sh` is not part of revision 1106d3b/2535fb7; run it from a checkout that has it. It does not rewrite `DEPLOYED_REVISION.json`, so after a site-only deploy that file still names the previous site release. (3) `cap_state.py fingerprint` reads options in pairs, so `--recompute` must come last. (4) Every install prunes older site releases down to a handful; `rollback.sh --site` picks the newest release that is not current.
+**Deployment notes found on the live server**: (1) run deploys with `umask 022`; a shell left at `umask 077` makes `install_staging.sh` write the Caddy snippet 0600, Caddy cannot read it, the reload fails and the script restores the old configuration (it did so correctly on 2026-11-02, but it leaves the new code and site release linked and `DEPLOYED_REVISION.json` stale until the deploy is run again). (2) `deploy_site_only.sh` was not part of revision 1106d3b/2535fb7. Since release 59ea680 (`release/tools-site-revision-2026-11-02`) it is installed at `/srv/dflv2/repo/deploy/website/deploy_site_only.sh` and records the served site in its own `SITE_REVISION.json`; `DEPLOYED_REVISION.json` (engine/tools) is deliberately not rewritten by a site-only deploy (see the section below). (3) `cap_state.py fingerprint` reads options in pairs, so `--recompute` must come last. (4) Every install prunes older site releases down to a handful; `rollback.sh --site` picks the newest release that is not current.
+
+## Frontend-only deployment and the two revision records
+
+Two things are installed on the Droplet and each has its own record:
+
+| What | Record | Written by |
+|---|---|---|
+| Engine, tools and deployment scripts (`/srv/dflv2/repo`) | `/srv/dflv2/DEPLOYED_REVISION.json` | a full deployment only (`deploy_pinned.sh <commit>`) |
+| The served website files (`/srv/dflv2/site/current`) | `/srv/dflv2/SITE_REVISION.json`, and one copy per site release in `/srv/dflv2/site-revisions/<release>.json` | a full deployment, and `deploy_site_only.sh` |
+
+A site-only update never writes `DEPLOYED_REVISION.json`, the engine, the league, the feed, the exporter or Caddy. (`DEPLOYED_REVISION.json` still has a
+`site_release` field: that is the site that was installed *with* that package, not the site now served; the served site is in `SITE_REVISION.json`.)
+
+**Where the helper is:** `/srv/dflv2/repo/deploy/website/deploy_site_only.sh`, part of the installed tools tree from the `release/tools-site-revision-2026-11-02`
+release on. Run as root with `umask 022`:
+
+    sh /srv/dflv2/repo/deploy/website/deploy_site_only.sh <40-character commit id>
+
+It fetches exactly that commit, requires a clean checkout of it, installs its `site/` folder as a new site release (atomic link switch), proves the served
+files are byte-identical to the commit's `site/`, and records the commit in `SITE_REVISION.json`.
+
+**Check:** `python3 -I /srv/dflv2/repo/tools/verify_revision.py --commit <engine/tools commit>`. The engine/tools files are compared with that commit; the
+served site is compared with the commit named in `SITE_REVISION.json` (or `--site-commit`), and with the tree hash stored there. It fails if the record names
+a different release than the one served, if a served file was edited by hand, or if the record is missing.
+
+**Undo:** `sh /srv/dflv2/repo/deploy/website/rollback.sh --site` switches back to the newest earlier site release and puts that release's record back. A release
+installed before records existed gets a record with `site_commit: null` that says so.
+
+**Release pruning:** every site install keeps the newest 5 releases (`KEEP=5`) and removes older release folders; set `KEEP=20` (or more) in the environment to
+keep more. The per-release records in `site-revisions/` are never removed.
