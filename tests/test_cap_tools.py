@@ -59,6 +59,15 @@ class Tools(unittest.TestCase):
         with open(a) as f:
             self.assertIs(json.load(f)["info"]["recompute"]["state_digest_equals_journal_head"], True)
 
+    def test_the_recompute_flag_may_come_before_the_other_options(self):
+        """Found on the server 2026-11-02: with --recompute first, --out was ignored (options were read in pairs)."""
+        out = os.path.join(self.tmp, "c.json")
+        p = subprocess.run([sys.executable, "-I", STATE, "fingerprint", "--recompute", "--league", self.db, "--feed", FEED, "--out", out], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue(os.path.exists(out), p.stdout)
+        with open(out) as f:
+            self.assertIn("recompute", json.load(f)["info"])
+
     def test_one_more_event_is_reported(self):
         a = self.fp("c.json")
         self.r.step()

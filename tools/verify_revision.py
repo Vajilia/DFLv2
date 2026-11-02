@@ -64,7 +64,8 @@ def compare(work, expected, root):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--commit", required=True)
+    ap.add_argument("--commit", required=True, help="the engine/tools revision (DEPLOYED_REVISION.json)")
+    ap.add_argument("--site-commit", default=None, help="the revision of the served website files; default: the one recorded in SITE_REVISION.json")
     ap.add_argument("--base", default="/srv/dflv2")
     ap.add_argument("--repo-url", default="https://github.com/Vajilia/DFLv2.git")
     ap.add_argument("--host", default="preview.diamondfootballleague.com")
@@ -101,9 +102,33 @@ def main(argv=None):
         line(not (m or c or b), f"the installed code is the commit's code ({len(exp)} files)", f"missing {m[:3]} changed {c[:3]} mode {b[:3]}" if (m or c or b) else repo)
         line(not x, "no unexpected files in the installed code", str(x[:5]) if x else "")
         site = os.path.realpath(os.path.join(a.base, "site", "current"))
-        sexp = tree_blobs(work, a.commit, "site/")
-        sm, sx, sc, sb = compare(work, sexp, site)
-        line(not (sm or sc or sb) and not sx, f"the served site is the commit's site/ ({len(sexp)} files)", f"missing {sm[:3]} changed {sc[:3]} extra {sx[:3]}" if (sm or sc or sb or sx) else os.path.basename(site))
+        site_commit, srec = a.site_commit, None
+        try:
+            with open(os.path.join(a.base, "SITE_REVISION.json")) as f:
+                srec = json.load(f)
+            line(srec.get("site_release") == os.path.basename(site), "the site revision record names the site release being served",
+                 f"{srec.get('site_release')} (commit {str(srec.get('site_commit'))[:12]})")
+            if site_commit is None:
+                site_commit = srec.get("site_commit")
+        except (OSError, ValueError) as e:
+            line(False, "the site revision record (SITE_REVISION.json) is readable", str(e))
+        if site_commit is None:
+            site_commit = a.commit if srec is None else None
+        if not site_commit or not re.fullmatch(r"[0-9a-f]{40}", str(site_commit)):
+            line(False, "the site's own commit is known", "pass --site-commit or record it with deploy_site_only.sh")
+        else:
+            if site_commit != a.commit:
+                git("fetch", "-q", "--depth", "1", a.repo_url, site_commit, cwd=work)
+                line(git("rev-parse", "FETCH_HEAD", cwd=work).decode().strip() == site_commit, "the site's commit was fetched", site_commit[:12])
+            line(srec is None or srec.get("site_commit") == site_commit, "the recorded site commit is the one checked", site_commit[:12])
+            sexp = tree_blobs(work, site_commit, "site/")
+            sm, sx, sc, sb = compare(work, sexp, site)
+            line(not (sm or sc or sb) and not sx, f"the served site is the site commit's site/ ({len(sexp)} files)" + ("" if site_commit == a.commit else f" [{site_commit[:12]}, not the engine/tools commit]"),
+                 f"missing {sm[:3]} changed {sc[:3]} extra {sx[:3]}" if (sm or sc or sb or sx) else os.path.basename(site))
+            if srec is not None and srec.get("site_tree_sha256"):
+                sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "deploy", "website"))
+                from record_site_revision import tree_sha256
+                line(tree_sha256(site) == srec["site_tree_sha256"], "the served files match the tree hash in the site revision record")
         if not a.no_caddy:
             tpl = git("show", f"{a.commit}:deploy/website/Caddyfile.template", cwd=work).decode()
             want = tpl.replace("__HOST__", a.host)

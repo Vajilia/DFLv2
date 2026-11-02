@@ -70,3 +70,33 @@ On the first live event the new release folder was private (HTTP 403 from the we
 ## Reading the runner status during an event (committed, executing, overdue)
 `runner_status.json` is written when an event starts and when it finishes, not while it runs, so during the 15-85 s an event takes it still shows the previous event as the last one and a `next_event_due` that is already in the past. That is an event IN PROGRESS, not an overdue one. Rule of thumb: committed = `seq` (and `league_events` in `feed/status.json`); executing = `last_start_epoch` is later than `last_event_at` and the runner is `running`; overdue = `next_event_due` is in the past, nothing started after the previous event, and more than about 2 minutes have passed (event 28 on 2026-10-31 started at its due time 18:53:27Z, ran 86 s, committed 18:54:53Z and was published as e00028 at 18:55:26Z). Progress is reported as events within the current season out of 47 and trial total out of 141.
 The `ba59269` suite entry stays in the historical test record as "interrupted, no result" and is no longer part of routine trial reports.
+
+## Frontend-only deployment and the two revision records
+
+Two things are installed on the Droplet and each has its own record:
+
+| What | Record | Written by |
+|---|---|---|
+| Engine, tools and deployment scripts (`/srv/dflv2/repo`) | `/srv/dflv2/DEPLOYED_REVISION.json` | a full deployment only (`deploy_pinned.sh <commit>`) |
+| The served website files (`/srv/dflv2/site/current`) | `/srv/dflv2/SITE_REVISION.json`, and one copy per site release in `/srv/dflv2/site-revisions/<release>.json` | a full deployment, and `deploy_site_only.sh` |
+
+A site-only update never writes `DEPLOYED_REVISION.json`, the engine, the league, the feed, the exporter or Caddy. (`DEPLOYED_REVISION.json` still has a
+`site_release` field: that is the site that was installed *with* that package, not the site now served; the served site is in `SITE_REVISION.json`.)
+
+**Where the helper is:** `/srv/dflv2/repo/deploy/website/deploy_site_only.sh`, part of the installed tools tree from the `release/tools-site-revision-2026-11-02`
+release on. Run as root with `umask 022`:
+
+    sh /srv/dflv2/repo/deploy/website/deploy_site_only.sh <40-character commit id>
+
+It fetches exactly that commit, requires a clean checkout of it, installs its `site/` folder as a new site release (atomic link switch), proves the served
+files are byte-identical to the commit's `site/`, and records the commit in `SITE_REVISION.json`.
+
+**Check:** `python3 -I /srv/dflv2/repo/tools/verify_revision.py --commit <engine/tools commit>`. The engine/tools files are compared with that commit; the
+served site is compared with the commit named in `SITE_REVISION.json` (or `--site-commit`), and with the tree hash stored there. It fails if the record names
+a different release than the one served, if a served file was edited by hand, or if the record is missing.
+
+**Undo:** `sh /srv/dflv2/repo/deploy/website/rollback.sh --site` switches back to the newest earlier site release and puts that release's record back. A release
+installed before records existed gets a record with `site_commit: null` that says so.
+
+**Release pruning:** every site install keeps the newest 5 releases (`KEEP=5`) and removes older release folders; set `KEEP=20` (or more) in the environment to
+keep more. The per-release records in `site-revisions/` are never removed.

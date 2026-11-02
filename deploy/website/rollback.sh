@@ -10,7 +10,11 @@ case "${1:-}" in
     cur="$(readlink "$BASE/site/current")"; cur="${cur#releases/}"
     prev="$(ls -1 "$BASE/site/releases" | sort | grep -v "^$cur\$" | grep -v partial | tail -n 1)"
     [ -n "$prev" ] || { echo "no earlier site release" >&2; exit 2; }
-    ln -sfn "releases/$prev" "$BASE/site/.current.new"; mv -T "$BASE/site/.current.new" "$BASE/site/current"; echo "site -> $prev" ;;
+    ln -sfn "releases/$prev" "$BASE/site/.current.new"; mv -T "$BASE/site/.current.new" "$BASE/site/current"; echo "site -> $prev"
+    # the site's own revision record follows the site (DEPLOYED_REVISION.json, the engine/tools revision, is not touched)
+    if [ -f "$BASE/site-revisions/$prev.json" ]; then cp "$BASE/site-revisions/$prev.json" "$BASE/SITE_REVISION.json.new"
+    else printf '{\n "site_commit": null,\n "site_release": "%s",\n "note": "no revision record exists for this release (it was installed before records were kept)"\n}\n' "$prev" > "$BASE/SITE_REVISION.json.new"; fi
+    chmod 644 "$BASE/SITE_REVISION.json.new"; mv "$BASE/SITE_REVISION.json.new" "$BASE/SITE_REVISION.json"; echo "site revision record -> $prev" ;;
   --feed)
     rel="${2:?release name}"; m="$BASE/feed/releases/$rel/manifest.json"
     [ -f "$m" ] || { echo "no such feed release: $rel" >&2; exit 2; }
