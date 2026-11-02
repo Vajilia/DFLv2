@@ -90,11 +90,29 @@ class Contract:
 
     # --- release and trade
     def release_charges(self, year, week, split=False, keep_guarantees=True):
+        """Memoized (a pure function of this frozen contract and the arguments). Callers ask about the league's current (year, week) or about a
+        later year at week 0, and league time only moves forward, so once a later week of a year has been asked, that year's earlier weeks are
+        dead: they are dropped here. At most the covered years (5) x the four flag combinations stay, whatever the length of the league."""
         key = (year, week, split, keep_guarantees)
-        hit = self._memo.get(key)
+        memo = self._memo
+        hit = memo.get(key)
         if hit is None:
-            hit = self._memo[key] = self._release_charges(year, week, split, keep_guarantees)
+            for k in [k for k in memo if k[0] == year and k[1] < week]:
+                del memo[k]
+            hit = memo[key] = self._release_charges(year, week, split, keep_guarantees)
         return dict(hit)
+
+    # The memo is derived data (neutral.EXCLUDED says so): it is never written to a snapshot or a copy, and one read from an older snapshot is
+    # discarded, so the first question after a load is simply answered again. Nothing a decision depends on lives in it.
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        state["_memo"] = {}
+        return state
+
+    def __setstate__(self, state):
+        state = dict(state)
+        state["_memo"] = {}
+        self.__dict__.update(state)
 
     def _release_charges(self, year, week, split=False, keep_guarantees=True):
         """Dead money by year if the player is let go in `year` after `week` paid weeks.
