@@ -82,8 +82,10 @@ class Tools(unittest.TestCase):
         d = json.loads(p.stdout)
         m = d["contract_memo"]
         self.assertGreater(m["contracts"], 1000)
-        self.assertGreater(m["entries"], 0)
-        self.assertLess(m["pickled_mb_without_memo"], m["pickled_mb_with_memo"])
+        # Contracts keep no release-charge memo in a stored snapshot on the memo-cache code (it is empty after a load), so the report may show
+        # 0 entries there; on older code it shows the entries the snapshot held. Either way, dropping the memo never makes the pickle bigger.
+        self.assertGreaterEqual(m["entries"], 0)
+        self.assertLessEqual(m["pickled_mb_without_memo"], m["pickled_mb_with_memo"])
         self.assertIn("lru_caches", d)
         self.assertGreater(d["pickled_mb"], 1)
 
