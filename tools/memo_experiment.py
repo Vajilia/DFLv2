@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Run a small real league for N events under ONE source tree and record, per event, what must not change and what we want to measure.
 Used to compare two trees (before / after a cache change) event by event, on scratch copies only: it creates its own league files in --work and
-never opens a deployed league.
+never opens a deployed league. `--spatial 1` plays the games with the 22-player spatial engine (what the league runs); the default 0 uses the older
+play-by-play engine, which is much faster and was what the first 141-event comparison used.
 
-  python3 -I tools/memo_experiment.py run  --src TREE --work DIR --out FILE.jsonl --events N [--seed 7] [--sample 10]
+  python3 -I tools/memo_experiment.py run  --src TREE --work DIR --out FILE.jsonl --events N [--seed 7] [--sample 10] [--spatial 0|1]
   python3 -I tools/memo_experiment.py diff A.jsonl B.jsonl         exit 1 if any DECISION field differs between the two runs
 
 DECISION fields (must be identical between trees): per event the journal's state digest, hash chain, archive record count and records digest, the
@@ -54,14 +55,14 @@ def universe_randoms(root):
     return found
 
 
-def run(src, work, out, events, seed, sample):
+def run(src, work, out, events, seed, sample, spatial=False):
     sys.path.insert(0, os.path.join(src, "src"))
     from dfl import archive as A, persist
     from dfl.ledger.contracts import Contract
     tables = os.path.join(src, "data", "season1")
     os.makedirs(work, exist_ok=True)
     path = os.path.join(work, "league.db")
-    r = persist.Runner.create(path, tables, seed=seed, snapshot_every=1, spatial=False)
+    r = persist.Runner.create(path, tables, seed=seed, snapshot_every=1, spatial=spatial)
     rows = []
     try:
         for n in range(1, events + 1):
@@ -83,13 +84,14 @@ def run(src, work, out, events, seed, sample):
                 row["memo_entries"] = sum(len(c.__dict__.get("_memo") or ()) for c in cs)
                 row["memo_max"] = max((len(c.__dict__.get("_memo") or ()) for c in cs), default=0)
             rows.append(row)
+            print(f"event {n}/{events} {key} {secs:.1f}s", file=sys.stderr, flush=True)
         final = {"final": True, "archive_digest": A.digest(path + ".archive"), "random_states": universe_randoms(r.u)}
     finally:
         r.close()
     with open(out, "w") as f:
         for row in rows + [final]:
             f.write(json.dumps(row, sort_keys=True) + "\n")
-    print(f"{len(rows)} events from {src}: last {rows[-1]['key']}, head {rows[-1]['digest'][:12]}, snapshot {rows[-1]['snapshot_bytes']} B, "
+    print(f"{len(rows)} events ({'spatial 22-player' if spatial else 'non-spatial'} engine) from {src}: last {rows[-1]['key']}, head {rows[-1]['digest'][:12]}, snapshot {rows[-1]['snapshot_bytes']} B, "
           f"rss {rows[-1].get('VmRSS')} MB, peak {rows[-1].get('VmHWM')} MB, {sum(x['seconds'] for x in rows):.1f} s")
 
 
@@ -120,7 +122,7 @@ def diff(a, b):
 def main(argv):
     if argv and argv[0] == "run":
         o = dict(zip(argv[1::2], argv[2::2]))
-        run(os.path.abspath(o["--src"]), os.path.abspath(o["--work"]), o["--out"], int(o["--events"]), int(o.get("--seed", 7)), int(o.get("--sample", 10)))
+        run(os.path.abspath(o["--src"]), os.path.abspath(o["--work"]), o["--out"], int(o["--events"]), int(o.get("--seed", 7)), int(o.get("--sample", 10)), o.get("--spatial", "0") == "1")
         return 0
     if len(argv) == 3 and argv[0] == "diff":
         return diff(argv[1], argv[2])
