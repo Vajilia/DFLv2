@@ -66,3 +66,21 @@ For events 1 to 47 as a short pass and then 94 to 141 (the heaviest) of an isola
 3. Review the numbers with the owner; decide section 6.
 4. Option 3 only if step 1 shows it is safe.
 5. Nothing touches `/srv/dflv2/league`, the runner service, or `DFL_UNTIL`.
+
+## 8. Result of the isolated trial of options 1 and 2 (2026-11-02)
+Branch `experiment/contract-memo-cache` (not merged, not deployed, no league on the server touched). Change: `Contract.release_charges` drops earlier weeks of a year once a later week of that year is asked (at most covered years x 4 flag combinations stay); `__getstate__`/`__setstate__` keep the memo out of every pickle and discard one read from an older snapshot. Tests: `tests/test_contract_memo.py` (6 tests; 3 fail on the old code).
+
+Method (`tools/memo_experiment.py`): the same real league (seed 7, play-level, no spatial engine, a snapshot after every event) created from scratch under the old tree (47e12e6) and the new tree and run for 141 events, three seasons, in two processes at the same time on one machine. A league file is bound to the code that wrote it, so each run starts a new league; no existing league is opened.
+
+**Unchanged (proved on all 141 events):** the journal's state digest, hash chain, archive record count and records digest, the event key and the state of the league's random stream are equal event by event (7 fields x 141); the archive's content digest at the end is equal; the states of all six random generators reachable from the league state (by name) are equal. The state digest never contained the memo (`neutral.EXCLUDED`), which is why it can be equal. Not covered here: the visible-estimate cache `_views` (untouched), a restart across the two code versions (impossible by design: different code fingerprints), and the server's league (not run at all).
+
+**Measured (old -> new; small local league, so use the ratios, not the absolute numbers):**
+| event | stored snapshot (compressed bytes) | resident MB | peak MB |
+|---|---|---|---|
+| 47 | 1,947,820 -> 1,816,503 | 152.7 -> 123.5 | 196.7 -> 176.0 |
+| 94 | 2,605,228 -> 2,286,381 | 211.5 -> 147.5 | 290.4 -> 199.9 |
+| 141 | 3,183,816 -> 2,720,894 | 283.4 -> 163.8 | 333.6 -> 221.7 |
+
+Memo entries held (all contracts): event 50 87,989 -> 13,891; event 90 167,942 -> 18,277; event 141 249,147 -> 22,851; largest memo on one contract 94 -> 7. Resident memory grew 131 MB over the three seasons before and 40 MB after. Event time over the three seasons (summed seconds; the two runs shared one machine, so treat as indicative): 213.2 s -> 184.9 s; season 3 alone 85.3 s -> 69.6 s. There was no slowdown from recomputing, because the memo only matters within one week.
+
+What this does not show: that the server's real league (about 2-3x larger contract counts, spatial engine) behaves the same; that is to be measured by loading the server copy's event-141 snapshot under the new code in a fresh process (`analyze_memory.py snap`, read-only) and by running further events on a scratch copy. Decisions still open for the owner are in section 6: any adoption changes the code fingerprint, so it belongs to the next league or an explicit migration.
