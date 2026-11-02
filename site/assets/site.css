@@ -1,5 +1,5 @@
 /* Components specific to the DFLv2 viewer. Tokens and base components are in base.css. */
-.devbanner { background: #3A2A08; border-bottom: 2px solid var(--accent); color: #FFE9A6; padding: 8px 16px; font-size: 15px; text-align: center; }
+.devbanner { background: #3A2A08; border-bottom: 4px solid var(--accent); color: #FFE9A6; padding: 8px 16px; font-size: 15px; text-align: center; }
 .devbanner b { font-family: var(--display); font-style: italic; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
 .wrapper { padding-inline: 16px; }
 header.top { padding-inline: 16px; }
