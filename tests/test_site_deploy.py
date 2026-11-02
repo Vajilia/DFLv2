@@ -167,6 +167,15 @@ class Install(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.base, "site", "current", "index.html")))
         self.assertTrue([n for n in os.listdir(self.caddy_dir) if ".dfl-staging." in n and n.endswith(".bak")], "a backup of the Caddyfile is kept")
 
+    def test_the_caddy_snippet_is_readable_by_caddy_even_from_a_shell_with_a_private_umask(self):
+        """Found on the server 2026-11-02: a root shell left at umask 077 made the snippet 0600; Caddy (another user) could not read it at reload."""
+        e = dict(os.environ, PATH=self.bin + os.pathsep + os.environ["PATH"], BASE=self.base, CADDY_DIR=self.caddy_dir, ROLLBACK_ROOT=self.roll,
+                 SERVICE_USER="root", ALLOW_NON_ROOT="1")
+        r = subprocess.run(["sh", os.path.join(DEPLOY, "install_staging.sh"), self.P.pkg], capture_output=True, text=True, env=e, preexec_fn=lambda: os.umask(0o077))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        mode = stat.S_IMODE(os.stat(os.path.join(self.caddy_dir, "conf.d", "dflv2-preview.caddy")).st_mode)
+        self.assertEqual(mode, 0o644)
+
     def test_the_seed_is_installed_by_an_unprivileged_user_when_the_package_sits_in_a_private_directory(self):
         """Found at the first real deployment: the package is unpacked under /root (mode 700); the service user must not need to enter it."""
         import pwd

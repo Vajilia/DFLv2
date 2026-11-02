@@ -85,7 +85,7 @@ mkdir -p "$CONF_D"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 cp -a "$CADDYFILE" "$CADDYFILE.dfl-staging.$stamp.bak"
 had_snippet=""; [ -f "$SNIPPET" ] && { cp -a "$SNIPPET" "$SNIPPET.$stamp.bak"; had_snippet=1; }
-sed "s/__HOST__/$HOST/g" "$BASE/repo/deploy/website/Caddyfile.template" > "$SNIPPET.new" && mv "$SNIPPET.new" "$SNIPPET"
+sed "s/__HOST__/$HOST/g" "$BASE/repo/deploy/website/Caddyfile.template" > "$SNIPPET.new" && chmod 644 "$SNIPPET.new" && mv "$SNIPPET.new" "$SNIPPET"   # explicit mode: Caddy runs as another user, and a root shell with umask 077 once left this 0600 and the reload failed
 IMPORT="import $CONF_D/*.caddy"
 added=""
 if ! grep -Eq "^[[:space:]]*import[[:space:]]+(\./)?(conf\.d|$CONF_D)/\*" "$CADDYFILE"; then printf '\n# added by install_staging.sh (DFLv2 staging): drop-in site blocks\n%s\n' "$IMPORT" >> "$CADDYFILE"; added=1; fi

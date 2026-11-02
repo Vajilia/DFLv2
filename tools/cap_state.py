@@ -116,7 +116,8 @@ def flat(d, p=""):
 
 def main(argv):
     if argv and argv[0] == "fingerprint":
-        opt = {argv[i]: argv[i + 1] for i in range(1, len(argv) - 1, 2) if argv[i].startswith("--") and argv[i] not in ("--recompute",)}
+        rest = [a for a in argv[1:] if a != "--recompute"]      # a flag with no value: it may stand anywhere
+        opt = {rest[i]: rest[i + 1] for i in range(0, len(rest) - 1, 2) if rest[i].startswith("--")}
         fp = fingerprint(opt["--league"], opt["--feed"], opt.get("--ctl"), "--recompute" in argv)
         text = json.dumps(fp, indent=1, sort_keys=True)
         if "--out" in opt:
