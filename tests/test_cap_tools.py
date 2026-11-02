@@ -82,8 +82,10 @@ class Tools(unittest.TestCase):
         d = json.loads(p.stdout)
         m = d["contract_memo"]
         self.assertGreater(m["contracts"], 1000)
-        self.assertGreater(m["entries"], 0)
-        self.assertLess(m["pickled_mb_without_memo"], m["pickled_mb_with_memo"])
+        # The snapshot was loaded in a fresh process: every contract's release-charge cache must be empty (the cache is derived data and is never
+        # written to a snapshot), so there is nothing for a save to drop and the pickle is the same size with and without it.
+        self.assertEqual((m["with_memo"], m["entries"], m["max_entries_per_contract"]), (0, 0, 0))
+        self.assertEqual(m["pickled_mb_with_memo"], m["pickled_mb_without_memo"])
         self.assertIn("lru_caches", d)
         self.assertGreater(d["pickled_mb"], 1)
 

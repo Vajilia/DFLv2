@@ -100,3 +100,6 @@ installed before records existed gets a record with `site_commit: null` that say
 
 **Release pruning:** every site install keeps the newest 5 releases (`KEEP=5`) and removes older release folders; set `KEEP=20` (or more) in the environment to
 keep more. The per-release records in `site-revisions/` are never removed.
+
+## Moving a league to the contract release-charge cache change (release/engine-memo-2026-11-02)
+The change (`src/dfl/ledger/contracts.py` only) keeps each contract's release-charge cache to the current week and later, and never writes it to a snapshot. It changes the code fingerprint, so a league written before it is refused by this code until it is carried over with `persist.upgrade` (`league_store.py upgrade OLD NEW --run-originating-code --archive ARCHIVE_COPY`), which never writes to the old file. Always do it in a separate directory: the new league keeps writing to the archive it is given, so give it a copy. After the upgrade: `compat` says `code: exact`, `verify --deep` says `ok`, the state digest equals the old journal's last digest, the archive digest is the old archive's, and the lineage names the old fingerprint, event number and chain value. Measured and tested in the experiment branch (docs/CACHE_OPTIMIZATION_PLAN.md sections 8-11, branch `experiment/contract-memo-cache`).
