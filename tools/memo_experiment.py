@@ -8,7 +8,7 @@ never opens a deployed league.
 
 DECISION fields (must be identical between trees): per event the journal's state digest, hash chain, archive record count and records digest, the
 event key, and the digest of the universe's stateful random stream; at the end the archive's content digest and the states of every random.Random
-object reachable in the process. MEASURED fields (compared only as numbers): seconds per event, stored snapshot size (compressed), resident and
+object reachable from the universe (by attribute path). MEASURED fields (compared only as numbers): seconds per event, stored snapshot size (compressed), resident and
 peak memory, and, at sampled events, how many contracts hold a release-charge memo and how many entries they hold in all."""
 import gc
 import hashlib
@@ -34,8 +34,24 @@ def sha(x):
     return hashlib.sha256(repr(x).encode()).hexdigest()[:16]
 
 
-def all_random_states():
-    return sorted(sha(o.getstate()) for o in gc.get_objects() if type(o) is random.Random)
+def universe_randoms(root):
+    """Every random.Random reachable from the universe, by attribute path, with a short hash of its state. (A scan of all objects in the process
+    would also count leftover temporaries that the garbage collector has not yet freed, which differ between runs for reasons unrelated to the league.)"""
+    found, seen, stack = {}, set(), [("u", root)]
+    while stack:
+        path, o = stack.pop()
+        if id(o) in seen or isinstance(o, (str, bytes, int, float, bool, type(None))):
+            continue
+        seen.add(id(o))
+        if isinstance(o, random.Random):
+            found[path] = sha(o.getstate())
+        elif isinstance(o, dict):
+            stack.extend((f"{path}[{k!r}]", v) for k, v in o.items() if isinstance(k, (str, int, tuple)))
+        elif isinstance(o, (list, tuple, set, frozenset)):
+            stack.extend((f"{path}[{i}]", v) for i, v in enumerate(o if not isinstance(o, (set, frozenset)) else sorted(o, key=repr)))
+        elif hasattr(o, "__dict__"):
+            stack.extend((f"{path}.{k}", v) for k, v in vars(o).items())
+    return found
 
 
 def run(src, work, out, events, seed, sample):
@@ -67,7 +83,7 @@ def run(src, work, out, events, seed, sample):
                 row["memo_entries"] = sum(len(c.__dict__.get("_memo") or ()) for c in cs)
                 row["memo_max"] = max((len(c.__dict__.get("_memo") or ()) for c in cs), default=0)
             rows.append(row)
-        final = {"final": True, "archive_digest": A.digest(path + ".archive"), "random_states": all_random_states()}
+        final = {"final": True, "archive_digest": A.digest(path + ".archive"), "random_states": universe_randoms(r.u)}
     finally:
         r.close()
     with open(out, "w") as f:
