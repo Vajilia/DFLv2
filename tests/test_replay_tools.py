@@ -248,19 +248,67 @@ class Tools(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(json.loads(out)["feed_games_without_replay"][0]["same_id_other_game"])
 
+    # ------------------------------------------------------------------------------------------------ public-data scan of a whole folder
+    def test_public_scan_passes_a_real_export_and_fails_on_anything_private(self):
+        self.assertEqual(self.export()[0], 0)
+        code, out, err = run("replay_public_scan.py", "--playback", self.play)
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("NOTHING OUTSIDE THE PUBLIC RULES", out)
+        e = load(os.path.join(self.play, "index.json"))["games"][0]
+
+        def tampered(change, rename_to_hash=True):
+            d = os.path.join(self.tmp, "scan")
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.copytree(self.play, d)
+            g = load(os.path.join(d, e["file"]))
+            change(g)
+            body = PB.canonical(g)
+            h = hashlib.sha256(body).hexdigest()
+            rel = f"games/{PB.slug(g['gid'])}.{h[:10]}.json"
+            os.remove(os.path.join(d, e["file"]))
+            with open(os.path.join(d, rel), "wb") as f:
+                f.write(body)
+            write_index(d, lambda i: i["games"][0].update(file=rel, sha256=h, bytes=len(body)))   # the hash is repaired: only the content is wrong
+            code, out, err = run("replay_public_scan.py", "--playback", d, "--json")
+            return code, json.loads(out)["problems"]
+        code, p = tampered(lambda g: g["plays"][0].update(rating=80))
+        self.assertEqual(code, 1)
+        self.assertTrue(any("rating" in x for x in p), p)
+        code, p = tampered(lambda g: next(iter(g["roster"].values())).update(overall=71))
+        self.assertTrue(any("roster" in x for x in p), p)
+        code, p = tampered(lambda g: g["plays"][1].update(text="Run for 4 yards; his coverage rating was low."))
+        self.assertTrue(any("mentions something private" in x for x in p), p)
+        code, p = tampered(lambda g: g["plays"][1].update(text="A player is injured and leaves the game."))
+        self.assertTrue(any("not an injury" in x for x in p), p)
+        code, p = tampered(lambda g: g["roster"].update({"999": {"side": "home", "name": "Nova Novrup", "number": 7, "pos": "QB"}}))
+        self.assertEqual(code, 0, "a surname that merely contains 'ovr' is not a rating: " + str(p))
+        os.makedirs(os.path.join(self.play, "extra"), exist_ok=True)
+        with open(os.path.join(self.play, "extra", "notes.txt"), "w") as f:
+            f.write("x")
+        code, out, err = run("replay_public_scan.py", "--playback", self.play, "--json")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("index does not name" in x for x in json.loads(out)["problems"]))
+
     # ------------------------------------------------------------------------------------------------ the game-id mapping
     def test_id_mapping(self):
-        sib = ["S002/po:East:wild_card:s2v7", "S002/po:East:wild_card:s3v6", "S002/po:East:wild_card:s4v5", "S002/po:West:wild_card:s2v7", "S002/po:West:wild_card:s3v6",
-               "S002/reg:w01:g01", "S002/tour:t01:g01", "S002/bowl", "S002/coronation"]
-        ids = {g: PB.feed_id_for(g, sib) for g in sib}
-        self.assertEqual(ids["S002/reg:w01:g01"], "reg:w01:g01")
-        self.assertEqual(ids["S002/tour:t01:g01"], "tour:t01:g01")
-        self.assertEqual((ids["S002/bowl"], ids["S002/coronation"]), ("bowl", "coronation"))
-        east = sorted(v for k, v in ids.items() if "East" in k)
-        self.assertEqual(east, ["po:East:wild_card:1", "po:East:wild_card:2", "po:East:wild_card:3"])
-        self.assertEqual(sorted(v for k, v in ids.items() if "West" in k), ["po:West:wild_card:1", "po:West:wild_card:2"])
-        self.assertEqual(len(set(ids.values())), len(ids))
-        self.assertEqual(ids["S002/po:East:wild_card:s4v5"], PB.feed_id_for("S002/po:East:wild_card:s4v5", sib), "the same game always gets the same id")
+        """Real ids from the production league's season 1 (archive id on the left, the id the published feed gives the same game on the right): the number
+        after `s` is the away club's seed, the number after `v` the home club's; a round's games are numbered by the HOME seed, lowest first."""
+        real = {
+            "S001/po:Eastern:wild_card:s6v3": "po:Eastern:wild_card:1", "S001/po:Eastern:wild_card:s5v4": "po:Eastern:wild_card:2",
+            "S001/po:Eastern:divisional:s4v1": "po:Eastern:divisional:1", "S001/po:Eastern:divisional:s3v2": "po:Eastern:divisional:2",
+            "S001/po:Eastern:conference:s2v1": "po:Eastern:conference:1", "S001/po:Western:wild_card:s6v3": "po:Western:wild_card:1",
+            "S001/po:Western:wild_card:s5v4": "po:Western:wild_card:2", "S001/po:Western:divisional:s6v1": "po:Western:divisional:1",
+            "S001/po:Western:divisional:s5v2": "po:Western:divisional:2", "S001/po:Western:conference:s2v1": "po:Western:conference:1"}
+        others = ["S001/reg:w01:g01", "S001/tour:r1:g01", "S001/bowl", "S001/coronation"]
+        siblings = list(real) + others
+        for gid, want in real.items():
+            self.assertEqual(PB.feed_id_for(gid, siblings), want, gid)
+        self.assertEqual([PB.feed_id_for(g, siblings) for g in others], ["reg:w01:g01", "tour:r1:g01", "bowl", "coronation"])
+        self.assertEqual(len({PB.feed_id_for(g, siblings) for g in siblings}), len(siblings), "no two games share an id")
+        # the same archive id in another season is its own game: numbering never mixes seasons
+        more = siblings + ["S002/po:Eastern:wild_card:s5v4", "S002/po:Eastern:wild_card:s6v3"]
+        self.assertEqual(PB.feed_id_for("S002/po:Eastern:wild_card:s5v4", more), "po:Eastern:wild_card:2")
+        self.assertEqual(PB.feed_id_for("S001/po:Eastern:wild_card:s5v4", more), "po:Eastern:wild_card:2")
 
     def test_a_player_who_is_not_on_a_public_roster_is_numbered_and_unnamed(self):
         db = sqlite3.connect(f"file:{ARCHIVE}?mode=ro", uri=True)
