@@ -40,7 +40,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 FORMAT, VERSION, MANIFEST = "dfl-recovery-set", 1, "RECOVERY_SET.json"
-ACTIVE, ORIGINAL, CODE = "active", "original-141", "code"
+ACTIVE, ORIGINAL, CODE, EQUIV = "active", "original-141", "code", "original-equivalent"
 TREE = f"{CODE}/engine-tree.tar.gz"
 TREE_DIRS = ("src", "data", "tools")
 
@@ -103,6 +103,29 @@ def _archive_counts(path):
         db.close()
 
 
+def same_history(a, b):
+    """-> list of differences between two league files' recorded history: every journal row, every restore point's checksum, every recorded code version.
+    Page layout, free pages, write-ahead state and meta stamps are not history, so a file rewritten by a backup or restore compares equal. [] = same history."""
+    import sqlite3
+    out = []
+    dbs = [sqlite3.connect(f"file:{os.path.abspath(x)}?mode=ro", uri=True) for x in (a, b)]
+    try:
+        for name, sql in (("journal", "SELECT * FROM journal ORDER BY seq"), ("snapshots", "SELECT seq, checkpoint, sha256, size FROM snapshots ORDER BY seq"),
+                          ("code", "SELECT fingerprint, manifest, length(zip) FROM code ORDER BY fingerprint")):
+            ra, rb = (d.execute(sql).fetchall() for d in dbs)
+            if ra != rb:
+                sa, sb = set(ra), set(rb)
+                out.append(f"{name}: {len(sa - sb)} row(s) only in the first file, {len(sb - sa)} only in the second")
+        for key in ("league_id", "fingerprint", "base", "lineage"):
+            va, vb = (d.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone() for d in dbs)
+            if va != vb:
+                out.append(f"meta {key} differs")
+    finally:
+        for d in dbs:
+            d.close()
+    return out
+
+
 def _pack_tree(dest, root):
     def keep(ti):
         return None if "__pycache__" in ti.name or ti.name.endswith(".pyc") else ti
@@ -141,15 +164,16 @@ def _git(root, *args):
 
 
 # ---------------------------------------------------------------------------------------------------------------- create
-def create(set_dir, league, original, code_tree=None):
+def create(set_dir, league, original, code_tree=None, equivalents=()):
     import league_backup as LB
     from dfl import persist
     if os.path.exists(set_dir) and os.listdir(set_dir):
         raise SystemExit(f"{set_dir} is not empty; a recovery set never goes into an existing folder")
-    for p in (league, original):
+    for p in (league, original, *equivalents):
         if not os.path.isfile(p):
             raise SystemExit(f"{p} does not exist")
-    _quiet(original)
+    for p in (original, *equivalents):
+        _quiet(p)
     os.makedirs(set_dir, exist_ok=True)
     act = LB.create(league, os.path.join(set_dir, ACTIVE), note="recovery set: the active league and its archive")
     orig_dir = os.path.join(set_dir, ORIGINAL)
@@ -173,6 +197,14 @@ def create(set_dir, league, original, code_tree=None):
     fp = persist.fingerprint(tree)
     if fp != ai["fingerprint"]:
         problems.append(f"the code tree {tree} ({fp[:12]}) is not the code that runs the active league ({str(ai['fingerprint'])[:12]}): name the tree that runs it with --code-tree")
+    eq_paths = []
+    for i, e in enumerate(equivalents, 1):
+        rel = f"{EQUIV}/league-{i}.db"
+        os.makedirs(os.path.join(set_dir, EQUIV), exist_ok=True)
+        shutil.copyfile(e, os.path.join(set_dir, rel))
+        diffs = same_history(os.path.join(orig_dir, "league.db"), os.path.join(set_dir, rel))
+        problems += [f"equivalent file {e} does not hold the same history as the original: {x}" for x in diffs]
+        eq_paths.append((rel, e))
     sp = persist.verify(os.path.join(orig_dir, "league.db"))
     problems += [f"original file: {x}" for x in sp]
     c = persist.archive_check(os.path.join(orig_dir, "league.db"), archive_file=os.path.join(set_dir, ACTIVE, LB.ARCHIVE))
@@ -184,17 +216,18 @@ def create(set_dir, league, original, code_tree=None):
     _pack_tree(os.path.join(set_dir, TREE), tree)
     components = [comp("active-manifest", set_dir, f"{ACTIVE}/{LB.MANIFEST}"), comp("active-league", set_dir, f"{ACTIVE}/{LB.LEAGUE}"),
                   comp("active-archive", set_dir, f"{ACTIVE}/{LB.ARCHIVE}"), comp("original-league", set_dir, f"{ORIGINAL}/league.db"),
-                  comp("code-tree", set_dir, TREE)]
+                  comp("code-tree", set_dir, TREE)] + [comp("original-equivalent", set_dir, rel) for rel, _ in eq_paths]
     manifest = {
         "format": FORMAT, "version": VERSION, "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "components": components,
         "active": {"head": ai["head"], "fingerprint": ai["fingerprint"], "journal_first_seq": ai["first_journal_seq"], "journal_rows": ai["journal_rows"],
                    "base": ai["base"], "checkpoint_snapshots": ai["checkpoint_snapshots"], "archive_counts": act["archive_counts"]},
         "original": {"head": oi["head"], "fingerprint": oi["fingerprint"], "journal_first_seq": oi["first_journal_seq"], "journal_rows": oi["journal_rows"],
                      "checkpoint_snapshots": oi["checkpoint_snapshots"], "other_snapshots": oi["other_snapshots"]},
+        "equivalents": [{"file": rel, "taken_from": os.path.abspath(e), "byte_identical_to_original": sha256_file(os.path.join(set_dir, rel)) == sha256_file(os.path.join(orig_dir, "league.db"))} for rel, e in eq_paths],
         "link": {"active_lineage_source_file_sha256": ai["lineage"][-1]["source_file_sha256"], "continues_event": ai["base"]["seq"], "chain": ai["base"]["chain"]},
         "code": {"tree_fingerprint": fp, "tree_git_commit": _git(tree, "rev-parse", "HEAD"), "tree_dirty": bool(_git(tree, "status", "--porcelain")),
                  "originating_code": f"carried inside each league file (code table): {oi['fingerprint']} in the original, {ai['fingerprint']} in the active file"},
-        "source_paths": sorted({os.path.abspath(p) for p in (league, original, league + ".archive", original + ".archive", os.path.dirname(os.path.abspath(league)),
+        "source_paths": sorted({os.path.abspath(p) for p in (league, original, *equivalents, league + ".archive", original + ".archive", os.path.dirname(os.path.abspath(league)),
                                                                 os.path.dirname(os.path.abspath(original)), tree)}),
         "preserves": {
             "game_history": "every game, play and recorded player movement of seasons 1..N: the active archive (a superset of the original's archive, checked row by row against the original journal)",
@@ -376,6 +409,9 @@ def restore_test(set_dir, work_dir, replay_from=None, require_sources_absent=Fal
     o = _last_json(r.stdout) or {}
     step("the original file opens and recovers under its own code, to its recorded event and chain",
          r.returncode == 0 and o.get("events") == oh["seq"] and o.get("chain") == oh["chain"] and (o.get("digest") in (None, oh.get("digest")) or oh.get("digest") is None), o or tail(r))
+    for eq in m.get("equivalents", []):
+        d = same_history(sp(ORIGINAL, "league.db"), sp(eq["file"]))
+        step(f"{eq['file']} holds the same recorded history as the original file (journal, restore-point checksums, code); byte-identical: {eq['byte_identical_to_original']}", not d, d or None)
     # 4. the two files are one history
     step("the active league continues the original's event and chain", m["link"]["continues_event"] == oh["seq"] and m["link"]["chain"] == oh["chain"], m["link"])
     step("the active file's lineage names this exact original file by SHA-256", m["link"]["active_lineage_source_file_sha256"] == sha256_file(wp("restored-original", "league.db")), None)
@@ -398,6 +434,7 @@ def main(argv=None):
     p.add_argument("set_dir")
     p.add_argument("--league", required=True)
     p.add_argument("--original", required=True)
+    p.add_argument("--equivalent", action="append", default=[], help="another file that must hold the same history as --original (for example the preserved league-141-original when the lineage hash names the upgrade input); repeatable")
     p.add_argument("--code-tree", help="the folder (with src/, data/, tools/) that runs the active league; default: the tree this tool is in")
     p = sub.add_parser("verify")
     p.add_argument("set_dir")
@@ -408,7 +445,7 @@ def main(argv=None):
     p.add_argument("--require-sources-absent", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "create":
-        m = create(a.set_dir, a.league, a.original, a.code_tree)
+        m = create(a.set_dir, a.league, a.original, a.code_tree, a.equivalent)
         print(json.dumps({"created": a.set_dir, "components": [(c["file"], c["size"]) for c in m["components"]], "active_head": m["active"]["head"]["seq"],
                           "original_head": m["original"]["head"]["seq"]}))
         return 0

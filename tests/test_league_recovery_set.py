@@ -160,6 +160,24 @@ class RecoverySet(unittest.TestCase):
             RS.create(self.set, self.new, self.old, code_tree=self.tree)
         self.assertIn("not empty", str(e.exception))
 
+    def test_an_equivalent_copy_of_the_original_is_checked_by_history_not_by_bytes(self):
+        from dfl import persist
+        twin = os.path.join(self.d, "twin.db")
+        persist.backup(self.old, twin)                                                   # a rewritten file: same history, other bytes
+        self.assertNotEqual(RS.sha256_file(twin), RS.sha256_file(self.old))
+        self.assertEqual(RS.same_history(self.old, twin), [])
+        s = os.path.join(self.d, "set-equiv")
+        m = RS.create(s, self.new, self.old, code_tree=self.tree, equivalents=[twin])
+        self.assertEqual([e["byte_identical_to_original"] for e in m["equivalents"]], [False])
+        self.assertEqual(RS.verify(s)["problems"], [])
+        res = RS.restore_test(s, os.path.join(self.d, "work-equiv"))
+        self.assertTrue(res["ok"], [x for x in res["steps"] if not x["ok"]])
+        self.assertTrue(any("byte-identical: False" in x["step"] and x["ok"] for x in res["steps"]))
+        other = new_league(self.d, "other3.db", 79, 14, placeholder=False)
+        with self.assertRaises(SystemExit) as e:
+            RS.create(os.path.join(self.d, "set-equiv-bad"), self.new, self.old, code_tree=self.tree, equivalents=[other])
+        self.assertIn("does not hold the same history", str(e.exception))
+
     def test_create_refuses_a_code_tree_that_does_not_run_the_active_league(self):
         t = os.path.join(self.d, "tree-changed")
         copy_tree(t)
