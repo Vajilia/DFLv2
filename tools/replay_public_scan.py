@@ -29,6 +29,7 @@ WORDS = r"ratings?|ovr|overall|attributes?|contracts?|salary|salaries|cap_?hit|p
 BANNED_KEY = re.compile(WORDS, re.I)                           # inside a key name: any occurrence
 BANNED_TEXT = re.compile(r"\b(" + WORDS + r")\b", re.I)         # inside a text value: whole words only (a surname may contain "ovr")
 INJURY_TEXT = "A player is injured and leaves the game."
+PENALTY_NAMES = re.compile(r"illegal formation", re.I)         # "Penalty on PHI: illegal formation, 5 yards." names a penalty; it is not a team's formation
 ROOT_FILES = {"index.json"}
 BASE64 = re.compile(r"[A-Za-z0-9+/]*={0,2}")
 
@@ -55,7 +56,7 @@ def walk(o, where, found, in_roster=False):
     elif isinstance(o, list):
         for i, v in enumerate(o):
             walk(v, f"{where}[{i}]", found)
-    elif isinstance(o, str) and o != INJURY_TEXT and BANNED_TEXT.search(o):
+    elif isinstance(o, str) and o != INJURY_TEXT and BANNED_TEXT.search(PENALTY_NAMES.sub("", o)):
         found.append((where, f"text {o[:60]!r} mentions something private"))
 
 
@@ -106,6 +107,7 @@ def main(argv=None):
     walk(idx, "index", found)
     problems += [f"{w}: {m}" for w, m in found]
     scanned, injuries, players, unnamed, games_with_unnamed = 0, 0, 0, 0, 0
+    per_season = {}
     named = set()
     for e in idx["games"]:
         named.add(e["file"])
@@ -125,16 +127,23 @@ def main(argv=None):
         gone = sum(1 for info in roster.values() if "name" not in info)
         unnamed += gone
         games_with_unnamed += 1 if gone else 0
+        ps = per_season.setdefault(str(e["season"]), {"games": 0, "roster_entries": 0, "without_a_name": 0, "games_with_unnamed": 0})
+        ps["games"] += 1
+        ps["roster_entries"] += len(roster)
+        ps["without_a_name"] += gone
+        ps["games_with_unnamed"] += 1 if gone else 0
     for d, _, files in os.walk(a.playback):
         for n in files:
             rel = os.path.relpath(os.path.join(d, n), a.playback).replace(os.sep, "/")
             if rel not in named and rel not in ROOT_FILES:
                 problems.append(f"{rel}: a file in the public folder that the index does not name")
-    out = {"games_scanned": scanned, "players_in_rosters": players, "players_without_a_name": unnamed, "games_with_unnamed_players": games_with_unnamed, "injury_plays": injuries, "problems": problems, "ok": not problems and scanned > 0}
+    out = {"games_scanned": scanned, "players_in_rosters": players, "players_without_a_name": unnamed, "games_with_unnamed_players": games_with_unnamed, "by_season": per_season, "injury_plays": injuries, "problems": problems, "ok": not problems and scanned > 0}
     if a.json:
         print(json.dumps(out, indent=1))
     else:
         print(f"{scanned} game file(s) scanned, {players} roster entries ({unnamed} without a name, in {games_with_unnamed} games), {injuries} injury plays: " + ("NOTHING OUTSIDE THE PUBLIC RULES" if out["ok"] else f"{len(problems)} PROBLEM(S)"))
+        for k, v in sorted(per_season.items()):
+            print(f"  season {k}: {v['games']} games, {v['roster_entries']} roster entries, {v['without_a_name']} without a name ({100 * v['without_a_name'] // max(1, v['roster_entries'])}%), {v['games_with_unnamed']} games affected")
         for p in problems[:40]:
             print("  " + p)
     return 0 if out["ok"] else 1
