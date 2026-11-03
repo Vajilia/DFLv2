@@ -321,5 +321,60 @@ class HistoryAndBack(unittest.TestCase):
             page.close()
 
 
+def real_game_in_both_lists(files):
+    """The archived OCO at GBP game stands in for a History playoff game and for the Coronation slot, so that both pages link to a replay file that
+    really is that game (the viewer refuses a file that holds a different game). Only the navigation is under test."""
+    for g in (files["history.json"]["seasons"][0]["playoff_games"][0], files["playoffs.json"]["coronation"]):
+        g.update(id=G1["id"], away=G1["away"], home=G1["home"], away_score=G1["away_score"], home_score=G1["home_score"], status="final")
+
+
+@unittest.skipIf(sync_playwright is None, "playwright is not installed")
+class PhoneNavigation(unittest.TestCase):
+    """History and Playoffs into a replay and back on a 390 px wide screen: nothing scrolls sideways, the field fits, back returns to the page it came from."""
+
+    @classmethod
+    def setUpClass(cls):
+        import preview_site
+        cls.tmp = tempfile.mkdtemp()
+        root = os.path.join(cls.tmp, "f")
+        write_variant(root, real_game_in_both_lists)
+        shutil.rmtree(os.path.join(root, "playback"))
+        shutil.copytree(PLAYBACK, os.path.join(root, "playback"))
+        handler = type("H", (preview_site.Handler,), {"feed_root": root, "site_root": preview_site.SITE})
+        socketserver.TCPServer.allow_reuse_address = True
+        cls.srv = socketserver.TCPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        cls.port = cls.srv.server_address[1]
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.srv.shutdown()
+        cls.srv.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_history_and_playoffs_into_a_replay_and_back_on_a_phone(self):
+        fits = "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        for route, link, label, href in (("history", "#app .tablewrap a.replay", "← History", "#/history"), ("playoffs", "#app .slot a.replay", "← Playoffs", "#/playoffs")):
+            page = self.browser.new_page(viewport={"width": 390, "height": 844})
+            page.goto(f"http://127.0.0.1:{self.port}/#/{route}")
+            page.wait_for_selector(link, timeout=15000)
+            self.assertTrue(page.evaluate(fits), route)
+            page.click(link)
+            page.wait_for_selector("#app .pb-canvas", timeout=20000)
+            self.assertTrue(page.evaluate(fits), route + ": viewer")
+            x, w = page.eval_on_selector("#app .pb-canvas", "c => { const r = c.getBoundingClientRect(); return [r.x, r.width] }")
+            self.assertTrue(x >= 0 and x + w <= 390, "the field fits the screen")
+            self.assertEqual(page.inner_text("#app a.pb-back"), label)
+            page.click("#app a.pb-back")
+            page.wait_for_selector("#app h1", timeout=15000)
+            self.assertEqual(page.evaluate("location.hash"), href)
+            self.assertTrue(page.evaluate(fits), route + ": back")
+            page.close()
+
+
 if __name__ == "__main__":
     unittest.main()
