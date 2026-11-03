@@ -135,10 +135,72 @@ The archive is the one thing the new league keeps writing to (it is permanent hi
 | resident memory per event, mean / max | 243.8 / 278.2 MB | 205.2 / 249.1 MB |
 | peak per event (maxrss), mean / max | 312.1 / 325.9 MB | 277.6 / 307.1 MB |
 | game weeks (19): seconds, mean / max | 68.4 / 79.3 | 70.1 / 77.1 |
-| league checkpoint size at season end | 27.81 MB | 25.96 MB |
+| league size logged at season end (database + WAL + shm; see section 13.3) | 27.81 MB | 25.96 MB |
 | export (publish) seconds, mean / max | 1.71 / 3.13 | 1.12 / 2.02 |
 | exporter peak memory, mean / max | 201 / 244 MB | 164 / 176 MB |
 
 Start gaps were exactly 900.0 s for all 46 intervals, no restarts, service peak 439 MB (limit 1200 MB). The archive grew from 423.5 MB to 565.2 MB (1,200 to 1,600 games, 141,978 to 189,201 traces) and verifies clean; `verify` of the league file is clean.
 
-**Reading these numbers honestly.** The saving is real but smaller in a running league than in the earlier laboratory measurements (those measured a freshly loaded league; resident 283 to 194 MB). In a running league the game-week working set dominates the peak (peak down 6%, resident down 16% on average). The comparison is not perfectly like-for-like: the new season is one season later in history, and the upgraded process started from a restart (144.9 MB at its first event, against about 222 MB for the old process at the same point), so memory grew more during the new season (+90 MB) than in the old one (+55 MB) and the gap narrowed through the year, from about -80 MB at the start to about -43 MB at the year close. Whether the gap would keep narrowing over more seasons is not known. The upgraded league file started much smaller (4.7 MB, against 23.6 MB) and grew to 25.96 MB by the end of the season; the reason was not investigated.
+**Reading these numbers honestly.** The saving is real but smaller in a running league than in the earlier laboratory measurements (those measured a freshly loaded league; resident 283 to 194 MB). In a running league the game-week working set dominates the peak (peak down 6%, resident down 16% on average). The comparison is not perfectly like-for-like: the new season is one season later in history, and the upgraded process started from a restart (144.9 MB at its first event, against about 222 MB for the old process at the same point), so memory grew more during the new season (+90 MB) than in the old one (+55 MB) and the gap narrowed through the year, from about -80 MB at the start to about -43 MB at the year close. Whether the gap would keep narrowing over more seasons is not known. The upgraded league file started much smaller (4.7 MB, against 23.6 MB, as logged) and grew to 25.96 MB by the end of the season; section 13.3 explains this from measurements (it is mostly the number of snapshots kept, plus the write-ahead log that the logged figure includes).
+
+## 13. Decision record, and why the upgraded league file started small (2026-11-03)
+
+### 13.1 Decision record
+
+**Accepted: the contract-release cache optimization**, as deployed in release `7e59cbb` (section 12), is the league's engine code from event 141 on. The grounds, all measured: with the 22-player engine the state digest, hash chain, archive records and digest, event keys and random-stream state were equal event by event over 141 events (section 10); the existing league was moved by the documented upgrade with no change of state (section 11); the 47 live events 142-188 ran under the new code with exact pacing, no restart, a clean archive verification and a clean `verify` of the league file (section 12); stored snapshots are smaller (11,353,036 against 13,852,982 bytes uncompressed at event 141, section 13.3) and measured memory in the live season was lower than in the same season of the previous year (section 12).
+
+**Unresolved: long-run memory growth.** What is known is one season. Under the new code the process was at 144.9 MB resident at its first event (a freshly started process) and 234.5 MB at the year close, +90 MB over the season (peak 307.1 MB, 1,322 MB of the machine's memory available at the end); under the old code the previous season grew +55 MB from a higher start. The gap to the old code narrowed from about -80 MB to about -43 MB during the season. The comparison is not like-for-like (a later season, and a restarted process against a long-running one), so it cannot say whether growth levels off, continues, or is just the start-up effect of a fresh process. No defect has been found and none has been ruled out.
+
+**How it will be settled: not on the live league.** The live trial is not to be extended solely to investigate memory; further seasons are played only for the league's own purposes, if the owner decides to. The question is answered with isolated comparisons from the same starting state, run on scratch copies, never touching `/srv/dflv2/league`:
+
+1. *Same start, one variable.* Start A: the event-141 file kept as `league-141-original`, run under the old code. Start B: an upgrade of a copy of that same file (section 11; `state_changed: false`), run under the new code. Both begin from the same state digest at event 141. A second pair can start from the event-188 file to test later history.
+2. *Same work.* Each arm runs the league's own 22-player engine through the same events with `tools/league_runner.py FILE --pace 0 --until-events N`, in its own scratch directory, one arm at a time on the same otherwise idle machine, for at least three seasons (N = 141 + 3 x 47 = 282). At pace 0 a season is a game-week time of about 70 s x 19 plus the rest, roughly half an hour of compute per arm per season.
+3. *Same measurements.* Per event, `events.jsonl` (resident `vmrss_mb`, peak `maxrss_mb`, available memory, seconds); at each year-end checkpoint `tools/analyze_memory.py table`, which loads the snapshot in a fresh process, so "resident of the long-running process minus a fresh load of the same state" separates what the process accumulates from what the league holds. The decision fields (state digest, chain, archive records) must be equal between arms at every event; a difference there is a bug, not a memory result.
+4. *Noise and the restart effect.* Each arm is run twice, alternating order. A third arm runs the new code but restarts the runner at every year-end checkpoint, which separates process age from league history.
+5. *Reading.* The question is the slope of resident memory against events for the same event keys. Only a positive slope that is larger under the new code than under the old would be a regression. The result goes into this document before any conclusion is drawn.
+
+### 13.2 What the league file holds
+
+The league file (`league.db`) is a SQLite file in write-ahead-log (WAL) mode with four tables: `snapshots` (zlib level 3 compressed pickles of the whole league state, one per kept event), `journal` (one small row per event: digest and hash chain), `code` (the source code that wrote the file) and `meta`. Snapshots are the only large part. The policy (`src/dfl/persist.py`): the newest 3 ordinary snapshots are kept, plus every year-end snapshot ("checkpoint") for ever. The permanent record of games lives in the separate archive file (`league.db.archive`), which is not part of any size below.
+
+### 13.3 Why the upgraded file started small, and why it grew
+
+Measured read-only on the server (SQLite opened `immutable=1`, nothing written, nothing copied; league stopped at 188):
+
+| | original (event 141, old code) | upgraded at creation (event 141) | upgraded now (event 188) |
+|---|---|---|---|
+| file bytes | 19,513,344 | 3,248,128 | 17,518,592 |
+| pages x 4096 / free pages | 4,764 / 67 (274,432 B) | | 4,277 / 63 (258,048 B) |
+| snapshots kept | 7: checkpoints 0, 47, 94, 141; ordinary 138, 139, 140 | 1: checkpoint 141 | 5: checkpoints 141, 188; ordinary 185, 186, 187 |
+| snapshot bytes (compressed, all kept) | 18,920,080 (97% of the file) | about 2,984,628 | 16,966,223 (97%) |
+| newest snapshot, compressed / uncompressed | 3,248,437 / 13,852,982 | 2,984,628 / 11,353,036 | 3,293,705 / 11,455,098 |
+| journal rows | 141 (seq 1-141) | none | 47 (seq 142-188) |
+| code table | 1 fingerprint `a8fc2634...`, 227,516 B zip | 1 fingerprint `efaa7167...` | same |
+| `-wal` / `-shm` | 0 B / 32,768 B | | 0 B / 32,768 B |
+
+**Where the 16,265,216 bytes went** (19,513,344 to 3,248,128):
+
+| cause | bytes | share |
+|---|---|---|
+| snapshot count: 6 of the 7 snapshots are not carried into the new file (0, 47, 94, 138, 139, 140); only the base checkpoint 141 is | 15,671,643 | 96.4% |
+| cache removal: the carried snapshot 141 is 18.0% smaller uncompressed and 8.1% smaller compressed (263,809 B) | 263,809 | 1.6% |
+| database free pages: the 67 free pages of the old file are not copied into a new file | 274,432 | 1.7% |
+| journal: the 141 old rows stay in the old file (the new file's chain starts from its base) | 36,864 | 0.2% |
+| remainder (page rounding and small tables) | 18,468 | 0.1% |
+
+*Compression* is not a cause: both files use the same level (zlib 3). Cache removal does change the ratio (compressed/uncompressed 23.4% with the caches, 26.3% without, because the caches compress well), which is why removing them saves 18% before and only 8% after compression.
+
+**Why it then grew to 17.5 MB:** the new file keeps filling the same policy: from 1 snapshot to 5 (3 rotating ordinary ones and 2 checkpoints, about 3.3 MB each), plus 47 journal rows (16,384 B). In steady state it grows by about one snapshot (about 3.3 MB) per season for the year-end checkpoint, plus the journal. The original file would have shown the same shape; at event 141 it had simply accumulated 4 checkpoints and 3 ordinary snapshots.
+
+**WAL and checkpoint state.** Both files are in WAL mode (file header bytes 18-19 are `02 02`; `PRAGMA journal_mode` reports `delete` through an immutable connection, so the header is the evidence). Both `-wal` files are 0 bytes now, i.e. fully checkpointed, and a 32,768 B `-shm` index remains. The runner's `league_bytes` in `events.jsonl` is the size of database plus `-wal` plus `-shm` (`tools/league_runner.py`), and the WAL is transient, so the logged figure is larger than what the file occupies: at event 188 it logged 25,960,312 bytes, against 17,518,592 bytes on disk (+ 32,768 `-shm`), so about 8.4 MB of the logged figure was write-ahead log at that moment; in the previous season the same arithmetic gives 27.81 MB logged against 19.51 MB on disk, about 8.3 MB. This is arithmetic from two measurements, not a direct reading of the WAL (it was emptied when the runner stopped). The like-for-like on-disk sizes at the season end are therefore 19.51 MB (old code, event 141) and 17.52 MB (new code, event 188), 10% smaller; the early logged value (4.7 MB at event 142 against 23.6 MB) compares a 3.25 MB database with a database that held 7 snapshots.
+
+### 13.4 Preserved content (a small file is not evidence of lost data; this is the evidence)
+
+| check | result |
+|---|---|
+| original file unchanged | `league-141-original/league.db` is 19,513,344 B, last modified 2026-11-01 23:08 (before the upgrade); its archive is 423,510,016 B, modified at the same time; SHA-256 of the file now `6dabe5c3bd133f3296b6cb57eebf0959fb44f485b995cfa08221026c565290c8` (the baseline for any later comparison) |
+| the new file continues the old chain | its base is seq 141 with chain `731a6f68...`, which is the old file's head at 141 (old digest `02c2858e...`); one lineage entry; archive base through 141 |
+| archive: nothing lost or changed | batches 96 to 128, games 1,200 to 1,600, records 3 to 4, traces 141,978 to 189,201. Rows of the original archive that are missing or different in the new one (compared on game/record/batch identity, season, sequence, kind, clubs, SHA-256 and size): 0 batches, 0 games, 0 records, 0 traces. Games with sequence <= 141 that the new archive has and the original has not: 0. Games added after 141: 400. |
+| journal | new file holds rows 142-188 (47); rows 1-141 are in the old file, 141 rows, head 141 |
+
+**What this does not show.** The comparison reads the stored SHA-256 and size columns, not the payload bytes; payload integrity is what `archive verify` checks, and it was clean after the run (section 12). And one thing really is not in the new file: the earlier restore points (checkpoints 0, 47, 94) and journal rows 1-141 exist only in the old file. The new file alone cannot replay the league from the beginning; the old file plus the archive can. So `league-141-original` is part of the league's record and must be kept and backed up with it.
