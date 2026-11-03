@@ -163,6 +163,7 @@ def main(argv=None):
     else:
         print(f"feed {r['feed_release']} (events {r['feed_events']}): archive {r['archive_games']} games, index {r['index_games']} entries; " +
               ", ".join(f"{k} {v}" for k, v in sorted(r["classes"].items())))
+        print(f"the feed lists {r['feed_games']} finished games (history playoff games and the current schedule); {len(r['feed_games_without_replay'])} of them have no replay under the same id, clubs and score")
         for row in r["by_season_kind"]:
             print(f"  season {row['season']} {row['kind']:<10} archive {row['archive']:>4}  exported {row['exported']:>4}  unrevealed {row['unrevealed']}  not_spatial {row['not_spatial']}  missing {row['missing']}")
         for c in ("unrevealed", "not_spatial", "missing"):
