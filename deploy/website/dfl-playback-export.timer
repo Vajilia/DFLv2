@@ -1,0 +1,10 @@
+[Unit]
+Description=Publish replays for newly revealed games
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=2min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

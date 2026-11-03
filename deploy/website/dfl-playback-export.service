@@ -1,0 +1,23 @@
+[Unit]
+Description=DFLv2 public replay export (reads the league archive, writes replay files under feed/playback)
+After=network.target
+
+[Service]
+Type=oneshot
+User=dflv2
+Group=dflv2
+Nice=15
+IOSchedulingClass=idle
+MemoryMax=600M
+UMask=0022
+ProtectSystem=strict
+# The only place this unit writes content is feed/playback (replay files are new files; a published one is never changed). The league directory is
+# listed as writable ONLY because SQLite must be able to create its "-shm" index file to read a write-ahead-log database at all (the same reason as
+# dfl-feed-export.service). The exporter opens the archive read-only and writes nothing into it. The league runner MUST run as this same user (dflv2).
+ReadWritePaths=/srv/dflv2/feed/playback /srv/dflv2/league
+ReadOnlyPaths=/srv/dflv2/feed /opt/dflv2-src
+PrivateTmp=true
+NoNewPrivileges=true
+# __COMMIT__ is the 40-character commit the exporter is run from: its own pinned checkout under /opt/dflv2-src, never the engine's /srv/dflv2/repo tree.
+# It is filled in when the unit is installed (see docs/REPLAY_TOOLS.md), so the unit file in the repository is a template, not an installable file.
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/export_playback.py --archive /srv/dflv2/league/league.db.archive --feed /srv/dflv2/feed --out /srv/dflv2/feed/playback

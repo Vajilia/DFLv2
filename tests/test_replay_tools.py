@@ -276,6 +276,8 @@ class Tools(unittest.TestCase):
         self.assertTrue(any("rating" in x for x in p), p)
         code, p = tampered(lambda g: next(iter(g["roster"].values())).update(overall=71))
         self.assertTrue(any("roster" in x for x in p), p)
+        code, p = tampered(lambda g: next(x for x in g["plays"] if x["trace"])["trace"].update(pos="AAAA this is not base64 " * 4))
+        self.assertTrue(any("not base64" in x for x in p), p)
         code, p = tampered(lambda g: g["plays"][1].update(text="Run for 4 yards; his coverage rating was low."))
         self.assertTrue(any("mentions something private" in x for x in p), p)
         code, p = tampered(lambda g: g["plays"][1].update(text="A player is injured and leaves the game."))

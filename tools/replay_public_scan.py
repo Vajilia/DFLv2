@@ -30,6 +30,7 @@ BANNED_KEY = re.compile(WORDS, re.I)                           # inside a key na
 BANNED_TEXT = re.compile(r"\b(" + WORDS + r")\b", re.I)         # inside a text value: whole words only (a surname may contain "ovr")
 INJURY_TEXT = "A player is injured and leaves the game."
 ROOT_FILES = {"index.json"}
+BASE64 = re.compile(r"[A-Za-z0-9+/]*={0,2}")
 
 
 def canonical(o):
@@ -44,6 +45,10 @@ def walk(o, where, found, in_roster=False):
                 found.append((where, f"key {k!r} is not in the public schema"))
             if BANNED_KEY.search(k):
                 found.append((where, f"key {k!r} names something private"))
+            if k in ("pos", "ball") and isinstance(v, str) and len(v) > 64:      # a trace's encoded positions: numbers, not text (a roster position is two or three letters)
+                if not BASE64.fullmatch(v):
+                    found.append((f"{where}.{k}", "encoded positions are not base64"))
+                continue
             if k == "kind" and v == "injury":                    # the public label of a play where an unnamed player left hurt (its text is checked separately)
                 continue
             walk(v, f"{where}.{k}", found, in_roster=(k == "roster" and not in_roster))

@@ -15,7 +15,7 @@ __HOST__ {
 			Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 		}
 		@feed path /feed/*
-		@latest path /feed/latest.json /feed/status.json
+		@latest path /feed/latest.json /feed/status.json /feed/playback/index.json
 		# a release file is cached for good only if it EXISTS and can be read. An error answer (403 while a release is half-made or its permissions are wrong,
 		# 404 for a pruned or not-yet-existing one) must never be told "immutable": a browser would replay it for a year (found 2026-10-31, first live event).
 		# Caddy's `file` matcher is true only for a file it can stat, so those answers keep the plain `no-cache` below.
@@ -25,9 +25,17 @@ __HOST__ {
 				root /srv/dflv2
 			}
 		}
+		# a published replay file (feed/playback/games/<game>.<hash>.json) carries its own hash in its name and never changes; the replay index is never cached
+		@playgame {
+			path /feed/playback/games/*
+			file {
+				root /srv/dflv2
+			}
+		}
 		# site files are revalidated each time; the pointer and the status heartbeat are never cached; a published release directory never changes, so it may be cached for long
 		header Cache-Control "no-cache"
 		header @release Cache-Control "public, max-age=31536000, immutable"
+		header @playgame Cache-Control "public, max-age=31536000, immutable"
 		header @latest Cache-Control "no-store"
 		# nothing whose name starts with a dot is ever served (the publisher lock, temporary files)
 		@hidden path_regexp (^|/)\.[^/]
