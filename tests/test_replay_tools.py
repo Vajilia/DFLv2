@@ -83,17 +83,31 @@ def write_index(play, fn):
         f.write(PB.canonical(idx))
 
 
+def feed_listing(dst, ids, **change):
+    """A copy of the fixture feed whose schedule lists exactly these finished games, each a copy of the archived game with its own id (and any field in
+    `change`), so the feed and the one-game archive can agree. -> the feed's path."""
+    shutil.copytree(FEED, dst)
+    rel = os.path.join(dst, "releases", load(os.path.join(dst, "latest.json"))["release"])
+    sched = load(os.path.join(rel, "schedule.json"))
+    base = next(g for g in sched["games"] if g["id"] == "reg:w01:g02")
+    sched["games"] = [dict(base, id=i, **change) for i in ids]
+    with open(os.path.join(rel, "schedule.json"), "wb") as f:
+        f.write(PB.canonical(sched))
+    return dst
+
+
 class Tools(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.play = os.path.join(self.tmp, "playback")
         self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.feed = feed_listing(os.path.join(self.tmp, "feed"), ["reg:w01:g02"])
 
     def export(self, archive=ARCHIVE, *extra):
-        return run("export_playback.py", "--archive", archive, "--feed", FEED, "--out", self.play, *extra)
+        return run("export_playback.py", "--archive", archive, "--feed", self.feed, "--out", self.play, *extra)
 
-    def coverage(self, archive=ARCHIVE, *extra):
-        return run("replay_coverage.py", "--archive", archive, "--playback", self.play, "--feed", FEED, "--json", *extra)
+    def coverage(self, archive=ARCHIVE, *extra, feed=None):
+        return run("replay_coverage.py", "--archive", archive, "--playback", self.play, "--feed", feed or self.feed, "--json", *extra)
 
     # ------------------------------------------------------------------------------------------------ the whole chain on a real game
     def test_export_verify_coverage_and_a_repeat_run(self):
@@ -182,6 +196,7 @@ class Tools(unittest.TestCase):
     # ------------------------------------------------------------------------------------------------ the completeness check
     def test_coverage_finds_what_is_wrong_with_an_index(self):
         arch = clone_rows(os.path.join(self.tmp, "x"), [("S001/reg:w01:g06", 1, "regular", 12, None), ("S001/bowl", 1, "bowl", 12, None)])
+        self.feed = feed_listing(os.path.join(self.tmp, "feed2"), ["reg:w01:g02", "reg:w01:g06"])
         self.assertEqual(self.export(arch)[0], 0)
         idx = load(os.path.join(self.play, "index.json"))
         self.assertEqual(sorted(e["id"] for e in idx["games"]), ["bowl", "reg:w01:g02", "reg:w01:g06"])
@@ -196,7 +211,7 @@ class Tools(unittest.TestCase):
                 write_index(d, index_fn)
             if files_fn:
                 files_fn(d)
-            code, out, err = run("replay_coverage.py", "--archive", arch, "--playback", d, "--feed", FEED, "--json")
+            code, out, err = run("replay_coverage.py", "--archive", arch, "--playback", d, "--feed", self.feed, "--json")
             return code, json.loads(out)["problems"]
         code, p = problems(lambda i: i.update(games=[e for e in i["games"] if e["gid"] != "S001/reg:w01:g06"]))
         self.assertEqual(code, 1)
@@ -210,6 +225,28 @@ class Tools(unittest.TestCase):
         self.assertTrue(any("given to both" in x for x in p), p)
         code, p = problems(lambda i: [e.update(id="reg:w05:g01") for e in i["games"] if e["gid"] == "S001/reg:w01:g06"])
         self.assertTrue(any("not the archive id" in x for x in p), p)
+
+    def test_every_game_the_feed_lists_must_find_its_replay_under_the_same_id_clubs_and_score(self):
+        arch = clone_rows(os.path.join(self.tmp, "x"), [("S001/reg:w01:g06", 1, "regular", 12, None)])
+        self.assertEqual(self.export(arch)[0], 0)
+        ok = feed_listing(os.path.join(self.tmp, "f_ok"), ["reg:w01:g02", "reg:w01:g06"])
+        self.assertEqual(json.loads(self.coverage(arch, feed=ok)[1])["feed_games_without_replay"], [])
+        # the feed calls the second game something else: it has no replay under that id, and the report says where the same game is
+        renamed = feed_listing(os.path.join(self.tmp, "f_renamed"), ["reg:w01:g02", "reg:w01:g07"])
+        code, out, err = self.coverage(arch, feed=renamed)
+        rep = json.loads(out)
+        self.assertEqual(code, 1)
+        self.assertEqual([(x["id"], x["same_game_under"]) for x in rep["feed_games_without_replay"]], [("reg:w01:g07", ["S001/reg:w01:g02", "S001/reg:w01:g06"])])
+        # the same id with another result: the site would not link it, and neither does the check pass
+        other = feed_listing(os.path.join(self.tmp, "f_score"), ["reg:w01:g02", "reg:w01:g06"])
+        rel = os.path.join(other, "releases", load(os.path.join(other, "latest.json"))["release"], "schedule.json")
+        sched = load(rel)
+        sched["games"][1]["home_score"] += 1
+        with open(rel, "wb") as f:
+            f.write(PB.canonical(sched))
+        code, out, err = self.coverage(arch, feed=other)
+        self.assertEqual(code, 1)
+        self.assertTrue(json.loads(out)["feed_games_without_replay"][0]["same_id_other_game"])
 
     # ------------------------------------------------------------------------------------------------ the game-id mapping
     def test_id_mapping(self):

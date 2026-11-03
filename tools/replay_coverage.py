@@ -38,6 +38,27 @@ def feed_events(feed):
     return int(m.group(1)), rel
 
 
+def feed_games(feed, release):
+    """{(season number, public game id): (away, home, away_score, home_score)} for every finished game the published feed itself lists: the playoff games of each
+    season in history.json, and the schedule of the season that is current (schedule.json), whose season number is found through its year."""
+    rel = os.path.join(feed, "releases", release)
+    out = {}
+    with open(os.path.join(rel, "history.json"), encoding="utf-8") as f:
+        seasons = json.load(f).get("seasons") or []
+    by_year = {s["year"]: s["season"] for s in seasons}
+    for s in seasons:
+        for g in s.get("playoff_games") or []:
+            if g.get("status", "final") == "final" and g.get("away_score") is not None:
+                out[(s["season"], g["id"])] = (g["away"], g["home"], g["away_score"], g["home_score"])
+    with open(os.path.join(rel, "schedule.json"), encoding="utf-8") as f:
+        sched = json.load(f)
+    season = by_year.get(sched.get("year"), max((s["season"] for s in seasons), default=0) + 1)
+    for g in sched.get("games") or []:
+        if g.get("status") == "final" and g.get("away_score") is not None:
+            out.setdefault((season, g["id"]), (g["away"], g["home"], g["away_score"], g["home_score"]))
+    return out
+
+
 def analyse(archive, playback, feed):
     events, release = feed_events(feed)
     with open(os.path.join(playback, "index.json"), encoding="utf-8") as f:
@@ -105,7 +126,23 @@ def analyse(archive, playback, feed):
     for k, ns in sorted(rounds.items()):
         if sorted(ns) != list(range(1, len(ns) + 1)):
             problems.append(f"season {k[0]} {k[1]} {k[2]}: playoff numbers are {sorted(ns)}, expected 1..{len(ns)}")
+    # the site offers a replay only where the feed's own game (same season and id) has the same clubs and score: check that every game the feed lists
+    # finds its replay that way, and say which entries are the ones that do not
+    by_key = {(e["season"], e["id"]): e for e in entries}
+    fg = feed_games(feed, release)
+    feed_no_replay = []
+    for (season, gid), want in sorted(fg.items()):
+        e = by_key.get((season, gid))
+        if e is None:
+            twin = [x["gid"] for x in entries if x["season"] == season and (x["away"], x["home"], x["away_score"], x["home_score"]) == want]
+            feed_no_replay.append({"season": season, "id": gid, "feed": list(want), "same_game_under": twin})
+        elif (e["away"], e["home"], e["away_score"], e["home_score"]) != want:
+            feed_no_replay.append({"season": season, "id": gid, "feed": list(want), "index": [e["away"], e["home"], e["away_score"], e["home_score"]], "same_id_other_game": True})
+    for x in feed_no_replay:
+        problems.append(f"feed game season {x['season']} {x['id']} {x['feed']}: no replay with the same id, clubs and score" +
+                        (f" (the same game is under {x['same_game_under']})" if x.get("same_game_under") else ""))
     return {"feed_release": release, "feed_events": events, "archive_games": len(rows), "index_games": len(entries), "classes": classes,
+            "feed_games": len(fg), "feed_games_without_replay": feed_no_replay,
             "by_season_kind": [dict(season=k[0], kind=k[1], **v) for k, v in sorted(table.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1])))],
             "exceptions": exceptions, "problems": problems, "index_format": [index.get("format"), index.get("format_version")]}
 
