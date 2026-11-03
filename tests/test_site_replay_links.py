@@ -275,6 +275,23 @@ class HistoryAndBack(unittest.TestCase):
         self.assertEqual(page.eval_on_selector_all("#app details > details a.replay", "els => els.map(e => e.getAttribute('href'))"), ["#/game/S001%2Freg%3Aw01%3Ag02"])
         page.close()
 
+    def test_a_playoff_game_is_found_under_the_archives_seed_name_and_is_not_listed_twice(self):
+        """The feed's po:Eastern:wild_card:1 (CLE, seed 6, at ATL, seed 3, 25-21) is the archive's po:Eastern:wild_card:s6v3."""
+        wild = entry_like(G1, gid="S001/po:Eastern:wild_card:s6v3", id="po:Eastern:wild_card:s6v3", game_kind="playoff", season=1, away="CLE", home="ATL", away_score=25, home_score=21)
+        self.publish(wild)
+        page = self.page("history", "#app details")
+        self.assertEqual(page.eval_on_selector_all("#app .tablewrap a.replay", "els => els.map(e => e.getAttribute('href'))"), ["#/game/S001%2Fpo%3AEastern%3Awild_card%3As6v3"])
+        self.assertEqual(page.eval_on_selector_all("#app details > details", "els => els.length"), 0)      # shown in the playoff list, so not repeated in the other list
+        page.close()
+        self.publish(entry_like(wild, away_score=26))                                                     # a different result: no link at all
+        page = self.page("history", "#app details")
+        self.assertEqual(page.eval_on_selector_all("#app a.replay", "els => els.length"), 0)
+        page.close()
+        self.publish(entry_like(wild, id="po:Eastern:wild_card:s5v3", gid="S001/po:Eastern:wild_card:s5v3"))   # other seeds met: not this game
+        page = self.page("history", "#app .tablewrap a.replay, #app details")
+        self.assertEqual(page.eval_on_selector_all("#app .tablewrap a.replay", "els => els.length"), 0)
+        page.close()
+
     def test_no_replays_for_a_season_means_no_list(self):
         self.publish()
         page = self.page("history", "#app details")

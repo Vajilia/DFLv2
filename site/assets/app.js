@@ -181,8 +181,19 @@
   function replayEntry(g, season) {
     var ix = S.pb.index;
     if (!ix || !ix.by || !g.id) return null;
-    var e = ix.by[(season || (S.manifest && S.manifest.season)) + '|' + g.id];
-    return e && e.away === g.away && e.home === g.home && e.away_score === g.away_score && e.home_score === g.home_score ? e : null;   // only when it is the same game and the same result
+    var ids = replayIds(g), sn = season || (S.manifest && S.manifest.season);
+    for (var i = 0; i < ids.length; i++) {
+      var e = ix.by[sn + '|' + ids[i]];
+      if (e && e.away === g.away && e.home === g.home && e.away_score === g.away_score && e.home_score === g.home_score) return e;   // only when it is the same game and the same result
+    }
+    return null;
+  }
+  // The names a game can have in the archive. The feed numbers playoff games by round (po:Eastern:wild_card:1); the archive names them by the seeds that met
+  // (po:Eastern:wild_card:s6v3, away seed v home seed). Either way the clubs and the score must agree before a link is shown.
+  function replayIds(g) {
+    var ids = [g.id], m = /^(po:[^:]+:[^:]+):\d+$/.exec(g.id || '');
+    if (m && g.away_seed && g.home_seed) ids.push(m[1] + ':s' + g.away_seed + 'v' + g.home_seed);
+    return ids;
   }
   function groupByDate(games) {
     var m = {}, order = [];
@@ -461,7 +472,7 @@
     var ix = S.pb.index;
     if (!ix || !ix.games) return null;
     var shown = {};
-    shownGames.forEach(function (g) { shown[g.id] = 1; });
+    shownGames.forEach(function (g) { replayIds(g).forEach(function (id) { shown[id] = 1; }); });
     var list = ix.games.filter(function (e) { return e.season === s.season && e.id !== 'coronation' && !shown[e.id]; });
     if (!list.length) return null;
     list.sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
