@@ -121,3 +121,24 @@ The archive is the one thing the new league keeps writing to (it is permanent hi
 4. check: `compat` says `code: exact`; `verify --deep` says `ok`; the new file's lineage names the old fingerprint, event 141 and the old chain value; `cap_state.py fingerprint` of the copy shows 141 events and the same chain;
 5. the next capped run uses the upgraded copy; the original directory stays exactly as it is, as the record of the three-season trial (and the verified off-server backup remains the second copy).
 **Tested:** (a) `tests/test_contract_memo_upgrade.py` writes a league with the code as it was before this change (fixture `tests/fixtures/contracts_before_memo.py`, whose snapshot carries the full caches), shows the new code refuses it, upgrades a copy, and checks: original files byte-identical; state equal by value; hash chain continued; every cache empty after the upgrade; archive history unchanged by the move and both code epochs recorded; deep verification clean; and the next 10 events of the upgraded league equal, row for row (event key, state digest, hash chain, archive record count and records digest), the same 10 events fired by the league left on the old code. (b) The same procedure on the real trial league (server scratch copy of the verified backup, 141 events, 22-player engine, rule version engine-1.2): see section 10.
+
+## 12. The deployed release, and the one-season continuation on the server (2026-11-02 / 03)
+
+**What was deployed.** Not the experiment commit but a pinned release, `7e59cbbaea23b0de353545c64a6f5c39cffe774d` (branch `release/engine-memo-2026-11-02`): the previously deployed tools release `59ea680` plus only the contract-release cache change and its compatibility work. `src/dfl` and `data` are byte-identical to this experiment commit (`0f084fe`), so both have the same code fingerprint (`efaa71678327...`). They differ in everything outside the engine: the release does **not** contain the replay viewer and its exporter, verifier, demo builder and tests, `site/assets/playback.*`, `config.js`, `src/dflsite/playback.py`, `tools/memo_experiment.py`, the Caddy playback routes, or this document. The release adds the compatibility tests (`tests/test_contract_memo_upgrade.py`, the explicit `test_cap_tools` memory-report checks, `tests/fixtures/contracts_before_memo.py`). The full suite was run on `0f084fe` (889 tests OK); the release was verified with the 20 focused test files that cover everything it changes or that depends on the league file, publishing and deployment (362 tests, exit 0).
+
+**Procedure used** (section 11): stop runner and exporter; fresh verified backup; upgrade a copy into a separate private directory; check preservation (141 events and journal rows, hash chain `731a6f68...`, journal and deep state digests, all 6 random-number generators, archive digest `d65bbce9...`, archive verify clean); deploy the pinned release (all checks matched); rename the directories (original kept as `league-141-original`, upgraded copy became `league`); cap 188, pace 900 s; one runner and one exporter. The runner stopped by itself at event 188 (11:48 PM PST).
+
+**Result (events 142-188, new code, compared with events 95-141, old code, same position in the season, same event keys):**
+
+| | old code (season 3) | new code (season 4) |
+|---|---|---|
+| resident memory per event, mean / max | 243.8 / 278.2 MB | 205.2 / 249.1 MB |
+| peak per event (maxrss), mean / max | 312.1 / 325.9 MB | 277.6 / 307.1 MB |
+| game weeks (19): seconds, mean / max | 68.4 / 79.3 | 70.1 / 77.1 |
+| league checkpoint size at season end | 27.81 MB | 25.96 MB |
+| export (publish) seconds, mean / max | 1.71 / 3.13 | 1.12 / 2.02 |
+| exporter peak memory, mean / max | 201 / 244 MB | 164 / 176 MB |
+
+Start gaps were exactly 900.0 s for all 46 intervals, no restarts, service peak 439 MB (limit 1200 MB). The archive grew from 423.5 MB to 565.2 MB (1,200 to 1,600 games, 141,978 to 189,201 traces) and verifies clean; `verify` of the league file is clean.
+
+**Reading these numbers honestly.** The saving is real but smaller in a running league than in the earlier laboratory measurements (those measured a freshly loaded league; resident 283 to 194 MB). In a running league the game-week working set dominates the peak (peak down 6%, resident down 16% on average). The comparison is not perfectly like-for-like: the new season is one season later in history, and the upgraded process started from a restart (144.9 MB at its first event, against about 222 MB for the old process at the same point), so memory grew more during the new season (+90 MB) than in the old one (+55 MB) and the gap narrowed through the year, from about -80 MB at the start to about -43 MB at the year close. Whether the gap would keep narrowing over more seasons is not known. The upgraded league file started much smaller (4.7 MB, against 23.6 MB) and grew to 25.96 MB by the end of the season; the reason was not investigated.
