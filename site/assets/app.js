@@ -4,8 +4,10 @@
 (function () {
   'use strict';
   var FORMAT = 'dfl-public-feed', VERSION = 1, REFRESH_MS = 60000;
-  var BASE = 'feed/';
-  var S = { ptr: null, manifest: null, cache: {}, route: null, fresh: 0, error: null };
+  var CFG = window.DFL_CONFIG || {};                              // assets/config.js: empty in production; a review copy of the site points the same code at another feed
+  var BASE = CFG.feed || 'feed/';
+  var S = { ptr: null, manifest: null, cache: {}, route: null, fresh: 0, error: null, pb: { index: null, at: 0, viewer: null, gid: null, loading: null } };
+  var PB_BASE = CFG.playback || (BASE + 'playback/');   // published replay files (docs/PUBLIC_PLAYBACK_FORMAT.md); separate from the league feed
 
   // ---------------------------------------------------------------- tiny DOM helpers
   function h(tag, attrs) {
@@ -172,19 +174,27 @@
     if (g.venue) tail.push(h('div', { class: 'muted', style: 'font-size:14px', text: g.venue }));
     if (g.away_seed || g.home_seed) tail.push(h('div', { class: 'muted', style: 'font-size:14px', text: '#' + g.away_seed + ' at #' + g.home_seed }));
     if (g.note && g.kind !== 'regular' && g.kind !== 'playoff') tail.push(h('div', { class: 'muted', style: 'font-size:13px', text: g.note }));
+    var rp = done ? replayEntry(g, opt.season) : null;
+    if (rp) tags.push(h('a', { class: 'replay', href: '#/game/' + encodeURIComponent(rp.gid), title: 'Watch this game replayed from the recorded player movement' }, 'Replay'));
     return h('div', { class: 'game' }, h('div', { class: 't' }, when, tags), h('div', { class: 'teams' }, side(g.away, g.away_score, aw), side(g.home, g.home_score, hw), tail));
+  }
+  function replayEntry(g, season) {
+    var ix = S.pb.index;
+    if (!ix || !ix.by || !g.id) return null;
+    var e = ix.by[(season || (S.manifest && S.manifest.season)) + '|' + g.id];
+    return e && e.away === g.away && e.home === g.home && e.away_score === g.away_score && e.home_score === g.home_score ? e : null;   // only when it is the same game and the same result
   }
   function groupByDate(games) {
     var m = {}, order = [];
     games.forEach(function (g) { var k = g.date || ''; if (!m[k]) { m[k] = []; order.push(k); } m[k].push(g); });
     return order.map(function (k) { return [k, m[k]]; });
   }
-  function gameList(games, T, withDay) {
+  function gameList(games, T, withDay, opt) {
     var box = h('div', { class: 'tablewrap' });
     if (!games.length) { box.appendChild(empty('No games to show.')); return box; }
     groupByDate(games).forEach(function (g) {
       if (withDay !== false) box.appendChild(h('div', { class: 'day', text: fmtDate(g[0], true) }));
-      g[1].forEach(function (x) { box.appendChild(gameRow(x, T, { noDate: withDay !== false })); });
+      g[1].forEach(function (x) { box.appendChild(gameRow(x, T, { noDate: withDay !== false, season: opt && opt.season })); });
     });
     return box;
   }
@@ -200,7 +210,8 @@
         h('h1', { text: s.status_text }),
         h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(s.events_total), 'aria-valuenow': String(s.events_done), 'aria-label': 'League year progress' }, h('i', { style: 'width:' + pctDone + '%' })),
         h('div', { class: 'sub', text: s.events_done + ' of ' + s.events_total + ' calendar events done (' + pctDone + '%).' })));
-      if (s.champion && T[s.champion]) out.push(h('div', { class: 'champ' }, badge(T[s.champion], 'lg'), h('div', null, h('div', { class: 'eyebrow', text: 'DIAMOND CORONATION CHAMPION · ' + s.year }), h('div', { class: 'big', text: T[s.champion].full_name }))));
+      var champ = s.champion || (po.status === 'complete' ? po.champion : null);
+      if (champ && T[champ]) out.push(h('div', { class: 'champ' }, badge(T[champ], 'lg'), h('div', null, h('div', { class: 'eyebrow', text: 'DIAMOND CORONATION CHAMPION · ' + s.year }), h('div', { class: 'big', text: T[champ].full_name }), s.complete ? h('div', { class: 'sub', text: 'Season ' + s.season + ' is complete.' }) : null)));
       out.push(h('div', { class: 'kpis' },
         kpi(s.phase, 'phase'),
         kpi(s.regular_weeks.total ? s.regular_weeks.played + ' / ' + s.regular_weeks.total : '–', 'regular-season weeks played'),
@@ -221,10 +232,19 @@
       } else if (!sch.games.length) {
         out.push(section('Schedule', empty(s.schedule_published ? 'No games yet.' : 'The schedule is published when training camp opens.')));
       }
-      if (po.status !== 'not started') out.push(h('p', null, h('a', { href: '#/playoffs', text: 'The playoff bracket is under way →' })));
+      var pl = playoffLine(s, po);
+      if (pl) out.push(h('p', null, h('a', { href: '#/playoffs', text: pl })));
       out.push(section('About this preview', h('div', { class: 'stack', style: 'gap:8px;padding-top:0' }, n.notices.map(note))));
       return out;
     });
+  }
+  // What the home page says about the playoffs, by where the playoffs and the league year really are. Nothing before they are seeded; "under way" only while rounds are being played.
+  function playoffLine(s, po) {
+    if (!po || po.status === 'not started') return null;
+    if (s.complete) return 'See the final playoff bracket and the Diamond Coronation result →';
+    if (po.status === 'complete') return 'The Diamond Coronation has been played: see the bracket →';
+    if (po.status === 'seeded') return 'The playoff field is set: see the bracket →';
+    return 'The playoff bracket is under way →';
   }
   function kpi(v, l) { return h('div', { class: 'card kpi' }, h('b', { text: v }), h('span', { text: l })); }
   function shiftDate(iso, days) { var d = parseDate(iso); if (!d) return iso; d.setDate(d.getDate() + days); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -416,7 +436,7 @@
         Object.keys(s.seeds).sort().forEach(function (c) { row(c + ' seeds', s.seeds[c].map(function (x, i) { return (i + 1) + ' ' + (T[x] ? T[x].city : x); }).join(' · ')); });
         d.appendChild(kv);
         var games = s.playoff_games;
-        if (games.length) d.appendChild(h('div', { style: 'margin-top:12px' }, gameList(games.map(function (g) { return Object.assign({}, g, { date: g.date }); }), T)));
+        if (games.length) d.appendChild(h('div', { style: 'margin-top:12px' }, gameList(games.map(function (g) { return Object.assign({}, g, { date: g.date }); }), T, undefined, { season: s.season })));   // a past season's games are looked up under that season, not the current one
         out.push(d);
       });
       return out;
@@ -452,8 +472,67 @@
     return [h('h1', { text: 'Map' }), box];
   }
 
+  // ---------------------------------------------------------------- game replay (loaded on demand; reads feed/playback/ only)
+  function loadOnce(tag, url) {
+    S.pb.loading = S.pb.loading || {};
+    if (!S.pb.loading[url]) S.pb.loading[url] = new Promise(function (ok, bad) {
+      var el = tag === 'script' ? h('script', { src: url }) : h('link', { rel: 'stylesheet', href: url });
+      el.onload = function () { ok(); }; el.onerror = function () { delete S.pb.loading[url]; bad(new Error('the replay viewer could not be loaded')); };
+      document.head.appendChild(el);
+    });
+    return S.pb.loading[url];
+  }
+  function playbackReady() {
+    if (window.DFLPlayback) return Promise.resolve(window.DFLPlayback);
+    return Promise.all([loadOnce('link', 'assets/playback.css'), loadOnce('script', 'assets/playback.js')]).then(function () { return window.DFLPlayback; });
+  }
+  // The list of replayable games: one small file, read at most once a minute on pages that list games. Missing or incompatible only means "no Replay links".
+  // (Replay format: dfl-public-playback, version 1. The viewer code itself is not loaded until a replay is opened.)
+  function playbackIndex(force) {
+    var pb = S.pb;
+    if (!force && pb.index !== null && Date.now() - pb.at < 60000) return Promise.resolve(pb.index);
+    return fetch(PB_BASE + 'index.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
+      if (!o) return false;
+      if (o.format !== 'dfl-public-playback') return false;
+      if (o.format_version !== 1) return { incompatible: 'The replay files use format version ' + o.format_version + ', which this page does not read (it reads version 1). The site needs updating before replays can be shown.' };
+      var by = {};
+      (o.games || []).forEach(function (e) { by[e.gid] = e; by[e.season + '|' + e.id] = e; });
+      return { by: by };
+    }).catch(function () { return false; }).then(function (ix) { pb.index = ix; pb.at = Date.now(); return ix; });
+  }
+  // Where "back" goes: a game from an earlier season is listed under History; a playoff game under Playoffs; anything else under Schedule.
+  function backLink(gid) {
+    var m = /^S0*(\d+)\/(.*)$/.exec(gid || ''), cur = S.manifest && S.manifest.season;
+    if (m && cur != null && +m[1] !== +cur) return h('a', { class: 'pb-back', href: '#/history' }, '← History');
+    if (m && /^(po:|coronation|bowl)/.test(m[2])) return h('a', { class: 'pb-back', href: '#/playoffs' }, '← Playoffs');
+    return h('a', { class: 'pb-back', href: '#/schedule' }, '← Schedule');
+  }
+  function pageGame(gid) {
+    var tk = render.token, pb = S.pb;
+    var back = backLink(gid);
+    function msg(text) { return [back, h('div', { class: 'err', role: 'alert', text: text })]; }
+    if (pb.viewer && pb.gid === gid) {                       // a release refresh re-renders the page: keep the viewer (and where it is) instead of loading again
+      pb.viewer.refresh();
+      return [back, pb.viewer.node];
+    }
+    return playbackIndex(true).then(function (ix) {
+      if (tk !== render.token) return [];
+      if (!ix) return msg('Replays are not available right now.');
+      if (ix.incompatible) return msg(ix.incompatible);
+      var entry = ix.by[gid];
+      if (!entry) return msg('There is no replay for this game. Replays exist only for games whose player movement was recorded and published.');
+      return playbackReady().then(function (P) {
+        if (tk !== render.token) return [];
+        destroyViewer();
+        pb.viewer = P.create({ base: PB_BASE, entry: entry }); pb.gid = gid;
+        return [back, pb.viewer.node];
+      });
+    }).catch(function (e) { return msg('This replay could not be shown: ' + e.message); });
+  }
+  function destroyViewer() { var pb = S.pb; if (pb.viewer) { pb.viewer.destroy(); pb.viewer = null; pb.gid = null; } }
+
   // ---------------------------------------------------------------- shell
-  var ROUTES = { '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
+  var ROUTES = { game: pageGame, '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
   function parseRoute() {
     var p = (location.hash || '#/').replace(/^#\/?/, '').split('/');
     return { name: p[0] || '', arg: p[1] ? decodeURIComponent(p[1]) : '' };
@@ -470,7 +549,9 @@
       if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     var token = (render.token = (render.token || 0) + 1);
-    return Promise.resolve(page(r.arg)).then(function (content) {
+    if (S.pb.viewer && (r.name !== 'game' || r.arg !== S.pb.gid)) destroyViewer();
+    var pre = /^(|schedule|playoffs|team|history|game)$/.test(r.name) ? playbackIndex(false) : Promise.resolve();
+    return pre.then(function () { return token === render.token ? page(r.arg) : null; }).then(function (content) {
       if (token !== render.token) return;
       clear(app); add(app, content);
     }).catch(function (e) {
@@ -515,5 +596,5 @@
   window.addEventListener('hashchange', function () { if (S.manifest) { render(); window.scrollTo(0, 0); } });
   check();
   if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
-  window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome };
+  window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome, replay: function () { return S.pb.viewer; } };
 })();

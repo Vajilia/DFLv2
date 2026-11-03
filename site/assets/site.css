@@ -61,3 +61,5 @@ body { overflow-x: hidden; }
 .health.ok { border-left-color: var(--accent); color: inherit; }
 .health.paused, .health.warn { border-left-color: #C9A227; color: inherit; }
 .health.bad { border-left-color: var(--loss); background: #3A1414; color: #FFD6D6; }
+.replay { font-family: var(--mono); font-weight: 700; font-size: 14px; margin-left: 8px; padding: 0 8px; border: 1px solid var(--accent); color: var(--accent); }
+.replay:hover { background: var(--accent); color: var(--accent-ink); }
