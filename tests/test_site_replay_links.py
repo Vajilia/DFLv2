@@ -100,7 +100,7 @@ class ReplayLinks(unittest.TestCase):
         page = self.open("history")
         links = self.replay_links(page)
         page.close()
-        self.assertEqual(links, ["#/game/S001%2Freg%3Aw01%3Ag01"])
+        self.assertEqual(links, ["#/game/S001%2Freg%3Aw01%3Ag01", "#/game/S001%2Freg%3Aw01%3Ag02"])   # the playoff-list game, then the collapsed list of Season 1's other recorded replay
         self.assertEqual(self.errors, [])
 
     def test_the_same_game_id_in_the_current_season_does_not_borrow_that_replay(self):
@@ -120,7 +120,7 @@ class ReplayLinks(unittest.TestCase):
                     e["home_score"] += 1
             write(idx, json.dumps(d))
             page = self.open("history")
-            self.assertEqual(self.replay_links(page), [])
+            self.assertEqual(self.replay_links(page), ["#/game/S001%2Freg%3Aw01%3Ag02"])     # only the unchanged game keeps its link
             page.close()
         finally:
             write(idx, orig)
@@ -188,6 +188,120 @@ class ReplayLinks(unittest.TestCase):
         finally:
             write(idx, orig)
             os.remove(os.path.join(self.root, "playback", name))
+
+
+G2 = next(e for e in INDEX["games"] if e["id"] == "reg:w01:g02")        # LVR at NOS 3-6
+
+
+def entry_like(base, **fields):
+    """An index entry for the rules tests: it points at a real replay file (so it opens), with the identity fields changed. The page shows what
+    the file holds when it opens; these entries only exercise which links appear and where "back" goes."""
+    e = dict(base)
+    e.update(fields)
+    return e
+
+
+@unittest.skipIf(sync_playwright is None, "playwright is not installed")
+class HistoryAndBack(unittest.TestCase):
+    """The History page's replay links (Coronation and the collapsed list of other recorded replays) and the viewer's back link."""
+
+    @classmethod
+    def setUpClass(cls):
+        import preview_site
+        cls.tmp = tempfile.mkdtemp()
+        root = os.path.join(cls.tmp, "f")
+        write_variant(root, lambda files: None)                          # the frozen completed Season 1: champion TOR over MON 43-22, the Coronation is in playoffs.json
+        shutil.rmtree(os.path.join(root, "playback"))
+        shutil.copytree(PLAYBACK, os.path.join(root, "playback"))
+        cls.root, cls.idx = root, os.path.join(root, "playback", "index.json")
+        cls.orig = read(cls.idx)
+        handler = type("H", (preview_site.Handler,), {"feed_root": root, "site_root": preview_site.SITE})
+        socketserver.TCPServer.allow_reuse_address = True
+        cls.srv = socketserver.TCPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        cls.port = cls.srv.server_address[1]
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.srv.shutdown()
+        cls.srv.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def tearDown(self):
+        write(self.idx, self.orig)
+
+    def publish(self, *entries):
+        d = json.loads(self.orig)
+        d["games"] = list(entries)
+        write(self.idx, json.dumps(d))
+
+    def page(self, route, wait):
+        page = self.browser.new_page(viewport={"width": 1000, "height": 900})
+        page.goto(f"http://127.0.0.1:{self.port}/#/{route}")
+        page.wait_for_selector(wait, timeout=15000)
+        return page
+
+    def coronation(self, **fields):
+        base = dict(gid="S001/coronation", id="coronation", game_kind="coronation", season=1, away="MON", home="TOR", away_score=22, home_score=43)
+        base.update(fields)
+        return entry_like(G1, **base)
+
+    def test_history_coronation_row_links_when_the_index_has_that_game_between_the_two_finalists(self):
+        self.publish(self.coronation())
+        page = self.page("history", "#app details")
+        links = page.eval_on_selector_all("#app dl a.replay", "els => els.map(e => e.getAttribute('href'))")
+        page.close()
+        self.assertEqual(links, ["#/game/S001%2Fcoronation"])
+
+    def test_history_coronation_row_has_no_link_when_the_score_or_clubs_differ_from_the_history(self):
+        for fields in ({"home_score": 44}, {"home": "CLE"}, {"season": 2, "gid": "S002/coronation"}):
+            self.publish(self.coronation(**fields))
+            page = self.page("history", "#app details")
+            self.assertEqual(page.eval_on_selector_all("#app dl a.replay", "els => els.length"), 0, fields)
+            page.close()
+
+    def test_history_lists_other_replays_of_a_season_collapsed_with_a_label_and_a_link(self):
+        self.publish(self.coronation(), entry_like(G2))
+        page = self.page("history", "#app details")
+        summary = page.inner_text("#app details > details > summary")
+        self.assertIn("Other recorded replays from this season (1)", summary)
+        page.click("#app details > details > summary")
+        text = page.inner_text("#app details > details")
+        self.assertIn("Regular season, week 1", text)
+        self.assertEqual(page.eval_on_selector_all("#app details > details a.replay", "els => els.map(e => e.getAttribute('href'))"), ["#/game/S001%2Freg%3Aw01%3Ag02"])
+        page.close()
+
+    def test_no_replays_for_a_season_means_no_list(self):
+        self.publish()
+        page = self.page("history", "#app details")
+        self.assertEqual(page.eval_on_selector_all("#app details > details", "els => els.length"), 0)
+        page.close()
+
+    def test_back_goes_to_the_page_the_visitor_came_from(self):
+        self.publish(self.coronation())
+        for route, selector, label, href in (("playoffs", "#app .slot a.replay", "← Playoffs", "#/playoffs"),
+                                             ("history", "#app dl a.replay", "← History", "#/history")):
+            page = self.page(route, selector)
+            page.click(selector)
+            page.wait_for_selector("#app a.pb-back", timeout=20000)
+            self.assertEqual(page.inner_text("#app a.pb-back"), label)
+            self.assertEqual(page.get_attribute("#app a.pb-back", "href"), href)
+            page.click("#app a.pb-back")
+            page.wait_for_selector("#app h1", timeout=15000)
+            self.assertEqual(page.evaluate("location.hash"), href)
+            page.close()
+
+    def test_a_direct_visit_to_a_replay_falls_back_by_the_kind_of_game(self):
+        self.publish(self.coronation(), entry_like(G2, season=1))
+        cases = (("S001%2Fcoronation", "← Playoffs"), ("S001%2Freg%3Aw01%3Ag02", "← Schedule"))
+        for gid, label in cases:
+            page = self.page("game/" + gid, "#app a.pb-back")
+            self.assertEqual(page.inner_text("#app a.pb-back"), label, gid)
+            page.close()
 
 
 if __name__ == "__main__":

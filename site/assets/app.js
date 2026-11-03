@@ -429,7 +429,9 @@
         var d = h('details', { class: 'card', open: idx === 0 },  h('summary', null, h('b', { text: 'Season ' + s.season + ' · ' + s.year + ' — ' }), (T[s.champion] ? T[s.champion].full_name : s.champion) + ' champions'));
         var kv = h('dl', { class: 'kv' });
         function row(k, v) { kv.appendChild(h('dt', { text: k })); kv.appendChild(h('dd', null, v)); }
-        row('Diamond Coronation', (T[s.champion] ? T[s.champion].full_name : s.champion) + ' over ' + (T[s.runner_up] ? T[s.runner_up].full_name : s.runner_up) + (s.score ? ', ' + s.score + (s.score_source === 'archive' ? ' (recovered from the game archive)' : '') : ', score not recorded') + ' · ' + s.venue);
+        var cr = coronationReplay(s);
+        row('Diamond Coronation', [(T[s.champion] ? T[s.champion].full_name : s.champion) + ' over ' + (T[s.runner_up] ? T[s.runner_up].full_name : s.runner_up) + (s.score ? ', ' + s.score + (s.score_source === 'archive' ? ' (recovered from the game archive)' : '') : ', score not recorded') + ' · ' + s.venue + ' ',
+          cr ? h('a', { class: 'replay', href: '#/game/' + encodeURIComponent(cr.gid), title: 'Watch this game replayed from the recorded player movement' }, 'Replay') : null]);
         if (s.bowl_score) row('Ambassador Bowl', s.bowl_score + (s.bowl_winner ? ' · ' + s.bowl_winner + ' won' : ''));
         row('Exiled', s.exiled.map(function (x) { return T[x] ? T[x].full_name : x; }).join(', '));
         row('Division winners', s.division_winners.map(function (w) { return w.division + ': ' + (T[w.abbr] ? T[w.abbr].city : w.abbr); }).join(' · '));
@@ -437,10 +439,45 @@
         d.appendChild(kv);
         var games = s.playoff_games;
         if (games.length) d.appendChild(h('div', { style: 'margin-top:12px' }, gameList(games.map(function (g) { return Object.assign({}, g, { date: g.date }); }), T, undefined, { season: s.season })));   // a past season's games are looked up under that season, not the current one
+        var more = otherReplays(s, T, games);
+        if (more) d.appendChild(more);
         out.push(d);
       });
       return out;
     });
+  }
+  // The Diamond Coronation's replay, if the index holds one for this season between the champion and the runner-up (and the history's own score agrees when it has one).
+  function coronationReplay(s) {
+    var ix = S.pb.index, e = ix && ix.by ? ix.by[s.season + '|coronation'] : null;
+    if (!e || !s.champion || !s.runner_up) return null;
+    var champHome = e.home === s.champion;
+    if (!((champHome && e.away === s.runner_up) || (e.home === s.runner_up && e.away === s.champion))) return null;
+    var ch = champHome ? e.home_score : e.away_score, ru = champHome ? e.away_score : e.home_score, m = /^(\d+)\D+(\d+)$/.exec(s.score || '');
+    if (s.score && !(m && +m[1] === ch && +m[2] === ru)) return null;
+    return e;
+  }
+  // Other replays the index holds for a past season (regular season, tour, bowl): the history lists only playoff games, so this is how they are reached. Collapsed: there can be hundreds.
+  function otherReplays(s, T, shownGames) {
+    var ix = S.pb.index;
+    if (!ix || !ix.games) return null;
+    var shown = {};
+    shownGames.forEach(function (g) { shown[g.id] = 1; });
+    var list = ix.games.filter(function (e) { return e.season === s.season && e.id !== 'coronation' && !shown[e.id]; });
+    if (!list.length) return null;
+    list.sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+    var box = h('div', { class: 'stack', style: 'padding-top:0;gap:8px' });
+    list.forEach(function (e) {
+      var g = { id: e.id, kind: e.game_kind === 'tour' ? 'tour' : 'regular', status: 'final', away: e.away, home: e.home, away_score: e.away_score, home_score: e.home_score };
+      box.appendChild(h('div', { class: 'slot' }, h('div', { class: 'muted', text: replayLabel(e) }), gameRow(g, T, { noDate: true, season: s.season })));
+    });
+    return h('details', { class: 'card', style: 'margin-top:12px' }, h('summary', { text: 'Other recorded replays from this season (' + list.length + ')' }), box);
+  }
+  function replayLabel(e) {
+    var m = /^reg:w0*(\d+):g\d+$/.exec(e.id);
+    if (m) return 'Regular season, week ' + m[1];
+    if (/^tour:/.test(e.id)) return 'Ambassador Tour';
+    if (e.id === 'bowl') return 'Ambassador Bowl';
+    return e.id;
   }
 
   function pageRules() {
@@ -497,11 +534,14 @@
       if (o.format_version !== 1) return { incompatible: 'The replay files use format version ' + o.format_version + ', which this page does not read (it reads version 1). The site needs updating before replays can be shown.' };
       var by = {};
       (o.games || []).forEach(function (e) { by[e.gid] = e; by[e.season + '|' + e.id] = e; });
-      return { by: by };
+      return { by: by, games: o.games || [] };
     }).catch(function () { return false; }).then(function (ix) { pb.index = ix; pb.at = Date.now(); return ix; });
   }
-  // Where "back" goes: a game from an earlier season is listed under History; a playoff game under Playoffs; anything else under Schedule.
+  // Where "back" goes: to the page the visitor came from; on a direct visit, a game from an earlier season is listed under History, a playoff game under Playoffs, anything else under Schedule.
+  var BACK_LABEL = { '': 'Home', schedule: 'Schedule', playoffs: 'Playoffs', history: 'History', team: 'Team', teams: 'Teams', standings: 'Standings', calendar: 'Calendar' };
   function backLink(gid) {
+    var from = (S.lastHash || '').replace(/^#\/?/, '').split('/')[0];
+    if (S.lastHash && BACK_LABEL[from]) return h('a', { class: 'pb-back', href: S.lastHash }, '← ' + BACK_LABEL[from]);
     var m = /^S0*(\d+)\/(.*)$/.exec(gid || ''), cur = S.manifest && S.manifest.season;
     if (m && cur != null && +m[1] !== +cur) return h('a', { class: 'pb-back', href: '#/history' }, '← History');
     if (m && /^(po:|coronation|bowl)/.test(m[2])) return h('a', { class: 'pb-back', href: '#/playoffs' }, '← Playoffs');
@@ -543,6 +583,7 @@
   function render(again) {
     var app = document.getElementById('app'), r = parseRoute();
     S.route = r;
+    if (r.name !== 'game') S.lastHash = location.hash || '#/';      // where a replay's back link returns to
     var page = ROUTES[r.name] || pageHome;
     Array.prototype.forEach.call(document.querySelectorAll('#tabs a'), function (a) {
       var on = a.getAttribute('data-route') === (r.name === 'team' ? 'teams' : r.name);
