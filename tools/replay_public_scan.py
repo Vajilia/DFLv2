@@ -105,7 +105,7 @@ def main(argv=None):
     found = []
     walk(idx, "index", found)
     problems += [f"{w}: {m}" for w, m in found]
-    scanned, injuries, players = 0, 0, 0
+    scanned, injuries, players, unnamed, games_with_unnamed = 0, 0, 0, 0, 0
     named = set()
     for e in idx["games"]:
         named.add(e["file"])
@@ -120,17 +120,21 @@ def main(argv=None):
         problems += [f"{e['gid']}: {x}" for x in pr]
         scanned += 1
         injuries += inj
-        players += len(json.loads(raw.decode("utf-8")).get("roster", {}))
+        roster = json.loads(raw.decode("utf-8")).get("roster", {})
+        players += len(roster)
+        gone = sum(1 for info in roster.values() if "name" not in info)
+        unnamed += gone
+        games_with_unnamed += 1 if gone else 0
     for d, _, files in os.walk(a.playback):
         for n in files:
             rel = os.path.relpath(os.path.join(d, n), a.playback).replace(os.sep, "/")
             if rel not in named and rel not in ROOT_FILES:
                 problems.append(f"{rel}: a file in the public folder that the index does not name")
-    out = {"games_scanned": scanned, "players_in_rosters": players, "injury_plays": injuries, "problems": problems, "ok": not problems and scanned > 0}
+    out = {"games_scanned": scanned, "players_in_rosters": players, "players_without_a_name": unnamed, "games_with_unnamed_players": games_with_unnamed, "injury_plays": injuries, "problems": problems, "ok": not problems and scanned > 0}
     if a.json:
         print(json.dumps(out, indent=1))
     else:
-        print(f"{scanned} game file(s) scanned, {players} roster entries, {injuries} injury plays: " + ("NOTHING OUTSIDE THE PUBLIC RULES" if out["ok"] else f"{len(problems)} PROBLEM(S)"))
+        print(f"{scanned} game file(s) scanned, {players} roster entries ({unnamed} without a name, in {games_with_unnamed} games), {injuries} injury plays: " + ("NOTHING OUTSIDE THE PUBLIC RULES" if out["ok"] else f"{len(problems)} PROBLEM(S)"))
         for p in problems[:40]:
             print("  " + p)
     return 0 if out["ok"] else 1
