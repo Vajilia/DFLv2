@@ -172,6 +172,8 @@ class RecoverySet(unittest.TestCase):
         self.assertEqual(RS.verify(s)["problems"], [])
         res = RS.restore_test(s, os.path.join(self.d, "work-equiv"))
         self.assertTrue(res["ok"], [x for x in res["steps"] if not x["ok"]])
+        left = [n for _, _, fs in os.walk(s) for n in fs if n.endswith(("-shm", "-wal"))]
+        self.assertEqual(left, [], "the restore test leaves the set exactly as it was")
         self.assertTrue(any("byte-identical: False" in x["step"] and x["ok"] for x in res["steps"]))
         other = new_league(self.d, "other3.db", 79, 14, placeholder=False)
         with self.assertRaises(SystemExit) as e:

@@ -350,6 +350,13 @@ def _last_json(text):
 
 
 def restore_test(set_dir, work_dir, replay_from=None, require_sources_absent=False):
+    try:
+        return _restore_test(set_dir, work_dir, replay_from, require_sources_absent)
+    finally:
+        _tidy(set_dir)                                       # reading the set's league files can leave empty SQLite sidecars beside them; the set stays as it was
+
+
+def _restore_test(set_dir, work_dir, replay_from=None, require_sources_absent=False):
     steps = []
 
     def step(name, ok, detail=None):
