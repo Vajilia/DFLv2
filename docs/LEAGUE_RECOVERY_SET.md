@@ -61,7 +61,7 @@ python3 -I tools/league_recovery_set.py verify SET_DIR
 ```
 
 `create` copies the active pair with the same consistent online copy `league_backup.py` uses (league first, archive second); stop the runner before copying the original.
-Copy `SET_DIR` off the droplet. It is about 1.0 GB for this league (565 MB archive + 17.5 MB active + 19.5 MB original + code), mostly archive.
+Copy `SET_DIR` off the droplet. It is about 0.6 GB for this league (565 MB archive + 17.5 MB active + 19.5 MB original + a few MB of code), mostly archive.
 
 ## 4. The restore test
 
