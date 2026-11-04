@@ -103,6 +103,31 @@ class ReplayLinks(unittest.TestCase):
         self.assertEqual(links, ["#/game/S001%2Freg%3Aw01%3Ag01", "#/game/S001%2Freg%3Aw01%3Ag02"])   # the playoff-list game, then the collapsed list of Season 1's other recorded replay
         self.assertEqual(self.errors, [])
 
+    def test_history_sections_stay_open_after_replay_at_desktop_and_phone_widths(self):
+        for width in (1000, 390):
+            with self.subTest(width=width):
+                page = self.open("history")
+                page.set_viewport_size({"width": width, "height": 900})
+                more = page.locator("#app details details")
+                more.locator("summary").click()
+                page.wait_for_function("document.querySelector('#app details details').open")
+                more.locator("a.replay").first.click()
+                page.wait_for_selector("#app .pb-canvas", timeout=20000)
+                page.locator("a.pb-back").click()
+                page.wait_for_selector("#app details details", timeout=15000)
+                self.assertTrue(page.locator("#app details").first.evaluate("e => e.open"))
+                self.assertTrue(page.locator("#app details details").evaluate("e => e.open"))
+                # Explicitly collapsing is remembered too, including after another route.
+                page.locator("#app details > summary").first.click()
+                page.wait_for_function("!document.querySelector('#app details').open")
+                page.evaluate("location.hash = '#/standings'")
+                page.wait_for_function("document.querySelector('#app h1') && /standings/i.test(document.querySelector('#app h1').textContent)")
+                page.evaluate("location.hash = '#/history'")
+                page.wait_for_selector("#app details details", state="attached")
+                self.assertFalse(page.locator("#app details").first.evaluate("e => e.open"))
+                self.assertEqual(self.errors, [])
+                page.close()
+
     def test_the_same_game_id_in_the_current_season_does_not_borrow_that_replay(self):
         page = self.open("schedule/1")
         page.wait_for_selector("#app .game", timeout=15000)
