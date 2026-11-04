@@ -1,0 +1,9 @@
+.broadcast { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.bc-games { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.bc-games .card { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.bc-game { font: inherit; text-align: left; color: var(--ink); background: var(--surface); border: 1px solid var(--line); padding: 12px; min-height: 44px; cursor: pointer; overflow-wrap: anywhere; }
+.bc-game[aria-pressed="true"] { border-color: var(--accent); background: var(--soft); }
+.bc-stage { min-width: 0; }
+.bc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.bc-controls[hidden] { display: none; }
+.bc-controls input { flex: 1 1 240px; min-height: 44px; min-width: 0; accent-color: var(--accent); }

@@ -54,3 +54,6 @@
   .pb-card b { font-size: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .pb-btn { transition: none; } }
+
+.pb-live { grid-template-columns: minmax(0, 1fr); }
+.pb-live .pb-controls, .pb-live .pb-side { display: none; }

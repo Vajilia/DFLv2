@@ -91,7 +91,7 @@
   function create(opts) {
     // opts: { base: 'feed/playback/', entry: <index entry>, load: optional function -> promise of the game object }
     var base = opts.base, entry = opts.entry;
-    var root = h('section', { class: 'pb', 'aria-label': 'Game replay' });
+    var root = h('section', { class: 'pb' + (opts.live ? ' pb-live' : ''), 'aria-label': opts.live ? 'Live game' : 'Game replay' });
     var ac = window.AbortController ? new AbortController() : null;
     var st = { game: null, idx: 0, t: 0, playing: false, speed: 1, hold: 0, dead: false, raf: 0, last: 0, view: 'h', size: [0, 0], scale: 1 };
     var el = {}, ctx, buf = { p: new Float32Array(44), b: new Float32Array(3) }, fieldCache = null;
@@ -124,7 +124,7 @@
       root.textContent = '';
       var warn = [];
       var last = g.plays[g.plays.length - 1];
-      if (last && (last.score.away !== g.final.away || last.score.home !== g.final.home)) warn.push('The running score at the last play does not match the final score in this file; treat the replay with care.');
+      if (!opts.live && last && (last.score.away !== g.final.away || last.score.home !== g.final.home)) warn.push('The running score at the last play does not match the final score in this file; treat the replay with care.');
       el.board = h('div', { class: 'pb-board', role: 'group', 'aria-label': 'Scoreboard' },
         h('div', { class: 'pb-team away' }, h('span', { class: 'pb-chip', 'data-side': 'away', text: g.teams.away.abbr }), h('b', { class: 'pb-score', 'data-k': 'away', text: '0' })),
         h('div', { class: 'pb-mid' }, h('div', { class: 'pb-clock', 'data-k': 'clock', text: '' }), h('div', { class: 'pb-dd', 'data-k': 'dd', text: '' })),
@@ -152,13 +152,13 @@
         el.list.appendChild(li);
       });
       root.appendChild(h('div', { class: 'pb-head' }, h('h1', { class: 'pb-title', text: g.teams.away.name + ' at ' + g.teams.home.name }),
-        h('div', { class: 'sub', text: (g.date || '') + (g.neutral ? ' · neutral site' : '') + ' · final ' + g.final.away + '–' + g.final.home +
+        h('div', { class: 'sub', text: opts.live ? 'Live broadcast · recorded player movement' : (g.date || '') + (g.neutral ? ' · neutral site' : '') + ' · final ' + g.final.away + '–' + g.final.home +
           (g.winner ? ' (' + g.teams[g.winner].abbr + ' win)' : ' (tie)') })));
       if (warn.length) root.appendChild(h('div', { class: 'err', role: 'alert', text: warn.join(' ') }));
       root.appendChild(h('div', { class: 'pb-main' }, el.board, el.info, el.stage, el.who, el.text,
         h('div', { class: 'pb-controls' }, el.prev, el.play, el.next, h('label', { class: 'pb-lab' }, 'Speed ', el.speed),
           h('label', { class: 'pb-lab grow' }, 'In this play ', el.scrub), h('label', { class: 'pb-lab grow' }, 'Play ', el.pick, el.pickout)),
-        h('p', { class: 'pb-note muted', text: 'Replayed from what the league recorded: ' + g.traced_plays + ' of ' + g.plays.length + ' plays have recorded player movement' +
+        h('p', { class: 'pb-note muted', text: opts.live ? 'Synchronized broadcast of recorded movement. Plays without recorded movement appear as event cards.' : 'Replayed from what the league recorded: ' + g.traced_plays + ' of ' + g.plays.length + ' plays have recorded player movement' +
           ' (kickoffs, kicks, penalties, timeouts and scoring events have none and are shown as events). Positions are sampled every ' + (g.sampling.every * g.sampling.step_seconds).toFixed(2) +
           ' s; between samples a player moves in a straight line at constant speed. Names come from the public rosters when this file was made. Keys: space plays or pauses, ← → change play.' })));
       root.appendChild(h('div', { class: 'pb-side' }, h('h2', { text: 'Plays' }), el.list));
@@ -189,6 +189,7 @@
       el.scrub.addEventListener('input', function () { var tr = cur().trace; if (tr && tr._ok) { st.playing = false; st.hold = 0; st.t = (+el.scrub.value / 1000) * tr.t_end; sync(); } });
       el.list.addEventListener('click', function (e) { var b = e.target.closest ? e.target.closest('.pb-row') : null; if (b) goto(+b.getAttribute('data-i'), 0, false); });
       st.onkey = function (e) {
+        if (opts.live) return;
         if (!root.isConnected || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target || {}).tagName || '') && e.key !== ' ') return;
         if (e.key === ' ' && !/^(BUTTON|SELECT)$/.test((e.target || {}).tagName || '')) { e.preventDefault(); toggle(); }
         else if (e.key === 'ArrowRight' && !/^(INPUT|SELECT)$/.test((e.target || {}).tagName || '')) goto(st.idx + 1, 0, st.playing);
@@ -243,7 +244,7 @@
       el.scrub.value = tr && tr._ok ? String(Math.round(st.t / tr.t_end * 1000)) : '0';
     }
     function sync(force) {
-      var g = st.game, p = cur(), prev = st.idx > 0 ? g.plays[st.idx - 1] : null, sc = prev ? prev.score : { away: 0, home: 0 };
+      var g = st.game, p = cur(), prev = st.idx > 0 ? g.plays[st.idx - 1] : null, sc = opts.live ? (st.livePreviousScore || { away: 0, home: 0 }) : prev ? prev.score : { away: 0, home: 0 };
       var shown = p.trace ? sc : p.score;              // a snap shows the score as it stands when the ball is snapped; a scoring event shows its result
       if (p.kind === 'touchdown' || p.kind === 'field goal' || p.kind === 'extra point' || p.kind === 'safety' || p.kind === 'two-point try') shown = p.score;
       q('away').textContent = String(shown.away); q('home').textContent = String(shown.home);
@@ -348,6 +349,14 @@
     // ---- the handle the page uses (and the tests)
     return {
       node: root,
+      present: function (play, seconds, previousScore) {
+        if (!opts.live || !st.game || st.dead) return;
+        var old = cur(), changed = old.i !== play.i || old.text !== play.text;
+        st.game.plays = [play]; st.idx = 0; st.t = Math.max(0, seconds); st.playing = false;
+        st.livePreviousScore = previousScore;
+        prepare(play);
+        if (changed) sync(); else draw();
+      },
       destroy: function () {
         st.dead = true; st.playing = false;
         if (ac) ac.abort();

@@ -579,6 +579,17 @@
     if (m && /^(po:|coronation|bowl)/.test(m[2])) return h('a', { class: 'pb-back', href: '#/playoffs' }, '← Playoffs');
     return h('a', { class: 'pb-back', href: '#/schedule' }, '← Schedule');
   }
+  function pageWatch(gid) {
+    if (S.broadcast) return [S.broadcast.node];
+    var token = render.token;
+    return playbackReady().then(function (P) {
+      return Promise.all([loadOnce('link', 'assets/broadcast.css'), loadOnce('script', 'assets/broadcast.js')]).then(function () {
+        if (token !== render.token) return [];
+        S.broadcast = window.DFLBroadcast.create({base: CFG.broadcast || (BASE + 'broadcast/'), gid: gid, playback: P});
+        return [S.broadcast.node];
+      });
+    });
+  }
   function pageGame(gid) {
     var tk = render.token, pb = S.pb;
     var back = backLink(gid);
@@ -604,7 +615,7 @@
   function destroyViewer() { var pb = S.pb; if (pb.viewer) { pb.viewer.destroy(); pb.viewer = null; pb.gid = null; } }
 
   // ---------------------------------------------------------------- shell
-  var ROUTES = { game: pageGame, '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
+  var ROUTES = { watch: pageWatch, game: pageGame, '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
   function parseRoute() {
     var p = (location.hash || '#/').replace(/^#\/?/, '').split('/');
     return { name: p[0] || '', arg: p[1] ? decodeURIComponent(p[1]) : '' };
@@ -614,7 +625,9 @@
   }
   function render(again) {
     var app = document.getElementById('app'), r = parseRoute();
+    if (CFG.broadcastOnly && r.name !== 'watch') r = {name: 'watch', arg: ''};
     S.route = r;
+    if (S.broadcast && r.name !== 'watch') { S.broadcast.destroy(); S.broadcast = null; }
     if (S.returnScroll && S.returnScroll.hash !== (location.hash || '#/')) S.returnScroll = null;
     if (r.name !== 'game') S.lastHash = location.hash || '#/';      // where a replay's back link returns to
     var page = ROUTES[r.name] || pageHome;
@@ -666,6 +679,7 @@
       var first = !S.ptr;
       return loadRelease(p).then(function () { if (!first) S.fresh = Date.now(); chrome(); return render(); });
     }).catch(function (e) {
+      if (!S.manifest && parseRoute().name === 'watch') return;
       if (!S.manifest) {
         var app = document.getElementById('app'); clear(app);
         app.appendChild(h('div', { class: 'err', role: 'alert', text: 'The league feed could not be read: ' + e.message + '. Trying again automatically.' }));
@@ -685,8 +699,16 @@
       S.returnScroll = { hash: S.replayOrigin.hash, y: S.replayOrigin.y };
     }
   });
-  window.addEventListener('hashchange', function () { if (S.manifest) { render(); window.scrollTo(0, 0); } });
-  check();
-  if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
-  window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome, replay: function () { return S.pb.viewer; } };
+  window.addEventListener('hashchange', function () { if (CFG.broadcastOnly || S.manifest || parseRoute().name === 'watch') { render(); window.scrollTo(0, 0); } });
+  if (CFG.broadcastOnly) {
+    // Isolated rollout mode: do not read the simulation's feed, status or full replay index.
+    document.querySelectorAll('#tabs a').forEach(function (a) { a.hidden = a.getAttribute('data-route') !== 'watch'; });
+    document.getElementById('status').textContent = 'Season broadcast · public viewing clock';
+    render();
+  } else {
+    if (parseRoute().name === 'watch') render();
+    check();
+    if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
+  }
+  window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome, replay: function () { return S.pb.viewer; }, broadcast: function () { return S.broadcast; } };
 })();
