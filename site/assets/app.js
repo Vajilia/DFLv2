@@ -9,6 +9,17 @@
   var S = { ptr: null, manifest: null, cache: {}, route: null, fresh: 0, error: null, pb: { index: null, at: 0, viewer: null, gid: null, loading: null } };
   var PB_BASE = CFG.playback || (BASE + 'playback/');   // published replay files (docs/PUBLIC_PLAYBACK_FORMAT.md); separate from the league feed
 
+  var historySections = {}; // Browser-session UI state only; never written to the feed or league.
+
+  function historySection(key, attrs) {
+    var el = h('details', attrs);
+    if (Object.prototype.hasOwnProperty.call(historySections, key)) el.open = historySections[key];
+    el.addEventListener('toggle', function () {
+      if (el.isConnected) historySections[key] = el.open;
+    });
+    return el;
+  }
+
   // ---------------------------------------------------------------- tiny DOM helpers
   function h(tag, attrs) {
     var el = document.createElement(tag);
@@ -437,7 +448,8 @@
       var hist = a[0], T = teamIndex(a[1]), out = [h('h1', { text: 'History' }), h('div', { class: 'sub', text: 'Seasons played in this development league.' })];
       if (!hist.seasons.length) { out.push(empty('No season has finished yet.')); return out; }
       hist.seasons.slice().reverse().forEach(function (s, idx) {
-        var d = h('details', { class: 'card', open: idx === 0 },  h('summary', null, h('b', { text: 'Season ' + s.season + ' · ' + s.year + ' — ' }), (T[s.champion] ? T[s.champion].full_name : s.champion) + ' champions'));
+        var d = historySection('season:' + s.season, { class: 'card', open: idx === 0 });
+        d.appendChild(h('summary', null, h('b', { text: 'Season ' + s.season + ' · ' + s.year + ' — ' }), (T[s.champion] ? T[s.champion].full_name : s.champion) + ' champions'));
         var kv = h('dl', { class: 'kv' });
         function row(k, v) { kv.appendChild(h('dt', { text: k })); kv.appendChild(h('dd', null, v)); }
         var cr = coronationReplay(s);
@@ -481,7 +493,9 @@
       var g = { id: e.id, kind: e.game_kind === 'tour' ? 'tour' : 'regular', status: 'final', away: e.away, home: e.home, away_score: e.away_score, home_score: e.home_score };
       box.appendChild(h('div', { class: 'slot' }, h('div', { class: 'muted', text: replayLabel(e) }), gameRow(g, T, { noDate: true, season: s.season })));
     });
-    return h('details', { class: 'card', style: 'margin-top:12px' }, h('summary', { text: 'Other recorded replays from this season (' + list.length + ')' }), box);
+    var more = historySection('replays:' + s.season, { class: 'card', style: 'margin-top:12px' });
+    add(more, [h('summary', { text: 'Other recorded replays from this season (' + list.length + ')' }), box]);
+    return more;
   }
   function replayLabel(e) {
     var m = /^reg:w0*(\d+):g\d+$/.exec(e.id);
