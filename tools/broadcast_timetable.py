@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # every length is in seconds; the measured watching times (tools/broadcast_measure.py) justify SLOT_S
 PARAMS = {
-    "slot_s": 960,             # one game window; measured: median 667, p99 796 (regular), longest 905.3 at 1x, so 960 holds every measured game at 1x
+    "slot_s": 900,             # one game window; measured: median 667, p99 796 (regular), longest 905.3 at 1x: every game but the longest few fits at 1x, the longest at 1.04x
     "window_gap_s": 300,       # between two windows of one week: scores, "next kickoff" countdown
     "week_gap_s": 600,         # after a week's last window: the week's public results (standings, injuries, rosters) are revealed here
     "break_s": 480,            # an active-club break week without games
