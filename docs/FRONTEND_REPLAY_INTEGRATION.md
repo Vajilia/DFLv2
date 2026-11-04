@@ -17,3 +17,16 @@ Deployment: this commit is a frontend-only candidate for the existing `deploy_si
 - Homepage: 6 tests pass. Viewer recovery: 2 tests pass.
 - Static site: 19 pass, 1 fails (`test_every_page_renders_without_errors_on_desktop_and_phone`: team/ALA overflows at 390px). Reproduced with the unmodified base app.js; not caused by this change. Chromium headless 134 / Playwright 1.51 in this workspace. Do not treat this as a fully green frontend suite or a live-phone check.
 - JavaScript syntax and git whitespace checks pass. Engine/data diff from the frontend base is empty.
+
+## Follow-up after the full-export rehearsal
+
+The rehearsal at frontend `edd5f20` found that the explicit replay return link reset scroll position, and collapsed History lists still built every row.
+
+- Capture the source scroll position on a normal Replay click; restore it after rendering the explicit return link's destination. Other tab navigation still starts at the top. Modified clicks are left to the browser.
+- Build each season's extra replay rows on its first expansion, not while collapsed. Reopening a list does not duplicate rows. Previously open lists rebuild synchronously on return so their height exists before scroll restoration.
+- No playback format, index caching, engine, exporter or deployment changes.
+- Replay navigation now has 17 passing browser tests. New checks use a 1,600-entry synthetic index for deferred rendering and a 400-entry list for deep return navigation at 1920px and 390px. They exercise real viewer files with synthetic index entries; this is not a new full-export acceptance run or a real-phone test.
+
+The updated frontend needs one isolated rehearsal pass with the real export before production deployment. The previous review copy and production have not been changed by this work.
+
+Follow-up validation: 17 replay-navigation, 6 homepage and 2 recovery tests pass (25 total). Both new regressions fail against the previous frontend; deep-scroll return fails at both widths, and the previous collapsed list contains all 1,600 game rows. Syntax and whitespace checks pass.
