@@ -339,5 +339,20 @@ class Tools(unittest.TestCase):
         self.assertEqual(persist.fingerprint(), DEPLOYED_FINGERPRINT, "the engine code and data are those of the deployed release")
 
 
+    # ------------------------------------------------------------------------------------------------ the playback cache rules stay in the Caddy template
+    def test_the_caddy_template_keeps_the_playback_rules(self):
+        """The server renders its Caddy snippets from the template of whatever commit it was last fully deployed from (docs/COMBINED_RELEASE_PLAN.md, finding 5):
+        a template that loses these rules would silently drop them from the next re-render."""
+        with open(os.path.join(ROOT, "deploy", "website", "Caddyfile.template")) as f:
+            t = f.read()
+        self.assertIn("@latest path /feed/latest.json /feed/status.json /feed/playback/index.json", t, "the replay index is never cached as a long-lived file")
+        i = t.index("@playgame {")
+        block = t[i:t.index("\n\t\t}", i)]
+        self.assertIn("path /feed/playback/games/*", block)
+        self.assertIn("file {", block, "the long-cache header applies only where the file exists (an error answer keeps no-cache)")
+        self.assertIn('header @playgame Cache-Control "public, max-age=31536000, immutable"', t)
+        self.assertEqual(t.count("/feed/playback/games/*"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
