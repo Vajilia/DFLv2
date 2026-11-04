@@ -1,4 +1,4 @@
-# Combined release plan: replay tools + frontend (prepared 2026-11-03, nothing deployed)
+# Combined release plan: replay tools + frontend (prepared 2026-11-03, updated 2026-11-04 for frontend `0074fa2`; nothing deployed)
 
 Two candidates, kept as separate branches, deployed by two separate mechanisms:
 
@@ -6,25 +6,27 @@ Two candidates, kept as separate branches, deployed by two separate mechanisms:
 |---|---|---|---|---|
 | Engine and tools already on the server | `release/engine-memo-2026-11-02` | `7e59cbbaea23b0de353545c64a6f5c39cffe774d` | (already deployed; **not touched**) | nothing |
 | Replay files, Caddy cache rules, exporter | `release/replay-tools-2026-11-03` | `69700562fdfe9cfbed4ea15111ba66af1fbb039d` | a pinned checkout under `/opt/dflv2-src/` plus the steps in `docs/REPLAY_TOOLS.md` section 5 | `feed/playback/` (new), two Caddy snippets, later a timer |
-| Website | `frontend/replay-integration` | `edd5f20e789656e88a7d30ba75d7826a6c26fd06` | `deploy_site_only.sh <commit>` (existing helper) | `site/` only |
+| Website | `frontend/replay-integration` | `0074fa2c1379280f1b63b766ea018bbd9d857c81` (replaces `edd5f20`) | `deploy_site_only.sh <commit>` (existing helper) | `site/` only |
 
 Use `6970056`, not `049ae3b` (the replay-tools head that `docs/FRONTEND_REPLAY_INTEGRATION.md` cites). The only difference is one test fixture that had been left out of the commit by a
 `*.sqlite` rule in `.gitignore`; the tools are byte-identical. `049ae3b`'s tests fail on a fresh checkout; `6970056`'s pass.
+
+**Readiness (2026-11-04).** Nothing found so far blocks the go-live: the exact pins above were rehearsed together at the review address (sections 1a and 1b), every sampled replay and every return navigation passed at desktop width and in a 390 px window, and production is unchanged. Before step 4 (the first production change) three things remain: **your go-ahead**, **one look at the review address on a real phone** (the History cost on a phone is the only thing not measured), and the exporter checkout pinned as above. Nothing is deployed, merged or enabled.
 
 **The league stays stopped at event 188 throughout. The engine tree `/srv/dflv2/repo`, the league files, the feed publisher, the runner timer and every backup are never touched.**
 
 ## 1. What was checked on the combination (a local scratch merge, not pushed)
 
 * The branches change 21 different files; none is changed by both, so the merge is clean. Nothing under `src/dfl/` or `data/` differs from `7e59cbb`; the code fingerprint is `efaa7167...` (the deployed one).
-* All tests of both sides pass on the merged tree, run one file at a time in a real headless browser: replay tools 12, replay links 15, home page 6, static site 20 (every page, desktop and 390 px), site deploy 29, site-only deploy 3, cutover 13. The static test that the frontend notes as failing (`team/ALA` overflows at 390 px) **did not fail here**, at the frontend base `7e3aabe` or at `edd5f20`: 20 of 20. It is probably specific to the other workspace's browser; this is not a live-phone check either.
+* All tests of both sides pass on the merged tree, run one file at a time in a real headless browser: replay tools 12, replay links 17 (15 at `edd5f20`), home page 6, static site 20 (every page, desktop and 390 px), site deploy 29 (1 skipped), site-only deploy 3, cutover 13 (re-run on 2026-11-04 on a new scratch merge of `0074fa2` with the replay-tools branch; the earlier run was on `edd5f20`). The static test that the frontend notes as failing (`team/ALA` overflows at 390 px) **did not fail here**, at the frontend base `7e3aabe` or at `edd5f20`: 20 of 20. It is probably specific to the other workspace's browser; this is not a live-phone check either.
 * The frontend was tested against exporter output: the game file the current exporter writes for the fixture archive at `--every 3` is **byte-identical** to the frontend's fixture file (same name and hash `b0ce0c0abf`), and so is its index entry.
 * The exporter's real run (1,600 games, four seasons) was verified against the archive and the feed before this plan: see `docs/REPLAY_TOOLS.md` section 3. The index the site will read has 1,600 entries and every game the feed lists finds its replay under the same id.
 
 Not checked: the exporter's service sandbox against the live archive with the runner active; a live phone (see finding 7).
 
-## 1a. Rehearsal at a review address (done 2026-11-03; production untouched)
+## 1a. Rehearsal at a review address (2026-11-03, with frontend `edd5f20`; repeated for `0074fa2` in section 1b; production untouched)
 
-Address: **https://preview.diamondfootballleague.com/feed/review/combined/** (site `edd5f20` with only `assets/config.js` changed, reading the live feed and `/feed/review/playback-full/`, the full 1,600-game export). The two folders are new; the earlier review folders and the daughter's demo are untouched. Undo: move `feed/review/combined` and `feed/review/playback-full` aside.
+Address: **https://preview.diamondfootballleague.com/feed/review/combined/** (site `edd5f20` on 2026-11-03, now `0074fa2`, with only `assets/config.js` changed, reading the live feed and `/feed/review/playback-full/`, the full 1,600-game export). The two folders are new; the earlier review folders and the daughter's demo are untouched. Undo: move `feed/review/combined` and `feed/review/playback-full` aside.
 
 **The index checksum belongs to these exact settings.** A fresh export from the pinned code (`6970056`, `--every 2` = 0.1 s) of the archive copy (SHA-256 `871a0b94...0d24`) against the live feed (release `e00188-cf545fbf7b`) gives index SHA-256 `6ee0a76ef0c48a439b1f2c094aeebf6e5fc489deec28c049a8c130d09516ef30`, and the whole tree (index plus 1,600 game files) is byte-identical to the one in the review copy (`diff -r`). Every file records `sampling.every = 2` (0.10 s). The same game at 0.15 s gets a different file name and hash (`S001-reg-w01-g01`: `fdb479ca92` at 0.1 s, `79a6895dae` at 0.15 s), so a different sampling, archive or feed changes the index checksum; step 4's gate holds only for these settings.
 
@@ -43,6 +45,21 @@ Address: **https://preview.diamondfootballleague.com/feed/review/combined/** (si
 
 **Server state during and after:** league inactive and `limit_reached: true`; feed release `e00188-cf545fbf7b`; `verify_revision.py --commit 7e59cbb...` (all lines, including the Caddy block) reported ALL MATCH after the review copy was installed; no Caddy file, unit, site release or feed release was changed; the existing `dfl-feed-export.timer` (the feed publisher, which skips when nothing changed) and the transient `dfl-site-probe.timer` were already there and were not touched. The playback exporter timer does not exist on the server.
 
+## 1b. Follow-up rehearsal with frontend `0074fa2` (2026-11-04; production untouched)
+
+**What changed.** `0074fa2` is `edd5f20` plus a fix that restores the scroll position when returning from a replay and builds a collapsed replay list's rows only when it is opened, plus tests and a note. It changes `site/assets/app.js` (+34, -4), `tests/test_site_replay_links.py` and `docs/FRONTEND_REPLAY_INTEGRATION.md`, nothing else; nothing under `src/dfl/` or `data/` differs from `7e59cbb` (fingerprint `efaa7167...`).
+
+**What was updated.** Only the site files in `/srv/dflv2/feed/review/combined/`, from `0074fa2`'s `site/` (`diff -r` against the commit: only `assets/config.js` and `REVIEW_REVISIONS.txt` differ). The replay export is the verified one, not touched (index SHA-256 still `6ee0a76e...ef30`). The previous review site is kept outside the web root (`/root/rehearsal/combined-edd5f20`). Production site, Caddy, feed, units, the league and the demo are unchanged (`verify_revision.py --commit 7e59cbb...` still ALL MATCH, league inactive with `limit_reached: true`, feed release `e00188-cf545fbf7b`, Caddy snippets contain no playback rules yet, no playback unit exists, the demo is in place).
+
+**Collapsed lists no longer build their rows.** A fresh History load has **784 to 787 DOM nodes and 0 list rows** at both widths (it was 27,341 nodes and 1,556 rows with `edd5f20`; production's History page today has 727 nodes). A list's 389 rows (about 6,640 nodes) are built when it is first opened, and again whenever the page is re-rendered with that list open.
+
+**Deep History to Replay to History.** All with the real 1,600-game export:
+* **Desktop (a 1,366 px window).** With all four lists open the page is 231,776 px tall. A Season 1 tour-game link at scroll position 231,233 opened the viewer; "← History" restored position 231,233 exactly (the link at the same place on the screen, every section and list still open, all 1,556 rows rebuilt); the browser's Back button did the same. Ten History flows (Seasons 4 and 2; Coronation, Bowl, playoff, regular and tour links, 166 to 57,121 px down) all restored exactly with the sections kept. Schedule week 1, the Playoffs page and a team page also restore exactly. Using a tab (Home, then History) still starts at the top, so a stale position is never reused.
+* **390 px (a 390 px popup window).** All lists open: 315,278 px tall. A Season 1 tour-game link at 314,667 px restored exactly through the link, and a Season 2 link at 204,055 px exactly through the browser Back button. The same ten History flows plus Schedule and Playoffs restored exactly. No horizontal overflow and no element wider than the screen with all lists open.
+* **One unresolved oddity.** In the combined sequence (History flows, then Schedule, Playoffs, Team) the team page failed to restore twice (2,689 to 0 at desktop width, 4,240 to 0 at 390 px). Ten later repeats of the team page, in the same and other orders, all restored exactly, and in the failing runs the page had 20 replay links against 18 in every repeat, which points to my test script clicking a link of the previous page while the route was changing. I did not prove that; a visitor cannot click that fast.
+
+**Timing, with a caveat.** The browser used for this follow-up (2 processor cores) was 10 to 16 times slower at building page elements than the one in section 1a (building all 1,556 rows: 3.8 s here, 0.23 s there), so absolute numbers are not comparable. Here: opening a list for the first time 1.5 to 4.5 s; returning to a deep position with all four lists open 4.7 to 5.7 s (the page rebuilds every open list before scrolling); the same list reopened with its rows already built 0.2 to 0.6 s. Building the rows into a list that is already on screen costs about 3.6 times as much per row as building them before attaching (8.8 against 2.4 ms per row). On a fast computer that is a fraction of a second; on a mid-range phone it is probably 1 to 2 seconds. The cost has moved from every History load to the first opening of a list, which is a good trade, but the return with several lists open is the case to watch on a real phone.
+
 ## 2. Findings that affect the combination
 
 1. **The two halves depend on each other only through files.** The site alone shows no Replay links; the replay files alone are inert until a page asks for them. Either can be installed first without breaking anything. The frontend release notes' step "publish an empty replay index first" is **not needed and should not be done**: the exporter writes the real index.
@@ -56,11 +73,12 @@ Address: **https://preview.diamondfootballleague.com/feed/review/combined/** (si
    * **A guard test** in this branch (`tests/test_replay_tools.py`) fails if the template loses the playback rules, so the rules cannot disappear from the template unnoticed.
    * **A one-line check** to run before and after any future Caddy change: both `/etc/caddy/conf.d/dflv2-*.caddy` files must contain `/feed/playback/games/*` exactly once (today: 0 and 0).
    * **`verify_revision.py` and the new rules.** Its Caddy line compares the preview snippet with the template of the commit it is given. Checked on the server on 2026-11-03: with today's snippets and `7e59cbb` it prints ALL MATCH; with the snippet rendered from `6970056`'s template it reports exactly one mismatch (the Caddy line) and ALL MATCH with `--no-caddy`. The live production snippet today equals `7e59cbb`'s template rendered for `diamondfootballleague.com, www.diamondfootballleague.com, 143-198-130-68.sslip.io`; the scratch production snippet equals `6970056`'s template rendered for the same list; the two templates differ only by the playback rules (the index added to `@latest`, the `@playgame` matcher and its header). So step 7 uses `--no-caddy` and the `cmp` checks of step 5.
-6. **History with the full index** is measured in section 1a: fast to load and to scroll on this computer, but its DOM is 37 times larger than today's (the replay lists are built while collapsed). On a mid-range phone, whose processor is several times slower than this computer's, the first render of History is the part most likely to be noticeable. It could not be measured on a real phone here.
-7. **Frontend issues found (reported, not fixed; for ChatGPT):**
-   * **"← History" resets the scroll position to the top.** The page's `hashchange` handler scrolls to the top on every route change. A visitor who opens a replay from deep in a list (a link in Season 2's list is about 205,000 px down at 390 px; the lists remain open) lands back at the top, while the browser's own Back button returns to the exact position (checked at 390 px: 47,155 px to 0 with the link, 47,155 px to 47,155 with the browser button; 204,911 px to 0 and 204,911 px to 204,911). Suggested: the back link should go back in history when it came from that page.
-   * **The replay lists are built in full while closed** (27,341 nodes on History). Suggested, optional: build a list's rows the first time it is opened.
-   * The frontend note's "team/ALA overflows at 390 px" failure did not reproduce here (finding in section 1); its replay-link test file has 15 tests, which pass.
+6. **History with the full index** (sections 1a and 1b): fast to load, smooth to scroll, and since `0074fa2` it no longer builds the hidden rows (784 nodes instead of 27,341). What remains is the cost of building a list when it is opened or re-rendered open (section 1b); it could not be measured on a real phone.
+7. **Frontend issues found in the first rehearsal, and what became of them:**
+   * **"← History" reset the scroll position to the top:** fixed in `0074fa2` and verified (section 1b).
+   * **Replay lists built while closed (27,341 nodes):** fixed in `0074fa2` and verified (section 1b).
+   * **Suggested, optional, for ChatGPT:** build a list's rows into a detached fragment and attach them once; here that is about 3.6 times cheaper per row than appending to the list on screen. It would shorten both the first opening and the return with lists open.
+   * The frontend note's "team/ALA overflows at 390 px" failure did not reproduce here at either frontend commit; the replay-link test file now has 17 tests, which pass on the merged tree.
 
 ## 3. Sequence
 
@@ -68,7 +86,7 @@ Every step is additive, has a gate (what must be true before going on) and an un
 
 **Step 0. Preconditions** (read-only). League stopped (`runner_status.json` has `limit_reached: true`, `dflv2-league` inactive); feed release `e00188-cf545fbf7b`; `DEPLOYED_REVISION.json` names `7e59cbb`; the recovery set exists on the Droplet and on your computer (checksum `5edea873...133e`) and `dfl-backup-141.tar` is kept. Take the state fingerprint (`tools/cap_state.py fingerprint ... --out before.json`).
 
-**Step 1. Rehearsal at a review address: done (section 1a).** Gate met: nothing wrong with replays, playback or navigation across the four seasons; the History cost is acceptable on a computer, unmeasured on a phone; caching unchanged. Remaining before production, your call: look at the review address on a real phone, and decide whether the two frontend issues in finding 7 should be fixed first.
+**Step 1. Rehearsal at a review address: done twice (sections 1a, 1b), for the exact pins above.** Gate met: nothing wrong with replays, playback or navigation across the four seasons, at desktop width and at 390 px. Remaining before production, your call: one look at the review address on a real phone.
 
 **Step 2. Rollback copy.** `sh deploy/website/snapshot_config.sh`; note the snapshot folder.
 
@@ -78,9 +96,9 @@ Every step is additive, has a gate (what must be true before going on) and an un
 
 **Step 5. Caddy cache rules** on both snippets (`dflv2-preview.caddy`, `dflv2-production.caddy`). Render them from the **pinned checkout's** template, not from `/srv/dflv2/repo` (finding 5): preview with `sed "s/__HOST__/preview.diamondfootballleague.com/g"`, production with `sed "s|__HOST__|diamondfootballleague.com, www.diamondfootballleague.com, 143-198-130-68.sslip.io|g"` (the exact host list `cutover_production.sh` used; read it from the live snippet's first line and compare before writing). Write to `*.new`, `caddy validate` with both new files in a scratch config (done on 2026-11-03: "Valid configuration"), then move into place, `caddy validate` on the real config, `systemctl reload caddy`. Gates: each live snippet is byte-identical to the rendered template (`cmp`); the index answers 200 with the intended `Cache-Control` (`no-store` as the template stands); one game answers 200 with `immutable`; a name that does not exist answers 404 and never `immutable`; both snippets contain `/feed/playback/games/*` exactly once. Undo: `rollback.sh --config <snapshot>`.
 
-**Step 6. The website.** `sh /srv/dflv2/repo/deploy/website/deploy_site_only.sh edd5f20e789656e88a7d30ba75d7826a6c26fd06`. It copies only `site/`, proves the installed files equal the commit's, records `SITE_REVISION.json` and restarts nothing. Gate: its own byte-identity check, then the same look as step 1 on the production address (History, a replay, home) at desktop and 390 px. Undo: `rollback.sh --site` (one step; the previous site release is kept).
+**Step 6. The website.** `sh /srv/dflv2/repo/deploy/website/deploy_site_only.sh 0074fa2c1379280f1b63b766ea018bbd9d857c81`. It copies only `site/`, proves the installed files equal the commit's, records `SITE_REVISION.json` and restarts nothing. Gate: its own byte-identity check, then the same look as step 1 on the production address (History, a replay, home) at desktop and 390 px. Undo: `rollback.sh --site` (one step; the previous site release is kept).
 
-**Step 7. After.** State fingerprint again and `cap_state.py diff before.json after.json` (exit 0); league still stopped at 188; `verify_revision.py --commit 7e59cbb7... --no-caddy --site-commit edd5f20e...` still passes for the code tree, the site and `DEPLOYED_REVISION.json`. **Run it with `--no-caddy`:** its Caddy line compares the preview snippet with `7e59cbb`'s own template and will report one mismatch once step 5 has added the playback rules; that mismatch is expected and is replaced by the two `cmp` checks of step 5 (and, after the next full deployment, by `verify_revision.py --commit <that commit>` with the Caddy line on). The demo and the review copies load; the replay-tools scratch folders on the Droplet can be removed when you say.
+**Step 7. After.** State fingerprint again and `cap_state.py diff before.json after.json` (exit 0); league still stopped at 188; `verify_revision.py --commit 7e59cbb7... --no-caddy --site-commit 0074fa2c...` still passes for the code tree, the site and `DEPLOYED_REVISION.json`. **Run it with `--no-caddy`:** its Caddy line compares the preview snippet with `7e59cbb`'s own template and will report one mismatch once step 5 has added the playback rules; that mismatch is expected and is replaced by the two `cmp` checks of step 5 (and, after the next full deployment, by `verify_revision.py --commit <that commit>` with the Caddy line on). The demo and the review copies load; the replay-tools scratch folders on the Droplet can be removed when you say.
 
 **Step 8. Three separate actions, each with its own go-ahead, none part of the go-live.**
 * **A. Merge** `release/replay-tools-2026-11-03`, then `frontend/replay-integration`, into `main` as two merge commits. This changes only the source on GitHub. It does **not** change anything on the server (finding 5): `/srv/dflv2/repo` stays at `7e59cbb` and the live Caddy snippets keep the rules from step 5.
@@ -96,9 +114,9 @@ Site (`rollback.sh --site`), Caddy (`rollback.sh --config <snapshot>`), then mov
 
 | # | Decision | Recommendation |
 |---|---|---|
-| 1 | Rehearse at a review address before production | Done (section 1a). Look at it once on a real phone: https://preview.diamondfootballleague.com/feed/review/combined/ |
+| 1 | Rehearse at a review address before production | Done for the exact pins (sections 1a, 1b). Look at it once on a real phone: https://preview.diamondfootballleague.com/feed/review/combined/ |
 | 2 | Index caching | Unchanged (measured, finding 2) |
-| 3 | The two frontend issues (finding 7): scroll reset on "← History"; lists built while collapsed | Send to ChatGPT; the first is a small fix, the second optional. Decide whether production waits for them |
+| 3 | The two frontend issues found in the first rehearsal | Fixed in `0074fa2` and verified. One optional suggestion remains (finding 7); it does not need to hold production |
 | 4 | Names for players who have left | Accept for now |
 | 5 | Sampling | Keep 0.1 s (the checksum above is for it) |
 | 6 | Merge both branches into `main` (step 8 A); a full deployment of the merged commit (B); the exporter timer (C); resuming the league | Four separate go-aheads, in that order, none part of the go-live. The timer stays disabled and uninstalled while the league is stopped at 188 |
