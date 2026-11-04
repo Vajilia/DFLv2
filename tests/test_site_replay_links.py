@@ -94,6 +94,10 @@ class ReplayLinks(unittest.TestCase):
 
     def replay_links(self, page):
         page.wait_for_selector("#app .game", timeout=15000)
+        for summary in page.locator("#app details details:not([open]) > summary").all():
+            summary.click()
+        if page.locator("#app details details").count():
+            page.wait_for_selector("#app details details .game")
         return page.eval_on_selector_all("#app a.replay", "els => els.map(e => e.getAttribute('href'))")
 
     def test_an_older_seasons_game_on_the_history_page_gets_its_own_seasons_replay_link(self):
@@ -299,6 +303,43 @@ class HistoryAndBack(unittest.TestCase):
         self.assertIn("Regular season, week 1", text)
         self.assertEqual(page.eval_on_selector_all("#app details > details a.replay", "els => els.map(e => e.getAttribute('href'))"), ["#/game/S001%2Freg%3Aw01%3Ag02"])
         page.close()
+
+    def test_large_replay_list_is_built_only_when_opened_and_not_duplicated(self):
+        entries = [entry_like(G2, id="reg:w00:g%05d" % i, gid="S001/reg:w00:g%05d" % i) for i in range(1599)]
+        self.publish(*entries, entry_like(G2))
+        page = self.page("history", "#app details")
+        more = page.locator("#app details details")
+        self.assertIn("(1600)", more.locator("summary").inner_text())
+        self.assertEqual(more.locator(".game").count(), 0)
+        self.assertLess(page.locator("body *").count(), 2000)
+        more.locator("summary").click()
+        page.wait_for_function("document.querySelectorAll('#app details details .game').length === 1600")
+        more.locator("summary").click()
+        more.locator("summary").click()
+        self.assertEqual(more.locator(".game").count(), 1600)
+        page.close()
+
+    def test_replay_back_link_restores_deep_history_scroll_at_both_widths(self):
+        entries = [entry_like(G2, id="reg:w00:g%05d" % i, gid="S001/reg:w00:g%05d" % i) for i in range(399)]
+        self.publish(*entries, entry_like(G2))
+        for width in (1920, 390):
+            with self.subTest(width=width):
+                page = self.page("history", "#app details")
+                page.set_viewport_size({"width": width, "height": 900})
+                page.locator("#app details details > summary").click()
+                link = page.locator("#app details details a.replay").last
+                link.scroll_into_view_if_needed()
+                before = page.evaluate("window.scrollY")
+                self.assertGreater(before, 5000)
+                link.click()
+                page.wait_for_selector(".pb-canvas", timeout=20000)
+                page.locator(".pb-back").click()
+                page.wait_for_function("Math.abs(window.scrollY - %s) <= 2" % before, timeout=5000)
+                self.assertEqual(page.locator("#app details details .game").count(), 400)
+                # A normal tab change must not inherit the replay's saved position.
+                page.locator('#tabs a[data-route="standings"]').click()
+                page.wait_for_function("window.scrollY === 0")
+                page.close()
 
     def test_a_playoff_game_is_found_under_the_archives_seed_name_and_is_not_listed_twice(self):
         """The feed's po:Eastern:wild_card:1 (CLE, seed 6, at ATL, seed 3, 25-21) is the archive's po:Eastern:wild_card:s6v3."""
