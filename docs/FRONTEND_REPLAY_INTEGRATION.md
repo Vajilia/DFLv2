@@ -30,3 +30,9 @@ The rehearsal at frontend `edd5f20` found that the explicit replay return link r
 The updated frontend needs one isolated rehearsal pass with the real export before production deployment. The previous review copy and production have not been changed by this work.
 
 Follow-up validation: 17 replay-navigation, 6 homepage and 2 recovery tests pass (25 total). Both new regressions fail against the previous frontend; deep-scroll return fails at both widths, and the previous collapsed list contains all 1,600 game rows. Syntax and whitespace checks pass.
+
+## Playback progress slider
+
+Production acceptance found that the within-play range was only synchronized when a play changed or playback paused. The animation loop now updates that range directly from the playback clock on each playing frame. It does not rerun the full text/list synchronization each frame.
+
+A browser regression at 1000px and 390px checks that the range advances while playing, agrees with the viewer clock, stays fixed after pause, allows a seek while paused, and resets/disables on an untraced event. It fails on the previous playback.js at both widths. All 18 replay-navigation/control tests pass; JavaScript syntax and whitespace checks pass. No engine, replay data, format, exporter or deployment changes. This fix is prepared on the frontend branch and has not been deployed.
