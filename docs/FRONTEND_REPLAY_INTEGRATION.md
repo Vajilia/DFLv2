@@ -36,3 +36,11 @@ Follow-up validation: 17 replay-navigation, 6 homepage and 2 recovery tests pass
 Production acceptance found that the within-play range was only synchronized when a play changed or playback paused. The animation loop now updates that range directly from the playback clock on each playing frame. It does not rerun the full text/list synchronization each frame.
 
 A browser regression at 1000px and 390px checks that the range advances while playing, agrees with the viewer clock, stays fixed after pause, allows a seek while paused, and resets/disables on an untraced event. It fails on the previous playback.js at both widths. All 18 replay-navigation/control tests pass; JavaScript syntax and whitespace checks pass. No engine, replay data, format, exporter or deployment changes. This fix is prepared on the frontend branch and has not been deployed.
+
+## History-test timing correction
+
+The collapsed-list text/link test previously read the list immediately after a click. Since lazy row construction runs on the details toggle event, a successful single suite run did not establish repeated reliability. The test now waits up to five seconds for the visible replay link before retaining the same label and exact-destination assertions. No application code changes.
+
+Validation: the corrected test passes 20 consecutive repetitions in fresh pages; the complete replay-link/control file passes all 18 tests. This is a bounded stability check, not proof that every race is excluded. Production needs no redeployment for this test/documentation change.
+
+The reported one-off canvas change after pause remains an unreproduced observation; this change does not claim to resolve or explain it.
