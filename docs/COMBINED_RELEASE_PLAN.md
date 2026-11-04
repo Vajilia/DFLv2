@@ -1,4 +1,4 @@
-# Combined release plan: replay tools + frontend (prepared 2026-11-03, updated 2026-11-04 for frontend `0074fa2`; nothing deployed)
+# Combined release plan: replay tools + frontend (prepared 2026-11-03; website and replay rollout done 2026-11-04, see section 6)
 
 Two candidates, kept as separate branches, deployed by two separate mechanisms:
 
@@ -11,7 +11,7 @@ Two candidates, kept as separate branches, deployed by two separate mechanisms:
 Use `6970056`, not `049ae3b` (the replay-tools head that `docs/FRONTEND_REPLAY_INTEGRATION.md` cites). The only difference is one test fixture that had been left out of the commit by a
 `*.sqlite` rule in `.gitignore`; the tools are byte-identical. `049ae3b`'s tests fail on a fresh checkout; `6970056`'s pass.
 
-**Readiness (2026-11-04).** Nothing found so far blocks the go-live: the exact pins above were rehearsed together at the review address (sections 1a and 1b), every sampled replay and every return navigation passed at desktop width and in a 390 px window, and production is unchanged. Before step 4 (the first production change) three things remain: **your go-ahead**, **one look at the review address on a real phone** (the History cost on a phone is the only thing not measured), and the exporter checkout pinned as above. Nothing is deployed, merged or enabled.
+**Status (2026-11-04).** Steps 2 to 7 were carried out on production on 2026-11-04 on the owner's instruction (section 6). Step 8 (merge, full deployment, timer, league resume) has not been done and each part still needs its own go-ahead.
 
 **The league stays stopped at event 188 throughout. The engine tree `/srv/dflv2/repo`, the league files, the feed publisher, the runner timer and every backup are never touched.**
 
@@ -121,4 +121,27 @@ Site (`rollback.sh --site`), Caddy (`rollback.sh --config <snapshot>`), then mov
 | 5 | Sampling | Keep 0.1 s (the checksum above is for it) |
 | 6 | Merge both branches into `main` (step 8 A); a full deployment of the merged commit (B); the exporter timer (C); resuming the league | Four separate go-aheads, in that order, none part of the go-live. The timer stays disabled and uninstalled while the league is stopped at 188 |
 
-Not asked and not done: deployment, the timer, resuming the league, any change to the frontend branch.
+## 6. Production rollout record (2026-11-04, about 00:23 to 00:45 PST)
+
+Authorised: the website and replay rollout only. Not done, as instructed: no merge, no full engine deployment, no exporter timer or unit, no league resume.
+
+| Step | Result |
+|---|---|
+| 0 | Before-state fingerprint taken (`/root/rollout/before.json` on the Droplet). League inactive, `limit_reached: true`, event 188, feed release `e00188-cf545fbf7b`, `verify_revision.py` ALL MATCH |
+| 2 | Rollback copy: `/root/dfl-rollback/20261104T082347Z` (earlier snapshots kept) |
+| 3 | Pinned checkout `/opt/dflv2-src/69700562fdfe9cfbed4ea15111ba66af1fbb039d`, clean |
+| 4 | Export run by hand as `dflv2` (`nice`, 357 s, 38 MB peak memory): 1,600 games, 925 MB, index SHA-256 `6ee0a76e...ef30` (identical to the verified one). `verify_playback_against_archive.py` (1,600 games, all checks passed), `replay_coverage.py --expect-complete` (coverage OK) and `replay_public_scan.py` all exit 0; files 644, folders 755. The old copy is `feed/review/playback-full` (kept) |
+| 5 | Both snippets rendered from the pinned checkout's template; each differed from the live one only by the three playback hunks; validated in a scratch config, installed, `caddy validate`, reload; `cmp` of each live snippet with its rendering identical; `/feed/playback/games/*` appears once in each. On both hosts: index 200 `no-store`; a game 200 `public, max-age=31536000, immutable`; a missing name 404 `no-cache` |
+| 6 | `deploy_site_only.sh 0074fa2c1379280f1b63b766ea018bbd9d857c81`: site release `20261104T083828Z`, installed files byte-identical to the commit's `site/`; previous release `20261102T201633Z` kept |
+| 7 | `cap_state.py diff before after`: 75 stable fields identical, exit 0. Code fingerprint `efaa7167...9973` unchanged. `verify_revision.py --commit 7e59cbb... --no-caddy --site-commit 0074fa2c...` ALL MATCH. League inactive, event 188, `limit_reached: true`. No playback systemd unit. The demo, the review copies, `dfl-backup-141.tar` and every other backup are in place |
+
+**Browser check on production** (https://diamondfootballleague.com/): History shows 44 Replay links and 784 page elements with the lists closed. 20 games (every kind in each of the four seasons: regular, tour, playoff, bowl, coronation) each loaded with HTTP 200, a SHA-256 equal to the index, `immutable` caching and the viewer; playing advanced the game text in all 20 (the picture itself stayed the same in 9 of them in the first 4 seconds, which fits the "no movement recorded" opening plays; not examined further). At 390 px: no horizontal overflow with all 1,600 rows open (315,278 px tall); a game at 252,687 px opened and "← History" returned to exactly 252,687; the team page showed 18 replay links without overflow.
+
+**Open items, recorded as instructed:**
+* **Unresolved: the intermittent team-page return failure.** In the rehearsal (section 1b) the team page twice failed to restore its scroll position (2,689 to 0 at desktop width, 4,240 to 0 at 390 px) and later restored correctly in ten repeats. The cause is not proven (likely my test clicking a stale link during the route change). It was not seen on production (one team-page check at 390 px was clean), but one run is not a test. Treat as open until someone reproduces or rules it out.
+* **Deferred: the detached-fragment rendering optimisation** (finding 7). Not requested, not made. The cost it addresses (first opening of a list, and returning with many lists open) has not been measured on a real phone.
+* **Not done:** a real-phone look; Step 8 A to C and the league resume.
+
+**To undo, in this order** (none touches the league, the archive, feed releases or any backup): `sh /srv/dflv2/repo/deploy/website/rollback.sh --site`; `sh /srv/dflv2/repo/deploy/website/rollback.sh --config /root/dfl-rollback/20261104T082347Z`; then `mv /srv/dflv2/feed/playback /srv/dflv2/playback-removed-<UTC time>` and remove the pinned checkout. After those the index answers 404 and no page shows a Replay link.
+
+Not asked and not done: the merge, a full engine deployment, the timer, resuming the league, any change to the frontend branch.
