@@ -331,6 +331,9 @@ class HistoryAndBack(unittest.TestCase):
         summary = page.inner_text("#app details > details > summary")
         self.assertIn("Other recorded replays from this season (1)", summary)
         page.click("#app details > details > summary")
+        # The details toggle builds rows asynchronously; wait for the visible link,
+        # then retain the text and exact-destination assertions below.
+        page.wait_for_selector("#app details > details a.replay", state="visible", timeout=5000)
         text = page.inner_text("#app details > details")
         self.assertIn("Regular season, week 1", text)
         self.assertEqual(page.eval_on_selector_all("#app details > details a.replay", "els => els.map(e => e.getAttribute('href'))"), ["#/game/S001%2Freg%3Aw01%3Ag02"])
