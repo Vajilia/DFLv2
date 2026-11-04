@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>DFL broadcast protocol demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font:16px/1.4 system-ui,sans-serif;margin:0;padding:16px;max-width:760px}
+h1{font-size:1.2rem} .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+button{font:inherit;padding:6px 10px} button[aria-current=true]{background:#222;color:#fff}
+#board{font-size:1.6rem;margin:12px 0} #play{min-height:3em;padding:8px;border:1px solid #888}
+.dim{color:#666;font-size:.9rem} pre{overflow:auto}
+</style></head><body>
+<h1>DFL broadcast protocol demo (not the site)</h1>
+<p class="dim">Clock: <span id="clock">-</span> &middot; <span id="status">-</span></p>
+<h2 style="font-size:1rem">Games</h2><div id="games" class="row"></div>
+<div id="board" aria-live="off">-</div>
+<div id="play">-</div>
+<p class="dim" id="meta"></p>
+<script src="demo.js"></script>
+</body></html>
