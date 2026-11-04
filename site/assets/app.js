@@ -489,12 +489,19 @@
     if (!list.length) return null;
     list.sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
     var box = h('div', { class: 'stack', style: 'padding-top:0;gap:8px' });
-    list.forEach(function (e) {
-      var g = { id: e.id, kind: e.game_kind === 'tour' ? 'tour' : 'regular', status: 'final', away: e.away, home: e.home, away_score: e.away_score, home_score: e.home_score };
-      box.appendChild(h('div', { class: 'slot' }, h('div', { class: 'muted', text: replayLabel(e) }), gameRow(g, T, { noDate: true, season: s.season })));
-    });
     var more = historySection('replays:' + s.season, { class: 'card', style: 'margin-top:12px' });
+    var built = false;
+    function buildRows() {
+      if (built || !more.open) return;
+      built = true;
+      list.forEach(function (e) {
+        var g = { id: e.id, kind: e.game_kind === 'tour' ? 'tour' : 'regular', status: 'final', away: e.away, home: e.home, away_score: e.away_score, home_score: e.home_score };
+        box.appendChild(h('div', { class: 'slot' }, h('div', { class: 'muted', text: replayLabel(e) }), gameRow(g, T, { noDate: true, season: s.season })));
+      });
+    }
     add(more, [h('summary', { text: 'Other recorded replays from this season (' + list.length + ')' }), box]);
+    more.addEventListener('toggle', buildRows);
+    buildRows(); // Returning to an already-open list must restore its height before scrolling.
     return more;
   }
   function replayLabel(e) {
@@ -608,6 +615,7 @@
   function render(again) {
     var app = document.getElementById('app'), r = parseRoute();
     S.route = r;
+    if (S.returnScroll && S.returnScroll.hash !== (location.hash || '#/')) S.returnScroll = null;
     if (r.name !== 'game') S.lastHash = location.hash || '#/';      // where a replay's back link returns to
     var page = ROUTES[r.name] || pageHome;
     Array.prototype.forEach.call(document.querySelectorAll('#tabs a'), function (a) {
@@ -620,6 +628,13 @@
     return pre.then(function () { return token === render.token ? page(r.arg) : null; }).then(function (content) {
       if (token !== render.token) return;
       clear(app); add(app, content);
+      if (S.returnScroll && S.returnScroll.hash === (location.hash || '#/')) {
+        var back = S.returnScroll;
+        S.returnScroll = null;
+        requestAnimationFrame(function () {
+          if (token === render.token) window.scrollTo(0, back.y);
+        });
+      }
     }).catch(function (e) {
       if (token !== render.token) return;
       if (e.gone && !again) {
@@ -659,6 +674,17 @@
       else { var st = document.getElementById('status'); st.appendChild(h('span', { class: 'updated', text: 'Could not check for updates' })); }
     });
   }
+  // Capture before hash navigation resets the scroll position. Explicit replay back links
+  // restore only their own source page; normal tab navigation still starts at the top.
+  document.addEventListener('click', function (event) {
+    var link = event.target.closest('a');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (link.classList.contains('replay')) {
+      S.replayOrigin = { hash: location.hash || '#/', y: window.scrollY };
+    } else if (link.classList.contains('pb-back') && S.replayOrigin && link.getAttribute('href') === S.replayOrigin.hash) {
+      S.returnScroll = { hash: S.replayOrigin.hash, y: S.replayOrigin.y };
+    }
+  });
   window.addEventListener('hashchange', function () { if (S.manifest) { render(); window.scrollTo(0, 0); } });
   check();
   if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
