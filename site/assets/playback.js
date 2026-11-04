@@ -229,6 +229,7 @@
         var dt = st.last ? Math.min(0.25, (ts - st.last) / 1000) : 0;
         st.last = ts;
         advance(dt * st.speed);
+        syncProgress();
       }
       draw();
       st.raf = requestAnimationFrame(frame);
@@ -236,6 +237,11 @@
 
     // ---- text and controls follow the state
     function q(k) { return root.querySelector('[data-k="' + k + '"]'); }
+    // Update the range without rebuilding text or scanning the play list every frame.
+    function syncProgress() {
+      var tr = cur().trace;
+      el.scrub.value = tr && tr._ok ? String(Math.round(st.t / tr.t_end * 1000)) : '0';
+    }
     function sync(force) {
       var g = st.game, p = cur(), prev = st.idx > 0 ? g.plays[st.idx - 1] : null, sc = prev ? prev.score : { away: 0, home: 0 };
       var shown = p.trace ? sc : p.score;              // a snap shows the score as it stands when the ball is snapped; a scoring event shows its result
@@ -252,7 +258,7 @@
       el.play.setAttribute('aria-label', st.playing ? 'Pause' : (st.idx >= g.plays.length - 1 && st.hold >= holdFor(p) ? 'Play again' : 'Play'));
       el.pick.value = String(st.idx); el.pickout.textContent = (st.idx + 1) + ' of ' + g.plays.length;
       var tr = p.trace && prepare(p);
-      el.scrub.disabled = !tr; el.scrub.value = tr ? String(Math.round(st.t / tr.t_end * 1000)) : '0';
+      el.scrub.disabled = !tr; syncProgress();
       var card = q('card'), nomove = !tr;
       card.hidden = !nomove;
       if (nomove) { card.textContent = ''; card.appendChild(h('b', { text: p.kind.charAt(0).toUpperCase() + p.kind.slice(1) })); card.appendChild(h('span', { text: p.trace ? ('The movement for this play is damaged in the file and is not shown (' + (p.trace._err || 'unreadable') + ').') : 'No player movement was recorded for this play.' })); }
