@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from urllib.parse import quote
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -180,6 +181,37 @@ class ReplayLinks(unittest.TestCase):
         self.assertEqual(page.get_attribute("#app a.pb-back", "href"), "#/history")
         self.assertEqual([e for e in self.errors if "favicon" not in e], [])
         page.close()
+
+    def test_play_progress_follows_animation_and_stays_put_when_paused_or_scrubbed(self):
+        game = json.loads(read(os.path.join(PLAYBACK, G1["file"])))
+        i = next(i for i, p in enumerate(game["plays"]) if p.get("trace") and p["trace"]["t_end"] >= 3)
+        duration = game["plays"][i]["trace"]["t_end"]
+        for width in (1000, 390):
+            with self.subTest(width=width):
+                page = self.open("game/" + quote(G1["gid"], safe=""), "#app .pb-canvas")
+                page.set_viewport_size({"width": width, "height": 900})
+                page.evaluate("i => DFL_VIEWER.replay().goto(i)", i)
+                slider = page.locator('input[aria-label="Position within the play"]')
+                self.assertEqual(slider.input_value(), "0")
+                page.get_by_role("button", name="Play", exact=True).click()
+                page.wait_for_function("+document.querySelector('input[aria-label=\"Position within the play\"]').value > 100", timeout=5000)
+                # Check the displayed range and the actual animation clock in one frame.
+                delta = page.evaluate("duration => Math.abs(+document.querySelector('input[aria-label=\"Position within the play\"]').value - Math.round(DFL_VIEWER.replay().state().t / duration * 1000))", duration)
+                self.assertLessEqual(delta, 1)
+                page.get_by_role("button", name="Pause", exact=True).click()
+                paused = slider.input_value()
+                page.wait_for_timeout(250)
+                self.assertEqual(slider.input_value(), paused)
+                slider.evaluate("e => { e.value = '600'; e.dispatchEvent(new Event('input', {bubbles: true})); }")
+                self.assertAlmostEqual(page.evaluate("DFL_VIEWER.replay().state().t"), duration * .6)
+                self.assertFalse(page.evaluate("DFL_VIEWER.replay().state().playing"))
+                page.wait_for_timeout(150)
+                self.assertEqual(slider.input_value(), "600")
+                page.evaluate("DFL_VIEWER.replay().goto(0)")
+                self.assertTrue(slider.is_disabled())
+                self.assertEqual(slider.input_value(), "0")
+                self.assertEqual(self.errors, [])
+                page.close()
 
     def test_a_player_missing_from_the_public_rosters_is_shown_by_number_not_invented(self):
         import hashlib
