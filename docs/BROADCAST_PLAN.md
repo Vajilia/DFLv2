@@ -142,7 +142,7 @@ reveal and its pointer is replaced last. Mutation check: releasing one segment e
 
 **Residual exposure (honest).** (1) Anyone watching the network tab sees at most about **8 s (5 s segment + 3 s delay, roughly one play)** ahead of the screen. (2) League
 tables, team pages and injury lists update **once per week** (at the results block), not after each game; per-game partial reveals would need a feed-format change. A finished
-game's final score is on its replay-library entry and in `end.json` as soon as it ends. (3) Anyone who records a live segment can of course share it. (4) The existing public
+game's final score is on its replay-library entry and in `end.json` as soon as it ends. (3) A game that must be sped up shows `speed` above 1 in its manifest before it ends, which tells a viewer it is a very long game (about 0.5 % of games at a 15-minute slot, never more than a few percent faster); it says nothing about the result. (4) Anyone who records a live segment can of course share it. (5) The existing public
 `status.json` reports `league_events` and the runner's `seq` (events committed); with the league ahead of the broadcast that tells viewers how far it has computed (never a result). It must report revealed events only.
 
 ## 6. Pause, restart, downtime and the 48-hour tradeoff
@@ -182,7 +182,15 @@ Engine changes: **none** needed. The one the data forces is *none*: segments are
 * `src/dflsite/broadcast.py` (the layer), `tools/broadcast_demo.py` (prepare / start / pause / resume / status / run with a read-only server on 127.0.0.1),
   `tools/broadcast_demo_web/` (a protocol page, not the site), `tests/test_broadcast.py`, `tests/e2e_broadcast_demo.py`.
 * Run it: `broadcast_demo.py prepare --store S --public P --slot-s 150 --window 8:game.json`, `start --lease-s 6`, `run --port 8099`; open `http://127.0.0.1:8099/demo/`.
-* The results of the runs are in the progress report (section 9 of the hand-off) and are repeatable with the commands above.
+* **Results (2026-11-04).** Locally: 24 unit tests pass; a real-browser (Chromium) run with two browser contexts passes 12 checks. On the Droplet, in a throwaway directory
+  and on 127.0.0.1 only, using real games from the archive's replays (the longest, the shortest and a middle one of the first 12): the same 24 tests pass (58 s), and a
+  live daemon run with two HTTP viewers passes 11 checks: both viewers show the same play as the reference viewer, a late joiner and a refresh land at the current position,
+  pause stops both and resume continues from the same position, `kill -9` freezes both at the lease end and the restart records the gap as downtime and carries on with no
+  jump, and direct requests for an unreleased segment, `end.json`, the private store and `..` traversal are all 404.
+* **Production untouched.** Before and after the run: league stopped at event 188, runner inactive, `feed/latest.json` and `feed/playback/index.json` byte-identical. The only
+  files under `/srv/dflv2` modified in that window were `feed/.publish.lock`, `feed/status.json` and `league/league.db-shm`, which the existing one-minute `dfl-feed-export.timer`
+  touches every minute while the league is stopped (it publishes nothing).
+* The browser check needs Chromium; on a machine without it, `tests/e2e_broadcast_demo.py --no-browser` runs the same checks with HTTP clients.
 
 ## 9. Decisions left in the plan (owner)
 
