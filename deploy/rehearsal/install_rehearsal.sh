@@ -9,7 +9,9 @@
 # Environment (defaults in brackets):
 #   HOST [rehearsal.diamondfootballleague.com]   REH [/srv/dflv2-rehearsal]   SRC_ROOT [/opt/dflv2-src]   CADDY_DIR [/etc/caddy]   CADDYFILE [$CADDY_DIR/Caddyfile]
 #   CONF_D [$CADDY_DIR/conf.d]   ROLLBACK_ROOT [/root/dfl-rollback]   SNAPSHOT_MAX_AGE_MIN [1440]   SERVICE_USER [dflv2]   SYSTEMD_DIR [/etc/systemd/system]
-#   ETC_DIR [/etc/dflv2]   MIN_FREE_GB [6]   FORCE_DNS=1 (go on although the host does not resolve here)   ALLOW_NON_ROOT=1 (tests only)
+#   ETC_DIR [/etc/dflv2]   MIN_FREE_GB [6: the floor the monitor stops the broadcast at]   MAX_PUBLIC_GB [3]   CHECK_URL [https://$HOST]   CHECK_WAIT_S [180]
+#   FORCE_DNS=1 (go on although the host does not resolve here)   ALLOW_NON_ROOT=1 (tests only)
+# Exit codes: 2 package/paths/commands, 3 no rollback copy, 4 DNS, 5 pre-flight, 6 Caddy rejected the block (before any change), 7 the live server check failed (block removed again).
 set -eu
 PKG="${1:?usage: install_rehearsal.sh PACKAGE_DIR}"
 HOST="${HOST:-rehearsal.diamondfootballleague.com}"
@@ -24,7 +26,10 @@ SERVICE_USER="${SERVICE_USER:-dflv2}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 ETC_DIR="${ETC_DIR:-/etc/dflv2}"
 MIN_FREE_GB="${MIN_FREE_GB:-6}"
+MAX_PUBLIC_GB="${MAX_PUBLIC_GB:-3}"
+CHECK_WAIT_S="${CHECK_WAIT_S:-180}"
 SNIPPET="$CONF_D/dflv2-rehearsal.caddy"
+CHECK_URL="${CHECK_URL:-https://$HOST}"
 say() { printf '%s\n' "$*"; }
 die() { code="$1"; shift; say "STOPPED: $*" >&2; exit "$code"; }
 
@@ -41,6 +46,12 @@ case "$REH" in /srv/dflv2|/srv/dflv2/*|/var/www|/var/www/*|/|"") die 2 "REH=$REH
 case "$(basename "$REH")" in *rehearsal*) ;; *) die 2 "REH must be a folder with 'rehearsal' in its name (got $REH)";; esac
 [ ! -e "$REH" ] || die 2 "$REH already exists. Nothing is overwritten: remove it with  sh uninstall_rehearsal.sh --purge  first."
 [ -f "$CADDYFILE" ] || die 2 "no Caddyfile at $CADDYFILE (set CADDYFILE if it lives elsewhere)"
+# the block, rendered, must be accepted by the server's real Caddy on its own BEFORE anything is installed or changed
+RENDERED="$(mktemp)"; trap 'rm -f "$RENDERED"' EXIT
+sed "s/__HOST__/$HOST/g" "$PKG/repo/deploy/rehearsal/Caddyfile.rehearsal.template" > "$RENDERED"
+caddy validate --config "$RENDERED" --adapter caddyfile >/dev/null 2>"$RENDERED.err" || { cat "$RENDERED.err" >&2; rm -f "$RENDERED.err"; die 6 "the real Caddy rejects the rehearsal block on its own: nothing was changed."; }
+rm -f "$RENDERED.err"
+say "caddy $(caddy version 2>/dev/null | head -n 1): the rehearsal block validates on its own"
 
 # ---- 1. a rollback copy must exist and be recent
 if ! find "$ROLLBACK_ROOT" -maxdepth 1 -mindepth 1 -mmin "-$SNAPSHOT_MAX_AGE_MIN" 2>/dev/null | grep -q .; then
@@ -65,7 +76,7 @@ fi
 # ---- 3. disk
 parent="$(dirname "$REH")"; mkdir -p "$parent"
 free_kb="$(df -Pk "$parent" | awk 'NR==2{print $4}')"
-[ "$free_kb" -ge $((MIN_FREE_GB * 1024 * 1024)) ] || die 2 "less than $MIN_FREE_GB GB free under $parent"
+[ "$free_kb" -ge $((MIN_FREE_GB * 1024 * 1024)) ] || die 2 "less than $MIN_FREE_GB GB free under $parent (the floor the monitor stops the broadcast at; the pre-flight below also leaves room for the public folder to grow to $MAX_PUBLIC_GB GB)"
 
 # ---- 4. the code, as a new directory (never over an existing one)
 id "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$REH" --shell /usr/sbin/nologin "$SERVICE_USER"
@@ -84,7 +95,7 @@ chown -R "$SERVICE_USER" "$REH/private" "$REH/feed" "$REH/monitor" 2>/dev/null |
 say "data: $REH (private store, empty public folder, site)"
 
 # ---- 6. pre-flight: refuse to go on unless the store is complete, the folders are separate and neither is a production path
-if ! python3 -I "$dest/tools/rehearsal_check.py" preflight --root "$REH/private" --public "$REH/feed" --min-free-gb "$MIN_FREE_GB"; then
+if ! python3 -I "$dest/tools/rehearsal_check.py" preflight --root "$REH/private" --public "$REH/feed" --min-free-gb "$MIN_FREE_GB" --growth-gb "$MAX_PUBLIC_GB" --require-canary --guard "$REH/monitor"; then
   die 5 "pre-flight failed (above). Nothing in Caddy or systemd was changed. Undo with  sh $PKG/repo/deploy/rehearsal/uninstall_rehearsal.sh --purge"
 fi
 
@@ -102,11 +113,30 @@ mkdir -p "$CONF_D"
 had=0; [ -f "$SNIPPET" ] && { cp -a "$SNIPPET" "$SNIPPET.before"; had=1; }
 sed "s/__HOST__/$HOST/g" "$PKG/repo/deploy/rehearsal/Caddyfile.rehearsal.template" > "$SNIPPET"
 grep -q '^[[:space:]]*import[[:space:]].*conf\.d' "$CADDYFILE" || say "NOTE: $CADDYFILE has no import line for $CONF_D; the staging install normally added it."
+putback() { if [ "$had" = 1 ]; then cp -a "$SNIPPET.before" "$SNIPPET"; else rm -f "${SNIPPET:?}"; fi; }
 if caddy validate --config "$CADDYFILE" --adapter caddyfile; then
-  systemctl reload caddy && say "Caddy reloaded with the rehearsal block for $HOST"
+  systemctl reload caddy || { putback; die 6 "Caddy would not reload; the previous rehearsal-block state is back."; }
+  say "Caddy reloaded with the rehearsal block for $HOST"
 else
-  if [ "$had" = 1 ]; then mv "$SNIPPET.before" "$SNIPPET"; else rm -f "${SNIPPET:?}"; fi
-  die 6 "Caddy rejects the rehearsal block: the previous configuration is back and Caddy was not reloaded."
+  putback
+  die 6 "Caddy rejects the whole configuration with the rehearsal block in it: the previous configuration is back and Caddy was not reloaded."
 fi
+
+# ---- 9. the live server rules, proven on the real server before this script says INSTALLED: cache headers per kind of file, no listings, no private names, write
+# methods refused, and a harmless private canary that must be unreachable by ~300 encoded path-traversal requests. The feed is empty (the daemon has not run).
+CHECK_LOG="$(mktemp)"; ok=0; waited=0
+while :; do
+  if python3 -I "$dest/tools/rehearsal_check.py" http --url "$CHECK_URL" --before-start --canary "$REH/private/store/CANARY.txt" >"$CHECK_LOG" 2>&1; then ok=1; break; fi
+  [ "$waited" -ge "$CHECK_WAIT_S" ] && break
+  sleep 10; waited=$((waited + 10))                                            # a new host may need a minute for its certificate
+done
+if [ "$ok" = 1 ]; then tail -n 3 "$CHECK_LOG"; rm -f "$CHECK_LOG"; say "server rules verified live (headers, listings, write methods, traversal, canary)"
+else
+  cat "$CHECK_LOG" >&2; cp -a "$CHECK_LOG" "$REH/monitor/install-check.log" 2>/dev/null || true; rm -f "$CHECK_LOG"
+  putback
+  caddy validate --config "$CADDYFILE" --adapter caddyfile && systemctl reload caddy
+  die 7 "the live server check failed (output above, kept in $REH/monitor/install-check.log): the rehearsal block was taken out again and Caddy reloaded. Units are installed but not enabled."
+fi
+rm -f "$SNIPPET.before"
 say ""
 say "INSTALLED. Nothing is running. Next: docs/BROADCAST_REHEARSAL.md, section 'Start'."

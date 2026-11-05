@@ -17,6 +17,7 @@ import datetime
 import hashlib
 import io
 import json
+import secrets
 import os
 import shutil
 import subprocess
@@ -32,8 +33,8 @@ from dflsite import season as S  # noqa: E402
 import rehearsal_check as RC  # noqa: E402
 
 CODE_PATHS = ["src", "tools", "site", "deploy", "docs", "requirements.txt"]
-FORBIDDEN_IN_STORE = ("clock.json", "clock_log.jsonl", "daemon.lock", S.PAUSE)
-DEFAULT_CAPS = {"deadline_hours_after_start": 54, "max_public_gb": 3, "min_free_gb": 6, "memory_max": "600M"}
+FORBIDDEN_IN_STORE = ("clock.json", "clock_log.jsonl", "daemon.lock", S.PAUSE, "CANARY.txt")
+DEFAULT_CAPS = {"deadline_hours_after_start": 54, "max_public_gb": 3, "min_free_gb": 6, "memory_max": "600M", "guard": "auto-pause on spoiler, resource or monitor failure; explicit release and resume"}
 
 
 def sha256(path):
@@ -101,20 +102,25 @@ def build(commit, root, out, note="", force=()):
         t.flush()
         with tarfile.open(t.name) as tf:
             tf.extractall(repo, filter="data")
-    # store: one compressed file, with the top directory `store/`
+    # store: one compressed file, with the top directory `store/`. A harmless CANARY.txt is added to the package's copy: a private file with a random token that
+    # must never be served; the installer's server check and the monitor try to reach it by path traversal (R is not touched).
+    canary = ("DFL-REHEARSAL-CANARY-" + secrets.token_hex(16)).encode()
     with tarfile.open(os.path.join(pkg, "store.tar.gz"), "w:gz", compresslevel=3) as tf:
         tf.add(store, arcname="store", filter=lambda ti: None if ti.name == "store/" + S.PLAN else ti)
         raw = json.dumps(plan, sort_keys=True, separators=(",", ":")).encode() if forced else open(os.path.join(store, S.PLAN), "rb").read()
         ti = tarfile.TarInfo("store/" + S.PLAN)
         ti.size, ti.mtime, ti.mode = len(raw), os.path.getmtime(os.path.join(store, S.PLAN)), 0o644
         tf.addfile(ti, io.BytesIO(raw))
+        ci = tarfile.TarInfo("store/CANARY.txt")
+        ci.size, ci.mtime, ci.mode = len(canary), datetime.datetime.now().timestamp(), 0o644
+        tf.addfile(ci, io.BytesIO(canary))
     meta = {
         "id": pid, "format": "dfl-rehearsal-package", "format_version": 1, "commit": commit, "built_at": stamp, "note": note,
         "store": {"events": len(builds["events"]), "games": len(builds["games"]), "windows": len(view.windows), "plan_total_s": plan["total_s"],
                   "league_id": builds.get("league_id"), "honors_parts": sorted(builds.get("honors", {})),
                   "plan_sha256": hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":")).encode()).hexdigest() if forced else sha256(os.path.join(store, S.PLAN)),
                   "forced_overruns": {k.rstrip("="): {"slot_s": v, "overrun_s": overruns[k.rstrip("=")]} for k, v in forced.items()}, "builds_sha256": sha256(os.path.join(store, S.BUILDS))},
-        "caps": DEFAULT_CAPS,
+        "caps": DEFAULT_CAPS, "canary": {"path": "store/CANARY.txt", "sha256": hashlib.sha256(canary).hexdigest(), "note": "random token, never served; used by the traversal check"},
         "contains": ["repo/ (pinned code)", "store.tar.gz (private store)"], "does_not_contain": ["league database", "league archive", "clock", "any production file"],
     }
     with open(os.path.join(pkg, "PACKAGE.json"), "w") as f:

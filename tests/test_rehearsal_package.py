@@ -58,6 +58,12 @@ class Package(unittest.TestCase):
             names = tf.getnames()
         self.assertIn('store/plan.json', names)
         self.assertIn('store/builds.json', names)
+        self.assertIn('store/CANARY.txt', names)
+        with tarfile.open(os.path.join(pkg, 'store.tar.gz')) as tf:
+            token = tf.extractfile('store/CANARY.txt').read().decode().strip()
+        self.assertRegex(token, r'^DFL-REHEARSAL-CANARY-[0-9a-f]{32}$')
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, 'store', 'CANARY.txt')), 'the source store is not touched')
+        self.assertEqual(json.load(open(os.path.join(pkg, 'PACKAGE.json')))['canary']['path'], 'store/CANARY.txt')
         self.assertFalse([n for n in names if n.endswith(('.db', 'clock.json', 'PAUSE', 'daemon.lock'))])
         meta2 = json.load(open(os.path.join(pkg, 'PACKAGE.json')))
         self.assertEqual(meta2['commit'], meta['commit'])

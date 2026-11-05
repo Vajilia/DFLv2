@@ -1,16 +1,24 @@
 # The broadcast REHEARSAL site: the viewer (a pinned copy of site/) plus the feed that tools/broadcast_run.py fills. Caddy only serves files.
 # __HOST__ is filled in on the server by install_rehearsal.sh (default rehearsal.diamondfootballleague.com) and written to /etc/caddy/conf.d/dflv2-rehearsal.caddy.
-# Root /srv/dflv2-rehearsal: /feed/* is the daemon's public folder, everything else is the site. Nothing from private/ is under that root.
-# FIRST-RUN RISK: written without a Caddy binary to hand, so unvalidated until `caddy validate` has run on the server (the installer does that and puts the
-# previous configuration back if it fails). After a reload, `python3 tools/rehearsal_check.py http --url https://__HOST__ --store ...` proves the rules below.
+#
+# Layout under /srv/dflv2-rehearsal:   feed/ = the daemon's public folder      site/ = the viewer      private/ = the unreleased season (NEVER a served root)      monitor/
+# The feed file server is rooted DIRECTLY at /srv/dflv2-rehearsal/feed. `handle_path /feed/*` strips the /feed prefix, so /feed/latest.json is read from
+# /srv/dflv2-rehearsal/feed/latest.json, and there is no directory above that root that any served path could name. Everything else is served from site/.
+# Two independent layers keep private files out of reach: (1) the roots never include private/, and Caddy's file server joins paths with its own sanitiser, which
+# resolves `..` inside the root; (2) explicit 404s for dotfiles, `private`, and the private file names, matched on the decoded path.
+#
+# VALIDATION: this block has been checked against a stand-in server in tests, NOT parsed by Caddy in the workspace where it was written (no Caddy binary was
+# obtainable there). install_rehearsal.sh therefore (a) runs `caddy validate` on this block ALONE before touching /etc/caddy, (b) validates the whole
+# configuration again after the block is in place, (c) reloads only if both pass, and (d) right after the reload runs `rehearsal_check.py http --before-start
+# --canary ...` (cache headers, directory listings, write methods, 290+ encoded path-traversal requests aimed at a harmless private canary file) and takes the block
+# out again, reloading, if any check fails.
 #
 # Cache rules (docs/BROADCAST_FRONTEND_CONTRACT.md):
 #   never stored      latest.json, status.json, playback/index.json, broadcast/{clock,schedule}.json, broadcast/replays/index.json, broadcast/honors/index.json,
 #                     broadcast/live/<game>/manifest.json
 #   immutable         only a file that EXISTS (the `file` matcher): releases/*, playback/games/*, live/<game>/{head,sNNNN,end}.json, replays/<file>, honors/sNNN/<part>.json
-#   everything else   no-cache (revalidate). A missing file is a 404 with no-cache: a browser never keeps a "not yet" for long.
-# No directory is listed (file_server without `browse`); names starting with a dot are 404; write methods are 405; the response carries Caddy's Date header,
-# which the viewer uses as its time source.
+#   everything else   no-cache (revalidate). A missing file is a 404 with no-cache (also from handle_errors): a browser never keeps a "not yet" for long.
+# No directory is listed (file_server without `browse`); write methods are 405; the response carries Caddy's Date header, which the viewer uses as its time source.
 __HOST__ {
 	encode gzip
 	route {
@@ -21,29 +29,42 @@ __HOST__ {
 			X-Content-Type-Options nosniff
 			Referrer-Policy no-referrer
 			Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+			Cache-Control "no-cache"
 		}
-		@feed path /feed/*
-		@pointers path /feed/latest.json /feed/status.json /feed/playback/index.json /feed/broadcast/clock.json /feed/broadcast/schedule.json /feed/broadcast/replays/index.json /feed/broadcast/honors/index.json
-		@livemanifest path /feed/broadcast/live/*/manifest.json
-		@published {
-			path /feed/releases/* /feed/playback/games/* /feed/broadcast/live/*/head.json /feed/broadcast/live/*/s*.json /feed/broadcast/live/*/end.json /feed/broadcast/replays/* /feed/broadcast/honors/s*/*
-			file {
-				root /srv/dflv2-rehearsal
-			}
-		}
-		# order matters: later `header` lines replace earlier ones for a path they both match
-		header Cache-Control "no-cache"
-		header @published Cache-Control "public, max-age=31536000, immutable"
-		header @pointers Cache-Control "no-store"
-		header @livemanifest Cache-Control "no-store"
+		# names starting with a dot, and anything with a `..` segment after decoding, are never served
 		@hidden path_regexp (^|/)\.[^/]
 		respond @hidden 404
-		# two file servers, one root each (two `root` lines were found not to work on Caddy 2.11: docs/STAGING_DEPLOYMENT_RECORD_20261031.md)
-		file_server @feed {
-			root /srv/dflv2-rehearsal
+		# the private folders and file names are never served, wherever they are asked for
+		@private path_regexp (?i)(^/(private|monitor)(/|$))|((^|/)(CANARY[^/]*|PAUSE|daemon\.lock|clock_log\.jsonl|plan\.json|builds\.json)$)
+		respond @private 404
+		handle_path /feed/* {
+			route {
+				@pointers path /latest.json /status.json /playback/index.json /broadcast/clock.json /broadcast/schedule.json /broadcast/replays/index.json /broadcast/honors/index.json
+				@livemanifest path /broadcast/live/*/manifest.json
+				@published {
+					path /releases/* /playback/games/* /broadcast/live/*/head.json /broadcast/live/*/s*.json /broadcast/live/*/end.json /broadcast/replays/* /broadcast/honors/s*/*
+					file {
+						root /srv/dflv2-rehearsal/feed
+					}
+				}
+				# order matters: later `header` lines replace earlier ones for a path they both match
+				header @published Cache-Control "public, max-age=31536000, immutable"
+				header @pointers Cache-Control "no-store"
+				header @livemanifest Cache-Control "no-store"
+				file_server {
+					root /srv/dflv2-rehearsal/feed
+				}
+			}
 		}
-		file_server {
-			root /srv/dflv2-rehearsal/site
+		handle {
+			file_server {
+				root /srv/dflv2-rehearsal/site
+			}
 		}
+	}
+	# a 404 (or any error) is never cached for long, whatever header the matching rule had set
+	handle_errors {
+		header Cache-Control "no-cache"
+		respond "{http.error.status_code} {http.error.status_text}" {http.error.status_code}
 	}
 }
