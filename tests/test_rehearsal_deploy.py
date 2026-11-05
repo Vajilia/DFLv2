@@ -43,7 +43,7 @@ class Deploy(unittest.TestCase):
         stub(os.path.join(self.bin, 'ip'), 'echo "2: eth0    inet 10.0.0.5/24 brd 10.0.0.255 scope global eth0"\n')
         stub(os.path.join(self.bin, 'curl'), 'exit 22\n')
         # python3 passes through, except that the pre-flight (proved in test_rehearsal_check) is stood in for: a synthetic three-event store cannot pass its 48-hour test
-        stub(os.path.join(self.bin, 'python3'), 'case " $* " in *" preflight "*) echo "PASS stand-in pre-flight"; exit ${PREFLIGHT_RC:-0};; esac\nexec %s "$@"\n' % sys.executable)
+        stub(os.path.join(self.bin, 'python3'), 'case " $* " in *" preflight "*) [ -n "$REAL_PREFLIGHT" ] || { echo "PASS stand-in pre-flight"; exit 0; };; esac\nexec %s "$@"\n' % sys.executable)
         self.caddy_dir = os.path.join(self.d, 'caddy'); os.makedirs(os.path.join(self.caddy_dir, 'conf.d'))
         open(os.path.join(self.caddy_dir, 'Caddyfile'), 'w').write('import /etc/caddy/conf.d/*.caddy\n')
         self.roll = os.path.join(self.d, 'roll'); os.makedirs(os.path.join(self.roll, '20261105T000000Z'))
@@ -107,7 +107,7 @@ class Deploy(unittest.TestCase):
         self.untouched()
 
     def test_a_failing_preflight_changes_neither_caddy_nor_systemd_and_never_starts_anything(self):
-        r = self.run_sh('install_rehearsal.sh', self.pkg)
+        r = self.run_sh('install_rehearsal.sh', self.pkg, REAL_PREFLIGHT='1')          # the real pre-flight, on a store that cannot pass it
         self.assertEqual(r.returncode, 5, r.stdout + r.stderr)
         self.assertIn('pre-flight failed', r.stderr)
         self.assertFalse(os.path.exists(os.path.join(self.caddy_dir, 'conf.d', 'dflv2-rehearsal.caddy')))

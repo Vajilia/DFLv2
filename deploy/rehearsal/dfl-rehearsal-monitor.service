@@ -17,7 +17,7 @@ ReadWritePaths=/srv/dflv2-rehearsal/monitor
 ReadOnlyPaths=/srv/dflv2-rehearsal/private /srv/dflv2-rehearsal/feed /opt/dflv2-src
 PrivateTmp=true
 NoNewPrivileges=true
-ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/rehearsal_check.py watch --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --url https://__HOST__ --log /srv/dflv2-rehearsal/monitor/watch.log --evidence /srv/dflv2-rehearsal/monitor/evidence --guard /srv/dflv2-rehearsal/monitor --canary /srv/dflv2-rehearsal/private/store/CANARY.txt --cgroup /sys/fs/cgroup/system.slice/dfl-rehearsal.service --full-every 60 --min-free-gb 6 --max-public-gb 3
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/rehearsal_check.py watch --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --url https://__HOST__ --log /srv/dflv2-rehearsal/monitor/watch.log --evidence /srv/dflv2-rehearsal/monitor/evidence --guard /srv/dflv2-rehearsal/monitor --canary /srv/dflv2-rehearsal/private/store/CANARY.txt --cgroup /sys/fs/cgroup/system.slice/dfl-rehearsal.service --full-every 30 --min-free-gb 6 --max-public-gb 3
 Restart=on-failure
 RestartSec=10
 # exit status 1 means violations were logged: that is a result to read, not a crash to retry. 2 means it could not write its latch: do not retry in a loop either; the

@@ -303,6 +303,26 @@ class Verdict(Base):
         code, out = self.verdict(end)
         self.assertEqual(code, 1, out)
 
+    def test_a_planned_monitor_stop_drill_is_excluded_but_nothing_else_can_be(self):
+        end = int(RC.done_at(RC.make_oracle(self.rig.store))) + 5
+        self.finish(end)
+        self.heartbeats()
+        ns = lambda drill, reason='drill: stopped the monitor on purpose': __import__('argparse').Namespace(guard=self.guard, evidence=os.path.join(self.tmp, 'ev'), reason=reason, drill=drill)
+        self.beat()
+        BR.write_trip(self.guard, 'early_or_unknown_file', 'x', 'monitor', time.time())
+        self.assertEqual(RC.release(ns(True)), 2)                                        # a spoiler trip is never a drill
+        os.unlink(os.path.join(self.guard, 'TRIPPED'))
+        os.unlink(os.path.join(self.guard, 'trips.jsonl'))
+        BR.write_trip(self.guard, 'monitor_silent', 'x', 'daemon', time.time())
+        self.assertEqual(RC.release(ns(True)), 0)
+        code, out = self.verdict(end)
+        self.assertEqual(code, 0, out)
+        self.assertIn('1 planned monitor-stop drill', out)
+        # the same trip released without --drill counts against the run
+        os.unlink(os.path.join(self.guard, 'drills.jsonl'))
+        code, out = self.verdict(end)
+        self.assertEqual(code, 1, out)
+
     def test_a_wrong_season_size_or_a_wrong_file_is_not_a_pass(self):
         end = int(RC.done_at(RC.make_oracle(self.rig.store))) + 5
         self.finish(end)

@@ -4,7 +4,7 @@
   rehearsal_check.py http  --url https://HOST [--store R/store] [--sample 40]
         One pass over the SERVER'S RULES: cache headers per kind of file, no directory listings, nothing private served, write methods refused, a usable Date
         header, and (with --store, run on the server) a sample of URLs that are named in the private store but not yet released, which must all answer 404.
-  rehearsal_check.py watch --root R --public P [--url URL] [--log FILE] [--evidence DIR] [--guard DIR] [--canary FILE] [--cgroup DIR] [--every 10] [--full-every 60] [--min-free-gb 6] [--max-public-gb 3]
+  rehearsal_check.py watch --root R --public P [--url URL] [--log FILE] [--evidence DIR] [--guard DIR] [--canary FILE] [--cgroup DIR] [--every 10] [--full-every 30] [--min-free-gb 6] [--max-public-gb 3]
         A monitor for the whole rehearsal. Every cycle: the clock and status files agree, nothing moves backwards, the daemon's lease is alive (unless paused),
         no stale `.tmp-` debris, disk space. Every --full-every seconds: the whole public tree is compared with what the broadcast position allows
         (derived from the private plan and builds by tools/broadcast_season_check.py's independent Oracle): nothing early, nothing missing, and with --url a
@@ -579,6 +579,13 @@ def release(a):
         return 4
     rec = json.load(open(latch))
     now = time.time()
+    if getattr(a, "drill", False):
+        if not (rec.get("kind") == "monitor_silent" and rec.get("source") == "daemon"):
+            print("refusing --drill: only a trip made by the daemon because the monitor was deliberately stopped (monitor_silent) can be a drill; this one is %s from %s" % (rec.get("kind"), rec.get("source")), file=sys.stderr)
+            return 2
+        rec["drill"] = True
+        with open(os.path.join(a.guard, "drills.jsonl"), "a") as f:
+            f.write(json.dumps({"from": rec["at"], "to": now, "kind": rec["kind"], "reason": a.reason.strip()}) + "\n")
     rec["released_at"], rec["released_reason"] = now, a.reason.strip()
     dest = os.path.join(a.evidence or os.path.join(a.guard, "evidence"), "released")
     os.makedirs(dest, exist_ok=True)
@@ -625,17 +632,25 @@ def verdict(a):
                 last = rec["at"]
     except OSError as e:
         viol.append({"violation": "log_unreadable", "detail": str(e)})
-    trips = []
+    trips, drills = [], []
     try:
-        trips = [ln for ln in open(os.path.join(a.guard, "trips.jsonl")) if ln.strip()]
-    except OSError:
+        drills = [json.loads(ln) for ln in open(os.path.join(a.guard, "drills.jsonl")) if ln.strip()]
+    except (OSError, ValueError):
+        pass
+    try:
+        for ln in open(os.path.join(a.guard, "trips.jsonl")):
+            if ln.strip():
+                t = json.loads(ln)
+                if not any(d["from"] - 1 <= t["at"] <= d["to"] + 1 for d in drills):
+                    trips.append(ln)
+    except (OSError, ValueError):
         pass
     latched = os.path.exists(BR.trip_file(a.guard))
     clean = not viol and not trips and not latched
     line(beats > 0, "the monitor logged %d heartbeat lines%s (normal entries; they are not violations)" % (beats, "" if not beats else ", %s to %s" % (time.strftime("%Y-%m-%d %H:%M", time.gmtime(first)), time.strftime("%H:%M UTC", time.gmtime(last)))))
     kinds = sorted({v.get("violation") for v in viol})
     line(not viol, "violation entries in the log: %d%s" % (len(viol), "" if not viol else " (%s)" % ", ".join(kinds)))
-    line(not trips and not latched, "trips (automatic pauses): %d%s" % (len(trips), " and one is still latched" if latched else ""))
+    line(not trips and not latched, "trips (automatic pauses): %d%s%s" % (len(trips), " and one is still latched" if latched else "", "; %d planned monitor-stop drill(s) excluded" % len(drills) if drills else ""))
     clock = B.Clock(store, os.path.join(store, "_unused"))
     st = clock.state()
     pos = clock.position(time.time()) if st else 0.0
@@ -693,7 +708,7 @@ def main(argv=None):
     p.add_argument("--log")
     p.add_argument("--evidence")
     p.add_argument("--every", type=float, default=10.0)
-    p.add_argument("--full-every", type=float, default=60.0)
+    p.add_argument("--full-every", type=float, default=30.0)
     p.add_argument("--min-free-gb", type=float, default=6.0)
     p.add_argument("--max-public-gb", type=float, default=3.0)
     p.add_argument("--guard", help="the monitor's folder: write TRIPPED and the heartbeat here so the daemon (run with --guard) pauses")
@@ -703,6 +718,7 @@ def main(argv=None):
     p.add_argument("--guard", required=True)
     p.add_argument("--reason", required=True)
     p.add_argument("--evidence")
+    p.add_argument("--drill", action="store_true", help="the trip was the planned monitor-stop drill (only a daemon-made monitor_silent trip qualifies); the verdict excludes it")
     p = sub.add_parser("verdict")
     p.add_argument("--root", required=True)
     p.add_argument("--public", required=True)
