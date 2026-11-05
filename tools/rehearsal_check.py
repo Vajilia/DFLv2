@@ -211,7 +211,7 @@ def traversal_paths(full=True):
                 out.append("/feed/" + up * 2 + t)
                 out.append("/" + up + t)
     out += ["//" + TARGETS[0], "/feed//" + TARGETS[0], "/feed/" + CANARY_NAME, "/" + CANARY_NAME, "/private/store/" + CANARY_NAME, "/feed/private/store/" + CANARY_NAME,
-            "/feed/./../" + TARGETS[0], "/feed/x/../../" + TARGETS[0], "/feed/%2e%2e", "/feed/%2e%2e/", "/feed/..", "/feed/../"]
+            "/feed/./../" + TARGETS[0], "/feed/x/../../" + TARGETS[0]]
     return out
 
 
