@@ -45,6 +45,9 @@ class BroadcastError(Exception):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- files
+FSYNC = True            # tests that tick through a whole simulated day switch this off; a real daemon never does
+
+
 def put(path, obj):
     """Write JSON atomically: a reader sees the old file or the whole new one. Temporary names start with a dot (never served)."""
     d = os.path.dirname(path)
@@ -54,7 +57,8 @@ def put(path, obj):
     with open(tmp, "wb") as f:
         f.write(raw)
         f.flush()
-        os.fsync(f.fileno())
+        if FSYNC:
+            os.fsync(f.fileno())
     os.replace(tmp, path)
 
 
@@ -107,10 +111,14 @@ class Clock:
             f.flush()
             os.fsync(f.fileno())
 
-    def start(self, now, pos=0.0, lease=LEASE_S):
+    def start(self, now, pos=0.0, lease=LEASE_S, ready_until=None):
+        """`ready_until`: the publication horizon from the first instant (a season's clock must not run before its first tick has released anything)."""
         if self.state() is not None:
             raise BroadcastError("the clock already exists: use resume")
-        self._write({"state": "running", "anchor_wall": now, "anchor_pos": pos, "lease_until": now + lease, "epoch": 1}, "start", now)
+        st = {"state": "running", "anchor_wall": now, "anchor_pos": pos, "lease_until": now + lease, "epoch": 1}
+        if ready_until is not None:
+            st["ready_until"] = ready_until
+        self._write(st, "start", now)
 
     def position(self, now):
         st = self.state()
@@ -129,16 +137,23 @@ class Clock:
             return
         self._write(dict(st, state="running", anchor_wall=now, lease_until=now + lease, epoch=st["epoch"] + 1, **({"ready_until": st["anchor_pos"] + DELAY_S} if "ready_until" in st else {})), "resume", now)
 
-    def heartbeat(self, now, lease=LEASE_S):
+    def heartbeat(self, now, lease=LEASE_S, holding=False, why="downtime"):
         """Called every few seconds by the daemon. If the previous lease lapsed, the gap was downtime: it is recorded as a pause and the position resumes
-        from where the viewers' clocks stopped (lease end). Returns the downtime in seconds."""
+        from where the viewers' clocks stopped (lease end). Returns the downtime in seconds.
+        `holding`: the daemon is alive and standing deliberately at the edge of what has been built (the clock cannot pass `ready_until`): the lease is kept
+        but nothing is recorded yet; the stand-still is recorded ONCE, as `why`, when coverage arrives (a second per second of log lines would be noise)."""
         st = self.state()
         if st["state"] != "running":
+            return 0.0
+        if holding:
+            if st["lease_until"] - now < lease - 5:
+                put(self.path, dict(st, lease_until=now + lease))
+                put(self.mirror, dict(st, lease_until=now + lease))
             return 0.0
         down = max(0.0, now - clock_limit(st))
         if down > 0:
             frozen = position(st, now)
-            self._write(dict(st, anchor_pos=frozen, anchor_wall=now, lease_until=now + lease, epoch=st["epoch"] + 1, **({"ready_until": frozen} if "ready_until" in st else {})), "downtime", now, down_s=round(down, 3))
+            self._write(dict(st, anchor_pos=frozen, anchor_wall=now, lease_until=now + lease, epoch=st["epoch"] + 1, **({"ready_until": frozen} if "ready_until" in st else {})), why, now, down_s=round(down, 3))
         elif st["lease_until"] - now < lease - 5:       # renew about every 5 seconds, not every tick
             put(self.path, dict(st, lease_until=now + lease))
             put(self.mirror, dict(st, lease_until=now + lease))
@@ -235,14 +250,45 @@ def check_live_file(obj, kind):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- the timetable
-def make_schedule(windows, pos=0):
+def _gated(w):
+    """Postseason, Bowl and Coronation participants are not public until announced: they depend on results the viewers have not seen."""
+    return any("/po:" in g["gid"] or g["gid"].endswith(("/coronation", "/bowl")) for g in w["games"])
+
+
+def make_schedule(windows, pos=0, lookahead_s=None):
     """windows: [{"label", "start_s", "slot_s", "games": [{"gid", "away", "home"}]}] -> (public schedule, private schedule). They differ only in that
-    the private one retains computed participant identities and lengths; the public one gates announcements."""
-    pub = {"format": "dfl-broadcast-schedule", "format_version": 1, "windows": [
-        {"label": w["label"], "start_s": w["start_s"], "slot_s": w["slot_s"], "games": [{k: g[k] for k in ("gid", "away", "home") if k in g} for g in w["games"]]
-         if pos >= w.get("announce_s", w["start_s"] if any("/po:" in g["gid"] or g["gid"].endswith("/coronation") for g in w["games"]) else 0) else []}
-        for w in windows]}
+    the private one retains computed participant identities and lengths; the public one gates announcements.
+
+    A private window may carry `nominal_s` (its place in the timetable before any overrun) and `overrun_s` (how long its games run past the nominal slot).
+    The PUBLIC start of a window is its nominal start plus the overruns that have already become visible, that is, those whose slot has expired with a
+    game still live. A future overrun is therefore never in the public schedule before the viewers can see it, and a window that has begun never moves.
+    `lookahead_s` lists only windows that begin within that many seconds (and every window that has begun)."""
+    shift, shown = 0, []
+    for w in windows:
+        announced = w["nominal_s"] + shift if "nominal_s" in w else w["start_s"]
+        if lookahead_s is None or announced <= pos + lookahead_s or w["start_s"] <= pos:
+            gate = w.get("announce_s", w["start_s"] if _gated(w) else 0)
+            shown.append({"label": w["label"], "start_s": announced, "slot_s": w["slot_s"],
+                          "games": [{k: g[k] for k in ("gid", "away", "home") if k in g} for g in w["games"]] if pos >= gate else []})
+        if w.get("overrun_s", 0) > 0 and pos >= w["start_s"] + w["slot_s"]:
+            shift += w["overrun_s"]
+    pub = {"format": "dfl-broadcast-schedule", "format_version": 1, "windows": shown}
     return pub, {"windows": windows}
+
+
+_CACHE = {}
+
+
+def _cached_get(path):
+    """Immutable private files (head, end) are read once: a daemon ticking every second must not reread hundreds of games. Keyed by size and mtime."""
+    st = os.stat(path)
+    key = (st.st_mtime_ns, st.st_size)
+    hit = _CACHE.get(path)
+    if hit and hit[0] == key:
+        return hit[1]
+    obj = get(path)
+    _CACHE[path] = (key, obj)
+    return obj
 
 
 def _live_dir(public, gid):
@@ -259,22 +305,49 @@ def _desired(game_rec, win_start, pos, n_segs, length_s, delay_s):
     return want
 
 
-def reconcile(store, public, sched, pos, reveals=()):
+FULL_PASS_S = 120       # every window is re-examined at least this often; in between, finished and far-future windows are skipped
+
+
+def reconcile(store, public, sched, pos, reveals=(), memo=None):
     """Make the public tree exactly what the broadcast position allows: place what is due, remove what is not (a restart or a rewound clock is repaired the same
-    way). Idempotent. `sched` is the private schedule. Returns the number of files placed and removed."""
+    way). Idempotent. `sched` is the private schedule. Returns the number of files placed and removed.
+    `memo`: a dict the caller keeps between calls (a daemon ticking once a second). With it, windows whose games are all final and in place are not re-examined,
+    nor windows more than two minutes from their kickoff, except in a FULL pass (the first call, a position that went backwards, and every FULL_PASS_S seconds):
+    a new process, or a clock set back, repairs everything at once. Without it every call is a full pass."""
     placed = removed = 0
-    public_schedule, _ = make_schedule(sched["windows"], pos)
+    memo = {} if memo is None else memo
+    full = memo.get("settled") is None or pos < memo.get("pos", -1) or pos - memo.get("full_pos", -1e18) >= FULL_PASS_S
+    if full:
+        memo["settled"], memo["full_pos"] = {}, pos
+    if not memo.get("swept"):                 # debris of a process that died mid-write: a new process is the only writer, so every dot-temporary is its predecessor's
+        memo["swept"] = True
+        for d, dirs, names in os.walk(public):
+            for n in list(dirs) + names:
+                if n.startswith(".tmp-"):
+                    p = os.path.join(d, n)
+                    shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else os.unlink(p)
+                    removed += 1
+            dirs[:] = [x for x in dirs if not x.startswith(".tmp-")]
+    memo["pos"] = pos
+    public_schedule, _ = make_schedule(sched["windows"], pos, sched.get("lookahead_s"))
     schedule_path = os.path.join(public, "broadcast", "schedule.json")
     if not os.path.exists(schedule_path) or get(schedule_path) != public_schedule:
         put(schedule_path, public_schedule)
     replays = os.path.join(public, "broadcast", "replays")
     done = []
-    for w in sched["windows"]:
+    for wi, w in enumerate(sched["windows"]):
+        if not full:
+            if wi in memo["settled"]:
+                done += memo["settled"][wi]
+                continue
+            if pos < w["start_s"] - 120:
+                continue
+        p0, r0, wdone = placed, removed, []
         for g in w["games"]:
             gid = g["gid"]
             src = os.path.join(store, "games", safe(gid))
-            end = get(os.path.join(src, "end.json"))
-            head = get(os.path.join(src, "head.json"))
+            end = _cached_get(os.path.join(src, "end.json"))
+            head = _cached_get(os.path.join(src, "head.json"))
             n_segs = g["segments"]
             want = _desired(g, w["start_s"], pos, n_segs, g["length_s"], head["broadcast"]["delay_s"])
             dst = _live_dir(public, gid)
@@ -290,7 +363,7 @@ def reconcile(store, public, sched, pos, reveals=()):
             if want["end"]:
                 due.add("end.json")
             for name in sorted(due - have):
-                obj = get(os.path.join(src, name))
+                obj = (_cached_get if name in ("head.json", "end.json") else get)(os.path.join(src, name))
                 check_live_file(obj, "head" if name == "head.json" else "end" if name == "end.json" else "seg")
                 put(os.path.join(dst, name), obj)
                 placed += 1
@@ -298,8 +371,7 @@ def reconcile(store, public, sched, pos, reveals=()):
                 os.unlink(os.path.join(dst, name))
                 removed += 1
             if want["head"]:
-                state = "final" if want["end"] else "live"
-                man = {"gid": gid, "state": state, "segments": want["segs"], "seg_s": SEG_S, "delay_s": head["broadcast"]["delay_s"], "speed": head["broadcast"]["speed"],
+                man = {"gid": gid, "state": "final" if want["end"] else "live", "segments": want["segs"], "seg_s": SEG_S, "delay_s": head["broadcast"]["delay_s"], "speed": head["broadcast"]["speed"],
                        "start_s": w["start_s"]}
                 cur = None
                 try:
@@ -319,10 +391,13 @@ def reconcile(store, public, sched, pos, reveals=()):
                     shutil.copyfile(os.path.join(src, "replay.json"), tmp)
                     os.replace(tmp, rp)
                     placed += 1
-                done.append({"gid": gid, "replay": end["replay"], "final": end["final"], "season": head.get("season"), "game_kind": head.get("game_kind")})
+                wdone.append({"gid": gid, "replay": end["replay"], "final": end["final"], "season": head.get("season"), "game_kind": head.get("game_kind")})
             elif os.path.exists(rp):
                 os.unlink(rp)
                 removed += 1
+        done += wdone
+        if w["games"] and len(wdone) == len(w["games"]) and (placed, removed) == (p0, r0):
+            memo["settled"][wi] = wdone
     # the replay index lists only broadcasts that have ended: it is the on-demand library
     idx = {"format": "dfl-broadcast-replays", "format_version": 1, "games": sorted(done, key=lambda d: d["gid"])}
     ip = os.path.join(replays, "index.json")
@@ -332,26 +407,54 @@ def reconcile(store, public, sched, pos, reveals=()):
     return placed + r_placed, removed + r_removed
 
 
+def _raw(path):
+    with open(path, "rb") as f:
+        return f.read()
+
+
 def _reveals(store, public, reveals, pos):
-    """reveals: [{"at_s", "src", "dst", "last"}]: a private file or directory that becomes public at `at_s` (the week's feed release, then its pointer).
-    A reveal is copied whole and renamed into place, never visible half-made; one that is not due is removed."""
+    """reveals: [{"at_s", "src" | "data", "dst", "last", "replace", "group"}]: a private file or directory (or, with `data`, bytes made by the planner) that becomes
+    public at `at_s` (the week's feed release, then its pointer). A reveal is copied whole and renamed into place, never visible half-made; one that is not
+    due is removed (a restart or a rewound clock is repaired the same way).
+
+    `group`: reveals that share a group and a `dst` are successive versions of ONE public file (the latest-release pointer, a cumulative index): only the
+    newest due version is placed, never each in turn (a restart that finds several due must not flip the file through every old version)."""
     placed = removed = 0
-    for r in sorted(reveals, key=lambda r: (r["at_s"], r.get("last", False))):
-        src, dst = os.path.join(store, r["src"]), os.path.join(public, r["dst"])
-        if pos >= r["at_s"]:
-            if not os.path.exists(dst):
+    plain, groups = [], {}
+    for r in reveals:
+        if r.get("group"):
+            groups.setdefault((r["group"], r["dst"]), []).append(r)
+        else:
+            plain.append(r)
+    for rs in groups.values():
+        due = [r for r in rs if pos >= r["at_s"]]
+        if due:
+            plain.append(dict(max(due, key=lambda r: (r["at_s"], r.get("order", 0))), replace=True))
+        else:
+            plain.append(dict(rs[0], at_s=float("inf"), replace=False))
+    for r in sorted(plain, key=lambda r: (r["at_s"], r.get("last", False))):
+        dst = os.path.join(public, r["dst"])
+        due = pos >= r["at_s"]
+        if "data" in r:
+            raw = r["data"] if isinstance(r["data"], bytes) else r["data"].encode()
+            same = lambda: os.path.exists(dst) and _raw(dst) == raw
+        else:
+            src = os.path.join(store, r["src"])
+            same = lambda: os.path.exists(dst) and _raw(src) == _raw(dst)
+        if due:
+            if not os.path.exists(dst) or (r.get("replace") and not same()):
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 tmp = os.path.join(os.path.dirname(dst), ".tmp-" + os.path.basename(dst))
-                if os.path.isdir(src):
+                if "data" in r:
+                    with open(tmp, "wb") as f:
+                        f.write(raw)
+                        f.flush()
+                        os.fsync(f.fileno())
+                elif os.path.isdir(src):
                     shutil.rmtree(tmp, ignore_errors=True)
                     shutil.copytree(src, tmp)
                 else:
                     shutil.copyfile(src, tmp)
-                os.replace(tmp, dst)
-                placed += 1
-            elif r.get("replace") and open(src, "rb").read() != open(dst, "rb").read():
-                tmp = os.path.join(os.path.dirname(dst), ".tmp-" + os.path.basename(dst))
-                shutil.copyfile(src, tmp)
                 os.replace(tmp, dst)
                 placed += 1
         elif os.path.exists(dst) and not r.get("replace"):

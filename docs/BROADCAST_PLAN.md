@@ -1,6 +1,6 @@
 # A watchable season in approximately 48 active hours
 
-Development branch: `frontend/watch-now-48h`. Based on broadcast prototype `61d7612` and frontend `e4c8d32`. **Local implementation and tests only. Nothing deployed or resumed.** The production league remains stopped at 188. No change under `src/dfl/` or `data/`.
+Development branches: `frontend/watch-now-48h` (based on broadcast prototype `61d7612` and frontend `e4c8d32`) and, on top of it, `backend/broadcast-integration-2026-11-04` (the private builder, the season daemon, broadcast-owned publication and Honors: **`docs/BROADCAST_INTEGRATION.md`**). **Local implementation and tests only. Nothing deployed or resumed.** The production league remains stopped at 188. No change under `src/dfl/` or `data/`.
 
 ## 1. Agreed viewing model
 
@@ -66,12 +66,14 @@ The browser's Date.now is not authoritative. It estimates server time from the H
 
 ## 6. Remaining production integration
 
-1. Build private per-event public snapshots and game records from committed league events, isolated from the old publisher. The job is not yet built.
-2. The full-season daemon must apply overrun shifts, participant announcement gates and all dependent feed/award reveals coherently. The local demo is not that daemon.
-3. Route every public result-bearing surface through broadcast progress: latest pointer, status, standings, history, rosters, playoff pairings, honors, replay indexes and guessed file URLs. Weekly standings/roster updates are acceptable initially. Never run the old all-results exporter into the same public namespace.
-4. Populate an Honors feed only from available recorded public awards; mark missing content explicitly.
-5. Pin and validate server cache rules, use private/public paths, and rehearse deployment and rollback. Nothing here changes Caddy, units, production files or backups.
-6. Rehearse a complete fresh season with outages and a forced overrun, measure real-phone performance, then decide on production deployment. The production league at 188 is not a test input to modify or resume.
+Items 1 to 4 and the local part of 6 were built on `backend/broadcast-integration-2026-11-04` (see `docs/BROADCAST_INTEGRATION.md`); what is still open is stated there and repeated here.
+
+1. *Built:* a private per-event builder (`tools/broadcast_build.py`): feed release, pointer, full replays, live recordings and honours parts for each event of a fresh isolated league, all outside the public folder.
+2. *Built:* the season daemon (`src/dflsite/season.py`, `tools/broadcast_run.py`): overruns shift later windows and blocks, participant announcement gates, dependent reveals, pause, holding at the edge of what is built, repair after a crash.
+3. *Built:* every results-bearing public surface (`status.json`, `latest.json`, releases with standings, history, rosters and playoff pairings, `playback/index.json`, `broadcast/replays/index.json`, honors) is written only by the daemon, at broadcast time. The old all-results exporter must never be pointed at the same folder. **Open:** an older exporter timer on a real server would still publish ahead of the broadcast; nothing here touches any timer.
+4. *Built:* Honors from recorded Tour Rings, Tiaras, halls and the fan entrant, with unavailable awards listed. **Open:** a frontend Honors view (requirements in the frontend contract); multi-year carry-over of the honors and playback indexes.
+5. *Open:* pin and validate server cache rules (uncached `latest.json`, `status.json`, `broadcast/clock.json`, `broadcast/schedule.json`, no directory listing, nothing served from the private root), and rehearse deployment and rollback. Nothing here changes Caddy, units, production files or backups.
+6. *Done locally in virtual time and with a real-time smoke test of the daemon:* a complete fresh season with simultaneous games, forced overruns, pauses, publisher failures, a restart and a slow builder. **Open:** a real-time end-to-end rehearsal, real-phone performance, then a decision on deployment. The production league at 188 is not a test input to modify or resume.
 
 ## 7. Tests and handoff
 

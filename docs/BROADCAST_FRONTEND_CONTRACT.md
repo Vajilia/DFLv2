@@ -40,3 +40,26 @@ The app route is `#/watch` (optional selected gid in the next encoded path segme
 ## Limits and rollout gates
 
 This is buffered full-play publication, not zero-peeking: network inspection can expose the whole current traced play and starts in its release bucket. Source HTTP Date accuracy is subsecond, not frame-perfect. Real-phone and full fresh-season acceptance remain required before release. Private weekly snapshot building, Honors publication and full-season overrun/reveal integration are still unbuilt; broadcastOnly mode must not be mistaken for completion of those jobs. Keep production and the stopped league unchanged.
+
+## Season-mode additions (backend integration, additive; nothing above changed)
+
+`docs/BROADCAST_INTEGRATION.md` describes the producer. What a frontend can now rely on, and what it must handle:
+
+**Public folder layout** (the folder is the feed root; `broadcast/` is its child, as `DFL_CONFIG.feed + 'broadcast/'` already assumes):
+`latest.json`, `releases/<release>/…`, `status.json`, `playback/index.json`, `playback/games/*.json`, `broadcast/{clock,schedule}.json`, `broadcast/live/<slug>/…`, `broadcast/replays/{index.json,*.json}`, `broadcast/honors/{index.json,s001/<part>.json}`. Every results-bearing file follows **broadcast** progress. Old releases remain on disk; follow `latest.json` only.
+
+**`schedule.json`**
+- Lists windows that begin within six hours and every window that has begun, not the whole year.
+- `start_s` of a window that has not begun can move **later** when an earlier game overruns. The move becomes visible only after that earlier window's nominal slot has expired with a game still live; at least 300 s remain before the next kickoff, so the existing 15 s schedule refresh is enough. A window that has begun never changes `start_s`. `slot_s` is the nominal slot and is not extended.
+- `games` of Bowl, Coronation and postseason windows is empty until the previous results block is revealed (not merely until kickoff). Render an empty `games` as "participants to be announced"; today the client skips such a window.
+- Do not treat slot expiry as the end of a game (unchanged): `end.json` is the end.
+
+**`status.json`** keeps format `dfl-feed-status` 1 and the existing fields, plus `"source": "broadcast"`. `league_events`/`published_events`/`release` are the events whose results are **public**. `runner.state` is `running` while the broadcast clock is advancing and `paused` when it is paused, held for lack of built material, or has lost its daemon's lease; `until_events`, `next_event_due` and `pace_seconds` are null; `limit_reached` is false. **Frontend requirement:** `health()` currently words these as "Simulation paused. The league is not advancing." For `source === 'broadcast'` say "Broadcast paused" / "Broadcast running" (the league is not what is paused), and do not show "next event about …".
+
+**Replay links.** `broadcast/replays/index.json` gains a game when its broadcast ends; `playback/index.json` (the ordinary replay links on schedule, team and history pages) gains it with the weekly results block, when the feed also shows its result. A game can therefore be replayable from Watch now minutes before the ordinary pages list it as final. That is deliberate: do not "fix" it by deriving results elsewhere.
+
+**Honors** (new, `broadcast/honors/index.json`, format `dfl-broadcast-honors` 1, kind `index`; a 404 means nothing has been revealed yet, which is the case until the Bowl ceremony): `parts` lists what has been revealed so far (`part` = `rings`, `tiara`, `halls`, `fan_entrant`; `season`; `file` relative to `broadcast/honors/`); `unavailable` lists awards the engine does not implement, with a reason. Each part file is `kind` = its part, `status` = `recorded` | `not_recorded` | `none`, a `note`, and `recipients` (players: `id`, `name`, `pos`, `club`; staff: `name`, `role`, `club`, no id), `counts`, `side` (rings) or `club` (tiara); `halls` has `halls[]` (scope + registers of positions), `entered_this_year`, `rule`, `eligible_players`, `unavailable`; `fan_entrant` has `entrant` (null when none). **Frontend requirement:** an Honors view that shows only what is present, shows `note`/`rule`/`unavailable` text verbatim, and never fills a gap (an empty halls list in a first year is correct, not an error). Parts appear one at a time during the Honors show; the index changes as they do.
+
+**Pause and hold.** `clock.json` pauses for three reasons the client cannot tell apart and need not: an owner pause, a daemon outage (lease), and a builder that is behind (`ready_until`). Keep the existing "Broadcast paused" wording.
+
+**Limits unchanged and stated again:** whole-play segments allow network peeking at the current play and the plays in its release bucket; HTTP Date has one-second resolution; the 390 px `team/ALA` overflow in `test_site_static.py` is an existing frontend issue and is not touched here.
