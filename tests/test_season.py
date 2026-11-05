@@ -224,10 +224,22 @@ class SeasonMode(unittest.TestCase):
         run(bc, T0 + 151, T0 + 400)
         self.assertEqual(bc.clock.position(T0 + 400), bc.clock.position(T0 + 152))
         self.assertAlmostEqual(bc.clock.position(T0 + 400), pos + 1, delta=1.5)
+        self.assertEqual(ST.read(r.pub('status.json'))['runner']['state'], 'paused')
         os.unlink(os.path.join(r.store, S.PAUSE))
         run(bc, T0 + 401, T0 + 410)
         self.assertGreater(bc.clock.position(T0 + 410), bc.clock.position(T0 + 400) + 5)
         self.assertEqual(ST.read(r.pub('status.json'))['runner']['state'], 'running')
+
+    def test_pause_and_resume_reach_the_status_file_on_the_tick_that_notices_them(self):
+        r2, bc2 = self.rig()                                   # not up to STATUS_EVERY_S later
+        run(bc2, T0, T0 + 150)
+        self.assertEqual(ST.read(r2.pub('status.json'))['runner']['state'], 'running')
+        open(os.path.join(r2.store, S.PAUSE), 'w').close()
+        bc2.tick(T0 + 151)
+        self.assertEqual(ST.read(r2.pub('status.json'))['runner']['state'], 'paused')
+        os.unlink(os.path.join(r2.store, S.PAUSE))
+        bc2.tick(T0 + 152)
+        self.assertEqual(ST.read(r2.pub('status.json'))['runner']['state'], 'running')
 
     def test_publisher_failure_freezes_inside_published_coverage_and_recovers(self):
         r, bc = self.rig()

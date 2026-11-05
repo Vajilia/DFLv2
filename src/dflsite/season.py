@@ -206,6 +206,7 @@ class SeasonBroadcaster(B.Broadcaster):
         self._failed = False
         self._memo = {}
         self._status_at = 0.0
+        self._moving = None
         self.plan = plan if plan is not None else B.get(os.path.join(store, PLAN))
 
     def view(self):
@@ -287,20 +288,23 @@ class SeasonBroadcaster(B.Broadcaster):
     def _status(self, now, ok, error=None, pos=None, view=None, placed=0, force=False):
         """The heartbeat the site reads (feed/status.json, format dfl-feed-status 1), written from BROADCAST progress: the number of events whose results are
         public, the clock's own state. The league's progress, the builder's progress and the horizon never appear here."""
-        if not force and placed == 0 and now - self._status_at < STATUS_EVERY_S:
+        if pos is None:
+            pos = self.clock.position(now) or 0.0
+        view = view or self.view()
+        st = self.clock.state()
+        moving = bool(st) and st["state"] == "running" and now < B.clock_limit(st) - 1e-6 and not (view.horizon is not None and pos >= view.horizon - 1e-6)
+        # a change between running and paused (the PAUSE switch, a coverage hold) is written at once: the pages must not say "running" while the clock stands still
+        changed = moving != self._moving
+        if not force and not changed and placed == 0 and now - self._status_at < STATUS_EVERY_S:
             return
         self._status_at = now
+        self._moving = moving
         path = os.path.join(self.public, ST.FILE)
         previous = ST.read(path)
         pdoc = (previous or {}).get("export") or {}
         t = ST.now_iso(now)
-        if pos is None:
-            pos = self.clock.position(now) or 0.0
-        view = view or self.view()
         due = [p for p in view.pointers if p["at_s"] <= pos]
         cur = max(due, key=lambda p: (p["at_s"], p["events"])) if due else None
-        st = self.clock.state()
-        moving = bool(st) and st["state"] == "running" and now < B.clock_limit(st) - 1e-6 and not (view.horizon is not None and pos >= view.horizon - 1e-6)
         last_pub = ST.now_iso(now) if placed else pdoc.get("last_publish_at")
         doc = {"format": ST.FORMAT, "format_version": ST.VERSION, "checked_at": t, "league_events": cur["events"] if cur else 0,
                "published_events": cur["events"] if cur else None, "release": cur["release"] if cur else None, "source": "broadcast",
