@@ -68,9 +68,10 @@
       schedule.windows.forEach(function (w) {
         var list = pos < w.start_s ? upcoming : nowList;
         var available = w.games.filter(function (g) { return !done[g.gid]; });
-        if (!available.length) return;
+        if (!available.length && w.games.length) return;
         var group = node('div', null, 'card'), label = node('h3', w.label); group.appendChild(label);
         if (pos < w.start_s) { var count = node('p', '', 'muted'); count.dataset.start = w.start_s; group.appendChild(count); }
+        if (!w.games.length) group.appendChild(node('p', 'Participants to be announced.', 'muted'));
         available.forEach(function (g) { group.appendChild(button(g)); }); list.appendChild(group);
       });
       library.slice().reverse().forEach(function (e) {

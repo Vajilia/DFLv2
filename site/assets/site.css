@@ -63,3 +63,9 @@ body { overflow-x: hidden; }
 .health.bad { border-left-color: var(--loss); background: #3A1414; color: #FFD6D6; }
 .replay { font-family: var(--mono); font-weight: 700; font-size: 14px; margin-left: 8px; padding: 0 8px; border: 1px solid var(--accent); color: var(--accent); }
 .replay:hover { background: var(--accent); color: var(--accent-ink); }
+
+.honors { min-width: 0; }
+.honors-part { display: flex; flex-direction: column; gap: 12px; overflow-wrap: anywhere; }
+.honors-part p, .honors-unavailable p { margin: 0; max-width: none; }
+.honors-part li, .honors-unavailable li { overflow-wrap: anywhere; }
+.honors-part details { margin: 0; }

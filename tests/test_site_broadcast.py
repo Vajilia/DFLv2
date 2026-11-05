@@ -219,3 +219,13 @@ class BroadcastPage(unittest.TestCase):
         p.wait_for_function("document.querySelector('.broadcast > .notice').textContent.includes('incompatible')")
         self.assertIsNone(p.evaluate('DFL_VIEWER.broadcast().state().position'))
         self.assertFalse(p.locator('.pb-canvas').count())
+
+    def test_unannounced_participants_still_show_the_upcoming_window(self):
+        schedule=B.get(os.path.join(self.public,'broadcast','schedule.json'))
+        schedule['windows'].append({'label':'Conference championships','start_s':3600,'slot_s':960,'games':[]})
+        B.put(os.path.join(self.public,'broadcast','schedule.json'),schedule)
+        p=self.page(width=390)
+        p.wait_for_function("document.querySelector('.broadcast').textContent.includes('Participants to be announced.')")
+        self.assertIn('Conference championships',p.locator('.broadcast').text_content())
+        self.assertIn('Kickoff in',p.locator('.broadcast').text_content())
+        self.assertEqual(self.errors,[])

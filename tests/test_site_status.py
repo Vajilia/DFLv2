@@ -71,6 +71,17 @@ class Health(unittest.TestCase):
         self.assertIn("Simulation running", r["text"])
         self.assertIn("next event", r["text"])
 
+    def test_broadcast_status_never_describes_the_simulation_or_predicts_an_event(self):
+        for state in ('running', 'paused', 'stopped'):
+            d = dict(doc(runner=state), source='broadcast')
+            r = self.h(d)
+            self.assertEqual(r['text'], 'Broadcast ' + state + '.')
+            self.assertNotIn('Simulation', r['text'])
+            self.assertNotIn('next event', r['text'])
+        self.assertEqual(self.h(dict(doc(runner='error', err='IOError'), source='broadcast'))['level'], 'bad')
+        stale = self.h(dict(doc(checked=-6*60), source='broadcast'))
+        self.assertEqual(stale['level'], 'bad')
+
     def test_no_status_file_means_no_health_line(self):
         self.assertIsNone(self.h(None))
 

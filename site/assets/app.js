@@ -107,20 +107,21 @@
   // health(status, now) -> {level: 'ok'|'paused'|'warn'|'bad', text}. Pure, so it is tested on its own.
   function health(st, now) {
     if (!st) return null;
-    var chk = Date.parse(st.checked_at), ex = st.export || {}, rn = st.runner;
+    var chk = Date.parse(st.checked_at), ex = st.export || {}, rn = st.runner, bc = st.source === 'broadcast';
     function age(ms) { var m = Math.round(ms / 60000); return m < 1 ? 'under a minute' : m < 90 ? m + ' min' : Math.round(m / 60) + ' h'; }
     if (isNaN(chk) || now - chk > STALE_MS)
       return { level: 'bad', text: 'Updates may be stalled: the update service last reported ' + (isNaN(chk) ? 'at an unknown time' : age(now - chk) + ' ago') + '. The data shown is the last published.' };
     if (ex.ok === false)
       return { level: 'bad', text: 'The last update attempt failed (' + ((ex.error && ex.error.type) || 'error') + '). The data shown is the last good release' + (ex.last_success_at ? ' (' + fmtStamp(ex.last_success_at) + ')' : '') + '.' };
-    if (rn && rn.state === 'error') return { level: 'bad', text: 'The simulation runner stopped with an error (' + ((rn.error && rn.error.type) || 'error') + '). No new events until it is fixed.' };
-    if (!rn) return { level: 'warn', text: 'No simulation runner status is available.' };
-    if (rn.limit_reached) return { level: 'paused', text: 'Review limit reached: the league stopped by design at ' + (rn.until_events != null ? rn.until_events : rn.events) + ' events and is waiting for the owner\u2019s review. It is not advancing.' };
-    if (rn.state === 'paused') return { level: 'paused', text: 'Simulation paused. The league is not advancing.' };
-    if (rn.state === 'stopped') return { level: 'paused', text: 'Simulation stopped. The league is not advancing.' };
+    if (rn && rn.state === 'error') return { level: 'bad', text: (bc ? 'The broadcast publisher stopped with an error (' : 'The simulation runner stopped with an error (') + ((rn.error && rn.error.type) || 'error') + '). No new events until it is fixed.' };
+    if (!rn) return { level: 'warn', text: bc ? 'No broadcast status is available.' : 'No simulation runner status is available.' };
+    if (!bc && rn.limit_reached) return { level: 'paused', text: 'Review limit reached: the league stopped by design at ' + (rn.until_events != null ? rn.until_events : rn.events) + ' events and is waiting for the owner\u2019s review. It is not advancing.' };
+    if (rn.state === 'paused') return { level: 'paused', text: bc ? 'Broadcast paused.' : 'Simulation paused. The league is not advancing.' };
+    if (rn.state === 'stopped') return { level: 'paused', text: bc ? 'Broadcast stopped.' : 'Simulation stopped. The league is not advancing.' };
     var ru = Date.parse(rn.updated_at);
-    if (isNaN(ru) || now - ru > RUNNER_STALE_MS) return { level: 'bad', text: 'The simulation runner is not responding (last heard ' + (isNaN(ru) ? 'never' : age(now - ru) + ' ago') + ').' };
+    if (isNaN(ru) || now - ru > RUNNER_STALE_MS) return { level: 'bad', text: (bc ? 'The broadcast publisher is not responding (last heard ' : 'The simulation runner is not responding (last heard ') + (isNaN(ru) ? 'never' : age(now - ru) + ' ago') + ').' };
     var due = Date.parse(rn.next_event_due);
+    if (bc) return { level: 'ok', text: 'Broadcast running.' };
     return { level: 'ok', text: 'Simulation running' + (!isNaN(due) && due > now ? '; next event about ' + fmtStamp(rn.next_event_due) : '') + '.' };
   }
   function loadPointer() {
@@ -579,6 +580,15 @@
     if (m && /^(po:|coronation|bowl)/.test(m[2])) return h('a', { class: 'pb-back', href: '#/playoffs' }, '← Playoffs');
     return h('a', { class: 'pb-back', href: '#/schedule' }, '← Schedule');
   }
+  function pageHonors() {
+    if (S.honors) return [S.honors.node];
+    var token = render.token;
+    return loadOnce('script', 'assets/honors.js').then(function () {
+      if (token !== render.token) return [];
+      S.honors = window.DFLHonors.create({base: (CFG.broadcast || (BASE + 'broadcast/')).replace(/\/?$/, '/') + 'honors/'});
+      return [S.honors.node];
+    });
+  }
   function pageWatch(gid) {
     if (S.broadcast) return [S.broadcast.node];
     var token = render.token;
@@ -615,7 +625,7 @@
   function destroyViewer() { var pb = S.pb; if (pb.viewer) { pb.viewer.destroy(); pb.viewer = null; pb.gid = null; } }
 
   // ---------------------------------------------------------------- shell
-  var ROUTES = { watch: pageWatch, game: pageGame, '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
+  var ROUTES = { honors: pageHonors, watch: pageWatch, game: pageGame, '': pageHome, schedule: pageSchedule, standings: pageStandings, playoffs: pagePlayoffs, teams: pageTeams, team: pageTeam, calendar: pageCalendar, history: pageHistory, rules: pageRules, map: pageMap };
   function parseRoute() {
     var p = (location.hash || '#/').replace(/^#\/?/, '').split('/');
     return { name: p[0] || '', arg: p[1] ? decodeURIComponent(p[1]) : '' };
@@ -625,8 +635,9 @@
   }
   function render(again) {
     var app = document.getElementById('app'), r = parseRoute();
-    if (CFG.broadcastOnly && r.name !== 'watch') r = {name: 'watch', arg: ''};
+    if (CFG.broadcastOnly && !/^(watch|honors)$/.test(r.name)) r = {name: 'watch', arg: ''};
     S.route = r;
+    if (S.honors && r.name !== 'honors') { S.honors.destroy(); S.honors = null; }
     if (S.broadcast && r.name !== 'watch') { S.broadcast.destroy(); S.broadcast = null; }
     if (S.returnScroll && S.returnScroll.hash !== (location.hash || '#/')) S.returnScroll = null;
     if (r.name !== 'game') S.lastHash = location.hash || '#/';      // where a replay's back link returns to
@@ -679,7 +690,7 @@
       var first = !S.ptr;
       return loadRelease(p).then(function () { if (!first) S.fresh = Date.now(); chrome(); return render(); });
     }).catch(function (e) {
-      if (!S.manifest && parseRoute().name === 'watch') return;
+      if (!S.manifest && /^(watch|honors)$/.test(parseRoute().name)) return;
       if (!S.manifest) {
         var app = document.getElementById('app'); clear(app);
         app.appendChild(h('div', { class: 'err', role: 'alert', text: 'The league feed could not be read: ' + e.message + '. Trying again automatically.' }));
@@ -699,14 +710,14 @@
       S.returnScroll = { hash: S.replayOrigin.hash, y: S.replayOrigin.y };
     }
   });
-  window.addEventListener('hashchange', function () { if (CFG.broadcastOnly || S.manifest || parseRoute().name === 'watch') { render(); window.scrollTo(0, 0); } });
+  window.addEventListener('hashchange', function () { if (CFG.broadcastOnly || S.manifest || /^(watch|honors)$/.test(parseRoute().name)) { render(); window.scrollTo(0, 0); } });
   if (CFG.broadcastOnly) {
     // Isolated rollout mode: do not read the simulation's feed, status or full replay index.
-    document.querySelectorAll('#tabs a').forEach(function (a) { a.hidden = a.getAttribute('data-route') !== 'watch'; });
+    document.querySelectorAll('#tabs a').forEach(function (a) { a.hidden = !/^(watch|honors)$/.test(a.getAttribute('data-route')); });
     document.getElementById('status').textContent = 'Season broadcast · public viewing clock';
     render();
   } else {
-    if (parseRoute().name === 'watch') render();
+    if (/^(watch|honors)$/.test(parseRoute().name)) render();
     check();
     if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
   }
