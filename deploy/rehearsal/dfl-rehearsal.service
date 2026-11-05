@@ -1,0 +1,34 @@
+[Unit]
+Description=DFLv2 broadcast REHEARSAL daemon (capped; the only writer of /srv/dflv2-rehearsal/feed; never touches the league)
+After=network.target
+
+[Service]
+Type=simple
+User=dflv2
+Group=dflv2
+Nice=10
+MemoryMax=600M
+TasksMax=32
+UMask=0022
+ProtectSystem=strict
+ProtectHome=true
+# The daemon reads the private store and writes its clock, its log and the public folder. It never opens a league file: none is mounted writable and none is
+# named here. /srv/dflv2 (the production league, feed and site) is not listed at all, so under ProtectSystem=strict it is read-only to this unit.
+ReadWritePaths=/srv/dflv2-rehearsal/private /srv/dflv2-rehearsal/feed
+ReadOnlyPaths=/opt/dflv2-src
+PrivateTmp=true
+NoNewPrivileges=true
+# REHEARSAL_DEADLINE (UTC, ISO-8601) comes from /etc/dflv2/rehearsal.env. The installer writes a deadline in the PAST, so an accidental start pauses at once and exits 0.
+# The operator sets the real deadline (start + 54 h) when the rehearsal is approved. The daemon pauses and exits 0 at the deadline; Restart=on-failure does not restart that.
+EnvironmentFile=/etc/dflv2/rehearsal.env
+# __COMMIT__ is the pinned checkout (/opt/dflv2-src/<commit>), filled in by install_rehearsal.sh; this file is a template, not installable as it is.
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py run --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --deadline ${REHEARSAL_DEADLINE} --max-public-gb 3
+# SIGTERM: the daemon finishes the tick and exits; it leaves the folder as it is (the clock stops by itself within its lease, and a restart carries on from there).
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+# 75 = another daemon holds the lock; 70 = the size cap was exceeded; neither is cured by restarting.
+RestartPreventExitStatus=75 70
+
+[Install]
+WantedBy=multi-user.target

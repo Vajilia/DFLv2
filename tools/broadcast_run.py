@@ -16,6 +16,9 @@ every second makes P exactly what the clock's position allows (src/dflsite/seaso
 * BUILDER BEHIND.  If the builder has not finished what the next second needs, the clock stands still at that point (and `status.json` says paused).
 * PUBLISH FAILURE.  A copy that fails (disk full, permissions) is logged as JSON on stderr, the clock is not allowed past the coverage already published,
   `status.json` reports a failed update, and the daemon retries every tick.
+* CAPS (for a rehearsal).  `--deadline` (epoch seconds or ISO-8601, UTC if no zone) ends the run cleanly at that wall-clock time: the daemon creates PAUSE, writes the
+  paused status, logs one JSON line `deadline` on stderr and exits 0; the broadcast stays paused until someone runs `resume`. `--max-public-gb` stops the
+  daemon (exit 70, one JSON line `cap_exceeded`) if the public folder grows past that size; it is measured every 5 minutes. Neither cap deletes anything.
 * SAFETY.  P must be an empty folder, or one this daemon filled before; it must not be inside R, nor R inside it. Never point it at a served production feed.
 """
 import argparse
@@ -40,6 +43,33 @@ def check_public(root, public):
         raise SystemExit("%s is not empty and was not made by this daemon; refusing to write into it" % public)
 
 
+def parse_deadline(text):
+    """Epoch seconds, or ISO-8601 (read as UTC when it has no zone)."""
+    import datetime
+    try:
+        return float(text)
+    except ValueError:
+        d = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=datetime.timezone.utc)
+        return d.timestamp()
+
+
+def tree_bytes(path):
+    total, stack = 0, [path]
+    while stack:
+        with os.scandir(stack.pop()) as it:
+            for e in it:
+                if e.is_dir(follow_symlinks=False):
+                    stack.append(e.path)
+                elif e.is_file(follow_symlinks=False):
+                    total += e.stat(follow_symlinks=False).st_size
+    return total
+
+
+CAP_CHECK_S = 300.0
+
+
 def cmd_run(a):
     store = os.path.join(os.path.abspath(a.root), "store")
     check_public(a.root, a.public)
@@ -50,6 +80,13 @@ def cmd_run(a):
     except OSError:
         print(json.dumps({"busy": True}), file=sys.stderr)
         return 75
+    try:
+        return run_loop(a, store, lockfd)
+    finally:
+        os.close(lockfd)                                                      # released at once (a process exit would do the same)
+
+
+def run_loop(a, store, lockfd):
     stop = {"flag": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
     signal.signal(signal.SIGINT, lambda *_: stop.update(flag=True))
@@ -59,8 +96,25 @@ def cmd_run(a):
         bc.clock.start(t, 0.0, a.lease, ready_until=0.0)
         bc.tick(t)                                                   # the same instant: a start is not a downtime
     failing = False
+    deadline = parse_deadline(a.deadline) if a.deadline else None
+    cap = a.max_public_gb * 1e9 if a.max_public_gb else None
+    cap_checked = None
     while not stop["flag"]:
         t0 = time.time()
+        if deadline is not None and t0 >= deadline:
+            open(os.path.join(store, S.PAUSE), "a").close()               # stay paused after the cap: a restart never continues by itself
+            try:
+                bc.tick(t0)
+            except Exception as e:
+                print(json.dumps({"error": type(e).__name__, "detail": str(e)[:200], "at": t0}), file=sys.stderr, flush=True)
+            print(json.dumps({"deadline": True, "at": t0, "paused": True}), file=sys.stderr, flush=True)
+            return 0
+        if cap is not None and (cap_checked is None or t0 - cap_checked >= CAP_CHECK_S):
+            cap_checked = t0
+            size = tree_bytes(a.public)
+            if size > cap:
+                print(json.dumps({"cap_exceeded": True, "public_bytes": size, "cap_bytes": int(cap), "at": t0}), file=sys.stderr, flush=True)
+                return 70
         try:
             r = bc.tick(t0)
             if failing:
@@ -101,6 +155,8 @@ def main(argv=None):
     p.add_argument("--tick", type=float, default=1.0)
     p.add_argument("--lease", type=float, default=B.LEASE_S)
     p.add_argument("--verbose", action="store_true")
+    p.add_argument("--deadline", help="end the run (paused, exit 0) at this time: epoch seconds or ISO-8601 (UTC if no zone)")
+    p.add_argument("--max-public-gb", type=float, default=0.0, help="exit 70 if the public folder grows past this size (checked every 5 minutes)")
     p.set_defaults(fn=cmd_run)
     for name in ("pause", "resume", "status"):
         p = sub.add_parser(name)

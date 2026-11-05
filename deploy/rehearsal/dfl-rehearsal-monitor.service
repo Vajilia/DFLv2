@@ -1,0 +1,25 @@
+[Unit]
+Description=DFLv2 broadcast REHEARSAL monitor (read-only watcher; logs findings and keeps the first evidence of each kind)
+After=dfl-rehearsal.service
+
+[Service]
+Type=simple
+User=dflv2
+Group=dflv2
+Nice=15
+MemoryMax=400M
+ProtectSystem=strict
+ProtectHome=true
+# Writes only its own log and evidence folder; the store and the public folder are read-only here.
+ReadWritePaths=/srv/dflv2-rehearsal/monitor
+ReadOnlyPaths=/srv/dflv2-rehearsal/private /srv/dflv2-rehearsal/feed /opt/dflv2-src
+PrivateTmp=true
+NoNewPrivileges=true
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/rehearsal_check.py watch --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --url https://__HOST__ --log /srv/dflv2-rehearsal/monitor/watch.log --evidence /srv/dflv2-rehearsal/monitor/evidence
+Restart=on-failure
+RestartSec=10
+# exit status 1 means findings were logged: that is a result to read, not a crash to retry
+RestartPreventExitStatus=1
+
+[Install]
+WantedBy=multi-user.target

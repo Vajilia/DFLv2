@@ -1,0 +1,49 @@
+# The broadcast REHEARSAL site: the viewer (a pinned copy of site/) plus the feed that tools/broadcast_run.py fills. Caddy only serves files.
+# __HOST__ is filled in on the server by install_rehearsal.sh (default rehearsal.diamondfootballleague.com) and written to /etc/caddy/conf.d/dflv2-rehearsal.caddy.
+# Root /srv/dflv2-rehearsal: /feed/* is the daemon's public folder, everything else is the site. Nothing from private/ is under that root.
+# FIRST-RUN RISK: written without a Caddy binary to hand, so unvalidated until `caddy validate` has run on the server (the installer does that and puts the
+# previous configuration back if it fails). After a reload, `python3 tools/rehearsal_check.py http --url https://__HOST__ --store ...` proves the rules below.
+#
+# Cache rules (docs/BROADCAST_FRONTEND_CONTRACT.md):
+#   never stored      latest.json, status.json, playback/index.json, broadcast/{clock,schedule}.json, broadcast/replays/index.json, broadcast/honors/index.json,
+#                     broadcast/live/<game>/manifest.json
+#   immutable         only a file that EXISTS (the `file` matcher): releases/*, playback/games/*, live/<game>/{head,sNNNN,end}.json, replays/<file>, honors/sNNN/<part>.json
+#   everything else   no-cache (revalidate). A missing file is a 404 with no-cache: a browser never keeps a "not yet" for long.
+# No directory is listed (file_server without `browse`); names starting with a dot are 404; write methods are 405; the response carries Caddy's Date header,
+# which the viewer uses as its time source.
+__HOST__ {
+	encode gzip
+	route {
+		@writes not method GET HEAD OPTIONS
+		respond @writes 405
+		header {
+			X-Robots-Tag "noindex, nofollow"
+			X-Content-Type-Options nosniff
+			Referrer-Policy no-referrer
+			Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		}
+		@feed path /feed/*
+		@pointers path /feed/latest.json /feed/status.json /feed/playback/index.json /feed/broadcast/clock.json /feed/broadcast/schedule.json /feed/broadcast/replays/index.json /feed/broadcast/honors/index.json
+		@livemanifest path /feed/broadcast/live/*/manifest.json
+		@published {
+			path /feed/releases/* /feed/playback/games/* /feed/broadcast/live/*/head.json /feed/broadcast/live/*/s*.json /feed/broadcast/live/*/end.json /feed/broadcast/replays/* /feed/broadcast/honors/s*/*
+			file {
+				root /srv/dflv2-rehearsal
+			}
+		}
+		# order matters: later `header` lines replace earlier ones for a path they both match
+		header Cache-Control "no-cache"
+		header @published Cache-Control "public, max-age=31536000, immutable"
+		header @pointers Cache-Control "no-store"
+		header @livemanifest Cache-Control "no-store"
+		@hidden path_regexp (^|/)\.[^/]
+		respond @hidden 404
+		# two file servers, one root each (two `root` lines were found not to work on Caddy 2.11: docs/STAGING_DEPLOYMENT_RECORD_20261031.md)
+		file_server @feed {
+			root /srv/dflv2-rehearsal
+		}
+		file_server {
+			root /srv/dflv2-rehearsal/site
+		}
+	}
+}
