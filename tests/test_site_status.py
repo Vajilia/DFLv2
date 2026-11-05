@@ -82,6 +82,64 @@ class Health(unittest.TestCase):
         stale = self.h(dict(doc(checked=-6*60), source='broadcast'))
         self.assertEqual(stale['level'], 'bad')
 
+    def test_broadcast_preparation_time_is_not_labelled_as_publication_age(self):
+        saved = self.page.evaluate("({status: DFL_VIEWER.state.status, at: DFL_VIEWER.state.manifest.generated_at})")
+        try:
+            for source in ('broadcast', None):
+                self.page.evaluate("source => { DFL_VIEWER.state.status = source ? {source: source} : null; DFL_VIEWER.state.manifest.generated_at = '2000-01-01T00:00:00Z'; DFL_VIEWER.chrome(); }", source)
+                stamp = self.page.locator('#status .updated').first
+                if source:
+                    self.assertIn('Release prepared', stamp.inner_text())
+                    self.assertNotIn('ago', stamp.inner_text())
+                    self.assertNotIn('Last published', stamp.inner_text())
+                    self.assertIn('not when it was revealed', stamp.get_attribute('title'))
+                else:
+                    self.assertIn('Last published update', stamp.inner_text())
+                    self.assertIn('ago', stamp.inner_text())
+        finally:
+            self.page.evaluate("saved => { DFL_VIEWER.state.status = saved.status; DFL_VIEWER.state.manifest.generated_at = saved.at; DFL_VIEWER.chrome(); }", saved)
+
+    def test_open_page_follows_broadcast_pause_without_a_new_release_or_reload(self):
+        import time
+        import preview_site
+        tmp = tempfile.mkdtemp()
+        old = preview_site.Handler.feed_root
+        p = None
+        try:
+            root = os.path.join(tmp, 'feed')
+            shutil.copytree(FIXTURE, root)
+            preview_site.Handler.feed_root = root
+            def write_state(state):
+                d = dict(doc(runner=state), source='broadcast')
+                d['checked_at'] = ST.now_iso(time.time())
+                d['runner']['updated_at'] = d['checked_at']
+                ST.write_atomic(os.path.join(root, 'status.json'), d)
+            write_state('running')
+            p = self.browser.new_page()
+            p.clock.install()
+            fetched = []
+            p.on('request', lambda r: fetched.append(r.url))
+            p.goto(f'http://127.0.0.1:{self.port}/')
+            p.wait_for_function("document.querySelector('.health') && document.querySelector('.health').textContent === 'Broadcast running.'")
+            release = p.evaluate('DFL_VIEWER.state.ptr.release')
+            before = len([u for u in fetched if '/manifest.json' in u])
+            write_state('paused')
+            p.wait_for_function("document.querySelector('.health').textContent === 'Broadcast paused.'", timeout=6000)
+            write_state('running')
+            p.wait_for_function("document.querySelector('.health').textContent === 'Broadcast running.'", timeout=6000)
+            self.assertEqual(release, p.evaluate('DFL_VIEWER.state.ptr.release'))
+            self.assertEqual(before, len([u for u in fetched if '/manifest.json' in u]))
+            # A failed ordinary minute refresh must retain broadcast provenance too.
+            os.unlink(os.path.join(root, 'status.json'))
+            with p.expect_request('**/feed/latest.json', timeout=6000):
+                p.clock.fast_forward(61000)
+            self.assertEqual(p.evaluate('DFL_VIEWER.state.status.source'), 'broadcast')
+            self.assertIn('Release prepared', p.locator('#status .updated').first.inner_text())
+        finally:
+            if p: p.close()
+            preview_site.Handler.feed_root = old
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_no_status_file_means_no_health_line(self):
         self.assertIsNone(self.h(None))
 

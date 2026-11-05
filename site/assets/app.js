@@ -668,14 +668,16 @@
     });
   }
   function chrome() {
-    var m = S.manifest, st = document.getElementById('status'), ft = document.getElementById('foot');
+    var m = S.manifest, st = document.getElementById('status'), ft = document.getElementById('foot'), bc = S.status && S.status.source === 'broadcast';
     document.getElementById('devtext').textContent = m.league.label.replace(/^DEVELOPMENT \/ TEST LEAGUE\.\s*/, '');
     clear(st);
     st.appendChild(h('span', null, h('b', { text: m.league.name })));
     if (m.year) st.appendChild(h('span', { text: 'Season ' + m.season + ' · ' + m.year }));
     if (m.simulation_date) st.appendChild(h('span', { class: 'simdate', title: 'The date inside the simulation: the day of its last completed event' }, 'Simulation date ', h('b', { text: fmtDate(m.simulation_date, true) })));
-    st.appendChild(h('span', { class: 'updated' + (S.fresh > Date.now() - 20000 ? ' fresh' : ''), title: 'Published ' + m.generated_at + ' (this is when the data last changed; a quiet league publishes nothing new)' },
-      'Last published update ', h('b', { text: fmtStamp(m.generated_at) }), ' (' + ago(m.generated_at) + ')'));
+    st.appendChild(h('span', { class: 'updated' + (S.fresh > Date.now() - 20000 ? ' fresh' : ''), title: bc ?
+      'Prepared ' + m.generated_at + ' (when this release was computed, not when it was revealed in the broadcast)' :
+      'Published ' + m.generated_at + ' (this is when the data last changed; a quiet league publishes nothing new)' },
+      bc ? 'Release prepared ' : 'Last published update ', h('b', { text: fmtStamp(m.generated_at) }), bc ? null : ' (' + ago(m.generated_at) + ')'));
     if (S.recovered && S.recovered > Date.now() - 30000) st.appendChild(h('span', { class: 'updated fresh', text: 'Switched to the newest release' }));
     var hl = health(S.status, Date.now());
     if (hl) st.appendChild(h('span', { class: 'health ' + hl.level, role: hl.level === 'bad' ? 'alert' : 'status', 'data-health': hl.level, text: hl.text }));
@@ -685,7 +687,7 @@
       'This page only reads published data; it cannot change the league. It checks for a newer release every minute.'));
   }
   function check() {
-    return loadStatus().then(function (stt) { S.status = stt; return loadPointer(); }).then(function (p) {
+    return loadStatus().then(function (stt) { if (stt || !S.status || S.status.source !== 'broadcast') S.status = stt; return loadPointer(); }).then(function (p) {
       if (S.ptr && p.release === S.ptr.release) { chrome(); return; }
       var first = !S.ptr;
       return loadRelease(p).then(function () { if (!first) S.fresh = Date.now(); chrome(); return render(); });
@@ -698,6 +700,18 @@
       }
       else { var st = document.getElementById('status'); st.appendChild(h('span', { class: 'updated', text: 'Could not check for updates' })); }
     });
+  }
+  // The broadcast clock can pause between result releases. Refresh just its status,
+  // without rebuilding the page or fetching the release/replay index every two seconds.
+  var broadcastStatusBusy = false, broadcastHealthShown = '';
+  function checkBroadcastStatus() {
+    if (broadcastStatusBusy || !S.manifest || !S.status || S.status.source !== 'broadcast') return;
+    broadcastStatusBusy = true;
+    loadStatus().then(function (st) {
+      if (st && (!S.status || !Number.isFinite(Date.parse(S.status.checked_at)) || Date.parse(st.checked_at) >= Date.parse(S.status.checked_at))) S.status = st;
+      var shown = JSON.stringify(health(S.status, Date.now()));
+      if (shown !== broadcastHealthShown) { broadcastHealthShown = shown; chrome(); }
+    }).finally(function () { broadcastStatusBusy = false; });
   }
   // Capture before hash navigation resets the scroll position. Explicit replay back links
   // restore only their own source page; normal tab navigation still starts at the top.
@@ -719,7 +733,7 @@
   } else {
     if (/^(watch|honors)$/.test(parseRoute().name)) render();
     check();
-    if (!window.DFL_EMBED) setInterval(check, REFRESH_MS);
+    if (!window.DFL_EMBED) { setInterval(check, REFRESH_MS); setInterval(checkBroadcastStatus, 2000); }
   }
   window.DFL_VIEWER = { render: render, state: S, health: health, chrome: chrome, replay: function () { return S.pb.viewer; }, broadcast: function () { return S.broadcast; } };
 })();
