@@ -73,7 +73,28 @@ The format is `dfl-broadcast-honors` version 1 (new, additive, under `broadcast/
 
 ## 4. Verification record
 
-See section 6 of `docs/BROADCAST_PLAN.md` and the commands at the end of this file. Results for the resulting commit are recorded in the handoff report that accompanies the branch.
+Run on this branch's code (builder seed 20261105, fresh isolated league in a temporary folder; production untouched).
+
+| Check | Result |
+|---|---|
+| Whole-year virtual-time check (`tools/broadcast_season_check.py`, 400 games, 41 releases, 59,290 public files) | **0 violations.** 612,471 per-second viewer-coverage checks, 658 guessed-URL probes through a static server, 1,030 full-tree scans for premature results and private tokens, public tree compared with an independent oracle after every boundary, reveal times recomputed independently. |
+| Forced overruns (w002, w041, w070, w104, w105 at a 450 s slot) | Overruns of 294, 345, 328, 249 and 202 s (1,418 s total); every later window and block shifted by exactly that amount; later breaks kept their length; the year ended at 174,218 s (48.4 h) of broadcast time. |
+| Scenarios | pause in the middle of a game (30 min); pause between windows (10 min); release copy failing for 240 s; live-segment writes failing for 90 s in a game; builder behind at event 34 (held at the horizon, one `coverage_wait`); daemon killed mid-game and restarted as a new process after 700 s (one `downtime`, resumed at the viewers' position). Clock log: 2 pause, 2 resume, 2 publish_failure, 1 coverage_wait, 1 downtime. |
+| Determinism | A free-running league with the same seed and the builder-driven league have identical journal and deep digests after all 47 events (`league_store.py digest`). |
+| Real-time CLI smoke | Second daemon refused (exit 75); pause held the position for 10 s; resume; `kill -9` and restart after 30 s logged one downtime. |
+| Real browser over the finished season (ChatGPT's site, Chromium) | Home, schedule, playoffs, history, `team/ALA` and Watch now at 1280 px and 390 px: no console or page errors, no HTTP errors, no horizontal overflow. |
+| Unit tests | `test_season`, `test_honors`, `test_broadcast_plan`, `test_broadcast_build` (32 tests, real engine) pass. |
+| Frontend and broadcast checks (`test_broadcast`, `_guard`, `_timetable`, `test_site_broadcast`, `_replay_links`, `_home`, `_recovery`, `_static`) | 84 tests pass on this branch. The `team/ALA` 390 px overflow ChatGPT reported did not occur in this run. |
+| Unchanged | `site/`, frontend tests, `tools/broadcast_timetable.py`, `src/dfl/`, `data/`. |
+
+Commands:
+
+```
+python -m unittest tests.test_season tests.test_honors tests.test_broadcast_plan tests.test_broadcast_build
+python -m unittest tests.test_broadcast tests.test_broadcast_guard tests.test_broadcast_timetable tests.test_site_broadcast tests.test_site_replay_links tests.test_site_home tests.test_site_recovery tests.test_site_static
+python tools/broadcast_build.py init --root R --seed 20261105 && python tools/broadcast_build.py step --root R
+python tools/broadcast_season_check.py --root R --public P --scan-every 900 --report rep.json     # about 19 min
+```
 
 ## 5. Limits and remaining gaps
 
