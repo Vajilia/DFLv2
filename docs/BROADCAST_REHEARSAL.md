@@ -127,6 +127,16 @@ a real Caddy by me.** It is validated by the installer, on the server, with the 
    `%c0%ae%c0%ae/`, `....//`, `..;/`, null `..%00/`, at depth 1–3 under `/feed/`, `/feed/broadcast/` and `/`, plus private file names (plan, builds, clock, watch log, `/etc/passwd`). Anything answering 200 or returning private content fails.
    Failure: block removed, Caddy reloaded, exit 7, output kept in `monitor/install-check.log`.
 
+**Permissions and access checks (added after the first live attempt; exit 8).** The first live install stopped at the reload (exit 6, block taken out again, production untouched): it had been started from a
+shell with `umask 027`, so the Caddy snippet, the installed code and part of the viewer were readable by root only, and `caddy validate` (run as root) could not see the problem. The installer now (a) sets `umask 022`
+itself and sets every mode explicitly: code and `site/` world-readable (only these two are changed recursively; they are public), `$REH` and the empty `feed/` 755, `private/` and `monitor/` **700**, owned by the service
+user and never made public or recursed, unit files, env file and Caddy snippet 644; (b) proves access **as the real users** with `runuser` (root can read everything): the service user reads all the code and writes
+`feed/`, `private/`, `monitor/`; Caddy's user (`systemctl show caddy -p User`, or `CADDY_USER`) reads the viewer and the snippet, runs `caddy adapt` on the whole configuration, and **cannot** read or enter `private/`,
+`monitor/` or the canary. Every check walks all parent directories, so an existing unreadable parent (for example `/opt/dflv2-src` left at 750) is named in the message. A real install that cannot run a check
+(missing user, no `runuser`) refuses instead of skipping. A failure before Caddy is touched changes nothing in Caddy; a snippet failure removes the block again and does not reload. Nothing outside what this install created is chmod-ed.
+`tests/test_rehearsal_umask.py` runs the whole install suite under umask 027 and checks access as the real unprivileged users `www-data` and `daemon` (it needs root; it is skipped, and says so, without). Run against
+the previous installer, its success test fails at the Caddy-user check.
+
 The same traversal slice keeps running in the monitor all through the rehearsal (a spoiler-class trip if anything leaks). In tests, a confining stand-in server passes all paths and a deliberately careless one (double-decoding, no
 confinement) is caught — that proves the *probe*, not Caddy. If you can supply a Caddy 2.11.7 binary (or run `caddy validate` locally), I will run the same tests against it before you approve the install.
 
@@ -156,7 +166,8 @@ too little disk, uninstall guards.
    Save the production fingerprint and baseline (read-only):
    `python3 -I repo/tools/cap_state.py fingerprint --league <league db> --feed /srv/dflv2/feed --out /root/rehearsal-before.json` and
    `python3 repo/tools/verify_deployment.py https://diamondfootballleague.com --production https://diamondfootballleague.com --save-baseline /root/prod-baseline.json`.
-5. **Install:** `sh repo/deploy/rehearsal/install_rehearsal.sh <unpacked package dir>` as root. Exit codes: 2 package/paths/disk, 3 no rollback copy, 4 DNS, 5 pre-flight, 6 Caddy rejected the block (nothing changed or block removed), 7 live server check failed (block removed again). It never starts or enables a unit.
+5. **Install:** `sh repo/deploy/rehearsal/install_rehearsal.sh <unpacked package dir>` as root. Exit codes: 2 package/paths/disk, 3 no rollback copy, 4 DNS, 5 pre-flight, 6 Caddy rejected the block (nothing changed or block removed), 7 live server check failed (block removed again), 8 an access check failed as the real service users (see section 5; Caddy not reloaded). It never starts or enables a unit.
+   **If an install stops half way** the installer refuses to run over the existing `/srv/dflv2-rehearsal`. Do not purge: `sh repo/deploy/rehearsal/quarantine_rehearsal.sh` moves the inactive leftovers (the rehearsal folder, the code directory named in `.installed_commit`, the two unit files, `/etc/dflv2/rehearsal.env`) into `/root/rehearsal-quarantine/<time>` (700; a rename on the same filesystem, so owners, modes and times are untouched; `manifest.tsv` records every original path, `listing.tsv.gz` every file; the moved tree is verified against that listing), refuses if a unit is active or enabled or a Caddy block is installed, deletes nothing, and `--restore <dir>` puts everything back exactly (refusing if an original path exists again). It never touches production, Caddy, the rollback copies, evidence, DNS or other packages.
 6. **Confirm production unchanged:** `verify_deployment.py … --baseline /root/prod-baseline.json` shows no change.
 7. **Stop here for your go.** Nothing is running.
 
@@ -196,6 +207,7 @@ Not claimed: zero spoilers. Whole-play segments can still be fetched by someone 
 ## 10. Rollback, from lightest to heaviest
 
 1. **Stop the run:** `systemctl stop dfl-rehearsal` first, then `dfl-rehearsal-monitor` (stopping the monitor while the daemon runs trips it after ~2 min). `broadcast_run.py pause` is also safe. Data stays.
+1b. **Set aside a half-finished install without deleting anything:** `sh deploy/rehearsal/quarantine_rehearsal.sh` (reversible with `--restore`; see step 5 of section 7).
 2. **Take it out, keep the data for inspection:** `sh /opt/dflv2-src/<commit>/deploy/rehearsal/uninstall_rehearsal.sh` — removes both units and the Caddy file (copy kept in `/root/dfl-rollback/removed/`), validates and reloads Caddy (puts the block back and exits 5 if Caddy then rejects the rest of the config).
 3. **Take it out completely (this deletes rehearsal data, so only when you decide):** the same with `--purge` — also deletes `/srv/dflv2-rehearsal`, the code directory this install added, `/etc/dflv2/rehearsal.env`. It refuses any path that is or is inside `/srv/dflv2`, `/var/www`, `/`, or lacks "rehearsal" in its name. **Not run now.**
 4. **Remove the DNS record** at IONOS (manual).

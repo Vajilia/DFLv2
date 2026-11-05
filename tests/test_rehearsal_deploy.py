@@ -20,7 +20,7 @@ from test_rehearsal_check import serve
 from dflsite import broadcast as B
 from test_season import Rig
 
-DEPLOY = ROOT / 'deploy' / 'rehearsal'
+DEPLOY = Path(os.environ.get('REHEARSAL_DEPLOY_DIR') or ROOT / 'deploy' / 'rehearsal')       # REHEARSAL_DEPLOY_DIR: run these tests against an older copy of the scripts (to prove a regression test would have caught the bug)
 
 
 def stub(path, body):

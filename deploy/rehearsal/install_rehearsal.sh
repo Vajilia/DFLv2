@@ -11,8 +11,17 @@
 #   CONF_D [$CADDY_DIR/conf.d]   ROLLBACK_ROOT [/root/dfl-rollback]   SNAPSHOT_MAX_AGE_MIN [1440]   SERVICE_USER [dflv2]   SYSTEMD_DIR [/etc/systemd/system]
 #   ETC_DIR [/etc/dflv2]   MIN_FREE_GB [6: the floor the monitor stops the broadcast at]   MAX_PUBLIC_GB [3]   CHECK_URL [https://$HOST]   CHECK_WAIT_S [180]
 #   FORCE_DNS=1 (go on although the host does not resolve here)   ALLOW_NON_ROOT=1 (tests only)
-# Exit codes: 2 package/paths/commands, 3 no rollback copy, 4 DNS, 5 pre-flight, 6 Caddy rejected the block (before any change), 7 the live server check failed (block removed again).
+# Exit codes: 2 package/paths/commands, 3 no rollback copy, 4 DNS, 5 pre-flight, 6 Caddy rejected the block (before any change), 7 the live server check failed (block removed again),
+#             8 access check failed: something this install put in place cannot be read (or, for private data, can be reached) by the user that must (or must not) reach it.
+#
+# PERMISSIONS do not depend on the caller's umask. The script sets umask 022 itself and then sets every mode explicitly: the code and the viewer (site/) are world-readable;
+# $REH and the empty public folder are 755; the private store and the guard folder are 700 and owned by the service user (never made public, never recursed). The access checks
+# then run AS THE REAL SERVICE USERS (root can read everything, so a root-only check proves nothing): Caddy's user (systemctl show caddy -p User, or CADDY_USER) must read the viewer
+# and the snippet, `caddy adapt` as that user must accept the whole configuration, and that user must NOT be able to reach private/, monitor/ or the canary; the daemon's user
+# (SERVICE_USER) must read the code and write the public, private and monitor folders. Each check walks every parent directory, so an unreadable parent (for example a directory
+# left at 750 by an earlier umask-027 run) is caught and named. Nothing is chmod-ed outside what this install created.
 set -eu
+umask 022
 PKG="${1:?usage: install_rehearsal.sh PACKAGE_DIR}"
 HOST="${HOST:-rehearsal.diamondfootballleague.com}"
 REH="${REH:-/srv/dflv2-rehearsal}"
@@ -23,6 +32,7 @@ CONF_D="${CONF_D:-$CADDY_DIR/conf.d}"
 ROLLBACK_ROOT="${ROLLBACK_ROOT:-/root/dfl-rollback}"
 SNAPSHOT_MAX_AGE_MIN="${SNAPSHOT_MAX_AGE_MIN:-1440}"
 SERVICE_USER="${SERVICE_USER:-dflv2}"
+CADDY_USER="${CADDY_USER:-$(systemctl show caddy -p User --value 2>/dev/null || true)}"; CADDY_USER="${CADDY_USER:-caddy}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 ETC_DIR="${ETC_DIR:-/etc/dflv2}"
 MIN_FREE_GB="${MIN_FREE_GB:-6}"
@@ -32,6 +42,38 @@ SNIPPET="$CONF_D/dflv2-rehearsal.caddy"
 CHECK_URL="${CHECK_URL:-https://$HOST}"
 say() { printf '%s\n' "$*"; }
 die() { code="$1"; shift; say "STOPPED: $*" >&2; exit "$code"; }
+
+# ---- access checks as the real service users (see the header). root bypasses permissions, so every check below runs through runuser.
+as_user() { u="$1"; shift; runuser -u "$u" -- "$@"; }
+user_checks() {   # 0: checks can run as user $1;  1: skipped (tests without root only);  a real install that cannot check stops
+  if [ "$(id -u)" = 0 ] && command -v runuser >/dev/null 2>&1 && id "$1" >/dev/null 2>&1; then return 0; fi
+  [ "${ALLOW_NON_ROOT:-}" = 1 ] && return 1
+  die 8 "cannot check access as the user '$1' (no such user, or no runuser): refusing to install something that was only verified as root."
+}
+first_blocked() {  # the first directory on the way to $2 that user $1 cannot enter
+  u="$1"; d="$2"; chain=""
+  while [ -n "$d" ] && [ "$d" != "/" ] && [ "$d" != "." ]; do chain="$d $chain"; d="$(dirname "$d")"; done
+  for d in $chain; do as_user "$u" test -x "$d" 2>/dev/null || { printf '%s' "$d"; return 0; }; done
+  return 0
+}
+why() {  # $1 user, $2 path
+  b="$(first_blocked "$1" "$(dirname "$2")")"
+  if [ -n "$b" ]; then printf '%s cannot enter %s (mode %s), which is on the way to %s' "$1" "$b" "$(stat -c %a "$b" 2>/dev/null)" "$2"
+  else printf '%s cannot read %s (mode %s owner %s)' "$1" "$2" "$(stat -c %a "$2" 2>/dev/null)" "$(stat -c %U:%G "$2" 2>/dev/null)"; fi
+}
+need_read()  { as_user "$1" test -r "$2" || die 8 "$(why "$1" "$2")"; }
+need_enter() { as_user "$1" test -x "$2" || die 8 "$(why "$1" "$2/")"; }
+need_write() { { as_user "$1" test -w "$2" && as_user "$1" test -x "$2"; } || die 8 "$1 cannot write in $2 ($(stat -c '%a %U:%G' "$2" 2>/dev/null)) or cannot reach it: $(first_blocked "$1" "$2")"; }
+need_tree()  {    # everything under $2 is readable (directories also searchable) by $1
+  need_enter "$1" "$2"
+  bad="$(as_user "$1" find "$2" \( -type d \( ! -readable -o ! -executable \) -o -type f ! -readable \) -print 2>/dev/null | head -n 3 | tr '\n' ' ')"
+  [ -z "$bad" ] || die 8 "$1 cannot read everything under $2, for example: $bad"
+}
+need_hidden() {   # private data: user $1 must not be able to read or enter $2
+  if as_user "$1" test -r "$2" 2>/dev/null || as_user "$1" test -x "$2" 2>/dev/null; then
+    die 8 "$1 can reach $2 ($(stat -c '%a %U:%G' "$2" 2>/dev/null)): private data must never be reachable by the web server's user"
+  fi
+}
 
 # ---- 0. preconditions (nothing is changed before all of these hold)
 [ "$(id -u)" = 0 ] || [ "${ALLOW_NON_ROOT:-}" = 1 ] || die 2 "run as root"
@@ -82,17 +124,35 @@ free_kb="$(df -Pk "$parent" | awk 'NR==2{print $4}')"
 id "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$REH" --shell /usr/sbin/nologin "$SERVICE_USER"
 mkdir -p "$SRC_ROOT"
 dest="$SRC_ROOT/$COMMIT"
-if [ ! -d "$dest" ]; then cp -a "$PKG/repo" "$dest.partial" && mv "$dest.partial" "$dest"; else say "code for $COMMIT is already at $dest (kept)"; fi
+if [ ! -d "$dest" ]; then
+  cp -a "$PKG/repo" "$dest.partial"
+  chmod -R u=rwX,go=rX "$dest.partial"                                           # the code is public (it is the repository): readable by the service user whatever modes the package carried
+  mv "$dest.partial" "$dest"
+else say "code for $COMMIT is already at $dest (kept; its permissions are checked below)"; fi
 say "code: $dest"
+if user_checks "$SERVICE_USER"; then need_tree "$SERVICE_USER" "$dest"; say "access: $SERVICE_USER can read all of the code"; else say "NOTE: not root: access checks skipped (tests only)"; fi
 
 # ---- 5. data: the private store (the ONLY place the broadcast's unreleased results exist), an empty public folder, the site, the monitor's folder
 mkdir -p "$REH/private" "$REH/feed" "$REH/site" "$REH/monitor"
 tar -xzf "$PKG/store.tar.gz" -C "$REH/private"
 cp -a "$PKG/repo/site/." "$REH/site/"
 printf '%s\n' "$COMMIT" > "$REH/.installed_commit"
-chmod 755 "$REH" "$REH/site" "$REH/feed"; chmod 750 "$REH/private" "$REH/monitor"
 chown -R "$SERVICE_USER" "$REH/private" "$REH/feed" "$REH/monitor" 2>/dev/null || [ "${ALLOW_NON_ROOT:-}" = 1 ] || die 2 "could not give $REH to $SERVICE_USER"
+# explicit modes, whatever the umask or the package carried. Public: $REH, the empty feed, and the viewer (site/) only. Private: never made public, never chmod -R-ed.
+chmod 755 "$REH" "$REH/feed"
+find "$REH/site" -type d -exec chmod 755 {} +; find "$REH/site" -type f -exec chmod 644 {} +
+chmod 700 "$REH/private" "$REH/monitor"
+chmod 644 "$REH/.installed_commit"
 say "data: $REH (private store, empty public folder, site)"
+if user_checks "$CADDY_USER"; then
+  need_tree "$CADDY_USER" "$REH/site"; need_read "$CADDY_USER" "$REH/site/index.html"; need_enter "$CADDY_USER" "$REH/feed"
+  need_hidden "$CADDY_USER" "$REH/private"; need_hidden "$CADDY_USER" "$REH/monitor"; need_hidden "$CADDY_USER" "$REH/private/store/CANARY.txt"
+  say "access: $CADDY_USER reads the viewer and the feed folder, and cannot reach private/, monitor/ or the canary"
+fi
+if user_checks "$SERVICE_USER"; then
+  need_write "$SERVICE_USER" "$REH/feed"; need_write "$SERVICE_USER" "$REH/private"; need_write "$SERVICE_USER" "$REH/monitor"
+  say "access: $SERVICE_USER can write the public, private and monitor folders"
+fi
 
 # ---- 6. pre-flight: refuse to go on unless the store is complete, the folders are separate and neither is a production path
 if ! python3 -I "$dest/tools/rehearsal_check.py" preflight --root "$REH/private" --public "$REH/feed" --min-free-gb "$MIN_FREE_GB" --growth-gb "$MAX_PUBLIC_GB" --require-canary --guard "$REH/monitor"; then
@@ -102,9 +162,9 @@ fi
 # ---- 7. systemd units and the environment file. Installed, NOT enabled, NOT started. No timer.
 mkdir -p "$SYSTEMD_DIR" "$ETC_DIR"
 for u in dfl-rehearsal.service dfl-rehearsal-monitor.service; do
-  sed "s/__COMMIT__/$COMMIT/g; s/__HOST__/$HOST/g" "$PKG/repo/deploy/rehearsal/$u" > "$SYSTEMD_DIR/$u.new" && mv "$SYSTEMD_DIR/$u.new" "$SYSTEMD_DIR/$u"
+  sed "s/__COMMIT__/$COMMIT/g; s/__HOST__/$HOST/g" "$PKG/repo/deploy/rehearsal/$u" > "$SYSTEMD_DIR/$u.new" && chmod 644 "$SYSTEMD_DIR/$u.new" && mv "$SYSTEMD_DIR/$u.new" "$SYSTEMD_DIR/$u"
 done
-[ -f "$ETC_DIR/rehearsal.env" ] || cp "$PKG/repo/deploy/rehearsal/rehearsal.env.template" "$ETC_DIR/rehearsal.env"
+if [ ! -f "$ETC_DIR/rehearsal.env" ]; then cp "$PKG/repo/deploy/rehearsal/rehearsal.env.template" "$ETC_DIR/rehearsal.env"; chmod 644 "$ETC_DIR/rehearsal.env"; fi
 systemctl daemon-reload
 say "units installed (not enabled, not started); $ETC_DIR/rehearsal.env holds a deadline in the past: $(cat "$ETC_DIR/rehearsal.env")"
 
@@ -112,8 +172,20 @@ say "units installed (not enabled, not started); $ETC_DIR/rehearsal.env holds a 
 mkdir -p "$CONF_D"
 had=0; [ -f "$SNIPPET" ] && { cp -a "$SNIPPET" "$SNIPPET.before"; had=1; }
 sed "s/__HOST__/$HOST/g" "$PKG/repo/deploy/rehearsal/Caddyfile.rehearsal.template" > "$SNIPPET"
+chmod 644 "$SNIPPET"
 grep -q '^[[:space:]]*import[[:space:]].*conf\.d' "$CADDYFILE" || say "NOTE: $CADDYFILE has no import line for $CONF_D; the staging install normally added it."
 putback() { if [ "$had" = 1 ]; then cp -a "$SNIPPET.before" "$SNIPPET"; else rm -f "${SNIPPET:?}"; fi; }
+# Caddy reads its configuration as ITS OWN user, not as root: `caddy validate` as root passed on an unreadable snippet once and the reload then failed. Prove the real reader can adapt it.
+if user_checks "$CADDY_USER"; then
+  ADAPT_ERR="$(mktemp)"
+  if ! { as_user "$CADDY_USER" test -r "$SNIPPET" && as_user "$CADDY_USER" test -r "$CADDYFILE" && as_user "$CADDY_USER" caddy adapt --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>"$ADAPT_ERR"; }; then
+    if as_user "$CADDY_USER" test -r "$SNIPPET" 2>/dev/null && as_user "$CADDY_USER" test -r "$CADDYFILE" 2>/dev/null; then reason="both files are readable, so \`caddy adapt\` itself failed as $CADDY_USER: output above"
+    elif as_user "$CADDY_USER" test -r "$SNIPPET" 2>/dev/null; then reason="$(why "$CADDY_USER" "$CADDYFILE")"; else reason="$(why "$CADDY_USER" "$SNIPPET")"; fi
+    cat "$ADAPT_ERR" >&2; rm -f "$ADAPT_ERR"; putback
+    die 8 "Caddy's own user cannot read or adapt the configuration with the rehearsal block in it ($reason). The block was taken out again and Caddy was NOT reloaded."
+  fi
+  rm -f "$ADAPT_ERR"; say "access: $CADDY_USER can read the block and adapt the whole configuration"
+fi
 if caddy validate --config "$CADDYFILE" --adapter caddyfile; then
   systemctl reload caddy || { putback; die 6 "Caddy would not reload; the previous rehearsal-block state is back."; }
   say "Caddy reloaded with the rehearsal block for $HOST"
