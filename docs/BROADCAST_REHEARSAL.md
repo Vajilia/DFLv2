@@ -79,7 +79,7 @@ Removing `PAUSE` by hand or `resume` without `--guard` does not bypass it: while
 
 Proven by tests (`tests/test_rehearsal_guard.py`, 18): each trip kind pauses the daemon and keeps first evidence; a violation outside the trip kinds does not stop it; the daemon
 trips itself on a missing or stale heartbeat and not on a fresh one; a hung monitor stops heartbeating; a monitor that cannot write its latch exits; `release`/`resume` refusals;
-the verdict. **Not proven live** until the rehearsal: a spoiler trip against the real daemon (the daemon itself removes a stray public file within a second, so it cannot be staged safely) and the
+the verdict. **Also run for real on a scratch install of the actual package** (real store and 400-game plan, real daemon and monitor processes, a stand-in HTTP server, `ALLOW_NON_ROOT`, nothing on the server): the monitor was killed with SIGKILL and the daemon tripped itself and paused after 120 s; `resume --guard` was refused; `release` was refused without a reason; `release --drill` then `resume --guard` brought the clock back to running; a fresh 110 s run showed 4 heartbeat lines, 0 violations and no evidence directory. That run also found a start-up race (a spurious `missing_file` in the first second), now fixed and tested. **Not proven live** until the rehearsal: a spoiler trip against the real daemon (the daemon itself removes a stray public file within a second, so it cannot be staged safely) and the
 disk/memory trips on the server. The monitor-stop drill (section 8) exercises the trip → release → resume path for real.
 
 ## 4. Layout (everything new; one added Caddy file is the only edit outside it)
