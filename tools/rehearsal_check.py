@@ -393,7 +393,8 @@ class Watch:
             self.violation("public_too_large", "%.2f GB" % (size / 1e9), {"bytes": size})
         self.progress()
         early_allowed, _ = self.oracle.expected(pos_after + TOL_S)
-        due, _ = self.oracle.expected(max(0.0, pos_before - TOL_S))
+        # in the first TOL_S seconds the daemon is still placing its very first files (the clock starts, then the first tick publishes): nothing can be called missing yet
+        due = self.oracle.expected(pos_before - TOL_S)[0] if pos_before > TOL_S else set()
         # the grouped files (latest.json, playback/index.json, honors/index.json) are in `expected` by name only: their content is checked below
         unexpected = sorted(listing - early_allowed)
         missing = sorted(due - listing)

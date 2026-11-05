@@ -179,6 +179,16 @@ class MonitorTrips(Base):
         self.check(w, 150)
         self.assertEqual(self.latch()['kind'], 'memory_high')
 
+    def test_the_first_seconds_after_the_clock_starts_are_not_a_missing_file(self):
+        # the live drill showed it: the monitor can read the new clock a moment before the daemon's first tick has published anything
+        a = args(self.tmp, self.pub, self.tmp, evidence=self.ev, guard=self.guard)
+        w = RC.Watch(a)
+        with mock.patch.object(RC.time, 'time', lambda: T0 + 0.2):
+            pos = w.cheap(T0 + 0.2)
+            w.full(T0 + 0.2, pos)
+        self.assertEqual(w.found, 0, self.lines())
+        self.assertIsNone(self.latch())
+
     def test_a_violation_that_is_not_spoiler_resource_or_monitor_is_logged_but_does_not_stop_the_broadcast(self):
         w = self.watch(150)
         w.violation('stale_tmp', 'x')
