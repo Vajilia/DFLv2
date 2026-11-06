@@ -11,6 +11,10 @@
       SYNTHETIC trees of N small files (no references, so the closure is trivially satisfied) to see how time and peak memory grow with the NUMBER of files, which is what
       they depend on. Each size is made, backed up, verified and restored in turn and deleted again. These figures are for the shape of the growth only, not for any real folder.
 
+  measure_public_backup.py closure --games 2000,8000,32000,128000 --work W
+      SYNTHETIC public trees whose playback index names N game files (and whose replay library lists the same N): the whole-index documents the reference closure loads whole.
+      Shows how the peak memory of `create` and `verify` grows with the size of those documents, separately from the number of files.
+
 Each child is measured on its own: wall time and peak RSS (VmHWM) are those of that one process; the temporary disk is the working index the tool reports (`index_bytes`). Prints one JSON report (also --report FILE). Exit 0 if every check passed.
 """
 import argparse
@@ -210,6 +214,47 @@ def scale(a):
 
 
 
+def closure(a):
+    """create / verify of trees with a playback index and replay library of N games each; peak memory against N."""
+    import hashlib
+    import shutil
+    w = os.path.abspath(a.work)
+    if os.path.exists(w) and os.listdir(w):
+        raise SystemExit("%s must be new" % w)
+    os.makedirs(w, exist_ok=True)
+    rep = {"mode": "closure", "points": []}
+    for n in [int(x) for x in a.games.split(",")]:
+        src, bk = os.path.join(w, "src"), os.path.join(w, "backup")
+        os.makedirs(os.path.join(src, "playback", "games"))
+        os.makedirs(os.path.join(src, "broadcast", "replays", "games"))
+        entries, lib = [], []
+        for i in range(n):
+            body = ('{"game":%d}' % i).encode().ljust(200, b" ")
+            h = hashlib.sha256(body).hexdigest()
+            name = "S001-reg-w%02d-g%05d.%s.json" % (i % 20, i, h[:10])
+            for d in ("playback", os.path.join("broadcast", "replays")):
+                with open(os.path.join(src, d, "games", name), "wb") as f:
+                    f.write(body)
+            entries.append({"file": "games/" + name, "sha256": h, "bytes": len(body), "gid": "S001/reg:w%02d:g%05d" % (i % 20, i), "home": "Team Name Home", "away": "Team Name Away"})
+            lib.append({"gid": "S001/reg:w%02d:g%05d" % (i % 20, i), "replay": "games/" + name})
+        json.dump({"games": entries}, open(os.path.join(src, "playback", "index.json"), "w"))
+        json.dump({"games": lib}, open(os.path.join(src, "broadcast", "replays", "index.json"), "w"))
+        pt = {"games": n, "index_documents_mb": round((os.path.getsize(os.path.join(src, "playback", "index.json")) + os.path.getsize(os.path.join(src, "broadcast", "replays", "index.json"))) / 1048576.0, 2)}
+        for name, args in (("create", [BK, "create", "--src", src, "--out", bk, "--no-fsync", "--no-preflight"]), ("verify", [BK, "verify", bk, "--no-preflight"])):
+            r = run_measured(args)
+            j = last_json(r.pop("stdout"))
+            pt[name] = {"wall_s": r["wall_s"], "peak_rss_mb": r["peak_rss_mb"], "ok": bool(j.get("ok")) and r["rc"] == 0}
+        rep["points"].append(pt)
+        shutil.rmtree(src)
+        shutil.rmtree(bk, ignore_errors=True)
+        print(json.dumps(pt, sort_keys=True), flush=True)
+    rep["ok"] = all(p[k]["ok"] for p in rep["points"] for k in ("create", "verify"))
+    print(json.dumps(rep, sort_keys=True))
+    if a.report:
+        json.dump(rep, open(a.report, "w"), indent=1, sort_keys=True)
+    return 0 if rep["ok"] else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -228,8 +273,12 @@ def main(argv=None):
     sc.add_argument("--file-bytes", type=int, default=2048)
     sc.add_argument("--work", required=True)
     sc.add_argument("--report")
+    cl = sub.add_parser("closure")
+    cl.add_argument("--games", default="2000,8000,32000,128000")
+    cl.add_argument("--work", required=True)
+    cl.add_argument("--report")
     a = ap.parse_args(argv)
-    return {"quiet": quiet, "live": live, "scale": scale}[a.cmd](a)
+    return {"quiet": quiet, "live": live, "scale": scale, "closure": closure}[a.cmd](a)
 
 
 if __name__ == "__main__":

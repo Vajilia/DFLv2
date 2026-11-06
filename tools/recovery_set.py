@@ -303,6 +303,8 @@ def main(argv=None):
     c.add_argument("--public", required=True)
     c.add_argument("--out", required=True)
     c.add_argument("--note")
+    c.add_argument("--no-preflight", action="store_true", help="skip the disk-space and RAM check (tools/backup_space.py)")
+    c.add_argument("--allow-ram", action="store_true", help="accept an output folder on tmpfs/ramfs")
     v = sub.add_parser("verify")
     v.add_argument("set")
     v.add_argument("--deep", action="store_true")
@@ -315,6 +317,13 @@ def main(argv=None):
     a = ap.parse_args(argv)
     try:
         if a.cmd == "create":
+            if not a.no_preflight:
+                import backup_space as BS
+                lg = os.path.join(a.root, "league")
+                pre = BS.preflight_set(a.public, os.path.join(a.root, "store"), [os.path.join(lg, "league.db"), os.path.join(lg, "league.db.archive")], a.out, a.allow_ram)
+                if not pre["ok"]:
+                    print(json.dumps(pre, sort_keys=True))
+                    return 1
             res = create(a.root, a.public, a.out, a.note)
         elif a.cmd == "verify":
             res = verify(a.set, a.deep)

@@ -9,11 +9,14 @@
 
 Exit 0 only when every check passed. Read-only on --src; the daemon and the builder are not stopped, paused or signalled.
 
-Bounded memory. No list or dict of every file is held: the inventory (what is on disk, what has been copied, what the manifest says) lives in a temporary SQLite index that is read
-and written in small batches, and the manifest is written and read as a stream. Memory therefore does not grow with the number of files (it is the interpreter, a few MB of SQLite
-cache, one batch and the whole-document indexes the reference closure loads on purpose); the price is TEMPORARY DISK: the index (reported as `index_bytes`). `create` keeps its index
-inside BACKUP.partial and removes it just before the commit; `verify` and `restore` keep theirs in --scratch (default: the system temporary folder; point it at a disk, not at RAM).
-The manifest format and its digest are unchanged, so every backup made before this change still verifies and restores.
+Bounded inventory and manifest memory. No list or dict of every file is held: the inventory (what is on disk, what has been copied, what the manifest says) lives in a temporary
+SQLite index read and written in small batches, and the manifest is written and read as a stream. That part of the memory no longer grows with the number of files (measured flat at
+31 to 34 MB from 29,000 to 472,000 synthetic files). It is NOT a bound on the whole tool: the reference closure still loads whole the JSON index documents it checks (playback,
+replay-library and Honors indexes, one release manifest at a time), so memory still grows with the size of those documents, i.e. with the number of games and events (measured in
+docs/PUBLIC_BACKUP.md section 3a). The price of the bounded part is TEMPORARY DISK: the index (reported as `index_bytes`). `create` keeps its index inside BACKUP.partial and removes it
+just before the commit; `verify` and `restore` keep theirs in --scratch (default: the system temporary folder). tools/backup_space.py estimates that disk beforehand and refuses a
+scratch or destination in RAM (tmpfs); the create/verify/restore commands run that preflight unless --no-preflight (an estimate, not a reservation: a full disk during the run is
+handled safely, see docs section 3b). The manifest format and its digest are unchanged, so every backup made before this change still verifies and restores.
 
 One operation per name. create, restore and quarantine take an operating-system lock on `.NAME.lock` beside BACKUP (or DEST, or BACKUP.partial's BACKUP) without waiting: a second
 attempt is refused ("in progress") and touches nothing, so a running backup's .partial can neither be written, discarded (--discard-partial) nor quarantined by another process. The
@@ -35,6 +38,7 @@ backup leaves only BACKUP.partial, which `verify` and `restore` refuse ("incompl
 import argparse
 import codecs
 import contextlib
+import errno
 import fcntl
 import hashlib
 import json
@@ -194,6 +198,13 @@ def remove_index(path):
             os.unlink(path + suffix)
         except FileNotFoundError:
             pass
+
+
+def is_disk_full(e):
+    """A write failed because the disk (or the quota, or the file-size limit) is exhausted."""
+    if isinstance(e, sqlite3.OperationalError):
+        return "full" in str(e).lower()
+    return isinstance(e, OSError) and e.errno in (errno.ENOSPC, errno.EDQUOT, errno.EFBIG)
 
 
 def _insert_many(db, sql, rows):
@@ -735,7 +746,14 @@ def create(src, out, profile="public", max_passes=8, require_quiescent=False, fs
     if os.path.commonpath([src, out]) in (src, out):
         raise Failed("the backup must not be inside the source (or the other way round)")
     with (name_lock(out, "public_backup create") if lock else contextlib.nullcontext()):
-        return _create(src, out, profile, max_passes, require_quiescent, fsync, discard_partial, hook or (lambda *a, **k: None), now)
+        try:
+            return _create(src, out, profile, max_passes, require_quiescent, fsync, discard_partial, hook or (lambda *a, **k: None), now)
+        except (OSError, sqlite3.OperationalError) as e:
+            if not is_disk_full(e):
+                raise
+            raise Failed("the disk is full while writing %s (%s): nothing was committed. %s.partial is kept as evidence (what was written so far, its working index included), "
+                         "already valid backups were not touched, and nothing was deleted. Free space or choose another destination, move the unfinished folder aside with "
+                         "`public_backup.py quarantine %s.partial`, and retry." % (out, e, out, out))
 
 
 def _create(src, out, profile, max_passes, require_quiescent, fsync, discard_partial, hook, now):
@@ -943,6 +961,11 @@ def verify(backup, closure=True, files_dir=None, scratch=None):
                    "bytes_verified": nbytes, "quiescent": m["snapshot"].get("quiescent"), "manifest_digest": m["manifest_digest"]}
     except Failed as e:
         return {"ok": False, "problems": [str(e)], "backup": backup}
+    except (OSError, sqlite3.OperationalError) as e:
+        if not is_disk_full(e):
+            raise
+        return {"ok": False, "backup": backup, "problems": ["the disk is full where the working index goes (%s): the check could not run and the backup was not touched. Free space or "
+                                                             "pass --scratch DIR on a disk with room (see `backup_space.py verify`)" % (scratch or tempfile.gettempdir())]}
     res["index_bytes"] = state["index_bytes"]
     return res
 
@@ -951,7 +974,14 @@ def restore(backup, dest, fsync=True, hook=None, scratch=None, lock=True):
     backup, dest = os.path.abspath(backup), os.path.abspath(dest)
     try:
         with (name_lock(dest, "public_backup restore") if lock else contextlib.nullcontext()):
-            return _restore(backup, dest, fsync, hook or (lambda *a, **k: None), scratch)
+            try:
+                return _restore(backup, dest, fsync, hook or (lambda *a, **k: None), scratch)
+            except (OSError, sqlite3.OperationalError) as e:
+                if not is_disk_full(e):
+                    raise
+                return {"ok": False, "stage": "copy", "problems": [
+                    "the disk is full while restoring into %s (%s): no destination was created, %s.restoring is kept as evidence of what was written, and the backup was not touched. "
+                    "Free space or choose another destination, move the unfinished folder aside with `public_backup.py quarantine %s.restoring`, and retry." % (dest, e, dest, dest)]}
     except Busy as e:
         return {"ok": False, "stage": "lock", "problems": [str(e)]}
 
@@ -1000,12 +1030,12 @@ def _restore(backup, dest, fsync, hook, scratch):
 
 def quarantine_partial(path, to=None, now=time.time, lock=True):
     """Move an unfinished `...partial` folder (a backup or a recovery set that failed or was killed) aside, whole and unchanged, so the retry can use the name. NOTHING is
-    deleted or copied: it is a rename within one filesystem, into `to` (default: a `partial-quarantine` folder beside it) under a name that still ends in `.partial` (so no
-    tool can ever mistake it for a finished backup), and a small note is added. Only a folder whose name ends in `.partial` is accepted; a finished backup is never moved. It is refused ("in progress", nothing moved) while
+    deleted or copied: it is a rename within one filesystem, into `to` (default: a `partial-quarantine` folder beside it) under a name that still ends in `.partial` or `.restoring` (so no
+    tool can ever mistake it for a finished backup or a restored tree), and a small note is added. Only a folder whose name ends in `.partial` (an unfinished backup or set) or `.restoring` (an unfinished restore) is accepted; a finished backup is never moved. It is refused ("in progress", nothing moved) while
     another operation holds the name's lock, so the .partial of a backup that is running can never be taken from under it."""
     path = os.path.abspath(path)
-    if not path.endswith(".partial") or not os.path.isdir(path) or os.path.islink(path):
-        return {"ok": False, "problems": ["%s is not an unfinished (.partial) folder; nothing was moved" % path]}
+    if not path.endswith((".partial", ".restoring")) or not os.path.isdir(path) or os.path.islink(path):
+        return {"ok": False, "problems": ["%s is not an unfinished (.partial or .restoring) folder; nothing was moved" % path]}
     try:
         with (name_lock(path, "public_backup quarantine") if lock else contextlib.nullcontext()):
             return _quarantine(path, to, now)
@@ -1036,10 +1066,17 @@ def _quarantine(path, to, now):
         return {"ok": False, "problems": ["could not move %s into %s (%s); a quarantine is a rename on one filesystem, pass --to on the same one" % (path, qdir, e)]}
     note = {"was": path, "quarantined_at": stamp, "files": n_files, "bytes": n_bytes, "had_manifest": os.path.exists(os.path.join(dest, MANIFEST)),
             "why": "an unfinished backup kept as evidence; it is not a valid backup and no tool will restore from it"}
-    with open(os.path.join(dest, "QUARANTINE_NOTE.json"), "w", encoding="utf-8") as f:
-        json.dump(note, f, indent=1, sort_keys=True)
-    fsync_dir(qdir)
-    return {"ok": True, "quarantined": dest, "files": n_files, "bytes": n_bytes}
+    note_written = True
+    try:                                              # (best effort: on a full disk the rename above is what matters, and it needs no space)
+        with open(os.path.join(dest, "QUARANTINE_NOTE.json"), "w", encoding="utf-8") as f:
+            json.dump(note, f, indent=1, sort_keys=True)
+    except OSError:
+        note_written = False
+    try:
+        fsync_dir(qdir)
+    except OSError:
+        pass
+    return {"ok": True, "quarantined": dest, "files": n_files, "bytes": n_bytes, "note_written": note_written}
 
 
 def main(argv=None):
@@ -1053,15 +1090,21 @@ def main(argv=None):
     p.add_argument("--require-quiescent", action="store_true")
     p.add_argument("--no-fsync", action="store_true")
     p.add_argument("--discard-partial", action="store_true")
+    p.add_argument("--no-preflight", action="store_true", help="skip the disk-space and RAM check (tools/backup_space.py)")
+    p.add_argument("--allow-ram", action="store_true", help="accept a destination on tmpfs/ramfs")
     p = sub.add_parser("verify")
     p.add_argument("backup")
     p.add_argument("--no-closure", action="store_true")
     p.add_argument("--scratch", help="where the temporary index goes (default: the system temporary folder; use a disk, not RAM)")
+    p.add_argument("--no-preflight", action="store_true")
+    p.add_argument("--allow-ram", action="store_true")
     p = sub.add_parser("restore")
     p.add_argument("backup")
     p.add_argument("dest")
     p.add_argument("--no-fsync", action="store_true")
     p.add_argument("--scratch")
+    p.add_argument("--no-preflight", action="store_true")
+    p.add_argument("--allow-ram", action="store_true")
     p = sub.add_parser("quarantine")
     p.add_argument("partial")
     p.add_argument("--to")
@@ -1069,6 +1112,19 @@ def main(argv=None):
     p.add_argument("--src", required=True)
     p.add_argument("--profile", default="public", choices=sorted(CLOSURE))
     a = ap.parse_args(argv)
+    pre = None
+    if a.cmd in ("create", "verify", "restore") and not a.no_preflight:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import backup_space as BS
+        if a.cmd == "create":
+            pre = BS.preflight_create(a.src, a.out, a.allow_ram, discard_partial=a.discard_partial)
+        elif a.cmd == "verify":
+            pre = BS.preflight_verify(os.path.abspath(a.backup), a.scratch, a.allow_ram)
+        else:
+            pre = BS.preflight_restore(os.path.abspath(a.backup), a.dest, a.scratch, a.allow_ram)
+        if not pre["ok"]:
+            print(json.dumps(dict(pre, ok=False), sort_keys=True))
+            return 1
     try:
         if a.cmd == "create":
             r = create(a.src, a.out, a.profile, a.max_passes, a.require_quiescent, not a.no_fsync, a.discard_partial)
@@ -1083,6 +1139,8 @@ def main(argv=None):
             r = {"ok": not problems.total, "problems": list(problems), "n_problems": problems.total}
     except Failed as e:
         r = {"ok": False, "problems": [str(e)]}
+    if pre is not None and isinstance(r, dict):
+        r["preflight"] = {"warnings": pre["warnings"], "estimate": pre["estimate"], "estimate_only": pre["estimate_only"]}
     print(json.dumps(r, sort_keys=True))
     return 0 if r.get("ok") else 1
 
