@@ -399,7 +399,7 @@ def reconcile(store, public, sched, pos, reveals=(), memo=None):
         if w["games"] and len(wdone) == len(w["games"]) and (placed, removed) == (p0, r0):
             memo["settled"][wi] = wdone
     # the replay index lists only broadcasts that have ended: it is the on-demand library
-    idx = {"format": "dfl-broadcast-replays", "format_version": 1, "games": sorted(done, key=lambda d: d["gid"])}
+    idx = {"format": "dfl-broadcast-replays", "format_version": 1, "games": sorted(list(sched.get("carry_replays", [])) + done, key=lambda d: d["gid"])}   # earlier seasons first, by game id
     ip = os.path.join(replays, "index.json")
     if not os.path.exists(ip) or get(ip) != idx:
         put(ip, idx)

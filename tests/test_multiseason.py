@@ -169,6 +169,8 @@ class Boundary(unittest.TestCase):
         run(bc, r.end1, r.end1 + 3 * 3600)
         after = r.tree()
         for k, v in before.items():
+            if k == 'broadcast/schedule.json':               # the schedule is a function of the position and moves on by design
+                continue
             self.assertEqual(after.get(k), v, '%s changed or vanished at the year boundary' % k)
         idx = r.js('playback/index.json')
         old = [e for e in idx['games'] if e['season'] == 901]
@@ -246,7 +248,7 @@ class Boundary(unittest.TestCase):
         r = self.r
         bc = r.started()
         self.start_year_two()
-        marks = ['RESULT-OF-EVENT-%d' % n for n in (5, 6, 7, 8)] + ['HONORS-OF-902', 'S902', 's902']
+        marks = ['RESULT-OF-EVENT-%d' % n for n in (6, 7, 8)] + ['HONORS-OF-902']          # events 6 to 8 are year two's week 1, week 2 and year close
         t = 0
         end = r.end1 + r.y2.t['r1'] - 5                # up to just before year two's first results block
         while t <= end:
@@ -255,18 +257,29 @@ class Boundary(unittest.TestCase):
             if t % 600 == 0 or t > end - 30:
                 text = r.text_of_tree()
                 for m in marks:
-                    if m == 'S902' or m == 's902':
-                        continue
                     self.assertNotIn(m, text, '%s public at %d s' % (m, t))
+                if t < r.end1 + 100 - 15:                # the opening event of year two (event 5) is released at its own time, not before
+                    self.assertNotIn('RESULT-OF-EVENT-5', text, 'event 5 public at %d s' % t)
         rep = r.js('broadcast/replays/index.json')['games']
-        self.assertTrue(all(g['season'] == 901 for g in rep))
-        self.assertTrue(all(e['season'] == 901 for e in r.js('playback/index.json')['games']))
+        for g in rep:                                    # a season-902 replay is listed only once that game's broadcast has ended (its own live folder says final)
+            if g['season'] == 902:
+                self.assertEqual(r.js('broadcast/live', B.safe(g['gid']), 'manifest.json')['state'], 'final')
+        self.assertTrue(all(e['season'] == 901 for e in r.js('playback/index.json')['games']), 'no season-902 result in the results index before its results block')
         self.assertFalse(any(p['season'] == 902 for p in r.js('broadcast/honors/index.json')['parts']))
         self.assertFalse(os.path.exists(r.pub('broadcast/honors/s902')))
-        for d, _, names in os.walk(r.public):
+        for d, _, names in os.walk(os.path.join(r.public, 'playback')):          # the results library (replays of results) has no season-902 file yet
             for n in names:
                 self.assertNotIn('S902-', n)
-                self.assertNotIn('e00005', n)
+
+    def test_season_two_games_are_absent_from_the_replay_library_until_they_end(self):
+        r = self.r
+        bc = r.started()
+        self.start_year_two()
+        run(bc, 0, r.end1 + r.y2.t['w0'] + 60)              # one minute into season two's first window
+        rep = r.js('broadcast/replays/index.json')['games']
+        self.assertTrue(all(g['season'] == 901 for g in rep))
+        self.assertEqual(r.js('broadcast/live/S902-reg-w01-g01/manifest.json')['state'], 'live')
+        self.assertFalse(os.path.exists(r.pub('broadcast/live/S902-reg-w02-g01')), 'a later window has not begun')
 
     def test_the_next_season_schedule_lists_only_what_has_begun_or_is_near(self):
         r = self.r
@@ -384,16 +397,55 @@ class Boundary(unittest.TestCase):
                     self.assertEqual(a[k], b[k], '%s at %d' % (k, at))
 
     # ------------------------------------------------------------------------------------------------------------------ holding
+    def set_pos(self, bc, now, pos):
+        st = bc.clock.state()
+        B.put(bc.clock.path, dict(st, anchor_wall=now, anchor_pos=pos, lease_until=now + B.LEASE_S, ready_until=pos))
+
+    def test_the_guarded_clock_crosses_the_boundary_when_the_next_season_is_ready(self):
+        r = self.r
+        self.start_year_two()
+        bc = r.started(guard=True, pos=r.end1 - 30)
+        pos = []
+        for t in range(0, 120):
+            bc.tick(T0 + t)
+            pos.append(bc.clock.position(T0 + t))
+        self.assertTrue(os.path.exists(os.path.join(r.store, S.CARRY)))
+        self.assertGreater(pos[-1], r.end1 + 20, 'the clock goes on into the next season')
+        self.assertEqual(sorted(set(round(b - a) for a, b in zip(pos, pos[1:]))), [1], 'the clock never jumped or stopped at the boundary')
+
+    def test_the_guarded_clock_holds_at_the_end_when_the_next_season_does_not_fit(self):
+        r = self.r
+        self.start_year_two()
+        bad = json.loads(open(os.path.join(r.y2.dir, S.BUILDS), 'rb').read())
+        bad['events']['5']['key'] = 'week_1'                          # the plan has no such event order: the build is not season two's
+        bad['games']['S901/reg:w01:g01'] = r.y1.builds['games']['S901/reg:w01:g01']
+        B.put(os.path.join(r.y2.dir, S.BUILDS), bad)
+        bc = r.started(guard=True, pos=r.end1 - 30)
+        for t in range(0, 150):
+            bc.tick(T0 + t)
+        self.assertFalse(os.path.exists(os.path.join(r.store, S.CARRY)))
+        self.assertAlmostEqual(bc.clock.position(T0 + 149), r.end1, delta=1.5, msg='held at the end of the season on air')
+        self.assertEqual(r.js('status.json')['runner']['state'], 'paused')
+        self.assertEqual(r.js('status.json')['published_events'], 4)
+
     def test_without_a_next_season_a_rolled_store_holds_at_the_end(self):
         r = self.r
-        bc = r.started()
         self.start_year_two(built=4)
-        run(bc, 0, r.end1 + r.y2.plan['total_s'] + 600)
-        st = bc.clock.state()
-        pos = bc.clock.position(T0 + r.end1 + r.y2.plan['total_s'] + 600)
-        self.assertLessEqual(pos, r.end1 + r.y2.plan['total_s'] + 1e-6, 'the clock never runs past the end of the last prepared season')
+        end2 = r.end1 + r.y2.plan['total_s']
+        bc = r.started(guard=True, pos=r.end1 - 20)
+        for t in range(0, 60):
+            bc.tick(T0 + t)
+        self.assertTrue(os.path.exists(os.path.join(r.store, S.CARRY)))
+        now = T0 + 60
+        self.set_pos(bc, now, end2 - 25)                               # jump the clock to the last seconds of season two (the whole season is built)
+        bc.tick(now)
+        for t in range(61, 140):
+            bc.tick(T0 + t)
+        pos = bc.clock.position(T0 + 139)
+        self.assertLessEqual(pos, end2 + 1e-6, 'the clock never runs past the end of the last prepared season')
+        self.assertGreater(pos, end2 - 3)
         self.assertEqual(r.js('status.json')['published_events'], 8)
-        self.assertIsNotNone(st)
+        self.assertEqual(r.js('status.json')['runner']['state'], 'paused')
 
     def test_a_single_year_store_behaves_as_before(self):
         tmp = tempfile.mkdtemp(dir=self.tmp.name)
