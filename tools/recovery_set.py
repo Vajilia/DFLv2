@@ -149,6 +149,19 @@ def _locked_create(root, public, out, note, fsync, hook, pub_hook, max_passes):
         lock.__exit__(None, None, None)
 
 
+def _component(out, name, make):
+    """Run one component backup inside the set. A full disk is re-reported for the SET: the component's own message names its inner folder, but the folder to
+    quarantine is the outer `SET.partial` (quarantining the inner one would leave the outer one blocking the name; runbook rehearsal, finding 1)."""
+    try:
+        return make()
+    except PBK.Failed as e:
+        if "disk is full" not in str(e):
+            raise
+        raise Failed("the disk is full while copying the %s part of the recovery set: nothing was committed. %s.partial is kept as evidence (what was written so far, the working index of the "
+                     "part being copied included), already valid sets were not touched, and nothing was deleted. Free space or choose another destination, move the unfinished set aside "
+                     "with `recovery_set.py quarantine %s.partial`, and retry." % (name, out, out))
+
+
 def _create(root, public, out, note, fsync, hook, pub_hook, max_passes):
     hook = hook or (lambda *a, **k: None)
     if os.path.exists(out) or os.path.exists(out + ".partial"):
@@ -161,9 +174,9 @@ def _create(root, public, out, note, fsync, hook, pub_hook, max_passes):
     t0 = time.time()
     ev0, built0 = league_events(league), built_events(store)
     hook("start")
-    pub = PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync, hook=pub_hook, max_passes=max_passes, lock=False)
+    pub = _component(out, "public", lambda: PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync, hook=pub_hook, max_passes=max_passes, lock=False))
     hook("after_public")
-    sto = PBK.create(store, os.path.join(part, "store"), "store", fsync=fsync, lock=False)
+    sto = _component(out, "store", lambda: PBK.create(store, os.path.join(part, "store"), "store", fsync=fsync, lock=False))
     hook("after_store")
     includes = []
     for n in CTL_FILES:

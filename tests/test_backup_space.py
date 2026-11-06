@@ -387,3 +387,42 @@ class RealFullDisk(Base):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RecoverySetFullDiskMessage(SimulatedFullDisk):
+    """Found by the runbook rehearsal (docs/BACKUP_RUNBOOK_REHEARSAL_2026-11-06.md finding 1): when the disk fills while a recovery set is being copied, the message must
+    name the OUTER SET.partial (the folder `recovery_set.py quarantine` takes), never the inner component folder, whichever component was being written."""
+
+    def make_root(self, public_files, store_files):
+        import recovery_set as RS
+        self.RS = RS
+        root = self.path('root')
+        os.makedirs(os.path.join(root, 'league'))
+        make_files(self.path('pub'), public_files)
+        make_files(os.path.join(root, 'store'), store_files)
+        for name, val in (('league_events', 1), ('built_events', (1, 1))):
+            real = getattr(RS, name)
+            setattr(RS, name, lambda *a, _v=val, **k: _v)
+            self.addCleanup(setattr, RS, name, real)
+        return root
+
+    def check_message(self, after, public_files, store_files):
+        root = self.make_root(public_files, store_files)
+        self.failing_copy(after=after)
+        out = self.path('set')
+        with self.assertRaises((self.RS.Failed, PBK.Failed)) as c:
+            self.RS.create(root, self.path('pub'), out, fsync=False)
+        msg = str(c.exception)
+        self.assertIn('disk is full', msg)
+        self.assertIn('`recovery_set.py quarantine %s.partial`' % out, msg)
+        self.assertNotIn('public_backup.py quarantine', msg, 'the inner tool would leave the outer folder blocking the name')
+        for inner in ('set.partial/public', 'set.partial/store'):
+            self.assertNotIn(inner, msg)
+        self.assertTrue(os.path.isdir(out + '.partial'))
+        self.assertFalse(os.path.exists(out))
+
+    def test_full_disk_while_copying_the_public_folder_names_the_outer_partial(self):
+        self.check_message(after=10, public_files=200, store_files=50)
+
+    def test_full_disk_while_copying_the_store_names_the_outer_partial(self):
+        self.check_message(after=250, public_files=200, store_files=400)

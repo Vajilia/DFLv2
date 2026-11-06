@@ -73,7 +73,7 @@ python3 tools/recovery_set.py quarantine SET.partial            # moved to SET_P
 
 A rename within one filesystem (so it works even when the disk is full) plus a small note file; the name stays `.partial` so no tool can mistake it for a finished set. It refuses anything not ending `.partial`/`.restoring` and anything whose name is locked by a running operation. Keep the folder until you know why the run failed; deleting it is the owner's decision, by hand.
 
-Two things seen in the rehearsal: (1) the full-disk message for a *set* suggests quarantining the inner `SET.partial/store.partial` with `public_backup.py`; do not, quarantine the outer `SET.partial` as above (known wording defect, `docs/BACKUP_RUNBOOK_REHEARSAL_2026-11-06.md` finding 1); (2) a `.SET.lock` file stays beside the set; that is intended, leave it.
+Two things seen in the rehearsal: (1) before the fix of 2026-11-06 the full-disk message for a *set* suggested quarantining the inner `SET.partial/store.partial` with `public_backup.py`; it now names the outer `SET.partial` and `recovery_set.py quarantine` (always quarantine the outer folder; finding 1 of the rehearsal record); (2) a `.SET.lock` file stays beside the set; that is intended, leave it.
 
 ## 8. Retry
 
