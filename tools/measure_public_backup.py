@@ -3,11 +3,15 @@
 
   measure_public_backup.py quiet --public P --work W [--profile public]
       create / verify / restore of an idle folder; the restored tree compared with the source byte for byte and by mode. W must be new (it is the only place written).
-  measure_public_backup.py live --root R --work W [--start-after-games 250] [--stagger 0]
+  measure_public_backup.py live --root R --work W [--start-after-games 250]
       the real daemon (broadcast_multiseason_check.py --through-end, virtual time) publishes into W/public from the private root R (a COPY, never a production root) while a
       backup of W/public is taken; afterwards every backed-up file that the final tree also has must be byte-identical to it, and the backup's own closure was checked by `create`.
 
-Each child is run with os.wait4 so wall time, CPU time and peak RSS are those of that one process. Prints one JSON report (also --report FILE). Exit 0 if every check passed.
+  measure_public_backup.py scale --files 29000,59000,118000,236000,472000 --work W [--file-bytes 2048]
+      SYNTHETIC trees of N small files (no references, so the closure is trivially satisfied) to see how time and peak memory grow with the NUMBER of files, which is what
+      they depend on. Each size is made, backed up, verified and restored in turn and deleted again. These figures are for the shape of the growth only, not for any real folder.
+
+Each child is measured on its own: wall time and peak RSS (VmHWM) are those of that one process. Prints one JSON report (also --report FILE). Exit 0 if every check passed.
 """
 import argparse
 import json
@@ -161,6 +165,51 @@ def live(a):
     return 0 if rep["ok"] else 1
 
 
+def make_tree(base, n, size):
+    """n files of `size` bytes under broadcast/live/<30-character name>/sNNNN.json, 800 to a folder: path lengths like the real folder's."""
+    per = 800
+    body = (b'{"synthetic":"%d"}' % size).ljust(size, b' ')
+    for i in range(0, n, per):
+        d = os.path.join(base, "broadcast", "live", "S%03d-po-Eastern-conference-s%dv%d" % (i // per % 999, i // per % 7, i // per % 3))
+        d = d + "-%d" % (i // per)
+        os.makedirs(d, exist_ok=True)
+        for j in range(min(per, n - i)):
+            with open(os.path.join(d, "s%04d.json" % j), "wb") as f:
+                f.write(body)
+
+
+def scale(a):
+    w = os.path.abspath(a.work)
+    if os.path.exists(w) and os.listdir(w):
+        raise SystemExit("%s must be new" % w)
+    os.makedirs(w, exist_ok=True)
+    rep = {"mode": "scale", "file_bytes": a.file_bytes, "points": []}
+    import shutil
+    for n in [int(x) for x in a.files.split(",")]:
+        src, bk, dest = os.path.join(w, "src"), os.path.join(w, "backup"), os.path.join(w, "restored")
+        t0 = time.time()
+        make_tree(src, n, a.file_bytes)
+        pt = {"files": n, "make_s": round(time.time() - t0, 1)}
+        for name, args in (("create", [BK, "create", "--src", src, "--out", bk, "--no-fsync"]), ("verify", [BK, "verify", bk]), ("restore", [BK, "restore", bk, dest, "--no-fsync"])):
+            r = run_measured(args)
+            j = last_json(r.pop("stdout"))
+            pt[name] = {"wall_s": r["wall_s"], "peak_rss_mb": r["peak_rss_mb"], "ok": bool(j.get("ok")) and r["rc"] == 0}
+            if r["rc"]:
+                rep["ok"] = False
+                print(json.dumps(rep, sort_keys=True))
+                return 1
+        rep["points"].append(pt)
+        for d in (src, bk, dest):
+            shutil.rmtree(d, ignore_errors=True)
+        print(json.dumps(pt, sort_keys=True), flush=True)
+    rep["ok"] = True
+    print(json.dumps(rep, sort_keys=True))
+    if a.report:
+        json.dump(rep, open(a.report, "w"), indent=1, sort_keys=True)
+    return 0
+
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -174,8 +223,13 @@ def main(argv=None):
     l.add_argument("--work", required=True)
     l.add_argument("--start-after-games", type=int, default=250)
     l.add_argument("--report")
+    sc = sub.add_parser("scale")
+    sc.add_argument("--files", default="29000,59000,118000,236000,472000")
+    sc.add_argument("--file-bytes", type=int, default=2048)
+    sc.add_argument("--work", required=True)
+    sc.add_argument("--report")
     a = ap.parse_args(argv)
-    return quiet(a) if a.cmd == "quiet" else live(a)
+    return {"quiet": quiet, "live": live, "scale": scale}[a.cmd](a)
 
 
 if __name__ == "__main__":

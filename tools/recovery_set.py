@@ -6,11 +6,12 @@
   recovery_set.py restore SET DEST                 -> DEST/league/{league.db, league.db.archive, ctl/}, DEST/store, DEST/public (a NEW directory)
   recovery_set.py quarantine SET.partial [--to DIR]  move an unfinished set aside, whole (a rename; nothing is deleted), then retry
 
-R is a builder root (R/league/league.db, R/league/ctl, R/store); P is the public folder the daemon writes. Read-only on both; neither the daemon nor the builder is signalled.
-The BUILDER MUST BE IDLE while a set is taken (between `broadcast_build.py step` runs): the builder insists that the league has exactly the events it has built (or one more),
-so a league that is ahead of its builds cannot be continued. The set refuses to record itself if the league's event count or the builds moved while it was being made, or if the
-store copy was not quiet. The DAEMON may keep publishing. Order: public folder first, then the private store, then the league (the store is never older than the public folder:
-a hand-over that happens during the copy is then always on the store side, which the daemon re-derives, never the other way round).
+R is a builder root (R/league/league.db, R/league/ctl, R/store); P is the public folder the daemon writes. Read-only on both except the lock file ROOT/.builder.lock; neither the daemon nor the builder is signalled.
+The BUILDER IS EXCLUDED while a set is taken: `create` holds the root's exclusive lock (tools/rootlock.py, ROOT/.builder.lock) that every changing `broadcast_build.py`
+command also takes, and refuses to start if the builder holds it (or a league runner holds league/ctl/runner.lock); a builder started during the set is refused (exit 75). The
+DAEMON may keep publishing. Order: public folder, then the private store, then the league. The daemon writes both the public folder and, in the store, the viewers' clock and
+the hand-over record, so a store captured after the public folder is never behind it (a restored daemon re-derives what is missing); the reverse order can leave the public
+folder ahead of the stored clock and is refused by rule S3. The league and the store do not move once the builder is excluded.
 
 Rules a set must satisfy (recomputed from the component manifests by `verify`, not trusted from SET/RECOVERY_SET.json):
   S1 the league's events equal the builds' last event, or exceed it by one (an event fired but not yet built)
@@ -116,7 +117,7 @@ def rules(league_ev, built, season_on_air, pub_ev, pub_season, store_quiet, pub_
     return out
 
 
-def create(root, public, out, note=None, fsync=True, hook=None, pub_hook=None):
+def create(root, public, out, note=None, fsync=True, hook=None, pub_hook=None, max_passes=8):
     """Take a recovery set. The builder is EXCLUDED, not merely checked: the root's exclusive lock (tools/rootlock.py, the one every changing `broadcast_build.py` command
     takes) is held from before the first event count is read until the set is committed or has failed, and a league runner that is running (`league/ctl/runner.lock`) is
     refused too. A builder that is running refuses the set at once and nothing is copied; a builder started during the set is refused (exit 75) and changes nothing.
@@ -136,14 +137,14 @@ def create(root, public, out, note=None, fsync=True, hook=None, pub_hook=None):
                 fcntl.flock(runner, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
                 raise Failed("a league runner is running (%s is held), so no recovery set was started" % rl)
-        return _create(root, public, out, note, fsync, hook, pub_hook)
+        return _create(root, public, out, note, fsync, hook, pub_hook, max_passes)
     finally:
         if runner is not None:
             os.close(runner)
         lock.__exit__(None, None, None)
 
 
-def _create(root, public, out, note, fsync, hook, pub_hook):
+def _create(root, public, out, note, fsync, hook, pub_hook, max_passes):
     hook = hook or (lambda *a, **k: None)
     if os.path.exists(out) or os.path.exists(out + ".partial"):
         raise Failed("%s (or its .partial) exists: a set is never overwritten. An unfinished %s.partial is kept as evidence with `recovery_set.py quarantine %s.partial`, then retry" % (out, out, out))
@@ -155,7 +156,7 @@ def _create(root, public, out, note, fsync, hook, pub_hook):
     t0 = time.time()
     ev0, built0 = league_events(league), built_events(store)
     hook("start")
-    pub = PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync, hook=pub_hook)
+    pub = PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync, hook=pub_hook, max_passes=max_passes)
     hook("after_public")
     sto = PBK.create(store, os.path.join(part, "store"), "store", fsync=fsync)
     hook("after_store")
@@ -166,9 +167,9 @@ def _create(root, public, out, note, fsync, hook, pub_hook):
     lb = py([os.path.join(ROOT, "tools", "league_backup.py"), "create", league, os.path.join(part, "league")] + includes + ["--note", note or "recovery set"])
     hook("after_league")
     ev1, built1 = league_events(league), built_events(store)
-    if (ev0, built0) != (ev1, built1):
-        raise Failed("the league or the builds moved while the set was being made (league %d to %d events, built %s to %s): the builder must be idle; nothing was recorded" %
-                     (ev0, ev1, built0, built1))
+    if (ev0, built0[0]) != (ev1, built1[0]):                       # (the season on air is the DAEMON's: it changes at a hand-over, which is allowed)
+        raise Failed("the league or the builds moved while the set was being made (league %d to %d events, built %d to %d): something changed the builder's root without the "
+                     "lock; nothing was recorded" % (ev0, ev1, built0[0], built1[0]))
     mf = _jload(os.path.join(part, "league", "BACKUP_MANIFEST.json"))
     league_ev = mf["journal_head"]["seq"]
     built, season = built_events(os.path.join(part, "store", PBK.FILES))

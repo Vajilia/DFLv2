@@ -143,6 +143,27 @@ class Set(Fixture):
         self.assertTrue(RS.verify(self.set_path())['ok'])
         self.assertTrue(os.path.isdir(res['quarantined']))
 
+    def test_a_hand_over_written_by_the_daemon_during_the_set_is_not_builder_movement(self):
+        """Found by the real-engine hand-over test (tests/test_backup_resume_real.py): the daemon writes store/carry.json, which changes the season ON AIR that
+        `built_events` reports. The check that the builder did not move must look at what only the builder changes (league events, events built), not at that."""
+        real = RS.built_events
+        state = {'handed_over': False}
+
+        def hook(event, **info):
+            if event == 'after_public':
+                state['handed_over'] = True
+
+        def built_events(store):
+            last, season = real(store)
+            if state['handed_over'] and os.path.abspath(store) == os.path.join(os.path.abspath(self.root), 'store'):
+                season += 1                                               # the daemon started the next season in the middle of the set
+            return last, season
+        RS.built_events = built_events
+        self.addCleanup(setattr, RS, 'built_events', real)
+        res = RS.create(self.root, self.public, self.set_path(), fsync=False, hook=hook)
+        self.assertTrue(res['ok'], res)
+        self.assertTrue(RS.verify(self.set_path())['ok'])
+
     def test_a_set_that_fails_before_the_commit_is_never_valid(self):
         def hook(event, **info):
             if event == 'after_store':
