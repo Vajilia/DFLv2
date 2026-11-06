@@ -4,6 +4,7 @@
   recovery_set.py create  --root R --public P --out SET [--note TEXT]
   recovery_set.py verify  SET [--deep]
   recovery_set.py restore SET DEST                 -> DEST/league/{league.db, league.db.archive, ctl/}, DEST/store, DEST/public (a NEW directory)
+  recovery_set.py quarantine SET.partial [--to DIR]  move an unfinished set aside, whole (a rename; nothing is deleted), then retry
 
 R is a builder root (R/league/league.db, R/league/ctl, R/store); P is the public folder the daemon writes. Read-only on both; neither the daemon nor the builder is signalled.
 The BUILDER MUST BE IDLE while a set is taken (between `broadcast_build.py step` runs): the builder insists that the league has exactly the events it has built (or one more),
@@ -145,7 +146,7 @@ def create(root, public, out, note=None, fsync=True, hook=None, pub_hook=None):
 def _create(root, public, out, note, fsync, hook, pub_hook):
     hook = hook or (lambda *a, **k: None)
     if os.path.exists(out) or os.path.exists(out + ".partial"):
-        raise Failed("%s (or its .partial) exists: a set is never overwritten" % out)
+        raise Failed("%s (or its .partial) exists: a set is never overwritten. An unfinished %s.partial is kept as evidence with `recovery_set.py quarantine %s.partial`, then retry" % (out, out, out))
     league = os.path.join(root, "league", "league.db")
     store = os.path.join(root, "store")
     ctl = os.path.join(root, "league", "ctl")
@@ -191,6 +192,11 @@ def _create(root, public, out, note, fsync, hook, pub_hook):
     os.replace(part, out)
     PBK.fsync_dir(os.path.dirname(out))
     return {"ok": True, "set": out, **{k: desc["components"][k] for k in desc["components"]}, "seconds": desc["seconds"]}
+
+
+def quarantine(path, to=None):
+    """Move an unfinished SET.partial aside, whole (tools/public_backup.py quarantine_partial): a rename, nothing is deleted."""
+    return PBK.quarantine_partial(path, to)
 
 
 def verify(setdir, deep=False):
@@ -289,12 +295,17 @@ def main(argv=None):
     r = sub.add_parser("restore")
     r.add_argument("set")
     r.add_argument("dest")
+    q = sub.add_parser("quarantine")
+    q.add_argument("partial")
+    q.add_argument("--to")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "create":
             res = create(a.root, a.public, a.out, a.note)
         elif a.cmd == "verify":
             res = verify(a.set, a.deep)
+        elif a.cmd == "quarantine":
+            res = quarantine(a.partial, a.to)
         else:
             res = restore(a.set, a.dest)
     except (Failed, PBK.Failed) as e:

@@ -413,6 +413,74 @@ class Damage(Base):
             self.make()
 
 
+class Quarantine(Base):
+    """A stale `.partial` folder (an earlier backup that failed or was killed) is moved aside, whole, and the backup retried: evidence is kept, nothing is deleted."""
+
+    def setUp(self):
+        super().setUp()
+        run(self.r.started(), 0, 400)
+
+    def stale(self):
+        def hook(event, **info):
+            if event == 'before_commit':
+                raise RuntimeError('killed')
+        with self.assertRaises(RuntimeError):
+            self.make(hook=hook)
+        part = self.out() + '.partial'
+        self.assertTrue(os.path.isdir(part))
+        return part
+
+    def test_a_stale_partial_blocks_a_retry_and_the_error_says_how_to_quarantine_it(self):
+        part = self.stale()
+        with self.assertRaises(PBK.Failed) as c:
+            self.make()
+        self.assertIn('quarantine', str(c.exception))
+        self.assertTrue(os.path.isdir(part), 'the refusal changed nothing')
+
+    def test_quarantine_moves_the_whole_folder_aside_unchanged_and_the_retry_succeeds(self):
+        part = self.stale()
+        want = tree_of(part)
+        res = PBK.quarantine_partial(part)
+        self.assertTrue(res['ok'], res)
+        q = res['quarantined']
+        self.assertFalse(os.path.exists(part))
+        self.assertTrue(os.path.isdir(q))
+        self.assertNotEqual(os.path.dirname(q), os.path.dirname(part), 'it is kept in a folder of its own, not beside the backups')
+        note = json.load(open(os.path.join(q, 'QUARANTINE_NOTE.json')))
+        self.assertEqual(note['was'], part)
+        self.assertEqual(note['files'], len(want))
+        got = tree_of(q)
+        got.pop('QUARANTINE_NOTE.json')
+        self.assertEqual(got, want, 'every byte of the stale folder is kept')
+        self.assertFalse(PBK.verify(q)['ok'], 'a quarantined folder is still never a valid backup')
+        res2 = self.make()
+        self.assertTrue(res2['ok'])
+        self.assertTrue(PBK.verify(self.out())['ok'])
+        self.assertTrue(os.path.isdir(q), 'the retry did not touch the quarantined evidence')
+
+    def test_two_quarantines_never_collide(self):
+        a = PBK.quarantine_partial(self.stale())['quarantined']
+        b = PBK.quarantine_partial(self.stale())['quarantined']
+        self.assertNotEqual(a, b)
+        self.assertTrue(os.path.isdir(a) and os.path.isdir(b))
+
+    def test_only_a_partial_folder_can_be_quarantined(self):
+        self.make()
+        for path in (self.out(), os.path.join(self.tmp.name, 'nothing.partial'), self.tmp.name):
+            res = PBK.quarantine_partial(path)
+            self.assertFalse(res['ok'], path)
+        self.assertTrue(PBK.verify(self.out())['ok'], 'a valid backup is never moved')
+
+    def test_the_command_line_does_the_same_and_deletes_nothing(self):
+        part = self.stale()
+        n = len(tree_of(part))
+        p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/public_backup.py'), 'quarantine', part], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        res = json.loads(p.stdout.strip().splitlines()[-1])
+        self.assertTrue(res['ok'])
+        self.assertEqual(len(tree_of(res["quarantined"])), n + 1)
+
+
 class WithThePrivateState(Base):
     def test_the_private_store_profile_and_a_full_restore_of_both_continue_publishing(self):
         r = self.r

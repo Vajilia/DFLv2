@@ -5,6 +5,7 @@
   public_backup.py verify  BACKUP [--no-closure]             every file against the manifest (size, SHA-256), no extras, then the reference closure
   public_backup.py restore BACKUP DEST                        verify, then restore into a NEW (absent or empty) directory, then verify DEST; explicit modes 0755/0644
   public_backup.py check   --src DIR [--profile ...]          read-only reference-closure check of a live folder (no backup made)
+  public_backup.py quarantine BACKUP.partial [--to DIR]       move an unfinished folder aside, whole (a rename; nothing is deleted), so the backup can be retried
 
 Exit 0 only when every check passed. Read-only on --src; the daemon and the builder are not stopped, paused or signalled.
 
@@ -355,7 +356,7 @@ def create(src, out, profile="public", max_passes=8, require_quiescent=False, fs
     part = out + ".partial"
     if os.path.exists(part):
         if not discard_partial:
-            raise Failed("%s exists (an earlier backup did not finish); inspect it, or pass --discard-partial to remove that one folder" % part)
+            raise Failed("%s exists (an earlier backup did not finish). Keep it as evidence with `public_backup.py quarantine %s` and retry; --discard-partial DELETES it" % (part, part))
         shutil.rmtree(part)
     if os.path.commonpath([src, out]) in (src, out):
         raise Failed("the backup must not be inside the source (or the other way round)")
@@ -547,6 +548,41 @@ def verify_tree_against(base, m):
     return problems or CLOSURE[m["profile"]](Tree(base, {f["path"]: (f["size"], f["sha256"]) for f in m["files"]}))
 
 
+def quarantine_partial(path, to=None, now=time.time):
+    """Move an unfinished `...partial` folder (a backup or a recovery set that failed or was killed) aside, whole and unchanged, so the retry can use the name. NOTHING is
+    deleted or copied: it is a rename within one filesystem, into `to` (default: a `partial-quarantine` folder beside it) under a name that still ends in `.partial` (so no
+    tool can ever mistake it for a finished backup), and a small note is added. Only a folder whose name ends in `.partial` is accepted; a finished backup is never moved."""
+    path = os.path.abspath(path)
+    if not path.endswith(".partial") or not os.path.isdir(path) or os.path.islink(path):
+        return {"ok": False, "problems": ["%s is not an unfinished (.partial) folder; nothing was moved" % path]}
+    qdir = os.path.abspath(to) if to else os.path.join(os.path.dirname(path), "partial-quarantine")
+    os.makedirs(qdir, exist_ok=True)
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now()))
+    n_files = n_bytes = 0
+    for d, _, names in os.walk(path):
+        for f in names:
+            n_files += 1
+            try:
+                n_bytes += os.path.getsize(os.path.join(d, f))
+            except OSError:
+                pass
+    dest = os.path.join(qdir, "%s-%s" % (stamp, os.path.basename(path)))
+    k = 1
+    while os.path.exists(dest):
+        k += 1
+        dest = os.path.join(qdir, "%s-%d-%s" % (stamp, k, os.path.basename(path)))
+    try:
+        os.rename(path, dest)
+    except OSError as e:
+        return {"ok": False, "problems": ["could not move %s into %s (%s); a quarantine is a rename on one filesystem, pass --to on the same one" % (path, qdir, e)]}
+    note = {"was": path, "quarantined_at": stamp, "files": n_files, "bytes": n_bytes, "had_manifest": os.path.exists(os.path.join(dest, MANIFEST)),
+            "why": "an unfinished backup kept as evidence; it is not a valid backup and no tool will restore from it"}
+    with open(os.path.join(dest, "QUARANTINE_NOTE.json"), "w", encoding="utf-8") as f:
+        json.dump(note, f, indent=1, sort_keys=True)
+    fsync_dir(qdir)
+    return {"ok": True, "quarantined": dest, "files": n_files, "bytes": n_bytes}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -565,6 +601,9 @@ def main(argv=None):
     p.add_argument("backup")
     p.add_argument("dest")
     p.add_argument("--no-fsync", action="store_true")
+    p = sub.add_parser("quarantine")
+    p.add_argument("partial")
+    p.add_argument("--to")
     p = sub.add_parser("check")
     p.add_argument("--src", required=True)
     p.add_argument("--profile", default="public", choices=sorted(CLOSURE))
@@ -576,6 +615,8 @@ def main(argv=None):
             r = verify(a.backup, closure=not a.no_closure)
         elif a.cmd == "restore":
             r = restore(a.backup, a.dest, fsync=not a.no_fsync)
+        elif a.cmd == "quarantine":
+            r = quarantine_partial(a.partial, a.to)
         else:
             problems = CLOSURE[a.profile](Tree(os.path.abspath(a.src)))
             r = {"ok": not problems, "problems": problems[:50], "n_problems": len(problems)}

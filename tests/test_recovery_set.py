@@ -121,6 +121,28 @@ class Set(Fixture):
         t = {c: json.load(open(os.path.join(self.set_path(), c, PBK.MANIFEST if c != 'league' else 'BACKUP_MANIFEST.json'))) for c in ('public', 'store', 'league')}
         self.assertLessEqual(t['public']['snapshot']['finished'], t['store']['snapshot']['finished'])
 
+    def test_a_stale_set_partial_is_quarantined_and_the_retry_succeeds(self):
+        def hook(event, **info):
+            if event == 'after_store':
+                raise RuntimeError('killed')
+        with self.assertRaises(RuntimeError):
+            RS.create(self.root, self.public, self.set_path(), fsync=False, hook=hook)
+        part = self.set_path() + '.partial'
+        self.assertTrue(os.path.isdir(part))
+        with self.assertRaises(RS.Failed) as c:
+            RS.create(self.root, self.public, self.set_path(), fsync=False)
+        self.assertIn('quarantine', str(c.exception))
+        want = PBK_tree(part)
+        res = RS.quarantine(part)
+        self.assertTrue(res['ok'], res)
+        got = PBK_tree(res['quarantined'])
+        got.pop('QUARANTINE_NOTE.json')
+        self.assertEqual(got, want)
+        again = RS.create(self.root, self.public, self.set_path(), fsync=False)
+        self.assertTrue(again['ok'])
+        self.assertTrue(RS.verify(self.set_path())['ok'])
+        self.assertTrue(os.path.isdir(res['quarantined']))
+
     def test_a_set_that_fails_before_the_commit_is_never_valid(self):
         def hook(event, **info):
             if event == 'after_store':
