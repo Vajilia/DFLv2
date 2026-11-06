@@ -2,7 +2,7 @@
 
 *Written 2026-11-06 on branch `backend/public-backup-2026-11-06`, from `7668245230c2692fd81430fbd7bb6114a01121d3`. Everything here was built and tested locally on scratch copies. Nothing was deployed, nothing on the Droplet (the running rehearsal included) was contacted, no retention or deletion tool was written or run, and no frontend file changed.*
 
-Tools: `tools/public_backup.py` (public folder, private store), `tools/recovery_set.py` (league + store + public as one unit), `tools/measure_public_backup.py` (real-size measurements), `tools/engine_comparison.py` (separate: `docs/ENGINE_COMPARISON_REPRODUCTION.md`). Tests: `tests/test_public_backup.py` (28), `tests/test_recovery_set.py` (6).
+Tools: `tools/public_backup.py` (public folder, private store), `tools/recovery_set.py` (league + store + public as one unit), `tools/measure_public_backup.py` (real-size measurements), `tools/engine_comparison.py` (separate: `docs/ENGINE_COMPARISON_REPRODUCTION.md`). Tests: `tests/test_public_backup.py` (33), `tests/test_recovery_set.py` (16), `tests/test_backup_resume.py` (5), `tests/test_backup_resume_real.py` (1, opt-in). Also `tools/rootlock.py` (the builder-root lock).
 
 ## 1. Why this exists
 
@@ -95,7 +95,7 @@ After `restore`, the restored root runs exactly as the original did: `broadcast_
 
 ## 6. What the tests show (small synthetic data; not resource figures)
 
-`tests/test_public_backup.py`, 28 tests, built on synthetic and short real-engine publications in temporary folders:
+`tests/test_public_backup.py`, 28 tests (plus the 5 quarantine tests below), built on synthetic and short real-engine publications in temporary folders:
 
 * **Round trip:** byte-identical names, bytes and modes; an HTTP server over the restored folder (original removed) serves a replay, a live recording, a release and an Honors part by their original URLs, and every index entry loads; the daemon continues publishing from the restored folder and the resulting tree equals a control run.
 * **While publishing:** the daemon advanced from inside the backup; a season hand-over during the backup (10 ticks of 8 s); a folder that never goes quiet is refused with `--require-quiescent` and otherwise gives a closure-valid backup marked `quiescent: false`.
@@ -129,16 +129,30 @@ The backup of the public folder is 1,566,432,970 bytes (the files plus a 20 MB m
 
 **While the daemon publishes (real size).** The real daemon (`broadcast_multiseason_check.py --through-end`, virtual time, 20 s steps, from the same store) published the two seasons into a fresh folder while a backup started when 256 of 800 games were public. It took 27 s at 94 MB, made **8 passes without ever finding a quiet one** (`"quiescent": false`, 49,651 files, 652,079,923 bytes at the moment it was committed), the closure held, `verify` passed (4 s), and a restore of it verified and passed `check`. After the daemon finished, every immutable file in the backup (everything except the controls, the indexes and live manifests, which are replaced as publication goes on) was byte-identical to the same file in the final tree, and nothing in the backup was absent from it. Virtual time publishes far faster than the real broadcast, so this is a harsher case than production; in real time the passes are expected to find a quiet moment. The final tree of this run was the same size as the idle run (117,707 files, 1,546,391,468 bytes).
 
-**A refusal the real data produced.** The first set attempt used the comparison's builder root, where the daemon had never run, so the store had no `carry.json` while the public folder (made from a hard-linked copy) already showed season 2. Rule S3 refused it ("the public copy is newer than the store"), correctly. The set was then taken from the copy that carries the daemon's `carry.json`. A refused `create` leaves `SET.partial` behind (it is never valid; delete it by hand before trying again, which is also what happens after a crash).
+**A refusal the real data produced.** The first set attempt used the comparison's builder root, where the daemon had never run, so the store had no `carry.json` while the public folder (made from a hard-linked copy) already showed season 2. Rule S3 refused it ("the public copy is newer than the store"), correctly. The set was then taken from the copy that carries the daemon's `carry.json`. A refused `create` leaves `SET.partial` behind (it is never valid); it is kept as evidence with `recovery_set.py quarantine` and then the set is retried (section 5, *Stale `.partial` folders*).
 
-**Extrapolation to four seasons (not measured).** A season adds about 58,900 public files and 0.77 GB. Four seasons would be about 235,000 files and 3.1 GB: expect roughly twice the times above for the public folder (create about 2 minutes, restore about 3 minutes on this host) and about twice the memory (the manifest is held in memory: about 400 MB). On the Droplet's disk and with a cold cache the times will differ; rehearse there before relying on them.
+**How time and memory grow (measured on synthetic trees; not the real folder).** Peak memory depends on the **number of files**, not on their bytes (files are streamed in 1 MB chunks; the tool keeps one small record per file and, at the end of `create`, the manifest text built from them). Doubling the *data* therefore does not double the memory by itself: it does so only if the file count doubles, and then not exactly, because there is a fixed part. To see the shape instead of assuming it, `tools/measure_public_backup.py scale` makes, backs up, verifies and restores trees of 2 KB files with realistic path lengths (800 to a folder), one size after another, each tool run as its own process:
+
+| Files | `create` peak | `verify` peak | `restore` peak | `create` wall |
+|---|---|---|---|---|
+| 29,000 | 67 MB | 49 MB | 51 MB | 4 s |
+| 59,000 | 115 MB | 82 MB | 85 MB | 9 s |
+| 118,000 | 211 MB | 150 MB | 154 MB | 22 s |
+| 236,000 | 409 MB | 240 MB | 240 MB | 14 s |
+| 472,000 | 799 MB | 463 MB | 463 MB | 34 s |
+
+Each doubling of the file count multiplied the `create` peak by 1.7, 1.8, 1.9 and 1.95: close to linear above a fixed part of about 15 to 20 MB, with a slope of about 1.65 KB per file for `create` and 1.0 KB for `verify` and `restore`. The real two-season folder (117,707 files) measured 202 MB for `create`, within 5% of the synthetic figure for the same file count (211 MB), which supports using the synthetic series for this tool, but it is one data point. The wall times are **not** a scaling law: they vary with what the page cache held (the 236,000-file `create` was faster than the 118,000-file one) and with the disk.
+
+**Estimates for four real seasons (not measured; each depends on an assumption).** Memory follows the file count. If a season keeps adding about 58,900 public files (the figure from two seasons only; it depends on the number of games and the length of the live recordings), four seasons are about 235,000 files, and the series above gives a `create` peak of about 400 MB and about 240 MB for `verify` and `restore`. If the count were 50% higher the peak would be about 600 MB. Time is not extrapolated from this host: the idle two-season figures (53 s `create`, 82 s `restore` for 117,707 files) are the only real ones, they scale with file count and disk speed, and they should be re-measured on the Droplet's own disk, with a cold cache, before anyone plans a backup window.
 
 ## 8. Limitations
 
-* **Four real seasons are not available locally.** Only two real seasons exist on this host (the scripted comparison tree, built by the real builder and daemon). Production's four seasons live on the Droplet and were not touched. Figures for four seasons are an extrapolation (section 7).
+* **Four real seasons are not available locally.** Only two real seasons exist on this host (the scripted comparison tree, built by the real builder and daemon). Production's four seasons live on the Droplet and were not touched. Everything said about four seasons is an estimate and is labelled as one (section 7).
+* **Resuming is proven on a synthetic two-season store (always run) and on one real-engine hand-over (opt-in, needs a finished first season; one seed, one tick pattern, one 300 s downtime).** A restore on a different host, with the real web server in front, and a restore of a set taken in the middle of a real week of play (rather than across the hand-over) were not rehearsed.
+* **The builder exclusion works among the tools that take the lock** (every changing `broadcast_build.py` command and `recovery_set.py create`) and the league runner's own lock. A program that changes the league or the store without either (for example a hand-run `sqlite3` session, or a runner started with a different control directory) is not prevented; the event-count comparison before and after the copy would detect a change of the league or the builds but not other edits. The lock is not inherited by the league runner that the builder starts, so a builder killed while its runner is still working could leave the runner going with the builder lock free (the runner's own lock then refuses a set).
 * Hard links, modification times and owners are not preserved (section 2).
 * `quiescent: false` backups exist by design when publication never pauses; the closure guarantees the backup is usable and that no index names a missing file, but it is an assembled snapshot, not one instant. A recovery set requires its store component to be quiet.
-* The set requires an idle builder; there is no way to take a consistent set while the builder is mid-event (the builder's own precondition).
+* There is no way to take a consistent set while the builder is mid-event: the set waits for the builder to finish (it is refused until then), by design.
 * The tool verifies content and references; it does not check that a web server serves the restored folder with the right headers (tested over a plain `http.server` only), and it does not restore host configuration.
-* Backup, verify and restore are single-threaded Python and read every file; they are I/O-bound (section 7).
-* No scheduling, rotation, off-host transfer, encryption or retention of backups was built. Where backups are kept and for how long is the owner's decision.
+* Backup, verify and restore are single-threaded Python and read every file; they are I/O-bound (section 7). Time figures come from one host and one cache state.
+* No scheduling, rotation, off-host transfer, encryption or retention of backups was built. Where backups are kept and for how long is the owner's decision. Quarantined `.partial` folders accumulate until the owner removes them.

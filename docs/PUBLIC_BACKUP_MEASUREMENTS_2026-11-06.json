@@ -322,5 +322,107 @@
    "stderr": "",
    "wall_s": 58.1
   }
+ },
+ "scale_synthetic": {
+  "file_bytes": 2048,
+  "mode": "scale",
+  "ok": true,
+  "points": [
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 67.4,
+     "wall_s": 3.6
+    },
+    "files": 29000,
+    "make_s": 2.7,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 50.5,
+     "wall_s": 4.2
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 48.9,
+     "wall_s": 0.8
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 114.5,
+     "wall_s": 8.6
+    },
+    "files": 59000,
+    "make_s": 14.9,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 85.4,
+     "wall_s": 7.8
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 81.8,
+     "wall_s": 1.4
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 210.5,
+     "wall_s": 22.3
+    },
+    "files": 118000,
+    "make_s": 35.8,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 153.8,
+     "wall_s": 20.0
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 150.1,
+     "wall_s": 3.0
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 408.7,
+     "wall_s": 14.1
+    },
+    "files": 236000,
+    "make_s": 41.8,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 239.9,
+     "wall_s": 19.4
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 240.1,
+     "wall_s": 5.8
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 798.7,
+     "wall_s": 33.9
+    },
+    "files": 472000,
+    "make_s": 38.6,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 463.2,
+     "wall_s": 69.3
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 463.3,
+     "wall_s": 11.6
+    }
+   }
+  ]
  }
 }
