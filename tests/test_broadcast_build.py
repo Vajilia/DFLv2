@@ -90,6 +90,15 @@ class Builder(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.store, S.SEASONS)))
         self.assertEqual(json.loads(sh('status', '--root', self.root).stdout)['season'], 1)
 
+    def test_the_continuous_marker_is_set_and_cleared_without_touching_anything_else(self):
+        marker = os.path.join(self.store, S.CONTINUOUS)
+        self.assertFalse(os.path.exists(marker))
+        self.assertTrue(json.loads(sh('continuous', '--root', self.root).stdout)['continuous'])
+        self.assertTrue(os.path.exists(marker))
+        sh('continuous', '--root', self.root)                                   # idempotent
+        self.assertFalse(json.loads(sh('continuous', '--root', self.root, '--off').stdout)['continuous'])
+        self.assertFalse(os.path.exists(marker))
+
     def test_a_second_init_on_the_same_folder_is_refused(self):
         p = sh('init', '--root', self.root, '--seed', '4242', check=False)
         self.assertNotEqual(p.returncode, 0)

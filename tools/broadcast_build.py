@@ -176,7 +176,28 @@ def cmd_init(a):
     builds = load_builds(P)
     builds["genesis"] = {"release": release, "events": 0, "pointer": ptr}
     B.put(os.path.join(P["bdir"], S.BUILDS), builds)
-    print(json.dumps({"root": P["root"], "genesis": release, "events_in_plan": len(plan["events"])}))
+    if a.continuous:
+        mark_continuous(P)
+    print(json.dumps({"root": P["root"], "genesis": release, "events_in_plan": len(plan["events"]), "continuous": bool(a.continuous)}))
+    return 0
+
+
+def mark_continuous(P, on=True):
+    """The marker the daemon reads (`store/continuous`): the broadcast is a recurring league, so the clock holds at the end of a season until the next is on air."""
+    path = os.path.join(P["store"], S.CONTINUOUS)
+    if on:
+        with open(path, "a", encoding="utf-8"):
+            pass
+    elif os.path.exists(path):
+        os.unlink(path)
+
+
+def cmd_continuous(a):
+    P = paths(a.root)
+    if not os.path.isdir(P["store"]):
+        raise SystemExit("%s has no store" % P["root"])
+    mark_continuous(P, not a.off)
+    print(json.dumps({"continuous": not a.off}))
     return 0
 
 
@@ -264,7 +285,12 @@ def main(argv=None):
     p = sub.add_parser("init")
     p.add_argument("--root", required=True)
     p.add_argument("--seed", type=int, required=True)
+    p.add_argument("--continuous", action="store_true", help="mark the store as a recurring league (the clock holds at the end of each season)")
     p.set_defaults(fn=cmd_init)
+    p = sub.add_parser("continuous")
+    p.add_argument("--root", required=True)
+    p.add_argument("--off", action="store_true")
+    p.set_defaults(fn=cmd_continuous)
     p = sub.add_parser("step")
     p.add_argument("--root", required=True)
     p.add_argument("--events", type=int)

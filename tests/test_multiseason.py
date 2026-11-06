@@ -388,7 +388,7 @@ class Boundary(unittest.TestCase):
             q.y1.build(4)
             q.y2.build(4)
             bc = q.started()
-            run(bc, 0, at, step=37)                                # a different tick pattern, same final position
+            run(bc, 0, at, step=7)                                 # a different tick pattern (within the hand-over grace), same final position
             bc.tick(T0 + at)
             b = q.tree()
             self.assertEqual(sorted(a), sorted(b), 'at %d' % at)
@@ -546,21 +546,29 @@ class LatePreparation(unittest.TestCase):
     def test_the_final_tree_does_not_depend_on_when_the_next_season_was_prepared(self):
         r = self.r
         self.mark()
-        end2 = r.end1 + r.y2.plan['total_s']
-        bc = r.started(guard=False)
-        run(bc, 0, r.end1 + 1000)                                 # held at the end for a long while
+        stop = r.y2.t['r1'] + 700                                  # a little past season two's first results
+        bc = r.started(guard=True, pos=r.end1 - 30)
+        for t in range(0, 1000):                                   # held at the end for a long while
+            bc.tick(T0 + t)
         r.y2.build(2)
-        run(bc, r.end1 + 1001, r.end1 + 1400)
+        for t in range(1000, 1400):
+            bc.tick(T0 + t)
         r.y2.build(4)
-        run(bc, r.end1 + 1401, r.end1 + 1401 + r.y2.plan['total_s'] + 300)
+        t = 1400
+        while bc.clock.position(T0 + t) < r.end1 + stop:
+            bc.tick(T0 + t)
+            t += 1
         got = r.tree()
         tmp = tempfile.mkdtemp(dir=self.tmp.name)
         q = Rig(tmp)
         q.y1.build(4)
         q.y2.build(4)
         open(os.path.join(q.store, S.CONTINUOUS), 'w').close()
-        bc2 = q.started()
-        run(bc2, 0, end2 + 300)
+        bc2 = q.started(guard=True, pos=q.end1 - 30)
+        t = 0
+        while bc2.clock.position(T0 + t) < r.end1 + stop:
+            bc2.tick(T0 + t)
+            t += 1
         want = q.tree()
         self.assertEqual(sorted(got), sorted(want))
         for k in want:

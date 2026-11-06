@@ -40,7 +40,9 @@ from . import status as ST
 PLAN = "plan.json"
 BUILDS = "builds.json"
 SEASONS = "seasons"                    # store/seasons/sNNN/{plan,builds}.json: the second and later seasons (the first stays at the root, as before)
-CARRY = "carry.json"                   # written by the daemon at the end of a season: what the earlier seasons already made public, and where this season starts
+CARRY = "carry.json"
+HANDOVER_GRACE_S = 10                             # a hand-over this close to the end is on time (the daemon ticks every second and a prepared successor stops the clock at the end)
+CONTINUOUS = "continuous"                         # marker file in the store: the broadcast is a recurring league, so the clock holds at the end of a season until the next one is on air                   # written by the daemon at the end of a season: what the earlier seasons already made public, and where this season starts
 CARRY_FORMAT = "dfl-broadcast-carry"
 PAUSE = "PAUSE"
 LOOKAHEAD_S = 6 * 3600
@@ -298,7 +300,7 @@ class SeasonBroadcaster(B.Broadcaster):
                 self._view, self._key = materialize(self.plan, builds), key
             return self._view
         bpath = os.path.join(self._bdir, BUILDS)
-        hold = self._carry is not None or os.path.exists(os.path.join(self._next_dir(), PLAN))
+        hold = self._carry is not None or os.path.exists(os.path.join(self._next_dir(), PLAN)) or os.path.exists(os.path.join(self.store, CONTINUOUS))
         key = (self._stat(bpath), self._stat(os.path.join(self.store, CARRY)), hold)
         if self._view is None or key != self._key:
             if key[0] is None:
@@ -309,9 +311,11 @@ class SeasonBroadcaster(B.Broadcaster):
         return self._view
 
     # ------------------------------------------------------------------------------------------------------------------------ the hand-over
-    def _carry_record(self, v):
+    def _carry_record(self, v, pos=None):
         """What the season now ending made public, added to what the earlier ones had: the single record that starts the next season."""
         prior = self._carry or {"seasons": [], "playback": [], "honors": [], "replays": []}
+        # the next season starts at the end of this one, or at the clock's position if the clock already ran past the end (a store not marked continuous): never in the past
+        offset = v.end_s if pos is None or pos - v.end_s <= HANDOVER_GRACE_S else int(math.ceil(pos - 1e-3))
         replays = [dict(r) for r in prior["replays"]]
         for w in v.windows:
             for g in w["games"]:
@@ -319,7 +323,7 @@ class SeasonBroadcaster(B.Broadcaster):
                 end, head = B.get(os.path.join(src, "end.json")), B.get(os.path.join(src, "head.json"))
                 replays.append({"gid": g["gid"], "replay": end["replay"], "final": end["final"], "season": head.get("season"), "game_kind": head.get("game_kind")})
         return {"format": CARRY_FORMAT, "format_version": 1, "season": int(self.plan["season"]) + 1, "seasons": list(prior["seasons"]) + [int(self.plan["season"])],
-                "offset_s": v.end_s, "playback": sorted(v.playback, key=lambda e: e["gid"]), "honors": v.honors_parts, "replays": sorted(replays, key=lambda r: r["gid"]),
+                "offset_s": offset, "playback": sorted(v.playback, key=lambda e: e["gid"]), "honors": v.honors_parts, "replays": sorted(replays, key=lambda r: r["gid"]),
                 "last": v.last}
 
     def _maybe_hand_over(self, now):
@@ -336,7 +340,7 @@ class SeasonBroadcaster(B.Broadcaster):
         v = self.view()
         if not v.complete or self.clock.position(now) < v.end_s - 1e-6:
             return
-        carry = self._carry_record(v)
+        carry = self._carry_record(v, self.clock.position(now))
         try:
             nplan, nbuilds = B.get(os.path.join(nd, PLAN)), B.get(os.path.join(nd, BUILDS))
             if int(nplan["season"]) != carry["season"]:
