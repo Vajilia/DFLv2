@@ -1,5 +1,8 @@
 # Rehearsal trip `monitor_error: FileNotFoundError` on a `.tmp-` file (2026-11-06)
 
+> **SUPERSEDED in part (2026-11-06, later).** (1) The fix at `1c50450` missed `status.json`'s `.tmp-status.json-<pid>` name; the corrected fix is `5118701` (monitor SHA-256 `f3066c71ac32dfe85f764b46b7fcbd315a9ae545b80bad4ef919d5cfc9fc7319`, not the `4579f23e...` hash below). (2) Section 5 (patch the monitor in place using a hard-linked copy and resume the paused run) is **not the plan any more**: hard links were rejected, and the run is `FAILED` and cannot finish before its deadline. The plan is a separate clean run from position zero: `docs/FRESH_REHEARSAL_2026-11-06.md`. The rest (cause, tests, limits) stands.
+
+
 Branch `backend/monitor-tmp-race-2026-11-06`, one commit on top of the installed package commit `c28ca13696b0d8607fe92e7509cc2edbbdc07738`. **Nothing on the rehearsal host was read, changed, cleared or resumed by this work.** The rehearsal stays paused with its latch, clock, public files and logs as the trip left them.
 
 ## 1. Cause
