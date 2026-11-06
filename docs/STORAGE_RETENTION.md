@@ -94,6 +94,9 @@ All measured on scratch copies; nothing in any league, store or public folder of
 
 Consequences for the plan: R2's size is about 0.65 GB private a season, not 0.9; a **public-folder backup (with hard links preserved, if R3 is adopted) becomes an essential milestone before any retention action**; and a `repair` tool that re-materialises an earlier season's public files from the private caches would be the alternative to backups (not built, and it would need the caches R2 proposes to remove).
 
+*Update 2026-11-06: the public-folder backup this section calls essential now exists and is tested locally: `docs/PUBLIC_BACKUP.md` (`tools/public_backup.py`, `tools/recovery_set.py`). It has not yet been run against a production folder, and no retention action was built.*
+
+
 ## 6. Not decided here
 
 Whether to keep old live recordings (R4), the value of K, whether private caches should be rebuilt on demand or kept for a fixed number of seasons, and when a rollback copy may be dropped, are owner decisions. The implementation order is in `docs/COMPLETION_ROADMAP_2026-11-06.md`.

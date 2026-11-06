@@ -1,0 +1,326 @@
+{
+ "engine_comparison": {
+  "commit": "7668245230c2692fd81430fbd7bb6114a01121d3",
+  "daemon_check": {
+   "notes": {
+    "boundary_s": 172800,
+    "carry": true,
+    "files_at_end_of_season1": 59287,
+    "future_season2_games_checked": 0,
+    "games_public_at_end": 800,
+    "games_season1": 400,
+    "games_season2_public": 400,
+    "honors_parts_public": 8,
+    "honors_parts_season1": 4,
+    "ids_repeated_between_seasons": true,
+    "public_bytes_at_end": 1546391468,
+    "public_files_at_end": 117707,
+    "replays_public": 800,
+    "season1_wall_s": 91.7,
+    "season2_end_s": 345600.0,
+    "season2_events_built": 47,
+    "season2_first_results_s": 181740.0,
+    "season2_games_public": 400
+   },
+   "ok": true,
+   "problems": [],
+   "season": 1,
+   "wall_s": 208.0
+  },
+  "digests": {
+   "season2_event94": {
+    "builder_driven": {
+     "deep": "485b49f5d0e12d66cfb53d77ee555e15a2544e38b72242d6193c20f9845a03c0",
+     "events": 94,
+     "journal": "485b49f5d0e12d66cfb53d77ee555e15a2544e38b72242d6193c20f9845a03c0"
+    },
+    "builder_status": {
+     "events_built": 47,
+     "games_built": 400,
+     "honors": [
+      "fan_entrant",
+      "halls",
+      "rings",
+      "tiara"
+     ],
+     "season": 2
+    },
+    "free_running": {
+     "deep": "485b49f5d0e12d66cfb53d77ee555e15a2544e38b72242d6193c20f9845a03c0",
+     "events": 94,
+     "journal": "485b49f5d0e12d66cfb53d77ee555e15a2544e38b72242d6193c20f9845a03c0"
+    },
+    "identical": true
+   }
+  },
+  "ok": true,
+  "seed": 20261105,
+  "steps": [
+   {
+    "seconds": 11.0,
+    "step": "copy year-1 root twice"
+   },
+   {
+    "seconds": 856.3,
+    "step": "season 2: builder-driven and free-running to event 94"
+   },
+   {
+    "seconds": 208.9,
+    "step": "daemon through the whole of the last season (virtual time)"
+   }
+  ],
+  "wall_s": 1080.5,
+  "year1": {
+   "digest": {
+    "deep": "c9ebb593218caf92a3461c01f2af61834c847cebad9c6514713351817c6d5d56",
+    "events": 47,
+    "journal": "c9ebb593218caf92a3461c01f2af61834c847cebad9c6514713351817c6d5d56"
+   },
+   "root": "/tmp/season/R1",
+   "status": {
+    "events_built": 47,
+    "games_built": 400,
+    "honors": [
+     "fan_entrant",
+     "halls",
+     "rings",
+     "tiara"
+    ],
+    "season": 1
+   }
+  }
+ },
+ "live_public": {
+  "against_final_tree": {
+   "absent_from_final": 0,
+   "backup_files": 49651,
+   "immutable_files_that_differ": 0
+  },
+  "create": {
+   "daemon_still_running_when_it_ended": true,
+   "peak_rss_mb": 93.6,
+   "rc": 0,
+   "result": {
+    "backup": "/tmp/ms/LV/backup",
+    "bytes": 652079923,
+    "files": 49651,
+    "manifest_digest": "c1856935d01fbb8245e6b79d988ba5488ef27124843bc52b5d660243c086d787",
+    "ok": true,
+    "passes": 8,
+    "profile": "public",
+    "quiescent": false,
+    "seconds": 27.0
+   },
+   "stderr": "",
+   "wall_s": 27.3
+  },
+  "daemon_rc": 0,
+  "final_public_bytes": 1546391468,
+  "final_public_files": 117707,
+  "games_public_when_the_backup_started": 256,
+  "mode": "live",
+  "ok": true,
+  "root": "/tmp/ms/LV0",
+  "seconds_until_start": 68.0,
+  "verify": {
+   "peak_rss_mb": 67.8,
+   "rc": 0,
+   "result": {
+    "backup": "/tmp/ms/LV/backup",
+    "bytes_verified": 652079923,
+    "files": 49651,
+    "manifest_digest": "c1856935d01fbb8245e6b79d988ba5488ef27124843bc52b5d660243c086d787",
+    "n_problems": 0,
+    "ok": true,
+    "problems": [],
+    "profile": "public",
+    "quiescent": false
+   },
+   "wall_s": 4.0
+  }
+ },
+ "note": "Resource measurements of 2026-11-06 on the two real seasons of the scripted comparison (seed 20261105, event 94); see docs/PUBLIC_BACKUP.md section 7. Host: 2 cores, 7 GB.",
+ "quiet_public": {
+  "backup_bytes": 1566432970,
+  "backup_files": 117708,
+  "compare": {
+   "differ": 0,
+   "extra": 0,
+   "files": 117707,
+   "missing": 0,
+   "odd_modes": 0,
+   "seconds": 10.0
+  },
+  "create": {
+   "peak_rss_mb": 202.3,
+   "rc": 0,
+   "result": {
+    "bytes": 1546391468,
+    "bytes_verified": null,
+    "closure": null,
+    "files": 117707,
+    "n_problems": null,
+    "ok": true,
+    "passes": 1,
+    "quiescent": true,
+    "seconds": 52.8
+   },
+   "stderr": "",
+   "wall_s": 53.3
+  },
+  "mode": "quiet",
+  "ok": true,
+  "profile": "public",
+  "restore": {
+   "peak_rss_mb": 135.5,
+   "rc": 0,
+   "result": {
+    "bytes": 1546391468,
+    "bytes_verified": null,
+    "closure": null,
+    "files": 117707,
+    "n_problems": null,
+    "ok": true,
+    "passes": null,
+    "quiescent": null,
+    "seconds": null
+   },
+   "stderr": "",
+   "wall_s": 82.3
+  },
+  "source": "/tmp/ms/EC/public",
+  "source_bytes": 1546391468,
+  "source_files": 117707,
+  "verify": {
+   "peak_rss_mb": 122.4,
+   "rc": 0,
+   "result": {
+    "bytes": null,
+    "bytes_verified": 1546391468,
+    "closure": null,
+    "files": 117707,
+    "n_problems": 0,
+    "ok": true,
+    "passes": null,
+    "quiescent": true,
+    "seconds": null
+   },
+   "stderr": "",
+   "wall_s": 10.2
+  }
+ },
+ "quiet_store": {
+  "backup_bytes": 1577758203,
+  "backup_files": 117830,
+  "compare": {
+   "differ": 0,
+   "extra": 0,
+   "files": 117829,
+   "missing": 0,
+   "odd_modes": 0,
+   "seconds": 8.1
+  },
+  "create": {
+   "peak_rss_mb": 197.4,
+   "rc": 0,
+   "result": {
+    "bytes": 1558679147,
+    "bytes_verified": null,
+    "closure": null,
+    "files": 117829,
+    "n_problems": null,
+    "ok": true,
+    "passes": 1,
+    "quiescent": true,
+    "seconds": 63.1
+   },
+   "stderr": "",
+   "wall_s": 63.5
+  },
+  "mode": "quiet",
+  "ok": true,
+  "profile": "store",
+  "restore": {
+   "peak_rss_mb": 140.9,
+   "rc": 0,
+   "result": {
+    "bytes": 1558679147,
+    "bytes_verified": null,
+    "closure": null,
+    "files": 117829,
+    "n_problems": null,
+    "ok": true,
+    "passes": null,
+    "quiescent": null,
+    "seconds": null
+   },
+   "stderr": "",
+   "wall_s": 64.1
+  },
+  "source": "/tmp/ms/EC/A/store",
+  "source_bytes": 1558679147,
+  "source_files": 117829,
+  "verify": {
+   "peak_rss_mb": 139.5,
+   "rc": 0,
+   "result": {
+    "bytes": null,
+    "bytes_verified": 1558679147,
+    "closure": null,
+    "files": 117829,
+    "n_problems": 0,
+    "ok": true,
+    "passes": null,
+    "quiescent": true,
+    "seconds": null
+   },
+   "stderr": "",
+   "wall_s": 3.8
+  }
+ },
+ "recovery_set": {
+  "create": {
+   "peak_rss_mb": 219.2,
+   "rc": 0,
+   "result": {
+    "league": {
+     "dir": "league",
+     "events": 94,
+     "journal_head": {
+      "chain": "83957ff75f8a197eebe9b9f2e7f1ed05d20ed82522dd21beb29d7fde1570d85e",
+      "key": "year_close",
+      "seq": 94
+     },
+     "manifest_sha256": "37ab0f8ee313994b23b1155c1d16d0955817aabb3329900488267b0341f12455"
+    },
+    "ok": true,
+    "public": {
+     "dir": "public",
+     "highest_public_season": 2,
+     "manifest_digest": "c2240b47d9fe8f9c075d7d8bf8e108b133cc6514e3e39a0cd733f57c5fab6a7b",
+     "public_events": 94,
+     "quiescent": true
+    },
+    "store": {
+     "built_events": 94,
+     "dir": "store",
+     "manifest_digest": "5ba9f17ada6489e483c029292b30b7545985ac99d40877f2a298d9b19c87eb5f",
+     "quiescent": true,
+     "season_on_air": 2
+    }
+   },
+   "stderr": "",
+   "wall_s": 152.3
+  },
+  "verify_deep": {
+   "peak_rss_mb": 169.1,
+   "rc": 0,
+   "result": {
+    "ok": true,
+    "problems": []
+   },
+   "stderr": "",
+   "wall_s": 58.1
+  }
+ }
+}
