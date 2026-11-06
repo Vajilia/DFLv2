@@ -38,3 +38,7 @@ OK
 | `tools/measure_public_backup.py closure` (index-document size 0.6 to 38.7 MB, 2,000 to 128,000 games) | all steps ok; peak 25 to 195 MB (about 1.3 KB per listed game above 8,000 games) | 0 |
 
 Failures found on the way, all fixed: (1) an earlier focused run (85 tests, exit 1) had 3 failures: the new CLI preflight called an *active* backup's `.partial` "stale" instead of "in progress" (nothing was touched, the message was wrong); the preflight now checks the name's lock first; (2) the real full-filesystem test found that `quarantine` moved a `.partial` and then crashed writing its note file on a full disk; the note is now best effort. The real-engine hand-over test was **not rerun** in this pass (no change touched the code it exercises beyond `create`'s unchanged happy path); its last result is the passing run above (exit 0, `d13462d`-era code).
+
+## Runbook rehearsal (added later on 2026-11-06)
+
+`tools/backup_runbook_rehearsal.py` executed `docs/BACKUP_RUNBOOK.md` end to end on a scratch copy: **completed, exit 0, 34 of 34 expectations held** (third run; the first stopped on a bug in the driver itself, the second passed with two checks later found too weak). Transcript: `docs/BACKUP_RUNBOOK_REHEARSAL_2026-11-06.md`. Skipped: none. Never started: a run on the Droplet or a real production backup (not permitted). No unit test suite was re-run for this step (no change to `tools/public_backup.py`, `tools/backup_space.py` or `tools/recovery_set.py`). One wording defect found and recorded, not fixed (finding 1 of the transcript).
