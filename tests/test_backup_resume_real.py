@@ -65,6 +65,17 @@ def sha(p):
     return h.hexdigest()
 
 
+def without_time(path):
+    def strip(x):
+        if isinstance(x, dict):
+            return {k: strip(v) for k, v in x.items() if k != 'generated_at'}
+        if isinstance(x, list):
+            return [strip(v) for v in x]
+        return x
+    with open(path, 'rb') as f:
+        return strip(json.loads(f.read()))
+
+
 def day(bc, seconds, a, b, step):
     t = a
     while t < b:
@@ -98,7 +109,7 @@ class RealHandOver(unittest.TestCase):
         def pub_hook(event, **info):                                           # inside the public copy, after the cumulative controls: the daemon crosses the end of the season
             if event == 'file' and info['pass_no'] not in passes and info['n'] >= 200:
                 passes.add(info['pass_no'])
-                moved['t'] = day(bc, 0, moved['t'], moved['t'] + 200, 8)
+                moved['t'] = day(bc, 0, moved['t'], moved['t'] + 400, 8)
         res = RS.create(root, public, os.path.join(w, 'set'), fsync=False, pub_hook=pub_hook, max_passes=1)
         self.assertTrue(res['ok'], res)
         self.assertFalse(res['public']['quiescent'], 'the public backup is assembled from several publication states')
@@ -121,7 +132,7 @@ class RealHandOver(unittest.TestCase):
             sh('step', '--root', r, '--events', '2')
         da, db = digest(os.path.join(a_root, 'league/league.db')), digest(os.path.join(b_root, 'league/league.db'))
         self.assertEqual(da, db)
-        self.assertEqual(da['events'], 49)
+        self.assertEqual(da['events'], 47 + 13 + 2)
         plan = B.get(os.path.join(b_root, 'store', 'seasons', 's002', 'plan.json'))
         rel = {}
         for it in plan['items']:
@@ -161,8 +172,13 @@ class RealHandOver(unittest.TestCase):
         la, lb = listing(a_pub), listing(b_pub)
         self.assertEqual(la, lb)
         for rel_name in la:                                                    # byte for byte at the end
-            if not rel_name.endswith('index.json') and rel_name != 'latest.json':
-                self.assertEqual(sha(os.path.join(a_pub, rel_name)), sha(os.path.join(b_pub, rel_name)), rel_name)
+            if rel_name.endswith('index.json') or rel_name == 'latest.json':
+                continue
+            if rel_name.startswith('releases/e000') and int(rel_name.split('/')[1][1:6]) > 60 and rel_name.endswith('.json'):
+                # the two events built after the restore were built by two builders at two moments: the release manifests say when (generated_at), and nothing else may differ
+                self.assertEqual(without_time(os.path.join(a_pub, rel_name)), without_time(os.path.join(b_pub, rel_name)), rel_name)
+                continue
+            self.assertEqual(sha(os.path.join(a_pub, rel_name)), sha(os.path.join(b_pub, rel_name)), rel_name)
         for rel_name, h in before.items():
             self.assertEqual(sha(os.path.join(b_pub, rel_name)), h, 'public before the backup, changed afterwards: ' + rel_name)
         self.assertEqual(PBK.CLOSURE['public'](PBK.Tree(b_pub)), [])
