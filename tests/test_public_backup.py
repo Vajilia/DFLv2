@@ -690,7 +690,8 @@ class Concurrency(Base):
             self.assertEqual(sum(1 for rc, _ in results if rc == 0), 1, results)
             for rc, doc in results:
                 if rc:
-                    self.assertIn('in progress', json.dumps(doc))
+                    text = json.dumps(doc)             # (a process that starts after the winner has finished finds the finished backup, and is refused for that)
+                    self.assertTrue('in progress' in text or 'already exists' in text, text)
             self.assertTrue(PBK.verify(out)['ok'])
             self.assertFalse(os.path.exists(out + '.partial'), 'no leftovers')
 
