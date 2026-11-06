@@ -11,7 +11,7 @@
       SYNTHETIC trees of N small files (no references, so the closure is trivially satisfied) to see how time and peak memory grow with the NUMBER of files, which is what
       they depend on. Each size is made, backed up, verified and restored in turn and deleted again. These figures are for the shape of the growth only, not for any real folder.
 
-Each child is measured on its own: wall time and peak RSS (VmHWM) are those of that one process. Prints one JSON report (also --report FILE). Exit 0 if every check passed.
+Each child is measured on its own: wall time and peak RSS (VmHWM) are those of that one process; the temporary disk is the working index the tool reports (`index_bytes`). Prints one JSON report (also --report FILE). Exit 0 if every check passed.
 """
 import argparse
 import json
@@ -93,7 +93,7 @@ def quiet(a):
                        ("restore", [BK, "restore", bk, dest])):
         r = run_measured(args)
         j = last_json(r.pop("stdout"))
-        rep[name] = dict(r, result={k: j.get(k) for k in ("ok", "files", "bytes", "bytes_verified", "quiescent", "passes", "seconds", "n_problems", "closure")})
+        rep[name] = dict(r, temp_disk_mb=round(j.get("index_bytes", 0) / 1048576.0, 1), result={k: j.get(k) for k in ("ok", "files", "bytes", "bytes_verified", "quiescent", "passes", "seconds", "n_problems", "closure", "index_bytes")})
         if r["rc"] != 0:
             rep["ok"] = False
             print(json.dumps(rep, sort_keys=True))
@@ -193,7 +193,7 @@ def scale(a):
         for name, args in (("create", [BK, "create", "--src", src, "--out", bk, "--no-fsync"]), ("verify", [BK, "verify", bk]), ("restore", [BK, "restore", bk, dest, "--no-fsync"])):
             r = run_measured(args)
             j = last_json(r.pop("stdout"))
-            pt[name] = {"wall_s": r["wall_s"], "peak_rss_mb": r["peak_rss_mb"], "ok": bool(j.get("ok")) and r["rc"] == 0}
+            pt[name] = {"wall_s": r["wall_s"], "peak_rss_mb": r["peak_rss_mb"], "temp_disk_mb": round(j.get("index_bytes", 0) / 1048576.0, 1), "ok": bool(j.get("ok")) and r["rc"] == 0}
             if r["rc"]:
                 rep["ok"] = False
                 print(json.dumps(rep, sort_keys=True))

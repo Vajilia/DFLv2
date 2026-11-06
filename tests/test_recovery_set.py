@@ -143,6 +143,30 @@ class Set(Fixture):
         self.assertTrue(RS.verify(self.set_path())['ok'])
         self.assertTrue(os.path.isdir(res['quarantined']))
 
+    def test_simultaneous_attempts_on_one_set_name_cannot_touch_the_active_partial(self):
+        part = self.set_path() + '.partial'
+        tool = os.path.join(ROOT, 'tools', 'recovery_set.py')
+        seen = {}
+
+        def hook(event, **info):
+            if event == 'after_store':
+                seen['before'] = PBK_tree(part)
+                seen['create'] = subprocess.run([sys.executable, tool, 'create', '--root', self.root, '--public', self.public, '--out', self.set_path()], capture_output=True, text=True)
+                seen['quarantine'] = subprocess.run([sys.executable, tool, 'quarantine', part], capture_output=True, text=True)
+                seen['inproc'] = RS.quarantine(part)
+                seen['restore'] = subprocess.run([sys.executable, tool, 'restore', self.set_path(), self.set_path()], capture_output=True, text=True)
+                seen['after'] = PBK_tree(part)
+        res = RS.create(self.root, self.public, self.set_path(), fsync=False, hook=hook)
+        self.assertTrue(res['ok'], res)
+        for k in ('create', 'quarantine', 'restore'):
+            self.assertEqual(seen[k].returncode, 1, (k, seen[k].stdout))
+        self.assertIn('in progress', seen['create'].stdout)
+        self.assertIn('in progress', seen['quarantine'].stdout)
+        self.assertFalse(seen['inproc']['ok'])
+        self.assertEqual(seen['before'], seen['after'], 'the active partial set was not touched')
+        self.assertTrue(RS.verify(self.set_path())['ok'])
+        self.assertFalse(os.path.exists(os.path.join(self.w, 'partial-quarantine')))
+
     def test_a_hand_over_written_by_the_daemon_during_the_set_is_not_builder_movement(self):
         """Found by the real-engine hand-over test (tests/test_backup_resume_real.py): the daemon writes store/carry.json, which changes the season ON AIR that
         `built_events` reports. The check that the builder did not move must look at what only the builder changes (league events, events built), not at that."""

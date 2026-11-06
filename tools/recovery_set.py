@@ -123,6 +123,11 @@ def create(root, public, out, note=None, fsync=True, hook=None, pub_hook=None, m
     refused too. A builder that is running refuses the set at once and nothing is copied; a builder started during the set is refused (exit 75) and changes nothing.
     `pub_hook` is passed to the public backup (tests only)."""
     root, public, out = os.path.abspath(root), os.path.abspath(public), os.path.abspath(out)
+    with PBK.name_lock(out, "recovery set create"):             # one operation per set name: another create, quarantine or restore of it is refused ("in progress") and touches nothing
+        return _locked_create(root, public, out, note, fsync, hook, pub_hook, max_passes)
+
+
+def _locked_create(root, public, out, note, fsync, hook, pub_hook, max_passes):
     try:
         lock = RL.hold(root, "recovery set (tools/recovery_set.py create)")
         lock.__enter__()
@@ -156,9 +161,9 @@ def _create(root, public, out, note, fsync, hook, pub_hook, max_passes):
     t0 = time.time()
     ev0, built0 = league_events(league), built_events(store)
     hook("start")
-    pub = PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync, hook=pub_hook, max_passes=max_passes)
+    pub = PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync, hook=pub_hook, max_passes=max_passes, lock=False)
     hook("after_public")
-    sto = PBK.create(store, os.path.join(part, "store"), "store", fsync=fsync)
+    sto = PBK.create(store, os.path.join(part, "store"), "store", fsync=fsync, lock=False)
     hook("after_store")
     includes = []
     for n in CTL_FILES:
@@ -241,6 +246,14 @@ def verify(setdir, deep=False):
 
 def restore(setdir, dest, fsync=True):
     setdir, dest = os.path.abspath(setdir), os.path.abspath(dest)
+    try:
+        with PBK.name_lock(dest, "recovery set restore"):
+            return _restore(setdir, dest, fsync)
+    except PBK.Busy as e:
+        return {"ok": False, "stage": "lock", "problems": [str(e)]}
+
+
+def _restore(setdir, dest, fsync):
     v = verify(setdir)
     if not v["ok"]:
         return {"ok": False, "stage": "verify set", "problems": v["problems"]}
@@ -273,7 +286,7 @@ def restore(setdir, dest, fsync=True):
             shutil.copyfile(q, os.path.join(stage, "league", "ctl", n))
     shutil.rmtree(tmp)
     for comp in ("store", "public"):
-        r = PBK.restore(os.path.join(setdir, comp), os.path.join(stage, comp), fsync=fsync)
+        r = PBK.restore(os.path.join(setdir, comp), os.path.join(stage, comp), fsync=fsync, lock=False)
         if not r["ok"]:
             return {"ok": False, "stage": "restore " + comp, "problems": r["problems"]}
     if os.path.isdir(dest):

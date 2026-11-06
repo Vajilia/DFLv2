@@ -481,6 +481,282 @@ class Quarantine(Base):
         self.assertEqual(len(tree_of(res["quarantined"])), n + 1)
 
 
+class ManifestStreaming(Base):
+    """The manifest is read and written as a stream (no list of every file is ever held), whatever layout a manifest has, and every integrity check stays."""
+
+    def setUp(self):
+        super().setUp()
+        run(self.r.started(), 0, self.r.end1 + self.r.y2.plan['total_s'] + 100)
+        self.make()
+        self.mp = os.path.join(self.out(), PBK.MANIFEST)
+
+    def rewrite(self, **dump):
+        m = json.loads(open(self.mp, 'rb').read())
+        with open(self.mp, 'w') as f:
+            json.dump(m, f, **dump)
+
+    def test_every_layout_of_the_same_manifest_verifies_across_tiny_read_buffers(self):
+        for dump in ({}, {'indent': 2}, {'indent': 0, 'sort_keys': True}, {'separators': (',', ':'), 'sort_keys': True}):
+            with self.subTest(layout=dump):
+                self.rewrite(**dump)
+                for chunk in (7, 64, 1 << 20):
+                    PBK.READ_CHUNK = chunk
+                    self.addCleanup(setattr, PBK, 'READ_CHUNK', 1 << 20)
+                    v = PBK.verify(self.out())
+                    self.assertTrue(v['ok'], (chunk, v['problems']))
+        PBK.READ_CHUNK = 7
+        dest = self.out('dest')
+        self.assertTrue(PBK.restore(self.out(), dest, fsync=False)['ok'])
+
+    def test_a_manifest_cut_anywhere_is_never_valid(self):
+        raw = open(self.mp, 'rb').read()
+        n = len(raw)
+        for cut in sorted({1, 2, 50, n // 7, n // 3, n // 2, n - n // 5, n - 400, n - 60, n - 3, n - 2, n - 1}):
+            with self.subTest(cut=cut):
+                open(self.mp, 'wb').write(raw[:cut])
+                self.assertFalse(PBK.verify(self.out())['ok'])
+        open(self.mp, 'wb').write(raw + b'garbage')
+        self.assertFalse(PBK.verify(self.out())['ok'], 'bytes after the end of the manifest')
+        open(self.mp, 'wb').write(raw)
+        self.assertTrue(PBK.verify(self.out())['ok'])
+
+    def test_the_working_index_is_not_in_a_finished_backup_but_stays_in_an_unfinished_one(self):
+        self.assertEqual(sorted(os.listdir(self.out())), ['BACKUP_MANIFEST.json', 'files'])
+
+        def hook(event, **info):
+            if event == 'before_commit':
+                raise RuntimeError('killed')
+        with self.assertRaises(RuntimeError):
+            self.make('second', hook=hook)
+        self.assertTrue(os.path.exists(os.path.join(self.out('second') + '.partial', PBK.INDEX)), 'the evidence of an unfinished backup includes its index')
+
+    def test_each_step_reports_the_temporary_disk_it_used(self):
+        res = self.make('third')
+        self.assertGreater(res['index_bytes'], 0)
+        v = PBK.verify(self.out('third'))
+        self.assertGreater(v['index_bytes'], 0)
+        r = PBK.restore(self.out('third'), self.out('dest3'), fsync=False)
+        self.assertGreater(r['index_bytes'], 0)
+
+    def test_a_scratch_folder_can_be_chosen_and_is_left_empty(self):
+        scratch = os.path.join(self.tmp.name, 'scratch')
+        os.makedirs(scratch)
+        self.assertTrue(PBK.verify(self.out(), scratch=scratch)['ok'])
+        self.assertTrue(PBK.restore(self.out(), self.out('dest4'), fsync=False, scratch=scratch)['ok'])
+        self.assertEqual(os.listdir(scratch), [])
+
+    def test_a_manifest_in_the_layout_of_the_first_version_still_verifies_and_restores(self):
+        """Backups made before the streaming change had `json.dumps(body, indent=0, sort_keys=True)` as the whole manifest: they stay valid."""
+        m = json.loads(open(self.mp, 'rb').read())
+        open(self.mp, 'wb').write(json.dumps(m, indent=0, sort_keys=True).encode())
+        self.assertTrue(PBK.verify(self.out())['ok'])
+        self.assertTrue(PBK.restore(self.out(), self.out('dest5'), fsync=False)['ok'])
+
+    def test_the_digest_is_the_one_every_earlier_version_computed(self):
+        m = json.loads(open(self.mp, 'rb').read())
+        want = hashlib.sha256(PBK.canon({'files': m['files'], 'profile': m['profile'], 'snapshot': {k: v for k, v in m['snapshot'].items() if k in ('quiescent', 'cumulative')}})).hexdigest()
+        self.assertEqual(m['manifest_digest'], want)
+        self.assertEqual(m['totals']['files'], len(m['files']))
+        self.assertEqual(m['totals']['bytes'], sum(f['size'] for f in m['files']))
+        self.assertEqual([f['path'] for f in m['files']], sorted(f['path'] for f in m['files']))
+
+    def test_a_path_that_would_leave_the_destination_is_refused_even_with_a_matching_digest(self):
+        m = json.loads(open(self.mp, 'rb').read())
+        for bad in ('../escape.json', '/abs.json', 'a//b.json', './x.json'):
+            with self.subTest(path=bad):
+                mm = json.loads(json.dumps(m))
+                mm['files'][0]['path'] = bad
+                mm['manifest_digest'] = hashlib.sha256(PBK.canon({'files': mm['files'], 'profile': mm['profile'], 'snapshot': {k: v for k, v in mm['snapshot'].items() if k in ('quiescent', 'cumulative')}})).hexdigest()
+                open(self.mp, 'w').write(json.dumps(mm))
+                self.assertFalse(PBK.verify(self.out())['ok'])
+                r = PBK.restore(self.out(), self.out('nowhere'), fsync=False)
+                self.assertFalse(r['ok'])
+                self.assertFalse(os.path.exists(self.out('nowhere')) or os.path.exists(os.path.join(self.tmp.name, 'escape.json')))
+        open(self.mp, 'w').write(json.dumps(m))
+
+    def test_a_path_listed_twice_is_damage(self):
+        m = json.loads(open(self.mp, 'rb').read())
+        m['files'].append(dict(m['files'][0]))
+        m['manifest_digest'] = hashlib.sha256(PBK.canon({'files': m['files'], 'profile': m['profile'], 'snapshot': {k: v for k, v in m['snapshot'].items() if k in ('quiescent', 'cumulative')}})).hexdigest()
+        open(self.mp, 'w').write(json.dumps(m))
+        self.assertFalse(PBK.verify(self.out())['ok'])
+
+    def test_a_damaged_backup_reports_a_bounded_list_and_the_true_count(self):
+        files = os.path.join(self.out(), 'files')
+        victims = [os.path.join(d, n) for d, _, ns in os.walk(files) for n in ns][:80]
+        for v in victims:
+            with open(v, 'ab') as f:
+                f.write(b'x')
+        v = PBK.verify(self.out())
+        self.assertFalse(v['ok'])
+        self.assertEqual(v['n_problems'], len(victims))
+        self.assertEqual(len(v['problems']), 50)
+
+    def test_a_backup_made_by_the_previous_tool_still_verifies_and_restores(self):
+        """tests/fixtures/public_backup_v1 was made by the version before the streaming change (git 8fa89d7): same format, same digest definition."""
+        fx = str(ROOT / 'tests' / 'fixtures' / 'public_backup_v1')
+        v = PBK.verify(fx)
+        self.assertTrue(v['ok'], v['problems'])
+        self.assertEqual((v['files'], v['bytes_verified']), (12, 454))
+        dest = self.out('from_v1')
+        r = PBK.restore(fx, dest, fsync=False)
+        self.assertTrue(r['ok'], r)
+        self.assertEqual(tree_of(dest), tree_of(os.path.join(fx, 'files')))
+        self.assertEqual(PBK.load_manifest(fx)['counted'], {'files': 12, 'bytes': 454})
+        # the previous layout, damaged in the old ways, is still refused
+        copy = self.out('v1copy')
+        shutil.copytree(fx, copy)
+        with open(os.path.join(copy, 'files', 'status.json'), 'ab') as f:
+            f.write(b' ')
+        self.assertFalse(PBK.verify(copy)['ok'])
+
+
+def run_cli(*args):
+    return subprocess.run([sys.executable, '-I', str(ROOT / 'tools/public_backup.py')] + list(args), capture_output=True, text=True)
+
+
+class Concurrency(Base):
+    """Simultaneous attempts on one name cannot write, delete or quarantine each other's active `.partial` folder (an operating-system lock per name, taken without waiting)."""
+
+    def setUp(self):
+        super().setUp()
+        run(self.r.started(), 0, 1200)
+
+    def while_a_backup_runs(self, during):
+        seen = {}
+
+        def hook(event, **info):
+            if event == 'file' and info['n'] == 3 and 'x' not in seen:
+                seen['x'] = during()
+        res = self.make(hook=hook)
+        return res, seen['x']
+
+    def test_a_second_backup_of_the_same_name_is_refused_and_touches_nothing(self):
+        part = self.out() + '.partial'
+
+        def during():
+            before = sorted(os.listdir(os.path.join(part, 'files')))
+            a = run_cli('create', '--src', self.r.public, '--out', self.out(), '--no-fsync')
+            b = run_cli('create', '--src', self.r.public, '--out', self.out(), '--no-fsync', '--discard-partial')
+            return a, b, before, sorted(os.listdir(os.path.join(part, 'files')))
+        res, (a, b, before, after) = self.while_a_backup_runs(during)
+        for p in (a, b):
+            self.assertEqual(p.returncode, 1)
+            self.assertIn('in progress', p.stdout)
+        self.assertEqual(before, after, 'the active partial folder was not touched (not even by --discard-partial)')
+        self.assertTrue(res['ok'])
+        self.assertTrue(PBK.verify(self.out())['ok'])
+
+    def test_the_active_partial_folder_cannot_be_quarantined(self):
+        part = self.out() + '.partial'
+
+        def during():
+            return PBK.quarantine_partial(part), run_cli('quarantine', part)
+        res, (inproc, cli) = self.while_a_backup_runs(during)
+        self.assertTrue(res['ok'])
+        self.assertTrue(PBK.verify(self.out())['ok'])
+        # the in-process attempt comes from the SAME process (flock is per open file, so it is refused too); the command line is another process
+        self.assertFalse(inproc['ok'], inproc)
+        self.assertEqual(cli.returncode, 1, cli.stdout)
+        self.assertIn('in progress', json.dumps(inproc) + cli.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.out() + '.partial')) and not os.path.exists(self.out()), 'nothing was moved away from under the running backup')
+
+    def test_after_a_kill_the_name_is_free_again_and_the_stale_partial_can_be_quarantined(self):
+        code = ('import sys; sys.path.insert(0, %r); import public_backup as P, time\n'
+                'def h(e, **i):\n'
+                '    if e == "file" and i["n"] == 3:\n'
+                '        print("copying", flush=True); time.sleep(600)\n'
+                'P.create(%r, %r, "public", fsync=False, hook=h)\n') % (str(ROOT / 'tools'), self.r.public, self.out())
+        p = subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(p.stdout.readline().strip(), 'copying')
+            q = run_cli('quarantine', self.out() + '.partial')
+            self.assertEqual(q.returncode, 1, 'refused while the process is alive')
+            self.assertTrue(os.path.isdir(self.out() + '.partial'))
+            p.kill()
+            p.wait()
+        finally:
+            p.kill()
+        q = run_cli('quarantine', self.out() + '.partial')
+        self.assertEqual(q.returncode, 0, q.stdout)
+        self.assertTrue(self.make()['ok'])
+
+    def test_many_processes_starting_together_make_exactly_one_valid_backup(self):
+        for attempt in range(3):
+            out = self.out('race%d' % attempt)
+            procs = [subprocess.Popen([sys.executable, '-I', str(ROOT / 'tools/public_backup.py'), 'create', '--src', self.r.public, '--out', out, '--no-fsync'],
+                                      stdout=subprocess.PIPE, text=True) for _ in range(5)]
+            results = [(p.wait(), json.loads(p.stdout.read().strip().splitlines()[-1])) for p in procs]
+            self.assertEqual(sum(1 for rc, _ in results if rc == 0), 1, results)
+            for rc, doc in results:
+                if rc:
+                    self.assertIn('in progress', json.dumps(doc))
+            self.assertTrue(PBK.verify(out)['ok'])
+            self.assertFalse(os.path.exists(out + '.partial'), 'no leftovers')
+
+    def test_two_restores_to_one_destination_cannot_collide(self):
+        self.make()
+        dest = self.out('dest')
+        seen = {}
+
+        def hook(event, **info):
+            if event == 'file' and info['n'] == 2 and 'x' not in seen:
+                seen['x'] = run_cli('restore', self.out(), dest)
+        r = PBK.restore(self.out(), dest, fsync=False, hook=hook)
+        self.assertTrue(r['ok'])
+        self.assertEqual(seen['x'].returncode, 1)
+        self.assertTrue(PBK.verify(self.out())['ok'])
+        self.assertEqual(tree_of(dest), tree_of(self.r.public))
+
+
+def peak_of(*args):
+    """Run public_backup.py's main in a fresh interpreter; -> (result json, the interpreter's own peak resident memory in KB, read from /proc by the process itself at its end)."""
+    code = ('import sys; sys.path.insert(0, %r); import public_backup as P\nrc = P.main(sys.argv[1:])\n'
+            'print("HWM", [int(l.split()[1]) for l in open("/proc/self/status") if l.startswith("VmHWM")][0])\nsys.exit(rc)') % str(ROOT / 'tools')
+    p = subprocess.run([sys.executable, '-I', '-c', code] + list(args), capture_output=True, text=True)
+    lines = p.stdout.strip().splitlines()
+    assert p.returncode == 0, p.stdout + p.stderr
+    return json.loads(lines[-2]), int(lines[-1].split()[1])
+
+
+class BoundedMemory(unittest.TestCase):
+    """Peak memory of create, verify and restore does not grow with the number of files (the old inventory held about 1.65 KB per file for create and 1.0 KB for verify and
+    restore, so four times the files meant tens of megabytes more). Same tree shape at two sizes, each step in a fresh process; the temporary disk is what grows instead."""
+    SMALL, LARGE, LIMIT_KB = 12000, 48000, 12 * 1024
+
+    def tree(self, base, n):
+        per = 800
+        for i in range(0, n, per):
+            d = os.path.join(base, 'broadcast', 'live', 'S%03d-po-Eastern-conference-s1v1-%d' % (i // per, i // per))
+            os.makedirs(d)
+            for j in range(min(per, n - i)):
+                with open(os.path.join(d, 's%04d.json' % j), 'wb') as f:
+                    f.write(b'{"synthetic":%d}' % (i + j))
+
+    def measure(self, n):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        w = tmp.name
+        self.tree(os.path.join(w, 'src'), n)
+        out = {}
+        res, out['create'] = peak_of('create', '--src', os.path.join(w, 'src'), '--out', os.path.join(w, 'bk'), '--no-fsync')
+        self.assertEqual(res['files'], n)
+        res_v, out['verify'] = peak_of('verify', os.path.join(w, 'bk'))
+        self.assertTrue(res_v['ok'] and res_v['index_bytes'] > 0, res_v)
+        res_r, out['restore'] = peak_of('restore', os.path.join(w, 'bk'), os.path.join(w, 'dest'), '--no-fsync')
+        self.assertTrue(res_r['ok'])
+        out['index_bytes'] = {'create': res['index_bytes'], 'verify': res_v['index_bytes'], 'restore': res_r['index_bytes']}
+        return out
+
+    def test_peak_memory_does_not_grow_with_the_number_of_files(self):
+        small, large = self.measure(self.SMALL), self.measure(self.LARGE)
+        for step in ('create', 'verify', 'restore'):
+            grew = large[step] - small[step]
+            self.assertLess(grew, self.LIMIT_KB, '%s: %d files used %d KB, %d files used %d KB' % (step, self.SMALL, small[step], self.LARGE, large[step]))
+        for step in ('create', 'verify', 'restore'):
+            self.assertGreater(large['index_bytes'][step], small['index_bytes'][step], 'the temporary disk is what grows, and it is reported')
+
+
 class WithThePrivateState(Base):
     def test_the_private_store_profile_and_a_full_restore_of_both_continue_publishing(self):
         r = self.r

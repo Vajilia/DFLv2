@@ -1,0 +1,111 @@
+{
+"closure": {
+"checked": true,
+"problems": 0
+},
+"complete": true,
+"files": [
+{
+"class": "cumulative",
+"path": "broadcast/honors/index.json",
+"sha256": "ebbf79b54ef4cb5b0ad660ec7c0f3c879c394dd8da008543a22b9045dd963acc",
+"size": 40
+},
+{
+"class": "content",
+"path": "broadcast/honors/s001/tiara.json",
+"sha256": "8a4141a2dbd649f84e6d8b640c54125e50ff55f4df588a1c64216af47ef9679b",
+"size": 19
+},
+{
+"class": "content",
+"path": "broadcast/live/S001-reg-w01-g01/end.json",
+"sha256": "18e6c35fd86182c8301f8e23f58cfa2aa87bdf6e8dba802db165043079069eae",
+"size": 7
+},
+{
+"class": "content",
+"path": "broadcast/live/S001-reg-w01-g01/head.json",
+"sha256": "c6bcc3c83646995f40bb25b6b32febfa4f4e74cd510d94223dec0b940e11da7d",
+"size": 7
+},
+{
+"class": "control",
+"path": "broadcast/live/S001-reg-w01-g01/manifest.json",
+"sha256": "6db05dac2338dfdf8d9c4ad1cf9ab1bca1a09710f3995d19de2b93bdaf857c69",
+"size": 33
+},
+{
+"class": "content",
+"path": "broadcast/live/S001-reg-w01-g01/s0000.json",
+"sha256": "4782b138735a7c454d9dae33a52c54084314feeb18a027ef9e533429eaadba4e",
+"size": 7
+},
+{
+"class": "content",
+"path": "broadcast/live/S001-reg-w01-g01/s0001.json",
+"sha256": "b5f56421ca8ec1a26aa255980d8f78719086462ee31cfd986fe333da1af6a847",
+"size": 7
+},
+{
+"class": "content",
+"path": "broadcast/replays/games/S001-reg-w01-g01.dae1ec3a31.json",
+"sha256": "dae1ec3a31161460bcd619f79d8234339cc4bdf67142b2695bd488303b60b65e",
+"size": 34
+},
+{
+"class": "cumulative",
+"path": "broadcast/replays/index.json",
+"sha256": "36277d2103474b2c76a6b63777ba275b7d2eb9660f0c7b44713761973125f3ad",
+"size": 92
+},
+{
+"class": "content",
+"path": "playback/games/S001-reg-w01-g01.dae1ec3a31.json",
+"sha256": "dae1ec3a31161460bcd619f79d8234339cc4bdf67142b2695bd488303b60b65e",
+"size": 34
+},
+{
+"class": "cumulative",
+"path": "playback/index.json",
+"sha256": "186788575245e31f471e44f561f21f26f691fe2579d1129bd4f943e502da953c",
+"size": 154
+},
+{
+"class": "control",
+"path": "status.json",
+"sha256": "30eb7d4abd9894c1db7e8eb830f342a36b735af26481fed882011452e02d7c37",
+"size": 20
+}
+],
+"format": "dfl-public-backup",
+"format_version": 1,
+"manifest_digest": "288b968e1ddc0adc43ccb6109c9f81cdeb6ac7b9672a4d23c59955025b18f71c",
+"profile": "public",
+"snapshot": {
+"cumulative": {
+"broadcast/honors/index.json": "ebbf79b54ef4cb5b0ad660ec7c0f3c879c394dd8da008543a22b9045dd963acc",
+"broadcast/replays/index.json": "36277d2103474b2c76a6b63777ba275b7d2eb9660f0c7b44713761973125f3ad",
+"latest.json": null,
+"playback/index.json": "186788575245e31f471e44f561f21f26f691fe2579d1129bd4f943e502da953c"
+},
+"finished": "2026-11-06T12:57:41Z",
+"passes": [
+{
+"copied": 12,
+"pass": 1,
+"quiet": true
+}
+],
+"quiescent": true,
+"seconds": 0.0,
+"started": "2026-11-06T12:57:41Z",
+"status": {
+"state": "fixture"
+}
+},
+"totals": {
+"bytes": 454,
+"files": 12
+}
+}

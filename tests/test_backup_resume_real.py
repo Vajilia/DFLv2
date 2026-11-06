@@ -8,7 +8,12 @@ to a minute before the hand-over; then the recovery set is taken (the public bac
 season INSIDE the public copy; a control copy is made, the originals are deleted, the set is restored; the control and the restored copy then go on from the same instant
 after 300 s of downtime: the real builder fires two more events on each (the league digests must be equal), and the daemon runs on, in lock step, to the release of those
 events. The public tree of the restored copy equals the control's at every checkpoint (names and sizes) and byte for byte at the end; the viewers' clock never jumps;
-nothing of season 2 is public before its release position; every season-1 file public before the backup is unchanged.
+nothing of season 2 is public before its release position; every file that was public when the originals were lost is byte-identical afterwards (tests/published_bytes.py).
+
+The one comparison exception, and its limit: the two events built AFTER the restore were built by two builders at two moments, and the builder stamps `generated_at` into each new
+release's manifest. So, and only so, for the release folders that did not exist when the originals were lost: `releases/<new>/manifest.json` is compared with its top-level
+`generated_at` removed (it must be present in both), and `latest.json` (whose `manifest_sha256` is the digest of that manifest) is compared by its `release` name. Every other file
+of a new release, and every file anywhere else, is compared byte for byte, and no previously published file is ever normalised.
 """
 import hashlib
 import json
@@ -22,6 +27,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 sys.path.insert(0, str(ROOT / 'tools'))
+sys.path.insert(0, str(ROOT / 'tests'))
+import published_bytes as PUB
 import public_backup as PBK
 import recovery_set as RS
 from dflsite import broadcast as B, season as S
@@ -65,15 +72,13 @@ def sha(p):
     return h.hexdigest()
 
 
-def without_time(path):
-    def strip(x):
-        if isinstance(x, dict):
-            return {k: strip(v) for k, v in x.items() if k != 'generated_at'}
-        if isinstance(x, list):
-            return [strip(v) for v in x]
-        return x
+def without_generated_at(path):
+    """A release manifest without its top-level `generated_at` (which must be there): the single field that is allowed to differ between two builders."""
     with open(path, 'rb') as f:
-        return strip(json.loads(f.read()))
+        doc = json.loads(f.read())
+    assert isinstance(doc, dict) and 'generated_at' in doc, path
+    del doc['generated_at']
+    return doc
 
 
 def day(bc, seconds, a, b, step):
@@ -115,7 +120,8 @@ class RealHandOver(unittest.TestCase):
         self.assertFalse(res['public']['quiescent'], 'the public backup is assembled from several publication states')
         self.assertTrue(os.path.exists(os.path.join(root, 'store', S.CARRY)), 'the hand-over happened while the set was being taken')
         t_crash = moved['t'] - 8
-        before = {k: sha(os.path.join(public, k)) for k in listing(public) if k.startswith(('playback/games/', 'releases/', 'broadcast/replays/')) and not k.endswith('index.json')}
+        published = PUB.snapshot(public)                                       # everything public when the originals are lost
+        old_releases = {k.split('/')[1] for k in published['files'] if k.startswith('releases/')}
         self.assertTrue(RS.verify(os.path.join(w, 'set'), deep=True)['ok'])
         ctl = os.path.join(w, 'control')
         os.makedirs(ctl)
@@ -171,16 +177,21 @@ class RealHandOver(unittest.TestCase):
         self.assertGreater(n_checks, 3)
         la, lb = listing(a_pub), listing(b_pub)
         self.assertEqual(la, lb)
-        for rel_name in la:                                                    # byte for byte at the end
-            if rel_name.endswith('index.json') or rel_name == 'latest.json':
-                continue
-            if rel_name.startswith('releases/e000') and int(rel_name.split('/')[1][1:6]) > 60 and rel_name.endswith('.json'):
-                # the two events built after the restore were built by two builders at two moments: the release manifests say when (generated_at), and nothing else may differ
-                self.assertEqual(without_time(os.path.join(a_pub, rel_name)), without_time(os.path.join(b_pub, rel_name)), rel_name)
-                continue
-            self.assertEqual(sha(os.path.join(a_pub, rel_name)), sha(os.path.join(b_pub, rel_name)), rel_name)
-        for rel_name, h in before.items():
-            self.assertEqual(sha(os.path.join(b_pub, rel_name)), h, 'public before the backup, changed afterwards: ' + rel_name)
+        new_releases = {k.split('/')[1] for k in la if k.startswith('releases/')} - old_releases
+        self.assertEqual(len(new_releases), 2, new_releases)                    # the two events built after the restore
+        differ = []
+        for rel_name in la:                                                    # byte for byte at the end (the exception is stated in the module docstring)
+            parts = rel_name.split('/')
+            if rel_name == 'latest.json':
+                continue                                                       # compared by its release name below
+            if len(parts) == 3 and parts[0] == 'releases' and parts[1] in new_releases and parts[2] == 'manifest.json':
+                if without_generated_at(os.path.join(a_pub, rel_name)) != without_generated_at(os.path.join(b_pub, rel_name)):
+                    differ.append(rel_name + ' (beyond generated_at)')
+            elif sha(os.path.join(a_pub, rel_name)) != sha(os.path.join(b_pub, rel_name)):
+                differ.append(rel_name)
+        self.assertEqual(differ, [])
+        self.assertEqual(PUB.changed(published, b_pub), [], 'public before the originals were lost, changed afterwards (restored)')
+        self.assertEqual(PUB.changed(published, a_pub), [], 'public before the originals were lost, changed afterwards (control)')
         self.assertEqual(PBK.CLOSURE['public'](PBK.Tree(b_pub)), [])
         self.assertEqual(B.get(os.path.join(b_pub, 'latest.json'))['release'][:6], B.get(os.path.join(a_pub, 'latest.json'))['release'][:6])
 

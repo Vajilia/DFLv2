@@ -7,7 +7,8 @@ downtime, with the same builder steps, in lock step, and at every checkpoint:
   * the public tree of the restored copy equals the control's, file for file (so nothing that should be public is missing, and nothing else is there);
   * the viewers' clock is the control's, and never jumps (no unreleased action is skipped);
   * no result, Honors part or later-season game is public before its own release position (checked against the plan, not only against the control);
-  * every file that was published before the backup stays byte-identical.
+  * every file that was public when the originals were lost stays byte-identical, on the control and on the restored copy, except the controls and append-only indexes the
+    daemon is designed to replace (tests/published_bytes.py states the rule for each; no field of any file is ever normalised).
 The real-engine version of the season hand-over is tests/test_backup_resume_real.py (opt-in: it needs a finished first season).
 """
 import hashlib
@@ -26,6 +27,7 @@ import public_backup as PBK
 import recovery_set as RS
 from dflsite import broadcast as B, season as S
 from test_multiseason import Rig, Year, T0
+import published_bytes as PUB
 
 VOLATILE = ('broadcast/clock.json', 'status.json', 'broadcast/schedule.json')
 END1 = 4220                                                    # the synthetic season's length in show seconds (tests/test_multiseason.py: Year.plan['total_s'])
@@ -147,6 +149,7 @@ class Resume(unittest.TestCase):
         start = t_crash + 1 + downtime
         last = {id(ctl): None, id(rest): None}
         first_pos = None
+        published = PUB.snapshot(ctl.public)                       # everything public when the originals were lost
         for k in range(seconds):
             now = T0 + start + k
             if k in builds:
@@ -171,6 +174,8 @@ class Resume(unittest.TestCase):
                 for n, at in rel.items():
                     if 'RESULT-OF-EVENT-%d' % n in text:
                         self.assertGreaterEqual(pr, at - 1.5, 'event %d is public at clock %.0f, before its release position %d' % (n, pr, at))
+        for side, name in ((ctl, 'control'), (rest, 'restored')):
+            self.assertEqual(PUB.changed(published, side.public), [], 'public before the originals were lost, changed afterwards (%s)' % name)
         return tree(rest.public)
 
     # ---------------------------------------------------------------------------------------------------------------------- ordinary play
@@ -179,14 +184,10 @@ class Resume(unittest.TestCase):
         t_crash, pub, sto = self.take(built1=2, built2=0, t_b=1100, adv=200)
         self.assertFalse(pub['quiescent'], 'the public backup is assembled from several publication states (passes %d)' % pub['passes'])
         self.assertEqual(self.rules(pub, sto), [])
-        before = tree(os.path.join(self.tmp.name, 'control', 'public'))
         rs, rp = self.restore()
         ctl = Side(os.path.join(self.control_dir, 'store'), os.path.join(self.control_dir, 'public'), 2, 0)
         rest = Side(rs, rp, 2, 0)
-        final = self.lockstep(ctl, rest, t_crash, downtime=300, seconds=3600, builds={400: (3, 0), 1500: (4, 0)})
-        for rel, h in before.items():                                # what was public when the backup ended is unchanged afterwards (the indexes, latest and live manifests grow)
-            if PBK.class_of('public', rel) == 'content' and not rel.startswith('broadcast/live/') or rel.startswith(('broadcast/live/',)) and not rel.endswith('manifest.json'):
-                self.assertEqual(final.get(rel), h, rel)
+        self.lockstep(ctl, rest, t_crash, downtime=300, seconds=3600, builds={400: (3, 0), 1500: (4, 0)})       # (checks every previously public file, byte for byte, at its end)
 
     def test_a_short_downtime_and_a_long_one_both_resume_exactly(self):
         for downtime in (0, 40, 7200):
@@ -243,6 +244,35 @@ class Resume(unittest.TestCase):
         ctl.bc.tick(now)
         rest.bc.tick(now)
         self.assertLess(rest.bc.clock.position(now), ctl.bc.clock.position(now) - 1000, 'the clock is rewound by 1600 s: the results already public would be shown again as future')
+
+
+class PublishedBytesCheck(unittest.TestCase):
+    """The check that every previously published file keeps its bytes can fail: it is not a formality."""
+
+    def test_a_changed_removed_or_rewritten_file_is_reported(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        pub = os.path.join(tmp.name, 'public')
+        for rel, data in (('playback/games/a.json', b'A'), ('releases/e1/manifest.json', b'{"generated_at":"t0"}'), ('latest.json', b'{}'),
+                          ('playback/index.json', b'{"games":["a","b"]}'), ('broadcast/replays/index.json', b'{"games":[]}'), ('broadcast/honors/index.json', b'{"parts":[]}')):
+            os.makedirs(os.path.dirname(os.path.join(pub, rel)), exist_ok=True)
+            open(os.path.join(pub, rel), 'wb').write(data)
+        before = PUB.snapshot(pub)
+        self.assertEqual(PUB.changed(before, pub), [])
+        open(os.path.join(pub, 'latest.json'), 'wb').write(b'{"release":"e2"}')                                     # a control: allowed
+        open(os.path.join(pub, 'playback/index.json'), 'wb').write(b'{"games":["a","b","c"]}')                      # appended: allowed
+        self.assertEqual(PUB.changed(before, pub), [])
+        open(os.path.join(pub, 'releases/e1/manifest.json'), 'wb').write(b'{"generated_at":"t1"}')                  # a release manifest is NOT excused
+        self.assertEqual(len(PUB.changed(before, pub)), 1)
+        open(os.path.join(pub, 'releases/e1/manifest.json'), 'wb').write(b'{"generated_at":"t0"}')
+        open(os.path.join(pub, 'playback/games/a.json'), 'wb').write(b'B')
+        self.assertIn('changed', PUB.changed(before, pub)[0])
+        open(os.path.join(pub, 'playback/games/a.json'), 'wb').write(b'A')
+        open(os.path.join(pub, 'playback/index.json'), 'wb').write(b'{"games":["b","a"]}')                          # reordered: not append-only
+        self.assertIn('reordered', PUB.changed(before, pub)[0])
+        open(os.path.join(pub, 'playback/index.json'), 'wb').write(b'{"games":["a","b"]}')
+        os.unlink(os.path.join(pub, 'playback/games/a.json'))
+        self.assertIn('gone', PUB.changed(before, pub)[0])
 
 
 if __name__ == '__main__':
