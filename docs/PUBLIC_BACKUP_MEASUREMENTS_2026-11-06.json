@@ -323,7 +323,7 @@
    "wall_s": 58.1
   }
  },
- "scale_synthetic": {
+ "scale_synthetic_before": {
   "file_bytes": 2048,
   "mode": "scale",
   "ok": true,
@@ -421,6 +421,124 @@
      "ok": true,
      "peak_rss_mb": 463.3,
      "wall_s": 11.6
+    }
+   }
+  ]
+ },
+ "scale_synthetic_bounded": {
+  "file_bytes": 2048,
+  "mode": "scale",
+  "note": "Measured 2026-11-06 on the same host as scale_synthetic, with the bounded-memory tool (SQLite index, streamed manifest; git after 8fa89d7). Each step is its own process; peak_rss_mb is that process's VmHWM, wall_s its runtime, temp_disk_mb the working index the tool reports (index_bytes; for create it sits inside BACKUP.partial and is removed before the commit). The real 117,707-file folder was NOT re-measured: its source tree no longer existed on this host.",
+  "ok": true,
+  "points": [
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 31.6,
+     "temp_disk_mb": 7.9,
+     "wall_s": 2.2
+    },
+    "files": 29000,
+    "make_s": 2.3,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 30.4,
+     "temp_disk_mb": 6.9,
+     "wall_s": 2.6
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 30.1,
+     "temp_disk_mb": 6.9,
+     "wall_s": 0.8
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 31.6,
+     "temp_disk_mb": 16.0,
+     "wall_s": 4.4
+    },
+    "files": 59000,
+    "make_s": 3.7,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 33.6,
+     "temp_disk_mb": 14.0,
+     "wall_s": 5.0
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 33.4,
+     "temp_disk_mb": 14.0,
+     "wall_s": 1.8
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 30.6,
+     "temp_disk_mb": 32.0,
+     "wall_s": 10.0
+    },
+    "files": 118000,
+    "make_s": 5.2,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 34.4,
+     "temp_disk_mb": 28.1,
+     "wall_s": 10.2
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 34.3,
+     "temp_disk_mb": 28.1,
+     "wall_s": 3.4
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 30.7,
+     "temp_disk_mb": 64.0,
+     "wall_s": 20.2
+    },
+    "files": 236000,
+    "make_s": 18.5,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 34.4,
+     "temp_disk_mb": 56.4,
+     "wall_s": 20.9
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 34.3,
+     "temp_disk_mb": 56.4,
+     "wall_s": 7.2
+    }
+   },
+   {
+    "create": {
+     "ok": true,
+     "peak_rss_mb": 30.7,
+     "temp_disk_mb": 127.9,
+     "wall_s": 44.6
+    },
+    "files": 472000,
+    "make_s": 40.2,
+    "restore": {
+     "ok": true,
+     "peak_rss_mb": 34.4,
+     "temp_disk_mb": 113.0,
+     "wall_s": 70.6
+    },
+    "verify": {
+     "ok": true,
+     "peak_rss_mb": 34.2,
+     "temp_disk_mb": 113.0,
+     "wall_s": 14.4
     }
    }
   ]

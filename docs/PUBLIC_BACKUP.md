@@ -1,8 +1,8 @@
 # Public-folder backup and restore (milestone M8a)
 
-*Written 2026-11-06 on branch `backend/public-backup-2026-11-06`, from `7668245230c2692fd81430fbd7bb6114a01121d3`. Everything here was built and tested locally on scratch copies. Nothing was deployed, nothing on the Droplet (the running rehearsal included) was contacted, no retention or deletion tool was written or run, and no frontend file changed.*
+*Bounded-memory and locking changes added 2026-11-06 (sections 3a, 4, 7 and 8); originally written the same day on branch `backend/public-backup-2026-11-06`, from `7668245230c2692fd81430fbd7bb6114a01121d3`. Everything here was built and tested locally on scratch copies. Nothing was deployed, nothing on the Droplet (the running rehearsal included) was contacted, no retention or deletion tool was written or run, and no frontend file changed.*
 
-Tools: `tools/public_backup.py` (public folder, private store), `tools/recovery_set.py` (league + store + public as one unit), `tools/measure_public_backup.py` (real-size measurements), `tools/engine_comparison.py` (separate: `docs/ENGINE_COMPARISON_REPRODUCTION.md`). Tests: `tests/test_public_backup.py` (33), `tests/test_recovery_set.py` (17), `tests/test_backup_resume.py` (5), `tests/test_backup_resume_real.py` (1, opt-in). Also `tools/rootlock.py` (the builder-root lock).
+Tools: `tools/public_backup.py` (public folder, private store), `tools/recovery_set.py` (league + store + public as one unit), `tools/measure_public_backup.py` (real-size measurements), `tools/engine_comparison.py` (separate: `docs/ENGINE_COMPARISON_REPRODUCTION.md`). Tests: `tests/test_public_backup.py` (50), `tests/test_recovery_set.py` (18), `tests/test_backup_resume.py` (6), `tests/test_backup_resume_real.py` (1, opt-in), with `tests/published_bytes.py` (the shared "previously published bytes" check) and `tests/fixtures/public_backup_v1` (a backup made by the previous version of the tool). Also `tools/rootlock.py` (the builder-root lock).
 
 ## 1. Why this exists
 
@@ -30,11 +30,24 @@ The daemon is never stopped, paused or signalled. Published replay, release and 
 
 **Season hand-over during a backup** is covered because the daemon's hand-over is itself a sequence of atomic steps with a 10-second grace window (`HANDOVER_GRACE_S`, `docs/BROADCAST_CONTINUITY.md`); a backup that straddles it is either one side of it (quiet) or non-quiescent with a valid closure. Test: `test_a_hand_over_during_the_backup`.
 
+## 3a. Bounded memory, temporary disk, and one operation per name
+
+**Memory no longer follows the file count.** Before this change `create` kept a dict of every file (about 1.65 KB per file) and built the whole manifest in memory; `verify` and `restore` loaded the whole manifest and several per-file dicts (about 1.0 KB per file). Now:
+
+* The inventory (what is on disk, what has been copied with its SHA-256, what the manifest says) lives in a temporary **SQLite index** read and written in batches of 2,000 rows with an 8 MB page cache. No list or dict of every file exists. Problems are counted but only the first 50 are kept (`n_problems` is the true count).
+* The manifest is **written as a stream** (digest computed as it goes) and **read as a stream** by a small incremental parser, whatever its whitespace or key order. A damaged or truncated manifest is still refused: the parser checks syntax, the format and `complete` markers, that nothing follows the end, every file entry's shape (relative path without `..`, size, 64-hex SHA-256), no path listed twice, and the digest.
+* **Format and digest are unchanged** (version 1; `sha256` of the canonical JSON of `{files, profile, snapshot.{quiescent,cumulative}}`), so every backup made by the earlier tool still verifies and restores (test with a committed fixture made by the earlier tool).
+* What is still held whole, by design: the JSON index documents the reference closure parses (playback, replay and Honors indexes, one release manifest at a time). They grow with the number of games and events, not with the number of files (live recordings make up almost all files). This is the remaining memory that grows, slowly; it was not measured separately because the synthetic trees contain no such documents.
+
+**The price is temporary disk**, reported in every result as `index_bytes`: about 0.27 KB per file at create (inside `BACKUP.partial`, removed before the commit; a failed or killed backup keeps it with the rest of the evidence) and about 0.24 KB per file for `verify`/`restore` (in `--scratch`, default the system temporary folder, removed afterwards). Point `--scratch` at a real disk, not at RAM (`/tmp` is tmpfs on some hosts).
+
+**One operation per name.** `create`, `restore` and `quarantine` (and the recovery-set commands) take an operating-system lock, without waiting, on a hidden file `.NAME.lock` beside the backup (`NAME` without any `.partial` or `.restoring`). A second attempt is refused with "in progress" and **touches nothing**: it cannot write into, replace, `--discard-partial` or quarantine the `.partial` of a backup that is running. The lock is released by the system when its holder ends, however it ends (a `kill -9` included), so a stale `.partial` from a dead process can be quarantined at once and the lock file never has to be cleaned up (and is never deleted by a tool: deleting it would let two holders lock two different files). A recovery set takes the set's lock first and its components run under it. Limits: it is an advisory `flock` among these tools, on a local filesystem; a person running `rm`, or a tool on another host over NFS, is not stopped by it.
+
 ## 4. Verifying and restoring
 
 ```
-python3 -I tools/public_backup.py verify  BACKUP            # every file vs manifest (size, SHA-256), no extra files, manifest digest, then the closure
-python3 -I tools/public_backup.py restore BACKUP DEST       # verify, restore into a NEW (absent or empty) directory, verify DEST again
+python3 -I tools/public_backup.py verify  BACKUP [--scratch DIR]   # every file vs manifest (size, SHA-256), no extra files, manifest digest, then the closure
+python3 -I tools/public_backup.py restore BACKUP DEST [--scratch DIR]   # verify, restore into a NEW (absent or empty) directory, verify DEST again
 python3 -I tools/public_backup.py check   --src PUBLIC      # read-only closure check of a live folder (no backup made)
 ```
 
@@ -85,7 +98,7 @@ python3 -I tools/recovery_set.py  quarantine /backups/set-2026-11-06.partial    
 * It is a **rename on the same filesystem**, into `partial-quarantine/` beside the backups (or `--to DIR` on the same filesystem), under the name `<UTC stamp>-<original name>` (it still ends in `.partial`, so it can never pass for a backup). Nothing is copied or deleted; a cross-filesystem move is refused. A short `QUARANTINE_NOTE.json` (original path, time, file count, bytes, whether it had a manifest) is the only file added.
 * Only a folder whose name ends in `.partial` is accepted. A finished backup or set is never moved.
 * Then retry the `create` under the original name. The quarantined folder is untouched by the retry and by every tool.
-* Do **not** use `public_backup.py create --discard-partial` when the cause matters: that option deletes the stale folder. It exists for scripted retries where the evidence is not wanted.
+* Do **not** use `public_backup.py create --discard-partial` when the cause matters: that option deletes the stale folder. It exists for scripted retries where the evidence is not wanted. It, like `quarantine`, is refused while another operation holds the name (section 3a), so neither can touch the `.partial` of a backup that is still running.
 * Look at the stale folder before throwing it away: `ls`, its `BACKUP_MANIFEST.json` (absent means the run died before the end), the failure message of the run. Removing quarantined folders is a separate, deliberate decision for the owner; no tool here does it.
 * A refused set (a rule such as S3 failing) leaves its `.partial` too, and it can be large (a full copy of all three components): check the disk before the retry.
 
@@ -95,7 +108,7 @@ After `restore`, the restored root runs exactly as the original did: `broadcast_
 
 ## 6. What the tests show (small synthetic data; not resource figures)
 
-`tests/test_public_backup.py`, 28 tests (plus the 5 quarantine tests below), built on synthetic and short real-engine publications in temporary folders:
+`tests/test_public_backup.py`, 50 tests (28 original behaviour tests, the 5 quarantine tests below, and the bounded-memory, manifest and locking tests listed in 6a), built on synthetic and short real-engine publications in temporary folders:
 
 * **Round trip:** byte-identical names, bytes and modes; an HTTP server over the restored folder (original removed) serves a replay, a live recording, a release and an Honors part by their original URLs, and every index entry loads; the daemon continues publishing from the restored folder and the resulting tree equals a control run.
 * **While publishing:** the daemon advanced from inside the backup; a season hand-over during the backup (10 ticks of 8 s); a folder that never goes quiet is refused with `--require-quiescent` and otherwise gives a closure-valid backup marked `quiescent: false`.
@@ -110,6 +123,10 @@ After `restore`, the restored root runs exactly as the original did: `broadcast_
 `tests/test_backup_resume.py`, 5 tests, synthetic two-season store with the real guarded daemon and the real publication code: **non-quiescent public backup + store backup, a control copy, originals deleted, restore, then control and restored copy resumed in lock step** (same downtime, same builder steps), checking at every checkpoint that the public trees are equal file for file and byte for byte, the viewers' clock is equal and never jumps, no result is public before its release position (checked against the plan), and every file public before the backup is unchanged. Scenarios: ordinary play with the builder behind and finishing two events after the restore; three downtimes (0 s, 40 s, 2 h); a season hand-over inside the public copy with the builder then finishing the next season; a hand-over between the public and store captures; and the reverse capture order, which the rules refuse and which really rewinds the clock.
 
 `tests/test_backup_resume_real.py` is the **real-engine** version of the hand-over (opt-in: it needs a finished first season in `DFL_SEASON1_ROOT`, about 6 GB and 15 minutes, and is reported as *skipped* without it): the real builder builds season 2's first 13 events, the real daemon runs season 1 to a minute before the hand-over, a recovery set is taken while the daemon crosses the end of the season inside the (non-quiescent) public copy, the originals are deleted, the set is restored, and the real builder fires two more events on the control and on the restored copy (equal league digests) while both daemons run on to the release of those events (equal trees, no jump, nothing early, earlier files unchanged).
+
+### 6a. Bounded memory and concurrency tests
+
+Written first and run against the previous implementation (`8fa89d7`) to see them fail: the memory test (peak of a fresh process at 12,000 and 48,000 files, each of create, verify, restore, growth must stay under 12 MB: the previous tool grew 57, 42 and 39 MB), the scratch and `index_bytes` tests, the index-left-in-an-unfinished-backup test, the lock tests (a second `create`, a `create --discard-partial`, and `quarantine`, each while a backup is running, must be refused and leave the active `.partial` byte-identical; five processes starting together must make exactly one valid backup; after a `kill -9` the name is free and the stale `.partial` can be quarantined; two restores to one destination) and the recovery-set variant (a second `create`, a `quarantine` and a `restore` of a set name while that set is being made are refused and its `.partial` is unchanged). Added with them, passing from the start because they pin behaviour that must not change: every layout of one manifest (compact, indented, sorted) verifies and restores with the parser reading 7 bytes at a time; a manifest cut at any of a dozen points, or followed by garbage, is never valid; the digest equals the earlier tools' definition; paths that escape the destination, repeated paths and more than 50 damaged files are handled; and the committed version-1 backup verifies and restores.
 
 ## 7. Real-size measurements
 
@@ -131,19 +148,26 @@ The backup of the public folder is 1,566,432,970 bytes (the files plus a 20 MB m
 
 **A refusal the real data produced.** The first set attempt used the comparison's builder root, where the daemon had never run, so the store had no `carry.json` while the public folder (made from a hard-linked copy) already showed season 2. Rule S3 refused it ("the public copy is newer than the store"), correctly. The set was then taken from the copy that carries the daemon's `carry.json`. A refused `create` leaves `SET.partial` behind (it is never valid); it is kept as evidence with `recovery_set.py quarantine` and then the set is retried (section 5, *Stale `.partial` folders*).
 
-**How time and memory grow (measured on synthetic trees; not the real folder).** Peak memory depends on the **number of files**, not on their bytes (files are streamed in 1 MB chunks; the tool keeps one small record per file and, at the end of `create`, the manifest text built from them). Doubling the *data* therefore does not double the memory by itself: it does so only if the file count doubles, and then not exactly, because there is a fixed part. To see the shape instead of assuming it, `tools/measure_public_backup.py scale` makes, backs up, verifies and restores trees of 2 KB files with realistic path lengths (800 to a folder), one size after another, each tool run as its own process:
+**How time, memory and temporary disk grow with the file count (synthetic trees; not the real folder).** `tools/measure_public_backup.py scale` makes, backs up, verifies and restores trees of 2 KB files with realistic path lengths (800 to a folder), one size after another, each tool run as its own process. Peak memory is that process's `VmHWM`, runtime its wall time, temporary disk the working index the tool reports. Reported separately because they behave differently:
 
-| Files | `create` peak | `verify` peak | `restore` peak | `create` wall |
-|---|---|---|---|---|
-| 29,000 | 67 MB | 49 MB | 51 MB | 4 s |
-| 59,000 | 115 MB | 82 MB | 85 MB | 9 s |
-| 118,000 | 211 MB | 150 MB | 154 MB | 22 s |
-| 236,000 | 409 MB | 240 MB | 240 MB | 14 s |
-| 472,000 | 799 MB | 463 MB | 463 MB | 34 s |
+*Before* (the dict-based tool, measured earlier the same day on the same host): create peak 67 / 115 / 211 / 409 / 799 MB and verify/restore peak 49 / 82 / 150 / 240 / 463 MB at 29,000 / 59,000 / 118,000 / 236,000 / 472,000 files, with a slope of about 1.65 KB per file for create and 1.0 KB for verify and restore, and no temporary disk.
 
-Each doubling of the file count multiplied the `create` peak by 1.7, 1.8, 1.9 and 1.95: close to linear above a fixed part of about 15 to 20 MB, with a slope of about 1.65 KB per file for `create` and 1.0 KB for `verify` and `restore`. The real two-season folder (117,707 files) measured 202 MB for `create`, within 5% of the synthetic figure for the same file count (211 MB), which supports using the synthetic series for this tool, but it is one data point. The wall times are **not** a scaling law: they vary with what the page cache held (the 236,000-file `create` was faster than the 118,000-file one) and with the disk.
+*After* (the SQLite-index tool):
 
-**Estimates for four real seasons (not measured; each depends on an assumption).** Memory follows the file count. If a season keeps adding about 58,900 public files (the figure from two seasons only; it depends on the number of games and the length of the live recordings), four seasons are about 235,000 files, and the series above gives a `create` peak of about 400 MB and about 240 MB for `verify` and `restore`. If the count were 50% higher the peak would be about 600 MB. Time is not extrapolated from this host: the idle two-season figures (53 s `create`, 82 s `restore` for 117,707 files) are the only real ones, they scale with file count and disk speed, and they should be re-measured on the Droplet's own disk, with a cold cache, before anyone plans a backup window.
+| Files | `create` peak memory | `verify` peak | `restore` peak | wall: create / verify / restore | temporary disk: create / verify and restore |
+|---|---|---|---|---|---|
+| 29,000 | 31.6 MB | 30.1 MB | 30.4 MB | 2.2 s / 0.8 s / 2.6 s | 7.9 / 6.9 MB |
+| 59,000 | 31.6 MB | 33.4 MB | 33.6 MB | 4.4 s / 1.8 s / 5.0 s | 16.0 / 14.0 MB |
+| 118,000 | 30.6 MB | 34.3 MB | 34.4 MB | 10.0 s / 3.4 s / 10.2 s | 32.0 / 28.1 MB |
+| 236,000 | 30.7 MB | 34.3 MB | 34.4 MB | 20.2 s / 7.2 s / 20.9 s | 64.0 / 56.4 MB |
+| 472,000 | 30.7 MB | 34.2 MB | 34.4 MB | 44.6 s / 14.4 s / 70.6 s | 127.9 / 113.0 MB |
+
+* **Peak memory is flat**: 30.4 to 34.4 MB at every size, a sixteenfold range, for all three steps (the fixed part is the interpreter, SQLite and one batch). At 472,000 files that is 31 MB against 799 MB for `create` and 34 MB against 463 MB for `verify` and `restore`.
+* **Temporary disk grows linearly** and is now the cost: about 0.27 KB per file at create and 0.24 KB per file at verify and restore (128 MB and 113 MB at 472,000 files). It is a working file in the backup's own `.partial` (create) or in `--scratch` (verify and restore).
+* **Runtime is not worse** here (create 45 s at 472,000 files; the earlier tool took 34 s on a warmer cache, so there is no claim of a speed-up or a slow-down: wall times on this shared host vary with the page cache and the other work, and the two series were not taken back to back; the 118,000-file create took 22 s before and 10 s after for the same reason). Time still follows the number of files and the disk. Not measured: the same steps on the Droplet's disk with a cold cache.
+* **Not re-measured:** the real 117,707-file two-season folder (202 MB create before): its source tree was no longer on this host and regenerating it takes hours. The synthetic series predicted it within 5% before the change, which is the only evidence that the synthetic shape carries over; the real folder also has index documents that the synthetic one does not, so its figure will be somewhat higher than 31 MB but is expected to stay far below 202 MB. This is an expectation, not a measurement. The real-engine hand-over test (below) runs the new code on a real public folder, and passes, but it does not record memory.
+
+**Estimates for four real seasons (not measured).** With about 235,000 files (an extrapolation from two seasons), memory for all three steps would be about 31 to 34 MB (the measured series is flat across 29,000 to 472,000 files) plus the closure's index documents, and the temporary disk about 60 MB for create and 55 MB for verify or restore (from the measured slope). The time is not extrapolated; re-measure on the Droplet.
 
 ## 8. Limitations
 
@@ -155,4 +179,8 @@ Each doubling of the file count multiplied the `create` peak by 1.7, 1.8, 1.9 an
 * There is no way to take a consistent set while the builder is mid-event: the set waits for the builder to finish (it is refused until then), by design.
 * The tool verifies content and references; it does not check that a web server serves the restored folder with the right headers (tested over a plain `http.server` only), and it does not restore host configuration.
 * Backup, verify and restore are single-threaded Python and read every file; they are I/O-bound (section 7). Time figures come from one host and one cache state.
+* **Temporary disk instead of memory** (section 3a): about 0.27 KB per file, in the backup's `.partial` or in `--scratch`. If the scratch folder is in RAM (`/tmp` as tmpfs) the memory saving is lost; there is no check for that. A file name that is not valid UTF-8 is refused at create (public folder names are ASCII by construction; the earlier tool would have recorded such a name escaped).
+* **Whole-document indexes** (playback, replay and Honors indexes, one release manifest at a time) are still loaded whole by the closure. They are small next to the file count today and were not measured separately; a very large index would raise the peak by its own size.
+* **The lock is advisory and local** (section 3a): it stops these tools from colliding, not a person with `rm`, and it is not a distributed lock. A backup killed with the working index present leaves it in `BACKUP.partial` (it can be hundreds of MB at 472,000 files) until the owner removes the quarantined folder.
+* **No SQLite corruption protection:** the index has no journal and no fsync on purpose (it is disposable). A crash or full disk during a run makes that run fail or its `.partial` unusable; it never makes a committed backup wrong, because the manifest and the files are what verify checks.
 * No scheduling, rotation, off-host transfer, encryption or retention of backups was built. Where backups are kept and for how long is the owner's decision. Quarantined `.partial` folders accumulate until the owner removes them.
