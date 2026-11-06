@@ -31,6 +31,8 @@ Estimate against reality (one data point, tiny): the set preflight estimated 96,
 * The step "point the daemon and builder at the restored folder and go live" is outside the runbook and was not rehearsed (only the builder and the daemon in virtual time on a restored folder, covered by `tests/test_recovery_set.py`).
 
 ## Transcript (actual commands and results)
+
+> **Annotation added after commit `8d0e9b3` (the transcript itself is unchanged):** the transcript was recorded on commit `aa56f42` and is kept as the historical evidence. The full-disk error message in step 6 (it names the inner `set.partial/store.partial` and `public_backup.py quarantine`) is the wording that **predates `8d0e9b3`**, which changed it to name the outer `SET.partial` and `recovery_set.py quarantine`. This run was not repeated after the fix.
 Run started 2026-11-06 14:46:04Z (UTC) by `tools/backup_runbook_rehearsal.py --work /tmp/rbr`. Commands are exactly as run; output longer than 1800 characters is cut here and kept in full in the scratch folder.
 
 ## 1. Build the scratch copy (a disposable league, never a production directory)
