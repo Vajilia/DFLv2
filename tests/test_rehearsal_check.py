@@ -358,3 +358,34 @@ class TemporaryFileRace(unittest.TestCase):
         open(os.path.join(self.pubdir, 'broadcast', 'surprise.json'), 'w').write('{}')
         self.full_pass()
         self.assertIn('early_or_unknown_file', self.kinds())
+
+    # --- every temporary-name pattern the daemon's own code writes (src/dflsite/broadcast.py put and copy, src/dflsite/status.py write_atomic) -------------------------
+    def test_the_status_writers_temporary_name_is_in_flight_not_an_early_file(self):
+        """status.json is rewritten every second as `.tmp-status.json-<pid>` (the pid LAST), with an fsync before the rename."""
+        d = self.pubdir
+        self.assertTrue(os.path.exists(os.path.join(d, 'status.json')))
+        t = os.path.join(d, '.tmp-status.json-4242')
+        open(t, 'w').write('{}')
+        os.utime(t, (T0 + 590, T0 + 590))
+        self.full_pass()
+        self.assertEqual(self.kinds(), [])
+
+    def test_the_copy_writers_temporary_name_without_a_pid_is_in_flight(self):
+        """broadcast.py copies a due file through `.tmp-<name>` in the same folder (no pid)."""
+        rel = sorted(f for f in RC.SC.list_public(self.pubdir) if f.startswith('releases/') and f.endswith('manifest.json'))[0]
+        d, n = os.path.split(os.path.join(self.pubdir, rel))
+        t = os.path.join(d, '.tmp-' + n)
+        open(t, 'w').write('{}')
+        os.utime(t, (T0 + 590, T0 + 590))
+        self.full_pass()
+        self.assertEqual(self.kinds(), [])
+
+    def test_a_temporary_name_whose_target_is_not_allowed_is_still_flagged_for_every_pattern(self):
+        future = sorted(self.w.oracle.expected(10 ** 9)[0] - self.w.oracle.expected(1000)[0])
+        d, n = os.path.split(os.path.join(self.pubdir, future[0]))
+        os.makedirs(d, exist_ok=True)
+        for t in (os.path.join(d, '.tmp-4242-' + n), os.path.join(d, '.tmp-' + n), os.path.join(d, '.tmp-%s-4242' % n)):
+            open(t, 'w').write('{}')
+            os.utime(t, (T0 + 590, T0 + 590))
+        self.full_pass()
+        self.assertIn('early_or_unknown_file', self.kinds())

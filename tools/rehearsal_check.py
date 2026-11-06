@@ -404,7 +404,10 @@ class Watch:
         finals = {rest}
         head, sep, tail = rest.partition("-")
         if sep and head.isdigit():
-            finals.add(tail)                                                   # `.tmp-<pid>-<name>` (src/dflsite/broadcast.py); `.tmp-<name>` is the replay copy
+            finals.add(tail)                                                   # `.tmp-<pid>-<name>` (src/dflsite/broadcast.py put); `.tmp-<name>` is the copy
+        head, sep, tail = rest.rpartition("-")
+        if sep and tail.isdigit():
+            finals.add(head)                                                   # `.tmp-<name>-<pid>` (src/dflsite/status.py write_atomic: status.json every second)
         if not any(os.path.join(d, f) in allowed for f in finals):
             return False
         try:
