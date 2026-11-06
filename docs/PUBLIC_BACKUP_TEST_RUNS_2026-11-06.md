@@ -30,3 +30,11 @@ OK
 * Two real-engine launches never ran a test: `real2` stopped at import with an IndentationError that my edit had introduced; `real3` (launched 05:25 PST after the fix) left no process and an empty log, cause unknown. Neither produced a result. The passing run above is a fresh launch that was confirmed started (process alive, test name in the log) before waiting.
 * `measure_public_backup.py quiet` on the real 117,707-file folder and on the store was queued after the scale run but its source trees (`/tmp/ms/EC/...`) no longer exist on this host: both exited immediately with rc 1 and measured nothing. The real folder was **not** re-measured after the change.
 * Not run in this pass: the frontend/site test suites (no frontend change was made), a full repository test run, any test against the Droplet or a production backup.
+
+## M8b pass (preflight, full-disk handling, documentation correction)
+| Run | Result | Exit |
+|---|---|---|
+| `tests.test_backup_space` + `tests.test_public_backup` + `tests.test_recovery_set` + `tests.test_backup_resume` + `tests.test_broadcast_build`, one job, final code (`d481f9c`) | **100 tests OK, 0 skipped** (the real small-tmpfs full-disk tests ran; 915 s) | 0 |
+| `tools/measure_public_backup.py closure` (index-document size 0.6 to 38.7 MB, 2,000 to 128,000 games) | all steps ok; peak 25 to 195 MB (about 1.3 KB per listed game above 8,000 games) | 0 |
+
+Failures found on the way, all fixed: (1) an earlier focused run (85 tests, exit 1) had 3 failures: the new CLI preflight called an *active* backup's `.partial` "stale" instead of "in progress" (nothing was touched, the message was wrong); the preflight now checks the name's lock first; (2) the real full-filesystem test found that `quarantine` moved a `.partial` and then crashed writing its note file on a full disk; the note is now best effort. The real-engine hand-over test was **not rerun** in this pass (no change touched the code it exercises beyond `create`'s unchanged happy path); its last result is the passing run above (exit 0, `d13462d`-era code).
