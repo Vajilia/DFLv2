@@ -458,5 +458,115 @@ class Boundary(unittest.TestCase):
         self.assertTrue(bc.clock.position(T0 + q.end1 + 3000) > q.end1)
 
 
+class LatePreparation(unittest.TestCase):
+    """The next season is prepared late: after the season on air has already reached its end. The clock must hold safely at the end (a store marked continuous), then
+    continue into the next season without skipping any of its viewing time and without exposing anything of it early. A store that was not marked (the single-season
+    rehearsal behaviour) keeps running past its end; when its successor then appears, the successor starts at that moment, never in the past."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        B.FSYNC = False
+        self.addCleanup(setattr, B, 'FSYNC', True)
+        self.r = Rig(self.tmp.name)
+        self.r.y1.build(4)
+
+    def mark(self):
+        open(os.path.join(self.r.store, S.CONTINUOUS), 'w').close()
+
+    def carry(self):
+        return B.get(os.path.join(self.r.store, S.CARRY))
+
+    def test_a_continuous_store_holds_at_the_end_then_continues_without_skipping(self):
+        r = self.r
+        self.mark()
+        bc = r.started(guard=True, pos=r.end1 - 30)
+        for t in range(0, 400):                                   # the wall clock goes on for 400 s; season 2 is not prepared
+            bc.tick(T0 + t)
+        self.assertAlmostEqual(bc.clock.position(T0 + 399), r.end1, delta=1.5, msg='held at the end of the season on air')
+        self.assertEqual(r.js('status.json')['runner']['state'], 'paused')
+        self.assertFalse(os.path.exists(os.path.join(r.store, S.CARRY)))
+        r.y2.build(4)                                             # prepared late
+        pos = []
+        for t in range(400, 700):
+            bc.tick(T0 + t)
+            pos.append(bc.clock.position(T0 + t))
+        c = self.carry()
+        self.assertEqual(c['offset_s'], r.end1, 'season two starts where season one ended, however long the wait was')
+        self.assertEqual(r.js('status.json')['runner']['state'], 'running')
+        text = r.text_of_tree()
+        for n in (6, 7, 8):
+            self.assertNotIn('RESULT-OF-EVENT-%d' % n, text)
+        self.assertNotIn('HONORS-OF-902', text)
+        self.assertGreater(pos[-1], r.end1 + 200, 'the clock went on into season two')
+        self.assertEqual(r.js('broadcast/live/S902-reg-w01-g01/manifest.json')['state'], 'live')
+
+    def test_a_partly_built_next_season_holds_at_the_builders_horizon_then_continues(self):
+        r = self.r
+        self.mark()
+        r.y2.build(1)                                             # only the opening event is built
+        bc = r.started(guard=True, pos=r.end1 - 5)
+        last = -1
+        for t in range(0, 1500):
+            bc.tick(T0 + t)
+            v = bc.view()
+            pos = bc.clock.position(T0 + t)
+            if v.horizon is not None:
+                self.assertLessEqual(pos, v.horizon + 1.5, 'never past what is built (t=%d)' % t)
+            self.assertGreaterEqual(pos, last)
+            last = pos
+        text = r.text_of_tree()
+        for n in (6, 7, 8):
+            self.assertNotIn('RESULT-OF-EVENT-%d' % n, text)
+        held = bc.clock.position(T0 + 1499)
+        self.assertLess(held, r.end1 + r.y2.plan['total_s'])
+        r.y2.build(4)
+        for t in range(1500, 1500 + 40):
+            bc.tick(T0 + t)
+        self.assertGreater(bc.clock.position(T0 + 1539), held + 20, 'the clock continues once more is built')
+
+    def test_an_unmarked_store_that_ran_past_its_end_starts_the_next_season_at_the_hand_over(self):
+        r = self.r
+        bc = r.started()                                          # not marked: the single-season behaviour, the clock runs on
+        run(bc, 0, r.end1 + 3000)
+        self.assertGreater(bc.clock.position(T0 + r.end1 + 3000), r.end1 + 2999)
+        r.y2.build(4)
+        bc.tick(T0 + r.end1 + 3005)
+        c = self.carry()
+        pos = bc.clock.position(T0 + r.end1 + 3005)
+        self.assertGreaterEqual(c['offset_s'], pos - 1, 'season two starts now, not 3000 s ago')
+        text = r.text_of_tree()
+        for n in (5, 6, 7, 8):
+            self.assertNotIn('RESULT-OF-EVENT-%d' % n, text, 'nothing of season two is public at the moment it starts')
+        self.assertFalse(os.path.exists(r.pub('broadcast/live/S902-reg-w01-g01')))
+        run(bc, r.end1 + 3006, r.end1 + 3006 + 150)
+        self.assertIn('RESULT-OF-EVENT-5', r.text_of_tree(), 'the opening event is released 100 s after the hand-over')
+        self.assertNotIn('RESULT-OF-EVENT-6', r.text_of_tree())
+
+    def test_the_final_tree_does_not_depend_on_when_the_next_season_was_prepared(self):
+        r = self.r
+        self.mark()
+        end2 = r.end1 + r.y2.plan['total_s']
+        bc = r.started(guard=False)
+        run(bc, 0, r.end1 + 1000)                                 # held at the end for a long while
+        r.y2.build(2)
+        run(bc, r.end1 + 1001, r.end1 + 1400)
+        r.y2.build(4)
+        run(bc, r.end1 + 1401, r.end1 + 1401 + r.y2.plan['total_s'] + 300)
+        got = r.tree()
+        tmp = tempfile.mkdtemp(dir=self.tmp.name)
+        q = Rig(tmp)
+        q.y1.build(4)
+        q.y2.build(4)
+        open(os.path.join(q.store, S.CONTINUOUS), 'w').close()
+        bc2 = q.started()
+        run(bc2, 0, end2 + 300)
+        want = q.tree()
+        self.assertEqual(sorted(got), sorted(want))
+        for k in want:
+            if k not in ('broadcast/schedule.json',) and not k.endswith('index.json') and not k.endswith('latest.json'):
+                self.assertEqual(got[k], want[k], k)
+
+
 if __name__ == '__main__':
     unittest.main()
