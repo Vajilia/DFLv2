@@ -46,7 +46,8 @@ All of it on this branch's code. Production, the Droplet and `site/` were not in
 | A next season that does not fit | foreign game id / wrong first event: no carry record, nothing of season 2 public, clock held. |
 | **Real engine, determinism across the boundary** | A copy of a finished real year-1 league (seed 20261105): `next-season`, then the builder fired events 48 to 60 (offseason, draft, week 1, Tour round 1) one at a time with feed, replay and live-recording builds in between. A twin copy was run by the league runner alone to event 60. **`league_store.py digest` of both: identical** (journal, state and RNG consequences). Only season 2's 24 games were taken from the exporter (not 424). |
 | **Real store, daemon in virtual time** (`broadcast_multiseason_check.py`, step 20 s) | Season 1 whole (400 games, 59,287 files at its end), hand-over at 172,800 s, season 2's first results public at 181,740 s; 424 games public, 4 Honors parts (season 1's), season-1 files and index entries unchanged, `(season, id)` and `gid` unique with ids repeated between seasons, every playback file equal to its entry, no release not yet due public. **0 problems**, 100 s. |
-| Existing suites | `test_season`, `test_broadcast`, `_guard`, `_timetable`, `_plan`, `test_honors`: 59 tests pass unchanged. |
+| Real-engine determinism as a repeatable test | `tests/test_multiseason_engine.py`: needs a finished first season (`DFL_TEST_YEAR1_ROOT`, about 35 minutes to make; only copied), **skipped otherwise**. Run on 2026-11-06 against the disposable year-1 league: passes (13 events of season 2: identical league digests, only season 2's games taken). |
+| Existing suites | `test_season`, `test_broadcast`, `_guard`, `_timetable`, `_plan`, `test_honors`, `test_broadcast_build` (now 8 tests, one added: `next-season` refused until the season is built), `test_broadcast_run`: unchanged and passing. |
 
 ## 4. What does not change, and one observation for the frontend
 
@@ -68,3 +69,9 @@ python tools/broadcast_build.py next-season --root R                        # af
 python tools/broadcast_build.py step --root R                               # builds season 2 (events 48 to 94)
 python tools/broadcast_multiseason_check.py --root Rcopy --public P --state S --step 20 --past 600   # use COPIES; P and S new
 ```
+
+## 7. Appendix: the intermittent broadcast test (investigation, 2026-11-06)
+
+Method: `tests.test_site_broadcast` (7 tests, real Chromium) run **sequentially, one process at a time, nothing else running**, 20 times normally and 20 times pinned to one core (`taskset -c 0`) with a busy loop competing for that same core (about half the CPU; each run 14 to 15 s instead of 11 s). The harness kept the complete output of any failing run (none was kept).
+
+Result: **40 of 40 runs passed; the failure was not reproduced** in either condition. It stays **unresolved**: the original unidentified failure was seen when suites ran together, and a single clean run family proves nothing about that case. If it recurs, capture the exact assertion and the whole output of that run (the harness is a ten-line shell loop: `python -W ignore -m unittest -v tests.test_site_broadcast > run_N.log`, delete the log when the exit status is 0). Unrelated, already recorded in `docs/COMBINED_RELEASE_PLAN.md`: `test_history_lists_other_replays_of_a_season_collapsed_with_a_label_and_a_link` (frontend) is a known test race, and `tests/test_site_recovery.py` imports a sibling module and must be run with `python -m unittest discover -s tests -p test_site_recovery.py` (2 tests, passing); run as `tests.test_site_recovery` it fails at import, which is the test layout, not a defect of the code under test.

@@ -39,7 +39,7 @@ Dependencies of the stack: continuity builds on the rehearsal branch, which buil
 * Pause, restart and recovery in real time (proven in virtual time and with a real-time smoke test of the daemon).
 
 ### Known but unresolved
-* `tests/test_site_broadcast.py` is reported intermittent; **not reproduced** so far (see section 4 of the handoff; result in `docs/BROADCAST_CONTINUITY.md` appendix if it recurs). The history test `test_history_lists_other_replays...` in `test_site_replay_links.py` is a known test race (frontend), and a team-page scroll-restore failure seen once is unreproduced. All three are frontend-test issues, none is a backend defect found.
+* `tests/test_site_broadcast.py` is reported intermittent; **not reproduced in 40 sequential runs** (20 normal, 20 on one contended core; `docs/BROADCAST_CONTINUITY.md` section 7). Still open. The history test `test_history_lists_other_replays...` in `test_site_replay_links.py` is a known test race (frontend), and a team-page scroll-restore failure seen once is unreproduced. All three are frontend-test issues, none is a backend defect found.
 * Network peeking remains possible by design (whole plays in segments); not claimed secret.
 * Disk: about 2.0 GB per season (`docs/STORAGE_RETENTION.md`); no pruning exists.
 

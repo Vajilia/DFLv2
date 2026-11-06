@@ -83,6 +83,13 @@ class Builder(unittest.TestCase):
         self.assertNotEqual(p.returncode, 0)
         self.assertIn('one event at a time', p.stderr)
 
+    def test_next_season_is_refused_until_the_season_is_completely_built(self):
+        p = sh('next-season', '--root', self.root, check=False)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn('not completely built', p.stderr + p.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.store, S.SEASONS)))
+        self.assertEqual(json.loads(sh('status', '--root', self.root).stdout)['season'], 1)
+
     def test_a_second_init_on_the_same_folder_is_refused(self):
         p = sh('init', '--root', self.root, '--seed', '4242', check=False)
         self.assertNotEqual(p.returncode, 0)
