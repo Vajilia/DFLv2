@@ -378,6 +378,36 @@ class Boundary(unittest.TestCase):
         want = self.uninterrupted(r.end1 + 5400)
         self.assertEqual(sorted(got), sorted(want))
 
+    def test_a_guarded_daemon_killed_just_before_the_boundary_resumes_without_skipping(self):
+        """Production's clock is guarded: it cannot pass the end of the season on air while the successor is not yet on air, so a restart that finds the viewers' clock
+        frozen at its lease end still hands over at the season's end and season two starts counted from there."""
+        r = self.r
+        self.start_year_two()
+        bc = r.started(guard=True, pos=r.end1 - 120)
+        for t in range(0, 80):                                   # 40 s before the end
+            bc.tick(T0 + t)
+        bc2 = r.daemon(guard=True)                               # a new process after 400 s of nothing
+        now = T0 + 80 + 400
+        pos = []
+        for k in range(0, 800):
+            bc2.tick(now + k)
+            pos.append(bc2.clock.position(now + k))
+        c = B.get(os.path.join(r.store, S.CARRY))
+        self.assertEqual(c['offset_s'], r.end1, 'the successor starts at the end of the season it follows, however the restart fell')
+        self.assertTrue(all(b - a <= 1.0001 for a, b in zip(pos, pos[1:])), 'the clock never jumped')
+        final_pos = int(round(pos[-1]))
+        tmp = tempfile.mkdtemp(dir=self.tmp.name)
+        q = Rig(tmp)
+        q.y1.build(4)
+        q.y2.build(4)
+        qb = q.started()
+        run(qb, 0, final_pos)
+        a, b = q.tree(), r.tree()
+        for k in a:
+            if k.startswith(('broadcast/live/S902', 'releases/e0000')) and k in b:
+                self.assertEqual(a[k], b[k], k)
+        self.assertEqual(r.js('status.json')['published_events'], q.js('status.json')['published_events'])
+
     def test_the_whole_public_tree_is_a_function_of_the_position_in_both_seasons(self):
         r = self.r
         self.start_year_two()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A real built store, two seasons, the daemon in VIRTUAL time across the year boundary (docs/BROADCAST_CONTINUITY.md). Development tool; touches only the folders given.
 
-  broadcast_multiseason_check.py --root R --public P --state S [--step 20] [--past 400] [--report FILE]
+  broadcast_multiseason_check.py --root R --public P --state S [--step 20] [--past 400] [--through-end] [--report FILE]
 
 R   a private root whose first season is completely built and whose next season was prepared with `broadcast_build.py next-season` and built at least as far as the
     results of its first week. R/store/carry.json is written by the check (the daemon's hand-over); use a COPY of a root. P and S must be new.
@@ -12,6 +12,8 @@ the public tree just before the hand-over, runs on into the next season up to `-
   * (season, id) and gid are unique in the indexes although ids repeat between seasons; every playback file matches its entry's season, gid, score and SHA-256
   * nothing of the second season is public before its own time: no second-season release, result or award until the block that reveals it
   * latest.json never moves backwards
+`--through-end`: run on to the END of the second season (every window, the postseason, the Honors show, the year close) plus `--past` seconds, and check the whole
+second season: all its games and events public, its four Honors parts, the final release, the cumulative indexes (both seasons, nothing lost).
 Exit 0 and a JSON report if every check passes.
 """
 import argparse
@@ -54,6 +56,7 @@ def main(argv=None):
     ap.add_argument("--state", required=True)
     ap.add_argument("--step", type=float, default=20.0)
     ap.add_argument("--past", type=float, default=400.0)
+    ap.add_argument("--through-end", action="store_true")
     ap.add_argument("--report")
     a = ap.parse_args(argv)
     store = os.path.join(os.path.abspath(a.root), "store")
@@ -106,6 +109,7 @@ def main(argv=None):
     t = end1
     last_n = len(idx1["games"])
     stop_after = None
+    end2_at = None
     while True:
         bc.tick(t0 + t)
         pos_v = bc.view()
@@ -120,13 +124,19 @@ def main(argv=None):
             if first_reveal is None and any(e["season"] == plan1["season"] + 1 for e in ix["games"]):
                 first_reveal = t
                 stop_after = t + a.past
-        if stop_after is not None and t >= stop_after:
+        if a.through_end:
+            if pos_v.complete and pos_v.end_s is not None and bc.clock.position(t0 + t) >= pos_v.end_s and int(bc.plan["season"]) == plan1["season"] + 1:
+                if end2_at is None:
+                    end2_at = t
+                if t >= end2_at + a.past:
+                    break
+        elif stop_after is not None and t >= stop_after:
             break
         if pos_v.horizon is not None and bc.clock.position(t0 + t) >= pos_v.horizon and first_reveal is None and t > end1 + 3600 * 6:
             problems.append("the clock is held at the builder's horizon before the second season's first results (%s): build more events" % pos_v.horizon_why)
             break
         t += a.step
-        if t > end1 + p2["total_s"]:
+        if t > end1 + p2["total_s"] + (4 * 3600 if a.through_end else 0):
             problems.append("ran past the end of the second season without its first results")
             break
     notes["boundary_s"] = end1
@@ -168,6 +178,29 @@ def main(argv=None):
     check(not any(os.path.exists(os.path.join(a.public, "playback", e["file"])) for g, r in b2["games"].items() if int(r["seq"]) > last_events for e in [r["entry"]]),
           "a replay file of an event not yet revealed is public")
     notes["future_season2_games_checked"] = len(future_games)
+    if a.through_end:
+        n2 = sum(1 for e in idx["games"] if e["season"] == plan1["season"] + 1)
+        notes.update(season2_games_public=n2, season2_end_s=end2_at)
+        check(end2_at is not None, "the second season never reached its end")
+        check(n2 == len(b2["games"]), "second season: %d of %d games public at its end" % (n2, len(b2["games"])))
+        want_parts = sorted(set(hon1["parts"][i]["part"] for i in range(len(hon1["parts"]))))
+        got2 = sorted(p["part"] for p in hon["parts"] if p["season"] == plan1["season"] + 1)
+        check(got2 == want_parts, "second season honors parts %s, expected %s" % (got2, want_parts))
+        for p in hon["parts"]:
+            check(os.path.exists(os.path.join(a.public, "broadcast/honors", p["file"])), "honors file missing: %s" % p["file"])
+        last_rel = js(a.public, "latest.json")["release"]
+        check(int(last_rel[1:6]) == max(int(k) for k in b2["events"]), "latest.json is %s, expected the season's last event %s" % (last_rel, max(int(k) for k in b2["events"])))
+        check(len(rep["games"]) == len(idx["games"]), "replay library lists %d games, results index %d" % (len(rep["games"]), len(idx["games"])))
+        # every second-season live recording is final, every replay file exists
+        not_final = [g["gid"] for g in rep["games"] if js(a.public, "broadcast/live/%s/manifest.json" % B.safe(g["gid"]))["state"] != "final"]
+        check(not not_final, "live recordings not final: %s" % not_final[:3])
+        check(all(os.path.exists(os.path.join(a.public, "broadcast/replays", g["replay"])) for g in rep["games"]), "a replay-library file is missing")
+        nf = n = 0
+        for d, _, names in os.walk(a.public):
+            for x in names:
+                n += 1
+                nf += os.path.getsize(os.path.join(d, x))
+        notes.update(public_files_at_end=n, public_bytes_at_end=nf)
     rep_out = {"ok": not problems, "problems": problems, "notes": notes, "wall_s": round(time.time() - started, 1), "season": plan1["season"]}
     if a.report:
         with open(a.report, "w") as f:

@@ -12,7 +12,7 @@ four events a season) into one private store, then runs the real daemon (src/dfl
   * nothing of a later season is public before its own time (no result marker, no Honors, no playback file, no replay-library entry of a season not yet on air)
   * latest.json never moves back and the clock never jumps
 and measures, at each boundary: resident memory of the daemon process, index and carry-record sizes, public tree size and file count, and the time of a tick.
-Then, for each season boundary named in --kill-at, it runs the same virtual timeline again with the daemon killed and restarted around that boundary (40 s before, 1 s
+Then, for each season boundary named in --kill-at, it runs the same virtual timeline again with the daemon killed and restarted around that boundary (120 s before, 1 s
 after and 700 s after) and requires the final public tree to equal the uninterrupted run's. Exit 0 and a JSON report when every check passes.
 """
 import argparse
@@ -242,7 +242,8 @@ def killed(base, seasons, step, boundary_k, ref, final_t):
     B.FSYNC = False
     out = {}
     end = tl.ends[boundary_k - 1]
-    for dt in (-40, 1, 700):
+    for dt in (-120, 1, 700):               # (not -40: the unguarded virtual clock would let the lease carry the viewers' position past the end during the gap, and a successor that late starts when it is
+        #   found, by design. Production's guarded clock cannot pass the end of a prepared season: tests/test_multiseason.py, guarded restart.)
         shutil.rmtree(public, ignore_errors=True)
         for f in (S.CARRY,):
             p = os.path.join(store, f)
