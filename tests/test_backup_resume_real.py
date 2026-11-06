@@ -121,7 +121,7 @@ class RealHandOver(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(root, 'store', S.CARRY)), 'the hand-over happened while the set was being taken')
         t_crash = moved['t'] - 8
         published = PUB.snapshot(public)                                       # everything public when the originals are lost
-                self.assertTrue(RS.verify(os.path.join(w, 'set'), deep=True)['ok'])
+        self.assertTrue(RS.verify(os.path.join(w, 'set'), deep=True)['ok'])
         ctl = os.path.join(w, 'control')
         os.makedirs(ctl)
         shutil.copytree(root, os.path.join(ctl, 'root'), symlinks=True)
