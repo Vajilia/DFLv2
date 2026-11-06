@@ -54,8 +54,11 @@ def sha(path):
 def built_events(store):
     """-> (highest event built, season on air) read from the private store."""
     last, season = 0, 1
-    for bf in [os.path.join(store, "builds.json")] + [os.path.join(store, "seasons", n, "builds.json") for n in sorted(os.listdir(os.path.join(store, "seasons")))
-                                                       if os.path.isdir(os.path.join(store, "seasons"))]:
+    files = [os.path.join(store, "builds.json")]
+    sd = os.path.join(store, "seasons")
+    if os.path.isdir(sd):
+        files += [os.path.join(sd, n, "builds.json") for n in sorted(os.listdir(sd))]
+    for bf in files:
         if os.path.exists(bf):
             b = json.load(open(bf))
             last = max([last] + [int(k) for k in b.get("events", {})])
