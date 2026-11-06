@@ -214,9 +214,9 @@ def restore(setdir, dest, fsync=True):
     if os.path.exists(os.path.join(tmp, "archive.db")):
         os.replace(os.path.join(tmp, "archive.db"), os.path.join(stage, "league", "league.db.archive"))      # the name the league records for its archive
     for n in CTL_FILES:
-        q = os.path.join(tmp, "config", n)
+        q = os.path.join(setdir, "league", "config", n)             # (league_backup keeps these under config/ and lists them, with SHA-256, in its manifest)
         if os.path.exists(q):
-            os.replace(q, os.path.join(stage, "league", "ctl", n))
+            shutil.copyfile(q, os.path.join(stage, "league", "ctl", n))
     shutil.rmtree(tmp)
     for comp in ("store", "public"):
         r = PBK.restore(os.path.join(setdir, comp), os.path.join(stage, comp), fsync=fsync)
