@@ -55,6 +55,13 @@ FEED = "/feed"
 # What stops the broadcast. Everything else a check can find is logged as a violation (and fails the rehearsal) but does not pause it.
 SPOILER_KINDS = {"early_or_unknown_file", "future_url_served", "pointer_wrong", "private_exposed"}
 RESOURCE_KINDS = {"disk_low", "public_too_large", "memory_high"}
+
+
+def is_tmp(name):
+    """The daemon's temporary names (src/dflsite/broadcast.py writes `.tmp-<pid>-<name>` then renames it onto the final name)."""
+    return name.startswith(".tmp-") or name.endswith(".tmp")
+
+
 MONITOR_KINDS = {"monitor_error", "monitor_blind"}
 TRIP_KINDS = SPOILER_KINDS | RESOURCE_KINDS | MONITOR_KINDS
 HEARTBEAT_EVERY_S = 5.0
@@ -366,10 +373,14 @@ class Watch:
         # debris
         for d, _, names in os.walk(self.public):
             for n in names:
-                if n.startswith(".tmp-") or n.endswith(".tmp"):
+                if is_tmp(n):
                     p = os.path.join(d, n)
-                    if now - os.path.getmtime(p) > 120:
-                        self.violation("stale_tmp", "temporary file %s is %.0f s old" % (os.path.relpath(p, self.public), now - os.path.getmtime(p)))
+                    try:
+                        age = now - os.path.getmtime(p)
+                    except FileNotFoundError:
+                        continue                                               # renamed into place between the listing and this look (atomic publication): it was not stale
+                    if age > 120:
+                        self.violation("stale_tmp", "temporary file %s is %.0f s old" % (os.path.relpath(p, self.public), age))
         free = shutil.disk_usage(self.public).free / 1e9
         if free < self.a.min_free_gb:
             self.violation("disk_low", "%.1f GB free (the floor is %.1f GB)" % (free, self.a.min_free_gb), {"free_gb": free})
@@ -383,12 +394,37 @@ class Watch:
                 pass                                                           # no cgroup files (not systemd, or not yet started): the unit's MemoryMax still holds
         return pos
 
+    def in_flight(self, rel, allowed):
+        """True only for a daemon temporary file that is being published right now: a `.tmp-` name that is fresh (or already gone: renamed into place) AND whose final name the
+        position allows. A temporary file for a name the position does not allow, or one that stays past the stale limit, is still an unexpected file."""
+        d, n = os.path.split(rel)
+        if not is_tmp(n) or not n.startswith(".tmp-"):
+            return False
+        rest = n[len(".tmp-"):]
+        finals = {rest}
+        head, sep, tail = rest.partition("-")
+        if sep and head.isdigit():
+            finals.add(tail)                                                   # `.tmp-<pid>-<name>` (src/dflsite/broadcast.py); `.tmp-<name>` is the replay copy
+        if not any(os.path.join(d, f) in allowed for f in finals):
+            return False
+        try:
+            return time.time() - os.path.getmtime(os.path.join(self.public, rel)) <= 120
+        except FileNotFoundError:
+            return True
+
     def full(self, now, pos_before):
         self.progress()
         listing = SC.list_public(self.public)
         self.progress()
         pos_after = self.clock.position(time.time())
-        size = sum(os.path.getsize(os.path.join(self.public, f)) for f in listing)
+        size = 0
+        for f in listing:
+            try:
+                size += os.path.getsize(os.path.join(self.public, f))
+            except FileNotFoundError:
+                if not is_tmp(os.path.basename(f)):
+                    raise                                                      # a PUBLISHED file vanished: not normal, still an error
+                # a temporary file renamed into place after the listing (atomic publication): its final name is not in this listing, the next pass sees it
         if size > self.a.max_public_gb * 1e9:
             self.violation("public_too_large", "%.2f GB" % (size / 1e9), {"bytes": size})
         self.progress()
@@ -396,7 +432,7 @@ class Watch:
         # in the first TOL_S seconds the daemon is still placing its very first files (the clock starts, then the first tick publishes): nothing can be called missing yet
         due = self.oracle.expected(pos_before - TOL_S)[0] if pos_before > TOL_S else set()
         # the grouped files (latest.json, playback/index.json, honors/index.json) are in `expected` by name only: their content is checked below
-        unexpected = sorted(listing - early_allowed)
+        unexpected = sorted(f for f in listing - early_allowed if not self.in_flight(f, early_allowed))
         missing = sorted(due - listing)
         if unexpected:
             self.violation("early_or_unknown_file", "%d files the position does not allow, e.g. %s" % (len(unexpected), unexpected[:3]),

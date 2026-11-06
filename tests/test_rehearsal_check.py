@@ -213,3 +213,148 @@ class Preflight(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TemporaryFileRace(unittest.TestCase):
+    """Rehearsal trip 2026-11-06: `monitor_error: FileNotFoundError` on `broadcast/live/<game>/.tmp-<pid>-<name>.json`. The daemon publishes atomically (write `.tmp-...`, then
+    `os.replace` onto the final name), so a monitor that LISTS a tree and then STATS a name it listed can find the temporary file already renamed. That is normal
+    operation, not a failure: the monitor must not trip on it. It must still find a published file that really disappeared, a temporary file that stays, and a genuine
+    inspection failure (anything but 'the temporary file is gone')."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        B.FSYNC = False
+        self.addCleanup(setattr, B, 'FSYNC', True)
+        self.pubdir = tempfile.mkdtemp()
+        self.rig = Rig(self.tmp.name)
+        self.rig.public = self.pubdir
+        self.bc = self.rig.daemon()
+        self.bc.clock.start(T0, 0.0, B.LEASE_S, ready_until=0.0)
+        run(self.bc, T0, T0 + 600)
+        self.w = RC.Watch(args(self.tmp.name, self.pubdir, self.tmp.name))
+        self.live = os.path.join(self.pubdir, 'broadcast', 'live', 'S001-tour-r1-g01')
+        os.makedirs(self.live, exist_ok=True)
+        self.tmpf = os.path.join(self.live, '.tmp-630207-s0084.json')
+        self.final = os.path.join(self.live, 's0084.json')
+
+    def kinds(self):
+        p = os.path.join(self.tmp.name, 'watch.log')
+        return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+
+    def publish_during(self, owner, name):
+        """Wrap `owner.name` so that the daemon's atomic rename happens right AFTER the monitor has listed the tree and BEFORE it looks at what it listed."""
+        real = getattr(owner, name)
+
+        def wrapper(*a, **k):
+            result = real(*a, **k)
+            if os.path.exists(self.tmpf):
+                os.replace(self.tmpf, self.final)
+            return result
+        return mock.patch.object(owner, name, wrapper)
+
+    def racing_walk(self):
+        real = os.walk
+
+        def walk(top, *a, **k):
+            for d, dirs, names in real(top, *a, **k):
+                if os.path.exists(self.tmpf) and os.path.basename(self.tmpf) in names:
+                    os.replace(self.tmpf, self.final)
+                yield d, dirs, names
+        return mock.patch.object(RC.os, 'walk', walk)
+
+    def test_a_temporary_file_renamed_after_it_was_listed_is_not_an_error_in_the_cheap_pass(self):
+        open(self.tmpf, 'w').write('{}')
+        with mock.patch.object(RC.time, 'time', lambda: T0 + 600), self.racing_walk():
+            self.w.cheap(T0 + 600)                                           # used to raise FileNotFoundError out of os.path.getmtime
+        self.assertNotIn('stale_tmp', self.kinds())
+        self.assertNotIn('monitor_error', self.kinds())
+        self.assertEqual(self.w.found, 0)
+
+    def test_a_temporary_file_renamed_after_it_was_listed_is_not_an_error_in_the_full_pass(self):
+        open(self.tmpf, 'w').write('{}')
+        with mock.patch.object(RC.time, 'time', lambda: T0 + 600), self.publish_during(RC.SC, 'list_public'):
+            pos = self.w.cheap(T0 + 600)
+            self.w.full(T0 + 600, pos)                                       # used to raise FileNotFoundError out of os.path.getsize
+        self.assertNotIn('monitor_error', self.kinds())
+
+    def test_a_temporary_file_that_is_merely_in_flight_is_not_a_finding(self):
+        open(self.tmpf, 'w').write('{}')                                     # fresh and still there: not stale, not an error
+        with mock.patch.object(RC.time, 'time', lambda: T0 + 600):
+            self.w.cheap(T0 + 600)
+        self.assertNotIn('stale_tmp', self.kinds())
+
+    def test_a_temporary_file_that_stays_is_still_stale_debris(self):
+        open(self.tmpf, 'w').write('{}')
+        os.utime(self.tmpf, (T0 + 100, T0 + 100))
+        with mock.patch.object(RC.time, 'time', lambda: T0 + 600):
+            self.w.cheap(T0 + 600)
+        self.assertIn('stale_tmp', self.kinds())
+
+    def test_a_published_file_that_disappears_is_still_reported_not_swallowed(self):
+        victim = os.path.join(self.pubdir, 'latest.json')
+        self.assertTrue(os.path.exists(victim))
+        real = RC.SC.list_public
+
+        def vanish_after_listing(public):
+            out = real(public)
+            os.unlink(victim)                                                # a PUBLISHED file, not a temporary one
+            return out
+        with mock.patch.object(RC.time, 'time', lambda: T0 + 600), mock.patch.object(RC.SC, 'list_public', vanish_after_listing):
+            pos = self.w.cheap(T0 + 600)
+            try:
+                self.w.full(T0 + 600, pos)
+            except FileNotFoundError:
+                return                                                       # raised out of full: the run loop turns it into monitor_error and trips, as before
+        self.assertTrue(set(self.kinds()) & {'missing_file', 'monitor_error'}, self.kinds())
+
+    def test_a_genuine_inspection_failure_on_a_temporary_file_is_still_raised(self):
+        open(self.tmpf, 'w').write('{}')
+        with mock.patch.object(RC.time, 'time', lambda: T0 + 600), mock.patch.object(RC.os.path, 'getmtime', side_effect=PermissionError(13, 'denied')):
+            with self.assertRaises(PermissionError):
+                self.w.cheap(T0 + 600)
+
+    def test_the_run_loop_still_trips_on_an_unexpected_error(self):
+        """The `except Exception` of the run loop is untouched: any error that is not 'the temporary file is gone' still becomes monitor_error."""
+        src = open(os.path.join(os.path.dirname(RC.__file__), 'rehearsal_check.py')).read()
+        self.assertIn('self.violation("monitor_error"', src)
+
+    # --- the same cause one step later: a temporary file that is merely PRESENT in the listing of the full pass --------------------------------------------------------
+    def tmp_of(self, rel):
+        d, n = os.path.split(os.path.join(self.pubdir, rel))
+        return os.path.join(d, '.tmp-630207-' + n)
+
+    def full_pass(self, at=600):
+        with mock.patch.object(RC.time, 'time', lambda: T0 + at):
+            pos = self.w.cheap(T0 + at)
+            self.w.full(T0 + at, pos)
+
+    def test_an_in_flight_temporary_file_of_an_allowed_name_is_not_an_early_file(self):
+        t = self.tmp_of('latest.json')
+        open(t, 'w').write('{}')
+        os.utime(t, (T0 + 590, T0 + 590))
+        self.full_pass()
+        self.assertEqual(self.kinds(), [], 'the daemon was in the middle of publishing latest.json')
+
+    def test_a_temporary_file_for_a_name_the_position_does_not_allow_is_still_an_early_file(self):
+        future = sorted(self.w.oracle.expected(10 ** 9)[0] - self.w.oracle.expected(1000)[0])
+        self.assertTrue(future)
+        t = self.tmp_of(future[0])
+        os.makedirs(os.path.dirname(t), exist_ok=True)
+        open(t, 'w').write('{}')
+        os.utime(t, (T0 + 590, T0 + 590))
+        self.full_pass()
+        self.assertIn('early_or_unknown_file', self.kinds())
+
+    def test_a_stale_temporary_file_is_still_reported_by_the_full_pass(self):
+        t = self.tmp_of('latest.json')
+        open(t, 'w').write('{}')
+        os.utime(t, (T0 + 100, T0 + 100))
+        self.full_pass()
+        self.assertIn('stale_tmp', self.kinds())
+        self.assertIn('early_or_unknown_file', self.kinds(), 'a temporary file that does not go away is still a finding, as before')
+
+    def test_a_non_temporary_unknown_file_is_still_an_early_file(self):
+        open(os.path.join(self.pubdir, 'broadcast', 'surprise.json'), 'w').write('{}')
+        self.full_pass()
+        self.assertIn('early_or_unknown_file', self.kinds())
