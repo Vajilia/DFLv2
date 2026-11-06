@@ -12,6 +12,7 @@ Everything it makes is PRIVATE. Under the root R:
   store/        the broadcast store: plan.json, builds.json, feed/ (a private feed root: one release and one pointer per event), playback/ (full replay
                 files), games/ (live recordings), honors/ (parts), the clock and its log
   build.log.jsonl   what each event cost
+  .builder.lock     the root's exclusive lock (tools/rootlock.py): every changing command holds it while it runs, and so does a recovery set being taken
 
 The PUBLIC directory is a different folder that this program never receives, never writes and never derives a path into: only the daemon
 (tools/broadcast_run.py) copies a finished piece of the store into it, when the broadcast clock reaches the time it belongs to. A copy of R is therefore

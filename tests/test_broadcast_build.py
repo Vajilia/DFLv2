@@ -38,7 +38,7 @@ class Builder(unittest.TestCase):
 
     def test_everything_is_inside_the_private_root(self):
         self.assertEqual(os.listdir(self.parent), ['season'])
-        self.assertEqual(sorted(os.listdir(self.root)), ['build.log.jsonl', 'league', 'store'])
+        self.assertEqual(sorted(os.listdir(self.root)), ['.builder.lock', 'build.log.jsonl', 'league', 'store'])      # (the lock file: tools/rootlock.py)
 
     def test_each_event_has_a_private_release_and_its_own_pointer(self):
         self.assertEqual(sorted(int(k) for k in self.builds['events']), list(range(1, 14)))
