@@ -330,7 +330,9 @@ class Boundary(unittest.TestCase):
         r = self.r
         self.start_year_two()
         want = self.uninterrupted(r.end1 + 5400)
-        for kill_at in (r.end1 - 40, r.end1 + 1, r.end1 + 700):
+        # (-120, not -40: with this unguarded virtual clock the lease would carry the viewers' position past the end during the gap, and a successor that late starts
+        #  when found, by design - BROADCAST_CONTINUITY.md section 8. The guarded daemon killed 40 s before the end is the next test.)
+        for kill_at in (r.end1 - 120, r.end1 + 1, r.end1 + 700):
             tmp = tempfile.mkdtemp(dir=self.tmp.name)
             q = Rig(tmp)
             q.y1.build(4)
