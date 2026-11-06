@@ -106,6 +106,21 @@ class Set(Fixture):
         self.assertEqual(PBK.CLOSURE['public'](PBK.Tree(os.path.join(out, 'public'))), [])
         self.assertEqual(json.load(open(os.path.join(out, 'public/latest.json')))['release'][:6], 'e00014', 'the event built after the restore is published by the restored daemon')
 
+    def test_the_capture_order_is_public_then_store_then_league(self):
+        """What the code does (and what docs/PUBLIC_BACKUP.md says): public folder, private store, league; each is complete before the next one starts."""
+        seen = []
+        part = self.set_path() + '.partial'
+
+        def hook(event, **info):
+            seen.append((event, tuple(sorted(d for d in ('public', 'store', 'league') if os.path.isdir(os.path.join(part, d))))))
+        res = RS.create(self.root, self.public, self.set_path(), fsync=False, hook=hook)
+        self.assertEqual(seen, [('start', ()), ('after_public', ('public',)), ('after_store', ('public', 'store')), ('after_league', ('league', 'public', 'store')),
+                                ('before_commit', ('league', 'public', 'store'))])
+        desc = json.load(open(os.path.join(self.set_path(), RS.DESCRIPTOR)))
+        self.assertEqual(desc['order'], ['public', 'store', 'league'])
+        t = {c: json.load(open(os.path.join(self.set_path(), c, PBK.MANIFEST if c != 'league' else 'BACKUP_MANIFEST.json'))) for c in ('public', 'store', 'league')}
+        self.assertLessEqual(t['public']['snapshot']['finished'], t['store']['snapshot']['finished'])
+
     def test_a_set_that_fails_before_the_commit_is_never_valid(self):
         def hook(event, **info):
             if event == 'after_store':
