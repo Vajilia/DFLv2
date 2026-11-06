@@ -84,6 +84,14 @@ class Inventory(unittest.TestCase):
         for r in cands:
             self.assertNotIn('903', os.path.basename(r['path']))
 
+    def test_the_private_replay_export_is_never_a_candidate(self):
+        """A replay cannot be re-made byte for byte from the archive (rosters come from the feed of the day), so the private export stays permanent."""
+        rows = [r for r in self.rows() if r['path'].startswith('store/playback/games/')]
+        self.assertTrue(rows)
+        for r in rows:
+            self.assertNotEqual(r['class'], 'cache_after_handover', r['path'])
+        self.assertTrue(any(r['class'] == 'permanent' for r in rows))
+
     def test_every_candidate_has_a_public_copy_of_the_same_size(self):
         for r in self.rows():
             if r['class'] != 'cache_after_handover' or '/games/' not in '/' + r['path']:

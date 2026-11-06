@@ -10,8 +10,9 @@ Classes (each file belongs to exactly one):
   permanent           the league and its archive, the season plans and builds, Honors parts, every feed release that is public or current, every playback
                       file (the published replay URLs, immutable), the cumulative indexes, `latest.json`. Never a candidate.
   cache_after_handover  private copies the builder made for a season that has been handed over (store/carry.json lists it) AND whose public copy exists with the
-                      same size: the live recordings and replay copies under store/games, the private playback export, the private feed releases of that season.
-                      Derivable from the archive again (export_playback.py / broadcast_build.py); not needed by the daemon once the season is behind the clock.
+                      same size: the live recordings and replay copies under store/games, the private feed releases of that season that are public.
+                      The live recordings are re-made byte for byte from the replay file (tools/storage_reconstruct_check.py); the private playback export is NOT a
+                      candidate (it cannot be re-made from the archive); not needed by the daemon once the season is behind the clock.
   duplicate_public    broadcast/replays/<name> and playback/games/<name> hold the same bytes: one copy could be a hard link (saves the size, removes no URL).
   old_live            broadcast/live/<game>/ of a final game in a season older than the newest `--keep-live-seasons`: only the replay of it is needed afterwards.
                       CONDITIONAL on the frontend (a Watch link to an old game would stop working); a decision, not a rule.
@@ -153,8 +154,10 @@ def inventory(root, public=None, keep_live=2):
                 e = files.get("games/" + name)
                 s = int(e["season"]) if e else season_of(name)
                 pubf = os.path.join(public, "playback", "games", name) if public else None
-                if s in handed and pubf and os.path.isfile(pubf) and os.path.getsize(pubf) == os.path.getsize(os.path.join(gdir, name)):
-                    add("cache_after_handover", "private", os.path.join(gdir, name), s, "private export of a replay already public (immutable name)")
+                if s in handed:
+                    # NOT a candidate: measured 2026-11-06, a replay exported again from the archive and a later feed is another file (220 of 400 differ: rosters come from
+                    # the feed release), so the published bytes cannot be re-made. The private export stays until two other verified copies exist (backup + public).
+                    add("permanent", "private", os.path.join(gdir, name), s, "published replay; not reproducible from the archive (rosters come from the feed of the day)")
                 else:
                     add("in_use", "private", os.path.join(gdir, name), s, "export of the season on air or being built")
         if os.path.exists(os.path.join(pbd, "index.json")):

@@ -29,7 +29,7 @@ Operator-owned items outside the broadcast, listed so nobody mistakes them for b
 | # | Rule | Class | Reclaims / season | Safe because | Needs |
 |---|---|---|---|---|---|
 | R1 | **Never remove:** league file, archive, WAL, plans, builds, `carry.json`, Honors parts, every public release, every `playback/games` file, the cumulative indexes, `latest.json` | permanent | 0 | these are the game history, the published replay URLs (immutable, cached for a year) and the recovery source | nothing |
-| R2 | **Private cache after hand-over:** for a season listed in `carry.json`, the private `store/games/<gid>/`, `store/playback/games/*` and its intermediate private releases (not the season's last) may be removed once each has a **public copy of the same size** (to be upgraded to byte-equality before any action) | `cache_after_handover` | ~0.9 GB private | the daemon no longer reads them after the hand-over (the carry record keeps what it needs); they are re-made byte for byte by `export_playback.py` and `broadcast_build.py` from the archive (rebuild determinism was verified on 2026-11-05: a rebuilt season equals the original except three fields that legitimately differ) | a verified backup pair (league + archive) taken after the season closed; the builder not running on that season; **scope the exporter to the season being built** so the next export does not recreate the deleted private files |
+| R2 | **Private cache after hand-over (revised 2026-11-06):** for a season listed in `carry.json`, the private live-recording folders `store/games/<gid>/` and the intermediate private releases that have an identical public copy (not the season's last) may be moved to quarantine once each has a **verified public copy** (byte equality, to be added before any action). **Not** the private `store/playback/games/*` replay export: see section 5, it cannot be re-made from the archive | `cache_after_handover` | ~0.6 GB private (the live recordings, 615 to 652 MB of which the replay copy is 0.25 GB) plus 34 MB of releases | live recordings are re-made byte for byte from the replay file (25 of 25 sampled equal, 31 MB); the daemon never reads them after the hand-over (tested: the tree published afterwards is identical with them gone) | a verified backup pair (league + archive) taken after the season closed **and a verified backup of the public folder** (section 5); the builder not running on that season; **scope the exporter to the season being built** so the next export does not recreate the files |
 | R3 | **One public copy of each replay:** make `broadcast/replays/<name>` a hard link to `playback/games/<name>` | `duplicate_public` | 0.25 GB public | same bytes, same URLs; nothing disappears | a small daemon change (link instead of copy); backups must preserve hard links (`tar` and `rsync -H` do) |
 | R4 | **Old live recordings:** `broadcast/live/<gid>/` of a final game older than the newest *K* seasons (proposed K = 2) | `old_live` | 0.4 GB public | its replay stays; only the "watch it as it was broadcast" files go | **a frontend decision** (does a Watch link to an old final game need the live files? `test_site_broadcast` covers a final replay for the season on air only) |
 | R5 | **Pruning the feed keep-list** (`export_public_feed --keep 200`): unchanged and not proposed to change; at 47 releases a season it covers four seasons of private releases | none | 0 | | nothing |
@@ -52,14 +52,48 @@ On the real two-season copy (season 1 handed over; season 2 built to event 60; t
 | `in_use` (season 2, season 1's recent public live recordings, unverified) | 318 | 63,331 |
 | **total scanned** | **1,836** | |
 
+That table was taken before the correction in section 5 (it counted the private replay export as a cache). **After the correction, on the two *complete* real seasons** (season 1 handed over, season 2 built to event 94 and published through the year close; league files not in this copy):
+
+| Class | MB | Files |
+|---|---|---|
+| `cache_after_handover` | 530.9 | 58,420 |
+| `duplicate_public` | 489.8 | 800 |
+| `permanent` | 846.5 | 8,875 |
+| `in_use` | 1,238.0 | 167,439 |
+| **total scanned** | **3,105** | |
+
 Before the hand-over the same inventory of the finished season-1 root lists **0 MB removable** (nothing is behind the clock yet), which is the point of the condition in R2. Several synthetic seasons were exercised by `tests/test_storage_inventory.py` (a small synthetic store with three seasons): only seasons behind the carry record appear as candidates and no path of the season on air ever does.
 
 ## 4. What must be preserved (checked by the inventory's classes and tests)
 
 * **Permanent game history:** the archive and league file are `permanent` and appear in no candidate list.
-* **Published replay URLs:** every `playback/games` file is `permanent` (the site links them; they are immutable, one year of cache). R3 keeps the URL and the bytes.
-* **Recovery:** the daemon needs, after a hand-over, only the season on air (plan, builds, its games, releases) and `carry.json`; the league needs its own file and archive. R2 never touches either; its candidates are all re-derivable.
+* **Published replay URLs:** every `playback/games` file is `permanent` (the site links them; they are immutable, one year of cache). R3 keeps the URL and the bytes. The private export in `store/playback/games` is permanent too (section 5).
+* **Recovery:** the daemon needs, after a hand-over, only the season on air (plan, builds, its games, releases) and `carry.json`; the league needs its own file and archive. R2 never touches either; its candidates are all re-derivable (live recordings) or have an identical public copy (releases).
 
-## 5. Not decided here
+## 5. What can be reconstructed, what must stay, what recovery depends on (read-only evidence, 2026-11-06)
+
+All measured on scratch copies; nothing in any league, store or public folder of value was changed. Tools: `tools/storage_reconstruct_check.py` (writes only to a new scratch folder), `tests/test_recovery_dependencies.py`, `tools/league_backup.py`.
+
+| Item | Can it be re-made? | Evidence |
+|---|---|---|
+| **Live recordings** `store/games/<gid>/` (head, segments, end, manifest, replay copy) | **Yes, byte for byte**, from the replay file with the daemon's own `store_game` | 25 of 25 games sampled across the season (31 MB): every file equal |
+| **Replay files** `store/playback/games/*` = public `playback/games/*` = `broadcast/replays/*` | **No.** Re-running `export_playback.py` against the archive and the *final* feed gave 220 of 400 different files (other bytes, hence **other content-hashed names, i.e. other URLs**): the exporter takes rosters and names from the feed release it is given, and players who left a roster by the end of the year are missing (`player 1240` instead of a name in the play text). 180 were identical. | `storage_reconstruct_check.py` on the finished real season |
+| **Private feed releases** (48 a season) | 41 of 48 are byte-identical to the public `releases/` copy; **7 are not public** (6 MB; why was not investigated) | same tool, `--public` |
+| **League state at an earlier event** | Not from the final file (5 rolling snapshots only); by deterministic replay from the seed (about 35 minutes a season, digest-identical, section 3 of `BROADCAST_CONTINUITY.md`) | twin digests |
+| **Public files of an earlier season** (live folders, releases, Honors, replays) | **Not by the daemon.** After the hand-over the daemon does not re-create them: with the public folder lost, 421 of about 700 synthetic files were missing afterwards, and the cumulative indexes still listed the earlier season with no file behind three of its entries (dangling links) | `tests/test_recovery_dependencies.py` |
+| **After the hand-over, are the earlier season's private caches read?** | No | same file: moving all of them away changes nothing published afterwards |
+| **League + archive** | Yes: `league_backup.py create` → `verify --deep` → `restore` on the event-94 league: **deep digest identical** to the original (`485b49f5…`, 94 events), about 4 minutes, 568 MB for the pair | run on the free-running twin |
+
+**What must remain permanent** (so R1 stands, with a stronger reason): the league file and its archive; the **published replay files** (they cannot be re-made identically, and their names are the public URLs); every public release; the plans, builds, `carry.json` and Honors parts; and the **public folder itself** as the only home of the earlier seasons' live recordings, Honors files and indexes.
+
+**What recovery depends on**
+1. *League:* a verified backup pair (league + archive) is sufficient; or the seed plus the same code (deterministic replay) for any earlier state.
+2. *Broadcast, season on air:* `plan.json`/`builds.json`, the season's `store/games`, releases and `carry.json`; a restarted daemon repairs its own public folder from these (tested at many boundaries).
+3. *Broadcast, earlier seasons:* **only the public folder** (and a backup of it). This is the finding that changes the plan: R2 (and any future retention action) must be preceded by a verified backup of the public folder, because the daemon cannot repair it, and removing the private caches would then remove the only other source. The private replay export is a second source for the replay files; the live recordings could still be re-made from it.
+4. *Not a dependency:* the engine code, `data/` or `site/` for replay of the broadcast.
+
+Consequences for the plan: R2's size is about 0.65 GB private a season, not 0.9; a **public-folder backup (with hard links preserved, if R3 is adopted) becomes an essential milestone before any retention action**; and a `repair` tool that re-materialises an earlier season's public files from the private caches would be the alternative to backups (not built, and it would need the caches R2 proposes to remove).
+
+## 6. Not decided here
 
 Whether to keep old live recordings (R4), the value of K, whether private caches should be rebuilt on demand or kept for a fixed number of seasons, and when a rollback copy may be dropped, are owner decisions. The implementation order is in `docs/COMPLETION_ROADMAP_2026-11-06.md`.

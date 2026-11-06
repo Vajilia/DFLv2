@@ -2,6 +2,8 @@
 
 Written from the repository (branches below) and the production and rehearsal records in `docs/COMBINED_RELEASE_PLAN.md`, `docs/BROADCAST_*.md`, `docs/STAGING_DEPLOYMENT_RECORD_20261031.md` and `docs/BROADCAST_REHEARSAL.md`, plus the state read on the Droplet on 2026-11-06 (read-only). **No percentages: a line is either true, with its evidence, or it is listed as open.** `PROJECT_COMPLETION_PLAN.md` (2026-10-29), `BETA_STATUS.md` and `docs/BUILD_STATUS.md` pre-date most of this and are partly superseded; where they disagree with this file, the code and the records cited here win. Nothing below was deployed, merged or started by this batch.
 
+**Status line (updated 2026-11-06, after the owner's 01:02 PST message): the real-time rehearsal is IN PROGRESS** on the rehearsal host, started by the owner with the installed package `c28ca13696` (both services active, the clock advancing, monitor heartbeats `"ok": true`, safety deadline `2026-11-08T14:18:10Z`: all as reported by the owner; **not verified by me, and deliberately not touched** - no restart, rebuild, replacement or other disturbance was made or is planned). **Multi-season real-time verification remains pending** (M5): the rehearsal exercises one season only; the installed package does not contain the continuity code. Production is stopped at event 188 and was not touched.
+
 ## 1. Pins
 
 | What | Branch | Full commit |
@@ -29,19 +31,21 @@ Dependencies of the stack: continuity builds on the rehearsal branch, which buil
 * The permission-independent installer (explicit modes; checks as the real Caddy and service users; regression test under `umask 027` proven to fail on the previous installer) and the reversible quarantine of the failed first install.
 
 ### Implemented and tested **locally only** (this batch, `backend/multiseason-continuity-2026-11-06`)
-* Multi-season continuity: hand-over by one carry record on a never-restarted clock; cumulative replay, playback and Honors indexes; builder `next-season`; see `docs/BROADCAST_CONTINUITY.md`.
-* Read-only storage inventory and retention proposal: `docs/STORAGE_RETENTION.md`.
+* Multi-season continuity: hand-over by one carry record on a never-restarted clock; cumulative replay, playback and Honors indexes; builder `next-season`; see `docs/BROADCAST_CONTINUITY.md`. Verified in virtual time: a real engine league through **all of season 2 to year close** (twin digests identical at event 94; the daemon through postseason, Honors and year close: 800 games, 8 Honors parts, 0 problems), **ten synthetic seasons** with restarts at three boundaries, pause/restart/crash across boundaries, and **late preparation of the next season** (a defect found and fixed: the clock now holds at a season's end in a store marked `continuous`, and a late successor starts at the hand-over, never in the past).
+* Read-only storage inventory and retention proposal: `docs/STORAGE_RETENTION.md`. **Evidence changed the proposal:** published replay files cannot be re-made from the archive (220 of 400 differ), the daemon does not repair an earlier season's public files, so the public folder is permanent and needs its own backup before any retention action; live recordings are re-made exactly.
 * Not in the installed package: the rehearsal runs one season (the package would need a rebuild from the final commit to carry the continuity code).
 
-### Awaiting the real-time rehearsal (needs the owner to pick a start, someone watching the first 90 minutes, and a new deadline)
+### The real-time rehearsal (IN PROGRESS since the owner's start on 2026-11-06 ~01:02 PST; the items below are what it must still show)
 * One capped 48-hour season in real time (47 events, 400 games, forced overrun `w041:450`), the guard and monitor under real load, the first real operation of the daemon and builder on the 1 vCPU / 2 GB host.
 * Real-phone behaviour, network-peeking limits as measured by someone, the broadcast frontend on a real device.
 * Pause, restart and recovery in real time (proven in virtual time and with a real-time smoke test of the daemon).
+* **Not covered by this rehearsal, still pending:** multi-season real-time verification (hand-over, hold at season end, recovery across a boundary in real time). A season is 48 hours, so M5 uses a short synthetic season pair on the host.
 
 ### Known but unresolved
-* `tests/test_site_broadcast.py` is reported intermittent; **not reproduced in 40 sequential runs** (20 normal, 20 on one contended core; `docs/BROADCAST_CONTINUITY.md` section 7). Still open. The history test `test_history_lists_other_replays...` in `test_site_replay_links.py` is a known test race (frontend), and a team-page scroll-restore failure seen once is unreproduced. All three are frontend-test issues, none is a backend defect found.
+* `tests/test_site_broadcast.py` is reported intermittent; **not reproduced in 40 sequential runs** (20 normal, 20 on one contended core; `docs/BROADCAST_CONTINUITY.md` section 10). Still open. The history test `test_history_lists_other_replays...` in `test_site_replay_links.py` is a known test race (frontend), and a team-page scroll-restore failure seen once is unreproduced. All three are frontend-test issues, none is a backend defect found.
 * Network peeking remains possible by design (whole plays in segments); not claimed secret.
-* Disk: about 2.0 GB per season (`docs/STORAGE_RETENTION.md`); no pruning exists.
+* Disk: about 2.0 GB per season (`docs/STORAGE_RETENTION.md`); no pruning exists. About 59,000 public files a season (inode and backup time at ten seasons not examined); the replay-library and results indexes grow by about 54 KB and 123 KB a season and are fetched whole.
+* **The public folder is the only home of earlier seasons' live recordings, Honors files and indexes and the daemon cannot rebuild it** (tested); published replay files are not reproducible from the archive. A backup and restore rehearsal of the public folder is therefore a precondition of any retention action.
 
 ### Still unbuilt (not in this batch, listed so they are not mistaken for done)
 * **Adopting the real league:** the builder only makes a fresh isolated league. Broadcasting seasons 5 onward of the existing league (stopped at 188) or starting a new league is an **owner decision** (below); the technical step is small (a plan with `event_base` 188) but unbuilt and unrehearsed.
@@ -53,13 +57,13 @@ Dependencies of the stack: continuity builds on the rehearsal branch, which buil
 
 ## 3. Shortest practical path to a continuously watchable, recurring league
 
-1. **Run the capped real-time rehearsal** with the installed package (owner picks the time). Essential, already prepared; everything else assumes its result.
+1. **The capped real-time rehearsal** with the installed package: **running now** (owner-started, deadline `2026-11-08T14:18:10Z`); its result decides what step 2 contains.
 2. **Fix what it finds** (in order of what the guard reports).
 3. **Decide the league** (fresh league or adopt the production league at 188) and the public hostname.
 4. **Package the continuity code and rehearse a hand-over in real time** on the rehearsal host with a deliberately short synthetic season (a few minutes long, same code and clock, real Caddy), because a real boundary is 48 hours away.
 5. **Unattended operation:** supervisor for builder, daemon, monitor and `next-season`; alerts; a disk floor that pauses the builder.
 6. **Production serving rules and rollback** on the production host, then cut-over.
-7. Retention action R2 (`docs/STORAGE_RETENTION.md`) before the third season.
+7. Public-folder backup and restore rehearsal (new, M8a), then retention action R2 (`docs/STORAGE_RETENTION.md`, revised) before the third season.
 
 Steps 1 and 3 need the owner; 4 to 7 are backend work; the frontend steps below run in parallel.
 
@@ -67,14 +71,15 @@ Steps 1 and 3 need the owner; 4 to 7 are backend work; the frontend steps below 
 
 | # | Milestone | Acceptance check | Depends on | Class |
 |---|---|---|---|---|
-| M1 | **Real-time capped rehearsal** (owner start time; first 90 minutes watched; deadline replaced by the owner) | `rehearsal_check.py` verdict COMPLETE: 47 events, 400 games, heartbeat entries throughout, zero guard trips or each trip explained, public tree < 3 GB, production fingerprint identical before and after, units disabled and stopped again at the end | installed `c28ca13696` | essential |
+| M1 | **Real-time capped rehearsal - IN PROGRESS** (started by the owner 2026-11-06 ~01:02 PST, deadline `2026-11-08T14:18:10Z`; not verified or touched by me) | `rehearsal_check.py` verdict COMPLETE: 47 events, 400 games, heartbeat entries throughout, zero guard trips or each trip explained, public tree < 3 GB, production fingerprint identical before and after, units disabled and stopped again at the end | installed `c28ca13696` | essential |
 | M2 | **Rehearsal findings fixed** | each finding has a failing test first and passes; production untouched | M1 | essential |
 | M3 | **League decision** recorded (fresh vs adopt-188; hostname) | written ruling; no code | owner | essential |
 | M4 | **Adopt mode** (only if M3 says adopt): builder starts from a copy of an existing league at a season boundary (`event_base` = its events, season = next) | a copy of the production league at 188: builder fires events 189 to 195 identical in digest to a free-running twin; the production league file is never opened for writing | M3, continuity | essential if adopt |
 | M5 | **Boundary rehearsal in real time**: package rebuilt from the final commit; a short synthetic season pair (minutes long) run through real Caddy and the real daemon across the hand-over, with pause and a kill around it | the checks of `tests/test_multiseason.py` hold on the host: first season's files and indexes unchanged, no early exposure, same public tree as an uninterrupted run | M1, continuity branch merged into the package | essential |
-| M6 | **Unattended operation**: supervisor (systemd units written and tested on a scratch host, not enabled), builder scheduling ahead of the clock, `next-season` automation, alerts on `season_not_started`, `coverage_wait`, guard trips and disk floor | a scratch-host run of two short seasons with an injected builder failure and a daemon kill, no human step | M5 | essential |
+| M6 | **Unattended operation** (start a recurring league with `init --continuous`, or `broadcast_build.py continuous`, so the clock holds at each season's end): supervisor (systemd units written and tested on a scratch host, not enabled), builder scheduling ahead of the clock, `next-season` automation, alerts on `season_not_started`, `coverage_wait`, guard trips and disk floor | a scratch-host run of two short seasons with an injected builder failure and a daemon kill, no human step | M5 | essential |
 | M7 | **Production serving rules and rollback rehearsal** for the broadcast on the production host | the same 55 HTTP and security checks plus the production verifier; rollback restores the fingerprint | M1 | essential |
-| M8 | **Retention action R2** (move, never delete; quarantine; manifest) and exporter scoped to the season being built | on a scratch copy: removed set equals the inventory's, season rebuilt byte-identical from the archive, daemon and builder unaffected; production untouched | owner approval of R2, M6 | essential before season 3 |
+| M8a | **Public-folder backup and restore rehearsal** (new): back up the public tree and the store, restore into a scratch host, same indexes and every listed file present; hard links preserved if R3 is adopted | restored tree byte-identical to the source; no dangling index entries | M5 | essential before any retention action |
+| M8 | **Retention action R2 (revised: live recordings and public-equal releases only, never the private replay export)** (move, never delete; quarantine; manifest) and exporter scoped to the season being built | on a scratch copy: removed set equals the inventory's, season rebuilt byte-identical from the archive, daemon and builder unaffected; production untouched | owner approval of R2, M6 | essential before season 3 |
 | M9 | Single public copy of each replay (hard link) | byte and URL identical; backup preserves links | continuity | later |
 | M10 | Old live recording policy (R4) and any frontend change it needs | owner and frontend decision | frontend | later |
 | M11 | Frontend: season ordering and labels in lists; real-phone check | ChatGPT's own tests plus a physical phone | continuity | later (phone check essential before launch) |
@@ -86,5 +91,5 @@ Out of this batch by instruction: economy, richer animation and narrative expans
 
 1. Fresh league or the existing league at 188 as the public league (changes what viewers see first; engine untouched either way).
 2. The rehearsal start time and who watches the first 90 minutes.
-3. Retention: R2 yes or no, R4 and the value of K, how many rollback copies to keep.
+3. Retention: R2 (revised) yes or no, R4 and the value of K, how many rollback copies to keep; and whether to keep two independent copies of every replay file (a backup of the public folder) as the standing rule.
 4. Whether the replay library should list the newest season first (a frontend interface choice).
