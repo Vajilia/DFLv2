@@ -19,6 +19,7 @@ and are checked against real runs by tests/test_backup_space.py.
 Exit 0 only when the preflight passed.
 """
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -179,6 +180,29 @@ def evaluate(needs, evidence_names=(), allow_ram=False, table=None, free=_free, 
             "estimate_only": "an estimate, not a reservation: other writers can still fill the disk; the tools handle a full disk safely" + (" (" + note + ")" if note else "")}
 
 
+def busy(path):
+    """If another operation holds this name's lock (tools/public_backup.py name_lock), say so (the lock is tried and released at once; nothing is written). Else None."""
+    p = os.path.abspath(path)
+    for suffix in (".partial", ".restoring"):
+        if p.endswith(suffix):
+            p = p[:-len(suffix)]
+    lp = os.path.join(os.path.dirname(p), "." + os.path.basename(p) + ".lock")
+    try:
+        fd = os.open(lp, os.O_RDONLY)
+    except OSError:
+        return None
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            who = os.pread(fd, 300, 0).decode("utf-8", "replace").strip()
+            return "another operation on %s is in progress (lock %s%s): nothing was touched" % (p, lp, ", held by " + who if who else "")
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return None
+    finally:
+        os.close(fd)
+
+
 def _need(path, what, b, margin_rate, fixed=0):
     return {"path": path, "what": what, "bytes": b, "margin": int(b * margin_rate) + fixed}
 
@@ -191,9 +215,12 @@ def preflight_create(src, out, allow_ram=False, table=None, free=_free, discard_
              _need(out, "of working index inside %s.partial (removed before the commit)" % os.path.basename(out), e["index"], MARGIN_INDEX)]
     r = evaluate(needs, [out], allow_ram, table, free)
     r["operation"], r["estimate"] = "create", e
+    b = busy(out)
+    if b:
+        r["problems"].insert(0, b)
     if os.path.exists(out):
         r["problems"].append("%s already exists: a backup is never overwritten" % out)
-    if os.path.isdir(out + ".partial") and not discard_partial:
+    if os.path.isdir(out + ".partial") and not discard_partial and not b:
         r["problems"].append("%s exists (an earlier backup did not finish): quarantine it first (public_backup.py quarantine); its space stays in use" % (out + ".partial"))
     r["ok"] = not r["problems"]
     return r
@@ -215,7 +242,10 @@ def preflight_restore(backup, dest, scratch=None, allow_ram=False, table=None, f
              _need(scratch, "of working index (removed afterwards)", e["index"], MARGIN_INDEX)]
     r = evaluate(needs, [dest], allow_ram, table, free)
     r["operation"], r["estimate"] = "restore", e
-    if os.path.isdir(dest + ".restoring"):
+    b = busy(dest)
+    if b:
+        r["problems"].insert(0, b)
+    if os.path.isdir(dest + ".restoring") and not b:
         r["problems"].append("%s exists (an earlier restore did not finish): quarantine it first (public_backup.py quarantine); its space stays in use" % (dest + ".restoring"))
     r["ok"] = not r["problems"]
     return r
@@ -237,7 +267,10 @@ def preflight_set(public, store, league_files, out, allow_ram=False, table=None,
              _need(out, "of the largest working index", max(ep["index"], es["index"]), MARGIN_INDEX)]
     r = evaluate(needs, [out], allow_ram, table, free)
     r["operation"], r["estimate"] = "recovery set create", {"public": ep, "store": es, "league_bytes": league}
-    if os.path.exists(out) or os.path.isdir(out + ".partial"):
+    b = busy(out)
+    if b:
+        r["problems"].insert(0, b)
+    if (os.path.exists(out) or os.path.isdir(out + ".partial")) and not b:
         r["problems"].append("%s or %s.partial exists: a set is never overwritten; quarantine an unfinished one first" % (out, out))
     r["ok"] = not r["problems"]
     return r

@@ -224,6 +224,22 @@ class LowSpace(Base):
         r = BS.preflight_set(self.path('src'), self.path('src'), [], self.path('set'), free=lambda p: 1 << 20)
         self.assertFalse(r['ok'])
 
+    def test_the_preflight_of_a_name_in_use_says_so_and_does_not_mistake_the_active_partial_for_a_stale_one(self):
+        make_files(self.path('src'), 400)
+        seen = {}
+
+        def hook(event, **info):
+            if event == 'file' and info['n'] == 3 and 'x' not in seen:
+                seen['x'] = BS.preflight_create(self.path('src'), self.path('bk'))
+                seen['cli'] = cli('create', '--src', self.path('src'), '--out', self.path('bk'), '--no-fsync')
+        PBK.create(self.path('src'), self.path('bk'), fsync=False, hook=hook)
+        self.assertFalse(seen['x']['ok'])
+        self.assertIn('in progress', seen['x']['problems'][0])
+        self.assertFalse(any('quarantine it first' in p for p in seen['x']['problems']))
+        self.assertEqual(seen['cli'].returncode, 1)
+        self.assertIn('in progress', seen['cli'].stdout)
+        self.assertTrue(PBK.verify(self.path('bk'))['ok'])
+
 
 class SimulatedFullDisk(Base):
     """A copy that runs out of space half way (simulated: always runs). The valid backups stay valid, the unfinished one is kept as evidence, and a retry works."""
