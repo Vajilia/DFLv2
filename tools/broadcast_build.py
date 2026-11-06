@@ -3,6 +3,7 @@
 
   broadcast_build.py init   --root R --seed N [--league-name NAME]      a fresh isolated league, the season plan, the event-0 feed release
   broadcast_build.py step   --root R [--events K]                        fire and build the next K events (default: all up to the end of the year)
+  broadcast_build.py next-season --root R                                prepare the next season (store/seasons/sNNN/) once the current one is completely built
   broadcast_build.py status --root R
 
 Everything it makes is PRIVATE. Under the root R:
@@ -44,9 +45,23 @@ PY = sys.executable
 
 def paths(root):
     root = os.path.abspath(root)
-    return {"root": root, "league": os.path.join(root, "league", "league.db"), "ctl": os.path.join(root, "league", "ctl"), "store": os.path.join(root, "store"),
-            "feed": os.path.join(root, "store", "feed"), "playback": os.path.join(root, "store", "playback"), "honors": os.path.join(root, "store", "honors"),
-            "log": os.path.join(root, "build.log.jsonl")}
+    P = {"root": root, "league": os.path.join(root, "league", "league.db"), "ctl": os.path.join(root, "league", "ctl"), "store": os.path.join(root, "store"),
+         "feed": os.path.join(root, "store", "feed"), "playback": os.path.join(root, "store", "playback"), "honors": os.path.join(root, "store", "honors"),
+         "log": os.path.join(root, "build.log.jsonl")}
+    P["bdir"], P["season_n"] = target(P["store"])
+    return P
+
+
+def target(store):
+    """The season being built: the folder holding its plan and builds, and its number. The first season's are at the store root; each later season's are in
+    store/seasons/sNNN/ (made by `next-season`). The builder always works on the highest one."""
+    best, n = store, 1
+    d = os.path.join(store, S.SEASONS)
+    if os.path.isdir(d):
+        for name in sorted(os.listdir(d)):
+            if len(name) == 4 and name[0] == "s" and name[1:].isdigit() and os.path.exists(os.path.join(d, name, S.PLAN)) and int(name[1:]) > n:
+                best, n = os.path.join(d, name), int(name[1:])
+    return best, n
 
 
 def run(args, what):
@@ -57,7 +72,7 @@ def run(args, what):
 
 
 def load_builds(P):
-    path = os.path.join(P["store"], S.BUILDS)
+    path = os.path.join(P["bdir"], S.BUILDS)
     if os.path.exists(path):
         return B.get(path)
     return {"format": S.BUILDS_FORMAT, "format_version": 1, "events": {}, "games": {}, "honors": {}, "league_id": None}
@@ -92,13 +107,14 @@ def export_feed(P, seq):
     return out["release"], "feed/pointers/" + name
 
 
-def build_games(P, builds, seq, key, slot_s):
-    """Export every game of event `seq` that is not yet recorded and build its live recording in the store. Returns the new gids."""
+def build_games(P, builds, seq, key, slot_s, season=None):
+    """Export every game of event `seq` that is not yet recorded and build its live recording in the store. Returns the new gids.
+    The export covers the league's whole archive, so only this season's games are taken (an earlier season's belong to its own builds)."""
     run([os.path.join(ROOT, "tools", "export_playback.py"), "--archive", P["league"] + ".archive", "--feed", P["feed"], "--out", P["playback"]], "playback export")
     idx = B.get(os.path.join(P["playback"], "index.json"))
     new = []
     for e in idx["games"]:
-        if e["gid"] in builds["games"]:
+        if e["gid"] in builds["games"] or (season is not None and int(e["season"]) != int(season)):
             continue
         path = os.path.join(P["playback"], e["file"])
         raw = open(path, "rb").read()
@@ -159,14 +175,15 @@ def cmd_init(a):
     release, ptr = export_feed(P, 0)
     builds = load_builds(P)
     builds["genesis"] = {"release": release, "events": 0, "pointer": ptr}
-    B.put(os.path.join(P["store"], S.BUILDS), builds)
+    B.put(os.path.join(P["bdir"], S.BUILDS), builds)
     print(json.dumps({"root": P["root"], "genesis": release, "events_in_plan": len(plan["events"])}))
     return 0
 
 
 def step_one(P, plan, slot_s):
     builds = load_builds(P)
-    done = max([int(k) for k in builds["events"]] or [0])
+    base = int(plan.get("event_base", 0))                      # league events of the seasons before this one
+    done = max([int(k) for k in builds["events"]] or [base])
     seq = done + 1
     t0 = time.time()
     have = league_events(P)
@@ -176,16 +193,16 @@ def step_one(P, plan, slot_s):
         raise SystemExit("the league has %d events but %d are built: the builder fires the league one event at a time and nothing else may" % (have, done))
     t1 = time.time()
     key = event_key(P, seq)
-    if key != plan["events"][seq - 1]:
-        raise SystemExit("event %d is %r but the plan expects %r" % (seq, key, plan["events"][seq - 1]))
+    if key != plan["events"][seq - base - 1]:
+        raise SystemExit("event %d is %r but the plan expects %r" % (seq, key, plan["events"][seq - base - 1]))
     release, ptr = export_feed(P, seq)
     t2 = time.time()
-    new = build_games(P, builds, seq, key, slot_s)
+    new = build_games(P, builds, seq, key, slot_s, plan["season"])
     t3 = time.time()
     parts = build_honors(P, builds, key, plan, teams_of(P, release))
     t4 = time.time()
     builds["events"][str(seq)] = {"key": key, "release": release, "events": seq, "pointer": ptr}
-    B.put(os.path.join(P["store"], S.BUILDS), builds)
+    B.put(os.path.join(P["bdir"], S.BUILDS), builds)
     rec = {"seq": seq, "key": key, "release": release, "games": len(new), "honors": parts,
            "seconds": {"league": round(t1 - t0, 1), "feed": round(t2 - t1, 1), "games": round(t3 - t2, 1), "honors": round(t4 - t3, 1)}, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     with open(P["log"], "a", encoding="utf-8") as f:
@@ -196,22 +213,48 @@ def step_one(P, plan, slot_s):
 
 def cmd_step(a):
     P = paths(a.root)
-    plan = B.get(os.path.join(P["store"], S.PLAN))
+    plan = B.get(os.path.join(P["bdir"], S.PLAN))
     slot = plan["params"]["slot_s"]
+    base = int(plan.get("event_base", 0))
     n = 0
     while True:
-        done = max([int(k) for k in load_builds(P)["events"]] or [0])
-        if done >= len(plan["events"]) or (a.events is not None and n >= a.events):
+        done = max([int(k) for k in load_builds(P)["events"]] or [base])
+        if done >= base + len(plan["events"]) or (a.events is not None and n >= a.events):
             break
         step_one(P, plan, slot)
         n += 1
     return 0
 
 
+def cmd_next_season(a):
+    """Prepare the next season in store/seasons/sNNN/ once the one being built is complete. The league has fired exactly the events built so far, so the next
+    season's first event is the league's next one; its plan carries the league's own event numbers (event_base). Nothing of it is public: only the daemon, at the
+    end of the season on air, starts it (src/dflsite/season.py)."""
+    P = paths(a.root)
+    plan = B.get(os.path.join(P["bdir"], S.PLAN))
+    builds = load_builds(P)
+    base = int(plan.get("event_base", 0))
+    done = max([int(k) for k in builds["events"]] or [base])
+    if done < base + len(plan["events"]):
+        raise SystemExit("season %d is not completely built (%d of %d events): build it first" % (plan["season"], done - base, len(plan["events"])))
+    if league_events(P) != done:
+        raise SystemExit("the league has %d events but %d are built" % (league_events(P), done))
+    n = int(plan["season"]) + 1
+    d = os.path.join(P["store"], S.SEASONS, "s%03d" % n)
+    if os.path.exists(d):
+        raise SystemExit("season %d is already prepared: %s" % (n, d))
+    import broadcast_plan as BP
+    os.makedirs(d)
+    B.put(os.path.join(d, S.PLAN), BP.build_plan(season=n, event_base=done))
+    B.put(os.path.join(d, S.BUILDS), {"format": S.BUILDS_FORMAT, "format_version": 1, "events": {}, "games": {}, "honors": {}, "league_id": builds.get("league_id")})
+    print(json.dumps({"season": n, "dir": d, "event_base": done}))
+    return 0
+
+
 def cmd_status(a):
     P = paths(a.root)
     b = load_builds(P)
-    print(json.dumps({"events_built": len(b["events"]), "games_built": len(b["games"]), "honors": sorted(b["honors"])}))
+    print(json.dumps({"season": P["season_n"], "events_built": len(b["events"]), "games_built": len(b["games"]), "honors": sorted(b["honors"])}))
     return 0
 
 
@@ -226,6 +269,9 @@ def main(argv=None):
     p.add_argument("--root", required=True)
     p.add_argument("--events", type=int)
     p.set_defaults(fn=cmd_step)
+    p = sub.add_parser("next-season")
+    p.add_argument("--root", required=True)
+    p.set_defaults(fn=cmd_next_season)
     p = sub.add_parser("status")
     p.add_argument("--root", required=True)
     p.set_defaults(fn=cmd_status)

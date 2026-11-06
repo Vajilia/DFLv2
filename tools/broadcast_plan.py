@@ -10,6 +10,8 @@ A plan is one league year of broadcast, in NOMINAL broadcast seconds (no overrun
   games   which window every regular-season and Tour game belongs to (from data/season1/SCHEDULE.csv and TOUR.csv, the same every season)
   rounds  which windows each postseason round uses; its games are assigned by conference when the round is built
   events  the 47 events of a year in firing order, each one revealed by exactly one block
+  season, event_base   the season number and how many league events came before it (0 for the first season): the league's event numbers of this season are
+          event_base+1 .. event_base+47, so the builds of a later season carry the league's own (global) event numbers
 
 Nothing here depends on a game's result or length: a plan is the same for every league. It is data for the daemon, not a promise about a result.
 Standard library only (the check against the engine's own event calendar lives in the tests).
@@ -40,7 +42,7 @@ def window_name(date_iso, kickoff):
     return T.NAMES[dt.date.fromisoformat(date_iso).weekday()] + " " + kickoff
 
 
-def build_plan(params=None, season=1):
+def build_plan(params=None, season=1, event_base=0):
     P, segs = T.build(params)
     items, wcount = [], 0
     cal_windows = {}       # (calendar_week, 'Sat 17:30') -> key       (numbered regular weeks and break weeks with Tour games)
@@ -107,7 +109,7 @@ def build_plan(params=None, season=1):
             events += it["events"]
     if len(events) != len(set(events)):
         raise PlanError("an event is revealed twice")
-    plan = {"format": FORMAT, "format_version": VERSION, "season": season, "total_s": items[-1]["end_s"], "params": {"slot_s": P["slot_s"], "target_s": P["target_s"]},
+    plan = {"format": FORMAT, "format_version": VERSION, "season": season, "event_base": event_base, "total_s": items[-1]["end_s"], "params": {"slot_s": P["slot_s"], "target_s": P["target_s"]},
             "items": items, "games": games, "rounds": round_windows, "single": single,
             "round_sizes": {k: [it["expected"] for it in items if it["kind"] == "window" and it["key"] in v] for k, v in round_windows.items()}, "events": events}
     return plan
@@ -126,9 +128,10 @@ def _rows(name):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--season", type=int, default=1)
+    ap.add_argument("--event-base", type=int, default=0, help="league events that came before this season (47 a season)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    plan = build_plan(season=a.season)
+    plan = build_plan(season=a.season, event_base=a.event_base)
     if a.json:
         print(json.dumps(plan, indent=1, sort_keys=True))
     else:
