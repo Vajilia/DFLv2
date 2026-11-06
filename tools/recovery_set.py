@@ -19,6 +19,7 @@ Rules a set must satisfy (recomputed from the component manifests by `verify`, n
 The set is committed like a public backup: written under SET.partial, RECOVERY_SET.json last, renamed.
 """
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -30,6 +31,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import public_backup as PBK  # noqa: E402
+import rootlock as RL  # noqa: E402
 
 FORMAT = "dfl-recovery-set"
 DESCRIPTOR = "RECOVERY_SET.json"
@@ -113,8 +115,34 @@ def rules(league_ev, built, season_on_air, pub_ev, pub_season, store_quiet, pub_
     return out
 
 
-def create(root, public, out, note=None, fsync=True, hook=None):
+def create(root, public, out, note=None, fsync=True, hook=None, pub_hook=None):
+    """Take a recovery set. The builder is EXCLUDED, not merely checked: the root's exclusive lock (tools/rootlock.py, the one every changing `broadcast_build.py` command
+    takes) is held from before the first event count is read until the set is committed or has failed, and a league runner that is running (`league/ctl/runner.lock`) is
+    refused too. A builder that is running refuses the set at once and nothing is copied; a builder started during the set is refused (exit 75) and changes nothing.
+    `pub_hook` is passed to the public backup (tests only)."""
     root, public, out = os.path.abspath(root), os.path.abspath(public), os.path.abspath(out)
+    try:
+        lock = RL.hold(root, "recovery set (tools/recovery_set.py create)")
+        lock.__enter__()
+    except RL.Busy as e:
+        raise Failed("the builder is not idle, so no recovery set was started: %s" % e)
+    runner = None
+    try:
+        rl = os.path.join(root, "league", "ctl", "runner.lock")
+        if os.path.isdir(os.path.dirname(rl)):
+            runner = os.open(rl, os.O_RDWR | os.O_CREAT, 0o644)
+            try:
+                fcntl.flock(runner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                raise Failed("a league runner is running (%s is held), so no recovery set was started" % rl)
+        return _create(root, public, out, note, fsync, hook, pub_hook)
+    finally:
+        if runner is not None:
+            os.close(runner)
+        lock.__exit__(None, None, None)
+
+
+def _create(root, public, out, note, fsync, hook, pub_hook):
     hook = hook or (lambda *a, **k: None)
     if os.path.exists(out) or os.path.exists(out + ".partial"):
         raise Failed("%s (or its .partial) exists: a set is never overwritten" % out)
@@ -126,7 +154,7 @@ def create(root, public, out, note=None, fsync=True, hook=None):
     t0 = time.time()
     ev0, built0 = league_events(league), built_events(store)
     hook("start")
-    pub = PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync)
+    pub = PBK.create(public, os.path.join(part, "public"), "public", fsync=fsync, hook=pub_hook)
     hook("after_public")
     sto = PBK.create(store, os.path.join(part, "store"), "store", fsync=fsync)
     hook("after_store")

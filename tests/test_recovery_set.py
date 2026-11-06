@@ -10,12 +10,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'src'))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import public_backup as PBK
 import recovery_set as RS
+import rootlock as RL
 from dflsite import broadcast as B, season as S
 
 BUILD = os.path.join(ROOT, 'tools', 'broadcast_build.py')
@@ -104,17 +106,6 @@ class Set(Fixture):
         self.assertEqual(PBK.CLOSURE['public'](PBK.Tree(os.path.join(out, 'public'))), [])
         self.assertEqual(json.load(open(os.path.join(out, 'public/latest.json')))['release'][:6], 'e00014', 'the event built after the restore is published by the restored daemon')
 
-    def test_a_builder_that_moves_during_the_set_makes_it_invalid(self):
-        def hook(event, **info):
-            if event == 'after_public':
-                sh('step', '--root', self.root, '--events', '1')
-        with self.assertRaises(RS.Failed) as c:
-            RS.create(self.root, self.public, self.set_path(), fsync=False, hook=hook)
-        self.assertIn('builder must be idle', str(c.exception))
-        self.assertFalse(os.path.exists(self.set_path()))
-        v = RS.verify(self.set_path())
-        self.assertFalse(v['ok'])
-
     def test_a_set_that_fails_before_the_commit_is_never_valid(self):
         def hook(event, **info):
             if event == 'after_store':
@@ -155,6 +146,95 @@ class Set(Fixture):
         m['note'] = 'edited'
         json.dump(m, open(mp, 'w'))
         self.assertFalse(RS.verify(self.set_path())['ok'])
+
+
+class BuilderExclusion(Fixture):
+    """'The builder must be idle' is ENFORCED, not just checked: the builder's changing commands and the set's creation take the same exclusive lock (tools/rootlock.py)."""
+
+    def race(self, when):
+        got = {}
+
+        def hook(event, **info):
+            if event == when:
+                got['step'] = sh('step', '--root', self.root, '--events', '1', check=False)
+                got['status'] = sh('status', '--root', self.root, check=False)
+        res = RS.create(self.root, self.public, self.set_path(), fsync=False, hook=hook)
+        self.assertTrue(res['ok'], res)
+        self.assertEqual(got['step'].returncode, 75, got['step'].stderr[-300:] + got['step'].stdout[-300:])
+        self.assertIn('recovery set', got['step'].stderr + got['step'].stdout)
+        self.assertEqual(got['status'].returncode, 0, 'a read-only command is not blocked')
+        self.assertEqual(res['league']['events'], 13)
+        self.assertEqual(res['store']['built_events'], 13)
+        self.assertEqual(digest(os.path.join(self.root, 'league/league.db'))['events'], 13, 'the refused builder changed nothing')
+        v = RS.verify(self.set_path())
+        self.assertTrue(v['ok'], v['problems'])
+
+    def test_a_builder_started_right_after_the_status_check_is_refused(self):
+        self.race('start')                              # the window in which a status-only check would be stale
+
+    def test_a_builder_started_while_the_public_folder_is_copied_is_refused(self):
+        self.race('after_public')
+
+    def test_a_builder_started_while_the_store_is_copied_is_refused(self):
+        self.race('after_store')
+
+    def test_a_builder_started_while_the_league_is_copied_is_refused(self):
+        self.race('after_league')                       # after the league copy, before the set is committed
+
+    def test_the_builder_is_free_again_once_the_set_is_done(self):
+        RS.create(self.root, self.public, self.set_path(), fsync=False)
+        self.assertEqual(sh('step', '--root', self.root, '--events', '1', check=False).returncode, 0)
+
+    def test_a_running_builder_refuses_the_set_and_nothing_is_copied(self):
+        p = subprocess.Popen([sys.executable, BUILD, 'step', '--root', self.root, '--events', '1'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            for _ in range(200):
+                if RL.holder(self.root) or p.poll() is not None:
+                    break
+                time.sleep(0.05)
+            self.assertIsNotNone(RL.holder(self.root), 'the builder holds the lock while it works')
+            with self.assertRaises(RS.Failed) as c:
+                RS.create(self.root, self.public, self.set_path(), fsync=False)
+            self.assertIn('builder', str(c.exception))
+            self.assertFalse(os.path.exists(self.set_path()) or os.path.exists(self.set_path() + '.partial'), 'refused before anything was written')
+        finally:
+            p.communicate(timeout=300)
+        self.assertEqual(p.returncode, 0)
+        res = RS.create(self.root, self.public, self.set_path(), fsync=False)                  # the builder is done: league 14, built 14
+        self.assertTrue(res['ok'] and res['league']['events'] == 14 and res['store']['built_events'] == 14, res)
+
+    def test_a_killed_builder_does_not_leave_the_lock_behind(self):
+        code = 'import sys,time; sys.path.insert(0, %r); import rootlock as R; cm = R.hold(%r, "test"); cm.__enter__(); print("held", flush=True); time.sleep(600)' % (os.path.join(ROOT, 'tools'), self.root)
+        p = subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(p.stdout.readline().strip(), 'held')
+            with self.assertRaises(RS.Failed):
+                RS.create(self.root, self.public, self.set_path(), fsync=False)
+            p.kill()
+            p.wait()
+            res = RS.create(self.root, self.public, os.path.join(self.w, 'set2'), fsync=False)
+            self.assertTrue(res['ok'])
+        finally:
+            p.kill()
+
+    def test_every_changing_builder_command_takes_the_lock(self):
+        with RL.hold(self.root, 'test'):
+            for args in (['step', '--events', '1'], ['next-season'], ['continuous']):
+                p = sh(*args, '--root', self.root, check=False)
+                self.assertEqual(p.returncode, 75, (args, p.stderr[-200:]))
+            self.assertEqual(sh('status', '--root', self.root, check=False).returncode, 0)
+        self.assertEqual(digest(os.path.join(self.root, 'league/league.db'))['events'], 13)
+
+    def test_a_league_runner_that_is_running_refuses_the_set(self):
+        import fcntl
+        fd = os.open(os.path.join(self.root, 'league', 'ctl', 'runner.lock'), os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(RS.Failed) as c:
+                RS.create(self.root, self.public, self.set_path(), fsync=False)
+            self.assertIn('runner', str(c.exception))
+        finally:
+            os.close(fd)
 
 
 def PBK_tree(base):

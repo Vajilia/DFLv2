@@ -37,6 +37,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+import rootlock as RL  # noqa: E402
 from dflsite import broadcast as B  # noqa: E402
 from dflsite import season as S  # noqa: E402
 
@@ -302,7 +303,15 @@ def main(argv=None):
     p.add_argument("--root", required=True)
     p.set_defaults(fn=cmd_status)
     a = ap.parse_args(argv)
-    return a.fn(a)
+    if a.cmd == "status":
+        return a.fn(a)
+    # every command that changes the root takes the root's exclusive lock (tools/rootlock.py): a recovery set, which needs a root that does not move, takes the same one
+    try:
+        with RL.hold(a.root, "broadcast_build.py " + a.cmd):
+            return a.fn(a)
+    except RL.Busy as e:
+        print(json.dumps({"busy": True, "detail": str(e)}), file=sys.stderr)
+        return RL.EXIT_BUSY
 
 
 if __name__ == "__main__":
