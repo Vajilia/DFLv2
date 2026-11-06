@@ -40,6 +40,15 @@ class Failed(Exception):
     pass
 
 
+
+def _slurp(path):
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def _jload(path):
+    return json.loads(_slurp(path))
+
 def py(args, check=True):
     p = subprocess.run([sys.executable, "-I"] + args, capture_output=True, text=True)
     if check and p.returncode != 0:
@@ -60,15 +69,15 @@ def built_events(store):
         files += [os.path.join(sd, n, "builds.json") for n in sorted(os.listdir(sd))]
     for bf in files:
         if os.path.exists(bf):
-            b = json.load(open(bf))
+            b = _jload(bf)
             last = max([last] + [int(k) for k in b.get("events", {})])
     carry = os.path.join(store, "carry.json")
     if os.path.exists(carry):
-        season = int(json.load(open(carry))["season"])
+        season = int(_jload(carry)["season"])
     else:
         plan = os.path.join(store, "plan.json")
         if os.path.exists(plan):
-            season = int(json.load(open(plan)).get("season", 1))
+            season = int(_jload(plan).get("season", 1))
     return last, season
 
 
@@ -81,11 +90,11 @@ def public_state(pub_files):
     ev, seasons = 0, [0]
     p = os.path.join(pub_files, "latest.json")
     if os.path.exists(p):
-        ev = int(json.load(open(p))["release"][1:6])
+        ev = int(_jload(p)["release"][1:6])
     for rel, key in (("playback/index.json", "games"), ("broadcast/replays/index.json", "games"), ("broadcast/honors/index.json", "parts")):
         q = os.path.join(pub_files, rel)
         if os.path.exists(q):
-            seasons += [int(e["season"]) for e in json.load(open(q)).get(key, []) if e.get("season") is not None]
+            seasons += [int(e["season"]) for e in _jload(q).get(key, []) if e.get("season") is not None]
     return ev, max(seasons)
 
 
@@ -131,7 +140,7 @@ def create(root, public, out, note=None, fsync=True, hook=None):
     if (ev0, built0) != (ev1, built1):
         raise Failed("the league or the builds moved while the set was being made (league %d to %d events, built %s to %s): the builder must be idle; nothing was recorded" %
                      (ev0, ev1, built0, built1))
-    mf = json.load(open(os.path.join(part, "league", "BACKUP_MANIFEST.json")))
+    mf = _jload(os.path.join(part, "league", "BACKUP_MANIFEST.json"))
     league_ev = mf["journal_head"]["seq"]
     built, season = built_events(os.path.join(part, "store", PBK.FILES))
     pev, pseason = public_state(os.path.join(part, "public", PBK.FILES))
@@ -165,7 +174,7 @@ def verify(setdir, deep=False):
     if not os.path.isfile(dp):
         return {"ok": False, "problems": ["%s has no %s: incomplete, not valid" % (setdir, DESCRIPTOR)]}
     try:
-        desc = json.load(open(dp))
+        desc = _jload(dp)
     except ValueError:
         return {"ok": False, "problems": ["%s is not readable JSON" % DESCRIPTOR]}
     c = desc.get("components", {})
@@ -187,7 +196,7 @@ def verify(setdir, deep=False):
     if sto["ok"] and sto["manifest_digest"] != c.get("store", {}).get("manifest_digest"):
         problems.append("store: not the backup this set recorded")
     if not problems:
-        mf = json.load(open(lg_manifest))
+        mf = _jload(lg_manifest)
         built, season = built_events(os.path.join(setdir, "store", PBK.FILES))
         pev, pseason = public_state(os.path.join(setdir, "public", PBK.FILES))
         sm, pm = PBK.load_manifest(os.path.join(setdir, "store")), PBK.load_manifest(os.path.join(setdir, "public"))
@@ -212,7 +221,17 @@ def restore(setdir, dest, fsync=True):
         return {"ok": False, "stage": "restore league", "problems": [(p.stdout or p.stderr)[-400:]]}
     os.replace(os.path.join(tmp, "league.db"), os.path.join(stage, "league", "league.db"))
     if os.path.exists(os.path.join(tmp, "archive.db")):
-        os.replace(os.path.join(tmp, "archive.db"), os.path.join(stage, "league", "league.db.archive"))      # the name the league records for its archive
+        # league_backup restores the pair as league.db + archive.db and the league records "archive.db". The live layout (and the builder, the runner status and the
+        # export tools) use league.db.archive, so rename it and re-point the league's own record, exactly as persist.restore does for an archive_path.
+        os.replace(os.path.join(tmp, "archive.db"), os.path.join(stage, "league", "league.db.archive"))
+        sys.path.insert(0, os.path.join(ROOT, "src"))
+        from dfl import persist  # noqa: E402
+        db = persist.connect(os.path.join(stage, "league", "league.db"))
+        try:
+            with db:
+                db.execute("UPDATE meta SET value = ? WHERE key = 'archive'", (json.dumps({"file": "league.db.archive"}, sort_keys=True),))
+        finally:
+            db.close()
     for n in CTL_FILES:
         q = os.path.join(setdir, "league", "config", n)             # (league_backup keeps these under config/ and lists them, with SHA-256, in its manifest)
         if os.path.exists(q):

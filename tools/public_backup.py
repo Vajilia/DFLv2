@@ -55,6 +55,15 @@ class Failed(Exception):
     pass
 
 
+
+def _slurp(path):
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def _jload(path):
+    return json.loads(_slurp(path))
+
 def sha_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -399,7 +408,7 @@ def create(src, out, profile="public", max_passes=8, require_quiescent=False, fs
         for rel, key in (("latest.json", "latest"), ("status.json", "status"), ("broadcast/clock.json", "clock"), ("builds.json", "builds_summary")):
             if rel in copied:
                 try:
-                    doc = json.loads(open(os.path.join(part, FILES, rel), "rb").read())
+                    doc = json.loads(_slurp(os.path.join(part, FILES, rel)))
                     if rel == "builds.json":
                         doc = {"events_built": len(doc.get("events", {})), "games_built": len(doc.get("games", {}))}
                     snap[key] = doc
