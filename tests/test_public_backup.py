@@ -179,8 +179,9 @@ class WhilePublishing(Base):
 
         def hook(event, **info):
             if event == 'file' and info['n'] in (5, 60, 200):
-                state['t'] += 45
-                bc.tick(T0 + state['t'])
+                for _ in range(10):                                  # 8 s ticks (inside the hand-over grace) across the end of the season
+                    state['t'] += 8
+                    bc.tick(T0 + state['t'])
                 seen['carry'] = seen['carry'] or os.path.exists(os.path.join(r.store, S.CARRY))
         res = self.make(hook=hook)
         self.assertTrue(seen['carry'], 'the season hand-over happened while the backup was copying')
@@ -201,20 +202,36 @@ class WhilePublishing(Base):
 
     def test_a_folder_that_never_stops_publishing_is_refused_when_quiet_is_required(self):
         r = self.r
-        t0 = r.end1 + r.y2.t['w0'] - 100
-        bc = r.started()
-        run(bc, 0, t0)
-        state = {'t': t0}
+        run(r.started(), 0, r.end1 + r.y2.t['w0'] - 100)
+        flip = {'n': 0}
+        rels = sorted(os.listdir(os.path.join(r.public, 'releases')))[-2:]
 
-        def hook(event, **info):
-            if event == 'file' and info['n'] % 3 == 0 and info['n'] > 0:
-                state['t'] += 200
-                bc.tick(T0 + state['t'])
-        with self.assertRaises(PBK.Failed):
+        def hook(event, **info):                                   # the cumulative pointer moves between two valid releases on every few files: no quiet moment exists
+            if event == 'file':
+                flip['n'] += 1
+                B.put(os.path.join(r.public, 'latest.json'), {'release': rels[flip['n'] % 2]})
+        with self.assertRaises(PBK.Failed) as c:
             self.make(hook=hook, max_passes=3, require_quiescent=True)
+        self.assertIn('no quiet moment', str(c.exception))
         self.assertFalse(os.path.exists(self.out()), 'nothing was committed')
         self.assertTrue(os.path.isdir(self.out() + '.partial'))
         self.assertFalse(PBK.verify(self.out())['ok'])
+
+    def test_without_the_quiet_requirement_a_moving_folder_gives_a_closure_valid_backup_marked_not_quiescent(self):
+        r = self.r
+        run(r.started(), 0, r.end1 + r.y2.t['w0'] - 100)
+        flip = {'n': 0}
+        rels = sorted(os.listdir(os.path.join(r.public, 'releases')))[-2:]
+
+        def hook(event, **info):
+            if event == 'file':
+                flip['n'] += 1
+                B.put(os.path.join(r.public, 'latest.json'), {'release': rels[flip['n'] % 2]})
+        res = self.make(hook=hook, max_passes=3)
+        self.assertTrue(res['ok'] and not res['quiescent'])
+        v = PBK.verify(self.out())
+        self.assertTrue(v['ok'], v['problems'])
+        self.assertIs(v['quiescent'], False)
 
 
 class Interrupted(Base):
