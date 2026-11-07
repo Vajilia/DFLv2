@@ -1,0 +1,21 @@
+PASS: independent tree: no hard links max link count 1
+PASS: monitor and daemon still running after the clean phase monitor None daemon None
+PASS: clean phase: full passes logged and all ok 90 heartbeats, positions 0.1..267.1
+PASS: clean phase: no violation of any kind, no monitor_error violations: []
+PASS: the live window was open (public files grew past the offseason) last full pass {'at': 1794056533.4, 'free_gb': 16.3, 'heartbeat': True, 'ok': True, 'pos': 267.1, 'public_files': 38, 'public_gb': 0.0}
+PASS: deliberate stale temporary file is reported as stale_tmp after 0.5 s
+PASS: the stale temporary file also trips the monitor, as it did before the fix kind early_or_unknown_file
+PASS: the daemon paused behind that latch 
+PASS: release of the latch with a reason released (kept as /tmp/season/drill/monitor/evidence/released/20261107T130219Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume 
+PASS: resume with --guard 
+PASS: the broadcast position was preserved across the pause (no jump forward, nothing replayed) paused at 271.1, 6.0 s later 276.9
+PASS: no new finding after the resume []
+PASS: unauthorized future file trips the monitor (early_or_unknown_file) and names that file kind early_or_unknown_file after 2.3 s
+PASS: the daemon paused behind the latch 
+PASS: status.json says paused paused
+PASS: trip evidence folder written 
+PASS: no monitor_error in the whole run []
+
+17 of 17 expectations held
+record: /tmp/season/drill/drill.md
+rc=0

@@ -1,0 +1,7 @@
+test_a_set_taken_across_a_real_hand_over_resumes_publication_and_building (tests.test_backup_resume_real.RealHandOver.test_a_set_taken_across_a_real_hand_over_resumes_publication_and_building) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 620.557s
+
+OK
+rc=0

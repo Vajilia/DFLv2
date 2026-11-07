@@ -1,0 +1,310 @@
+{
+ "cgroups": {
+  "daemon": {
+   "failcnt": "0",
+   "limit_mb": 201,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 26.8
+  },
+  "monitor": {
+   "failcnt": "0",
+   "limit_mb": 537,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 65.0
+  },
+  "supervisor": {
+   "failcnt": "0",
+   "limit_mb": 805,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 168.6
+  }
+ },
+ "checks": [
+  {
+   "check": "stage 1: season 1 not yet handed over",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "stage 2: the position stands still at the end of season 1 while season 2 is not prepared",
+   "detail": [
+    172800.0,
+    "running",
+    1794059200.3836446
+   ],
+   "ok": true
+  },
+  {
+   "check": "stage 2: the daemon is alive and the monitor is not tripped",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "stage 2: during the hold no file appeared in the public folder",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "stage 3: the daemon handed over to season 2",
+   "detail": "after 2 s",
+   "ok": true
+  },
+  {
+   "check": "stage 3: the broadcast is 300 s into season 2",
+   "detail": [
+    173100.3899450302,
+    "running",
+    1794059534.3505588
+   ],
+   "ok": true
+  },
+  {
+   "check": "SUPPORTED CONTROLS ONLY during the real-time run: every clock-log entry is one the daemon's own code writes (coverage_wait, downtime); nothing rewrote clock.json or ready_until",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "all three processes ran to the end (none died)",
+   "detail": {
+    "daemon": true,
+    "monitor": true,
+    "supervisor": true
+   },
+   "ok": true
+  },
+  {
+   "check": "historical files: every season-1 public file has its bytes; indexes keep their earlier entries as a prefix",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "historical files: owner, mode, inode, size and modification time unchanged (controls, indexes and live manifests excepted)",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "cumulative indexes: season 1's entries are still there and the indexes did not shrink",
+   "detail": {
+    "broadcast/honors/index.json": [
+     4,
+     4
+    ],
+    "broadcast/replays/index.json": [
+     400,
+     400
+    ],
+    "playback/index.json": [
+     400,
+     400
+    ]
+   },
+   "ok": true
+  },
+  {
+   "check": "cumulative indexes: every entry that was there at the hold is byte-for-byte unchanged and in the same place (an exact prefix)",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "reference closure of the public folder (every index entry has its file, every release matches its manifest)",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "reference closure of the private store",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "carry.json names season 1 as finished and season 2 on air",
+   "detail": {
+    "season": 2,
+    "seasons": [
+     1
+    ]
+   },
+   "ok": true
+  },
+  {
+   "check": "monitor: no violation over the whole real-time run, no trip",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "monitor: it was checking (26 heartbeats seen over 784 s of real time; at least 13 expected)",
+   "detail": 26,
+   "ok": true
+  },
+  {
+   "check": "viewers' position never went back",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "viewers' position never ran faster than time (max rate 1.00/s)",
+   "detail": 1.0,
+   "ok": true
+  },
+  {
+   "check": "viewers' position never passed the end of season 1 before the hand-over",
+   "detail": 172800.0,
+   "ok": true
+  },
+  {
+   "check": "no early results: the oracle's final pass over the files finds nothing (position 173105 s, season 2 on air)",
+   "detail": 0,
+   "ok": true
+  }
+ ],
+ "clock_log_during_real_time_run": {
+  "entries": 2,
+  "not_made_by_the_daemon": [],
+  "reasons": [
+   "coverage_wait",
+   "downtime"
+  ]
+ },
+ "copy_s": 8.2,
+ "cpu_seconds": {
+  "daemon": 4.1,
+  "monitor": 13.4,
+  "supervisor": 19.1
+ },
+ "disk_free_gb_end": 11.8,
+ "exempt_files_replaced_by_design": [
+  "broadcast/clock.json",
+  "broadcast/schedule.json",
+  "latest.json",
+  "status.json"
+ ],
+ "handover_after_supervisor_s": 2.0,
+ "hold": {
+  "files": 59290,
+  "indexes": {
+   "broadcast/honors/index.json": 4,
+   "broadcast/replays/index.json": 400,
+   "playback/index.json": 400
+  }
+ },
+ "indexes_before_after": {
+  "broadcast/honors/index.json": [
+   4,
+   4
+  ],
+  "broadcast/replays/index.json": [
+   400,
+   400
+  ],
+  "playback/index.json": [
+   400,
+   400
+  ]
+ },
+ "limits": true,
+ "mode": "supported controls only (no clock edit after the processes start)",
+ "monitor": {
+  "heartbeats": 26,
+  "violation_count": 0,
+  "violations": []
+ },
+ "pass": true,
+ "peak_rss_mb": {
+  "daemon": 37.4,
+  "monitor": 72.8,
+  "supervisor": 144.3
+ },
+ "processes_alive_until_stopped": {
+  "daemon": true,
+  "monitor": true,
+  "supervisor": true
+ },
+ "public_gb_end": 0.779,
+ "season1": {
+  "length_s": 172800.0,
+  "season": 1
+ },
+ "season2": {
+  "events_built": 10,
+  "season": 2
+ },
+ "stage1": {
+  "position_s": 172440.0,
+  "public_files": 59231,
+  "virtual_to_s": 172440.0,
+  "wall_s": 99.3
+ },
+ "supervisor_health": {
+  "broadcast": {
+   "clock_state": "running",
+   "holding": false,
+   "horizon_s": 175560,
+   "horizon_why": "block 'waivers_clear' not built (waivers_clear)",
+   "lead_s": 2474.6,
+   "position_s": 173085.4,
+   "season_on_air": 2,
+   "view_error": null
+  },
+  "builder": {
+   "built": 10,
+   "consecutive_failures": 0,
+   "last_action": "step",
+   "last_error": null,
+   "last_success_at": 1794059519.404432,
+   "next_attempt_at": null,
+   "season": 2,
+   "state": "building",
+   "total": 47
+  },
+  "capacity": {
+   "floor_bytes": 8589934592,
+   "free_bytes": 11837382656,
+   "free_inodes": 15631364,
+   "inode_floor": 20000,
+   "low": true,
+   "ok": true,
+   "public": null,
+   "public_cap": {
+    "base_gb": 0.25,
+    "cap_bytes": 2750000000,
+    "ceiling_gb": 6.0,
+    "fraction": 0.283,
+    "measured_at": 1794059519.404432,
+    "per_season_gb": 1.25,
+    "public_bytes": 779411291,
+    "seasons_on_air": 2
+   },
+   "reasons": []
+  },
+  "checked_at": 1794059519.404432,
+  "checked_at_iso": "2026-11-07T13:51:59Z",
+  "cycle": 11,
+  "format": "dfl-supervisor-health",
+  "format_version": 1,
+  "pid": 6965,
+  "problems": [
+   {
+    "code": "capacity_low",
+    "detail": "free disk 11.02 GiB / 15631364 inodes will not hold the season after the next one: add room before it is needed (nothing is deleted automatically)",
+    "severity": "warning",
+    "since": "2026-11-07T13:46:42Z"
+   }
+  ],
+  "seasons": {
+   "ahead_complete": false,
+   "interrupted_evidence": [],
+   "on_air": 2,
+   "partial_pending": [],
+   "prepared_ahead": 0,
+   "target": 2
+  },
+  "started_at": 1794059202.3092687,
+  "state": "running",
+  "status": "warning"
+ },
+ "viewer_position": {
+  "max_before_handover": 172800.0,
+  "max_rate": 1.0,
+  "samples": 778,
+  "went_back": 0
+ }
+}

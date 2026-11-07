@@ -1,0 +1,198 @@
+{
+ "pass": true,
+ "scenarios": [
+  {
+   "cgroups_end": {
+    "daemon": {
+     "failcnt": "0",
+     "limit_mb": 201,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 42.0
+    },
+    "monitor": {
+     "failcnt": "1138",
+     "limit_mb": 537,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 2",
+     "oom_kill": 2,
+     "peak_mb": 536.9
+    },
+    "supervisor": {
+     "failcnt": "0",
+     "limit_mb": 805,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 556.2
+    }
+   },
+   "checks": [
+    {
+     "check": "warm-up: all three running, broadcast advancing",
+     "detail": [
+      171680.96119880676,
+      "running",
+      1794055359.3902116
+     ],
+     "ok": true
+    },
+    {
+     "check": "the kernel's memory-cgroup OOM killer killed the monitor (oom_kill counter rose, victim died by signal 9)",
+     "detail": {
+      "failcnt_after": "1138",
+      "group_oom_kill_after": 2,
+      "group_oom_kill_before": 0,
+      "kernel_killed": true,
+      "kind": "cgroup_oom_kill",
+      "limit_mb": 512,
+      "seconds_to_kill": 2.6,
+      "usage_before_mb": 28.5,
+      "victim_oom_score_adj_raised": {
+       "4511": true
+      },
+      "victims": [
+       "4511 python3 /home/claude/dflv2-m6/tools/rehearsal_check.py watch"
+      ]
+     },
+     "ok": true
+    },
+    {
+     "check": "safe hold: with no monitor the daemon stops the broadcast by itself (TRIPPED written, clock paused)",
+     "detail": {
+      "after_s": 120.0,
+      "trip": {
+       "kind": "monitor_silent"
+      }
+     },
+     "ok": true
+    },
+    {
+     "check": "the position does not move while held",
+     "detail": [
+      171807.03406739235,
+      "paused",
+      1794055502.354269
+     ],
+     "ok": true
+    },
+    {
+     "check": "the daemon process is still alive (held, not dead)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the restarted monitor is running and has not found a violation",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the broadcast does NOT resume by itself after the monitor is back (a person must release and resume)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "release keeps the trip as evidence",
+     "detail": " /tmp/season/oom3/monitor-oom/evidence/released/20261107T124554Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume --root ... --guard /tmp/season/oom3/monitor-oom/guard\n",
+     "ok": true
+    },
+    {
+     "check": "resume works after the release",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the broadcast is running again from the held position (+44 s)",
+     "detail": [
+      [
+       171807.03406739235,
+       "paused",
+       1794055502.354269
+      ],
+      [
+       171851.09295916557,
+       "running",
+       1794055599.5367186
+      ]
+     ],
+     "ok": true
+    },
+    {
+     "check": "every earlier public file keeps its bytes; indexes keep their earlier entries",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "evidence files written before the kill are still there, unchanged in size",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "public folder and private store pass the reference closure",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the monitor reported only the violations this fault should cause ['monitor_silent']",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "viewers' position never went back and never ran faster than time (max 1.00/s)",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "no early results: the oracle's final pass over the files finds nothing (position 171855 s)",
+     "detail": 0,
+     "ok": true
+    }
+   ],
+   "copy_s": 18.3,
+   "evidence": {
+    "bytes": 277,
+    "files": 1,
+    "names": [
+     "released/20261107T124554Z-TRIPPED.json"
+    ]
+   },
+   "evidence_released": [
+    "20261107T124554Z-TRIPPED.json"
+   ],
+   "fastest_pair": {
+    "position_gap_s": 1.0,
+    "rate": 1.0,
+    "wall_gap_s": 1.0
+   },
+   "kill": {
+    "failcnt_after": "1138",
+    "group_oom_kill_after": 2,
+    "group_oom_kill_before": 0,
+    "kernel_killed": true,
+    "kind": "cgroup_oom_kill",
+    "limit_mb": 512,
+    "seconds_to_kill": 2.6,
+    "usage_before_mb": 28.5,
+    "victim_oom_score_adj_raised": {
+     "4511": true
+    },
+    "victims": [
+     "4511 python3 /home/claude/dflv2-m6/tools/rehearsal_check.py watch"
+    ]
+   },
+   "monitor_violation_kinds": [],
+   "pass": true,
+   "restart": {
+    "emulated": "systemd Restart=on-failure RestartSec=10 + OOMPolicy=stop",
+    "restarted_after_s": 10.0,
+    "terminated_left_over_pids": []
+   },
+   "scenario": "monitor-oom",
+   "seconds_until_daemon_held": 120.0,
+   "viewer_position": {
+    "last": 171854.07707810402,
+    "max_rate": 1.0,
+    "samples": 319,
+    "went_back": 0
+   }
+  }
+ ]
+}

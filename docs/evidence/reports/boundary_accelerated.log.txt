@@ -1,0 +1,33 @@
+05:52:56  season 1 is 172800 s long; copy took 3 s
+05:54:30  stage 1 done: position 172440 s of 172800, 59231 public files, 94 s
+05:54:30  PASS  stage 1: season 1 not yet handed over
+06:00:28  stage 2: at the end of season 1 after 357 s of real time; standing for 90 s
+06:01:58  PASS  stage 2: the position stands still at the end of season 1 while season 2 is not prepared  -- (172800.0, 'running', 1794060118.103699)
+06:01:58  PASS  stage 2: the daemon is alive and the monitor is not tripped
+06:01:58  PASS  stage 2: during the hold no file appeared in the public folder
+06:02:00  hold snapshot: 59290 files, indexes {'playback/index.json': 400, 'broadcast/replays/index.json': 400, 'broadcast/honors/index.json': 4}
+06:02:00  stage 3: supervisor started
+06:02:02  PASS  stage 3: the daemon handed over to season 2  -- after 2 s
+06:07:34  PASS  stage 3: the broadcast is 300 s into season 2  -- (173101.6046485901, 'running', 1794060454.3569007)
+06:07:44  PASS  SUPPORTED CONTROLS ONLY during the real-time run: every clock-log entry is one the daemon's own code writes (coverage_wait, downtime); nothing rewrote clock.json or ready_until
+06:07:44  PASS  all three processes ran to the end (none died)  -- {'monitor': True, 'daemon': True, 'supervisor': True}
+06:07:48  stage 5 (ACCELERATED, not a supported control): virtual time to position 185112 s (season 2 + 12312 s), 600 ticks
+06:07:48  PASS  stage 5 [accelerated]: the broadcast reached the target position (the virtual clock is NOT gated by publication coverage here, so this says nothing about holds)  -- 185112.28943872452
+06:07:48  PASS  stage 5 [accelerated]: the position never went back
+06:07:48  PASS  stage 5 [accelerated]: the position never advanced faster than the 20 s tick (max step 20.0 s)
+06:07:48  stage 4: checking the files
+06:07:49  PASS  historical files: every season-1 public file has its bytes; indexes keep their earlier entries as a prefix
+06:07:50  PASS  historical files: owner, mode, inode, size and modification time unchanged (controls, indexes and live manifests excepted)
+06:07:51  PASS  cumulative indexes: season 1's entries are still there and the indexes did not shrink  -- {'playback/index.json': (400, 424), 'broadcast/replays/index.json': (400, 425), 'broadcast/honors/index.json': (4, 4)}
+06:07:51  PASS  cumulative indexes [accelerated tail only]: season 2's first results were appended (the playback index grew past season 1's 400 games)  -- {'playback/index.json': (400, 424), 'broadcast/replays/index.json': (400, 425), 'broadcast/honors/index.json': (4, 4)}
+06:07:53  PASS  cumulative indexes: every entry that was there at the hold is byte-for-byte unchanged and in the same place (an exact prefix)
+06:07:54  PASS  reference closure of the public folder (every index entry has its file, every release matches its manifest)
+06:07:54  PASS  reference closure of the private store
+06:07:54  PASS  carry.json names season 1 as finished and season 2 on air  -- {'season': 2, 'seasons': [1]}
+06:07:54  PASS  monitor: no violation over the whole real-time run, no trip
+06:07:54  PASS  monitor: it was checking (27 heartbeats seen over 794 s of real time; at least 13 expected)  -- 27
+06:07:54  PASS  viewers' position never went back
+06:07:54  PASS  viewers' position never ran faster than time (max rate 1.00/s)  -- 1.0
+06:07:54  PASS  viewers' position never passed the end of season 1 before the hand-over  -- 172800.0
+06:07:54  PASS  no early results: the oracle's final pass over the files finds nothing (position 185112 s, season 2 on air)
+06:07:55  RESULT: PASS (25 checks, 0 failed)

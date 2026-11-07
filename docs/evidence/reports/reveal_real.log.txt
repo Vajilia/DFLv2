@@ -1,0 +1,57 @@
+06:42:14  SEGMENT A (real time, supported controls): tools/boundary_real.py
+06:42:30  season 1 is 172800 s long; copy took 17 s
+06:44:11  stage 1 done: position 172680 s of 172800, 59290 public files, 101 s
+06:44:11  PASS  stage 1: season 1 not yet handed over
+06:46:09  stage 2: at the end of season 1 after 117 s of real time; standing for 30 s
+06:46:39  PASS  stage 2: the position stands still at the end of season 1 while season 2 is not prepared  -- (172800.0, 'running', 1794062799.0583456)
+06:46:39  PASS  stage 2: the daemon is alive and the monitor is not tripped
+06:46:39  PASS  stage 2: during the hold no file appeared in the public folder
+06:46:41  hold snapshot: 59290 files, indexes {'playback/index.json': 400, 'broadcast/replays/index.json': 400, 'broadcast/honors/index.json': 4}
+06:46:41  stage 3: supervisor started
+06:46:43  PASS  stage 3: the daemon handed over to season 2  -- after 2 s
+06:53:15  PASS  stage 3: the broadcast is 360 s into season 2  -- (173161.69385266304, 'running', 1794063195.45232)
+06:53:25  PASS  SUPPORTED CONTROLS ONLY during the real-time run: every clock-log entry is one the daemon's own code writes (coverage_wait, downtime); nothing rewrote clock.json or ready_until
+06:53:25  PASS  all three processes ran to the end (none died)  -- {'monitor': True, 'daemon': True, 'supervisor': True}
+06:53:25  stage 4: checking the files
+06:53:27  PASS  historical files: every season-1 public file has its bytes; indexes keep their earlier entries as a prefix
+06:53:28  PASS  historical files: owner, mode, inode, size and modification time unchanged (controls, indexes and live manifests excepted)
+06:53:29  PASS  cumulative indexes: season 1's entries are still there and the indexes did not shrink  -- {'playback/index.json': (400, 400), 'broadcast/replays/index.json': (400, 400), 'broadcast/honors/index.json': (4, 4)}
+06:53:30  PASS  cumulative indexes: every entry that was there at the hold is byte-for-byte unchanged and in the same place (an exact prefix)
+06:53:32  PASS  reference closure of the public folder (every index entry has its file, every release matches its manifest)
+06:53:32  PASS  reference closure of the private store
+06:53:32  PASS  carry.json names season 1 as finished and season 2 on air  -- {'season': 2, 'seasons': [1]}
+06:53:32  PASS  monitor: no violation over the whole real-time run, no trip
+06:53:32  PASS  monitor: it was checking (19 heartbeats seen over 554 s of real time; at least 9 expected)  -- 19
+06:53:32  PASS  viewers' position never went back
+06:53:32  PASS  viewers' position never ran faster than time (max rate 1.00/s)  -- 1.0030071576069888
+06:53:32  PASS  viewers' position never passed the end of season 1 before the hand-over  -- 172800.0
+06:53:32  PASS  no early results: the oracle's final pass over the files finds nothing (position 173174 s, season 2 on air)
+06:53:33  RESULT: PASS (21 checks, 0 failed)
+06:53:33  PASS  segment A (the supported-controls boundary run) passed all 21 of its checks
+06:53:33  PASS  season 2's first results reveal was found in its plan  -- 181740
+06:53:33  JUMP (fixture preparation, nothing running): to 181590 s, 150 s before the first reveal at 181740 s
+06:53:35  jump done: {'from_s': 173174.1, 'to_s': 181594.1, 'ticks': 421, 'ended_s_ago': 3.1, 'wall_s': 2.1}
+06:53:35  PASS  the jump reached its target (position 181594 s of 181590 s)  -- {'from_s': 173174.1, 'to_s': 181594.1, 'ticks': 421, 'ended_s_ago': 3.1, 'wall_s': 2.1}
+06:53:35  indexes at the start of segment B: playback 400, replay library 424
+06:53:36  SEGMENT B (real time, supported controls only)
+06:59:11  checking segment B: 318 samples, 64 reconcile records
+06:59:11  PASS  SEGMENT B, SUPPORTED CONTROLS ONLY: every clock-log entry is one the daemon's own code writes (downtime); nothing rewrote clock.json or ready_until
+06:59:11  PASS  segment B: all three processes ran to the end (none died)  -- {'monitor': True, 'daemon': True, 'supervisor': True}
+06:59:11  PASS  segment B started 137 s before the reveal (first sample at position 181603 s; the reveal is at 181740 s)  -- 181603.0586283207
+06:59:11  PASS  segment B crossed the reveal in real time (samples: 127 before, 171 after)  -- (127, 171)
+06:59:11  PASS  the playback index did not change before the reveal (400 entries the whole time)  -- [400]
+06:59:11  PASS  the playback index grew in ONE step at the reveal: [(181741.1060717106, 400, 424)]  -- [(181741.1060717106, 400, 424)]
+06:59:11  PASS  the growth appeared within 8 s of the reveal's position (at 181741.1 s, the reveal is 181740.0 s)  -- 1.1060717105865479
+06:59:11  PASS  the replay library never shrank and the playback index never shrank
+06:59:11  PASS  before the reveal the replay library ran ahead: 24 games had ended and were waiting for this reveal (intended reveal delay)  -- 24
+06:59:11  PASS  after the reveal every one of those 24 games is in BOTH indexes (none left waiting, none missing)
+06:59:11  PASS  the playback index grew by exactly the number of games that were waiting (24 = 24)  -- (400, 424)
+06:59:11  PASS  the count of games in both indexes rose by that number at the reveal  -- ({'both': 400, 'reveal_delay': 24, 'not_yet': 192}, {'both': 424, 'not_yet': 296})
+06:59:11  PASS  every reconcile record (64, by season and game ID) found only intended differences and no duplicate
+06:59:13  PASS  every file and every index entry present at the start of segment B is unchanged and in the same place (indexes grow by appending only)
+06:59:14  PASS  reference closure of the public folder
+06:59:14  PASS  reference closure of the private store
+06:59:14  PASS  monitor over segment B: no violation, no trip, 10 heartbeats
+06:59:14  PASS  viewers' position never went back and never ran faster than time (max rate 1.00/s)
+06:59:15  PASS  no early results: the oracle's final pass over the files finds nothing (position 181933 s)
+06:59:15  RESULT: PASS (22 checks, 0 failed)

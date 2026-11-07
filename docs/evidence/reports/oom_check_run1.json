@@ -1,0 +1,1043 @@
+{
+ "pass": true,
+ "scenarios": [
+  {
+   "cgroups_end": {
+    "daemon": {
+     "failcnt": "317",
+     "limit_mb": 201,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 2",
+     "oom_kill": 2,
+     "peak_mb": 201.3
+    },
+    "monitor": {
+     "failcnt": "0",
+     "limit_mb": 537,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 49.5
+    },
+    "supervisor": {
+     "failcnt": "0",
+     "limit_mb": 805,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 136.0
+    }
+   },
+   "checks": [
+    {
+     "check": "warm-up: all three running, broadcast advancing",
+     "detail": [
+      171680.98262000084,
+      "running"
+     ],
+     "ok": true
+    },
+    {
+     "check": "the kernel's memory-cgroup OOM killer killed the daemon (oom_kill counter rose, victim died by signal 9)",
+     "detail": {
+      "failcnt_after": "317",
+      "group_oom_kill_after": 2,
+      "group_oom_kill_before": 0,
+      "kernel_killed": true,
+      "kind": "cgroup_oom_kill",
+      "limit_mb": 192,
+      "seconds_to_kill": 1.2,
+      "usage_before_mb": 23.1,
+      "victim_oom_score_adj_raised": {
+       "2760": true
+      },
+      "victims": [
+       "2760 python3 /home/claude/dflv2-m6/tools/broadcast_run.py run"
+      ]
+     },
+     "ok": true
+    },
+    {
+     "check": "safe hold: with the daemon dead the position stops (it moved 0.0 s in the last 10 s, 3.5 s since the kill)",
+     "detail": [
+      [
+       171682.5066230297,
+       "running"
+      ],
+      [
+       171686.02693986893,
+       "running"
+      ],
+      [
+       171686.02693986893,
+       "running"
+      ]
+     ],
+     "ok": true
+    },
+    {
+     "check": "the monitor has not tripped (a dead daemon is a hold, not a spoiler)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the restarted daemon is running",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "after the restart the position goes on from where the viewers' clocks stopped (+60 s)",
+     "detail": [
+      [
+       171686.02693986893,
+       "running"
+      ],
+      [
+       171745.9901649952,
+       "running"
+      ]
+     ],
+     "ok": true
+    },
+    {
+     "check": "the downtime is on record in the clock log",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "every earlier public file keeps its bytes; indexes keep their earlier entries",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "evidence files written before the kill are still there, unchanged in size",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "public folder and private store pass the reference closure",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the monitor reported only the violations this fault should cause ['daemon_silent']",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "viewers' position never went back and never ran faster than time (max 1.26/s)",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "no early results: the oracle's final pass over the files finds nothing (position 171749 s)",
+     "detail": 0,
+     "ok": true
+    }
+   ],
+   "clock_log_tail": [
+    {
+     "at": 1794052448.0002253,
+     "epoch": 1,
+     "pos": 0.0,
+     "state": "running",
+     "why": "fast_forward_end"
+    },
+    {
+     "at": 1794052566.7639809,
+     "down_s": 115.764,
+     "epoch": 2,
+     "pos": 171603.0,
+     "state": "running",
+     "why": "downtime"
+    },
+    {
+     "at": 1794052685.544614,
+     "down_s": 35.754,
+     "epoch": 3,
+     "pos": 171686.02693986893,
+     "state": "running",
+     "why": "downtime"
+    }
+   ],
+   "copy_s": 14.1,
+   "evidence": {
+    "bytes": 0,
+    "files": 0,
+    "names": []
+   },
+   "kill": {
+    "failcnt_after": "317",
+    "group_oom_kill_after": 2,
+    "group_oom_kill_before": 0,
+    "kernel_killed": true,
+    "kind": "cgroup_oom_kill",
+    "limit_mb": 192,
+    "seconds_to_kill": 1.2,
+    "usage_before_mb": 23.1,
+    "victim_oom_score_adj_raised": {
+     "2760": true
+    },
+    "victims": [
+     "2760 python3 /home/claude/dflv2-m6/tools/broadcast_run.py run"
+    ]
+   },
+   "monitor_violation_kinds": [],
+   "pass": true,
+   "restart": {
+    "emulated": "systemd Restart=on-failure RestartSec=5 + OOMPolicy=stop",
+    "restarted_after_s": 5.0,
+    "terminated_left_over_pids": []
+   },
+   "scenario": "daemon-oom",
+   "viewer_position": {
+    "last": 171748.31927204132,
+    "max_rate": 1.26,
+    "samples": 179,
+    "went_back": 0
+   }
+  },
+  {
+   "cgroups_end": {
+    "daemon": {
+     "failcnt": "0",
+     "limit_mb": 201,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 23.5
+    },
+    "monitor": {
+     "failcnt": "0",
+     "limit_mb": 537,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 49.4
+    },
+    "supervisor": {
+     "failcnt": "0",
+     "limit_mb": 805,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 136.5
+    }
+   },
+   "checks": [
+    {
+     "check": "warm-up: all three running, broadcast advancing",
+     "detail": [
+      171680.9806854725,
+      "running"
+     ],
+     "ok": true
+    },
+    {
+     "check": "the daemon was killed with SIGKILL from outside",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "safe hold: with the daemon dead the position stops (it moved 0.0 s in the last 10 s, 2.3 s since the kill)",
+     "detail": [
+      [
+       171682.6822874546,
+       "running"
+      ],
+      [
+       171685.01641726494,
+       "running"
+      ],
+      [
+       171685.01641726494,
+       "running"
+      ]
+     ],
+     "ok": true
+    },
+    {
+     "check": "the monitor has not tripped (a dead daemon is a hold, not a spoiler)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the restarted daemon is running",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "after the restart the position goes on from where the viewers' clocks stopped (+60 s)",
+     "detail": [
+      [
+       171685.01641726494,
+       "running"
+      ],
+      [
+       171744.98700284958,
+       "running"
+      ]
+     ],
+     "ok": true
+    },
+    {
+     "check": "the downtime is on record in the clock log",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "every earlier public file keeps its bytes; indexes keep their earlier entries",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "evidence files written before the kill are still there, unchanged in size",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "public folder and private store pass the reference closure",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the monitor reported only the violations this fault should cause ['daemon_silent']",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "viewers' position never went back and never ran faster than time (max 1.00/s)",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "no early results: the oracle's final pass over the files finds nothing (position 171749 s)",
+     "detail": 0,
+     "ok": true
+    }
+   ],
+   "clock_log_tail": [
+    {
+     "at": 1794052448.0002253,
+     "epoch": 1,
+     "pos": 0.0,
+     "state": "running",
+     "why": "fast_forward_end"
+    },
+    {
+     "at": 1794052773.7659261,
+     "down_s": 322.766,
+     "epoch": 2,
+     "pos": 171603.0,
+     "state": "running",
+     "why": "downtime"
+    },
+    {
+     "at": 1794052890.4925857,
+     "down_s": 34.71,
+     "epoch": 3,
+     "pos": 171685.01641726494,
+     "state": "running",
+     "why": "downtime"
+    }
+   ],
+   "copy_s": 12.1,
+   "evidence": {
+    "bytes": 0,
+    "files": 0,
+    "names": []
+   },
+   "kill": {
+    "kind": "sigkill"
+   },
+   "monitor_violation_kinds": [],
+   "pass": true,
+   "restart": {
+    "emulated": "systemd Restart=on-failure RestartSec=5 + OOMPolicy=stop",
+    "restarted_after_s": 5.0,
+    "terminated_left_over_pids": []
+   },
+   "scenario": "daemon-sigkill",
+   "viewer_position": {
+    "last": 171748.36908125877,
+    "max_rate": 1.0,
+    "samples": 178,
+    "went_back": 0
+   }
+  },
+  {
+   "cgroups_end": {
+    "daemon": {
+     "failcnt": "0",
+     "limit_mb": 201,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 23.6
+    },
+    "monitor": {
+     "failcnt": "927",
+     "limit_mb": 537,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 2",
+     "oom_kill": 2,
+     "peak_mb": 536.9
+    },
+    "supervisor": {
+     "failcnt": "0",
+     "limit_mb": 805,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 135.9
+    }
+   },
+   "checks": [
+    {
+     "check": "warm-up: all three running, broadcast advancing",
+     "detail": [
+      171680.98891043663,
+      "running"
+     ],
+     "ok": true
+    },
+    {
+     "check": "the kernel's memory-cgroup OOM killer killed the monitor (oom_kill counter rose, victim died by signal 9)",
+     "detail": {
+      "failcnt_after": "927",
+      "group_oom_kill_after": 2,
+      "group_oom_kill_before": 0,
+      "kernel_killed": true,
+      "kind": "cgroup_oom_kill",
+      "limit_mb": 512,
+      "seconds_to_kill": 3.0,
+      "usage_before_mb": 25.6,
+      "victim_oom_score_adj_raised": {
+       "3003": true
+      },
+      "victims": [
+       "3003 python3 /home/claude/dflv2-m6/tools/rehearsal_check.py watch"
+      ]
+     },
+     "ok": true
+    },
+    {
+     "check": "the restarted monitor started again (a second `start` record) and is sending heartbeats",
+     "detail": [
+      {
+       "at": 1794053153.0,
+       "free_gb": 13.0,
+       "heartbeat": true,
+       "ok": true,
+       "pos": 171759.0,
+       "public_files": 59230,
+       "public_gb": 0.778
+      }
+     ],
+     "ok": true
+    },
+    {
+     "check": "the daemon never held: no TRIPPED, the clock was running at every sample since the kill",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the daemon process kept running",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "every earlier public file keeps its bytes; indexes keep their earlier entries",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "evidence files written before the kill are still there, unchanged in size",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "public folder and private store pass the reference closure",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the monitor reported only the violations this fault should cause []",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "viewers' position never went back and never ran faster than time (max 1.00/s)",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "no early results: the oracle's final pass over the files finds nothing (position 171777 s)",
+     "detail": 0,
+     "ok": true
+    }
+   ],
+   "copy_s": 28.5,
+   "evidence": {
+    "bytes": 0,
+    "files": 0,
+    "names": []
+   },
+   "kill": {
+    "failcnt_after": "927",
+    "group_oom_kill_after": 2,
+    "group_oom_kill_before": 0,
+    "kernel_killed": true,
+    "kind": "cgroup_oom_kill",
+    "limit_mb": 512,
+    "seconds_to_kill": 3.0,
+    "usage_before_mb": 25.6,
+    "victim_oom_score_adj_raised": {
+     "3003": true
+    },
+    "victims": [
+     "3003 python3 /home/claude/dflv2-m6/tools/rehearsal_check.py watch"
+    ]
+   },
+   "monitor_violation_kinds": [],
+   "pass": true,
+   "restart": {
+    "emulated": "systemd Restart=on-failure RestartSec=10 + OOMPolicy=stop",
+    "restarted_after_s": 10.0,
+    "terminated_left_over_pids": []
+   },
+   "scenario": "monitor-oom-restart",
+   "viewer_position": {
+    "last": 171777.06269192696,
+    "max_rate": 1.0,
+    "samples": 172,
+    "went_back": 0
+   }
+  },
+  {
+   "cgroups_end": {
+    "daemon": {
+     "failcnt": "0",
+     "limit_mb": 201,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 23.6
+    },
+    "monitor": {
+     "failcnt": "582",
+     "limit_mb": 537,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 2",
+     "oom_kill": 2,
+     "peak_mb": 536.9
+    },
+    "supervisor": {
+     "failcnt": "0",
+     "limit_mb": 805,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 161.4
+    }
+   },
+   "checks": [
+    {
+     "check": "warm-up: all three running, broadcast advancing",
+     "detail": [
+      171680.96572375298,
+      "running"
+     ],
+     "ok": true
+    },
+    {
+     "check": "the kernel's memory-cgroup OOM killer killed the monitor (oom_kill counter rose, victim died by signal 9)",
+     "detail": {
+      "failcnt_after": "582",
+      "group_oom_kill_after": 2,
+      "group_oom_kill_before": 0,
+      "kernel_killed": true,
+      "kind": "cgroup_oom_kill",
+      "limit_mb": 512,
+      "seconds_to_kill": 2.6,
+      "usage_before_mb": 24.5,
+      "victim_oom_score_adj_raised": {
+       "3149": true
+      },
+      "victims": [
+       "3149 python3 /home/claude/dflv2-m6/tools/rehearsal_check.py watch"
+      ]
+     },
+     "ok": true
+    },
+    {
+     "check": "safe hold: with no monitor the daemon stops the broadcast by itself (TRIPPED written, clock paused)",
+     "detail": {
+      "after_s": 116.0,
+      "trip": {
+       "kind": "monitor_silent"
+      }
+     },
+     "ok": true
+    },
+    {
+     "check": "the position does not move while held",
+     "detail": [
+      171802.0574054718,
+      "paused"
+     ],
+     "ok": true
+    },
+    {
+     "check": "the daemon process is still alive (held, not dead)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the restarted monitor is running and has not found a violation",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the broadcast does NOT resume by itself after the monitor is back (a person must release and resume)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "release keeps the trip as evidence",
+     "detail": "as /tmp/season/oom/monitor-oom/evidence/released/20261107T121109Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume --root ... --guard /tmp/season/oom/monitor-oom/guard\n",
+     "ok": true
+    },
+    {
+     "check": "resume works after the release",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the broadcast is running again from the held position (+44 s)",
+     "detail": [
+      [
+       171802.0574054718,
+       "paused"
+      ],
+      [
+       171846.48637270927,
+       "running"
+      ]
+     ],
+     "ok": true
+    },
+    {
+     "check": "every earlier public file keeps its bytes; indexes keep their earlier entries",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "evidence files written before the kill are still there, unchanged in size",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "public folder and private store pass the reference closure",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the monitor reported only the violations this fault should cause ['monitor_silent']",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "viewers' position never went back and never ran faster than time (max 1.00/s)",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "no early results: the oracle's final pass over the files finds nothing (position 171851 s)",
+     "detail": 0,
+     "ok": true
+    }
+   ],
+   "copy_s": 18.0,
+   "evidence": {
+    "bytes": 279,
+    "files": 1,
+    "names": [
+     "released/20261107T121109Z-TRIPPED.json"
+    ]
+   },
+   "evidence_released": [
+    "20261107T121109Z-TRIPPED.json"
+   ],
+   "kill": {
+    "failcnt_after": "582",
+    "group_oom_kill_after": 2,
+    "group_oom_kill_before": 0,
+    "kernel_killed": true,
+    "kind": "cgroup_oom_kill",
+    "limit_mb": 512,
+    "seconds_to_kill": 2.6,
+    "usage_before_mb": 24.5,
+    "victim_oom_score_adj_raised": {
+     "3149": true
+    },
+    "victims": [
+     "3149 python3 /home/claude/dflv2-m6/tools/rehearsal_check.py watch"
+    ]
+   },
+   "monitor_violation_kinds": [],
+   "pass": true,
+   "restart": {
+    "emulated": "systemd Restart=on-failure RestartSec=10 + OOMPolicy=stop",
+    "restarted_after_s": 10.0,
+    "terminated_left_over_pids": []
+   },
+   "scenario": "monitor-oom",
+   "seconds_until_daemon_held": 116.0,
+   "viewer_position": {
+    "last": 171850.0819644928,
+    "max_rate": 1.0,
+    "samples": 313,
+    "went_back": 0
+   }
+  },
+  {
+   "builder_status": {
+    "events_built": 4,
+    "games_built": 0,
+    "season": 2
+   },
+   "cgroups_end": {
+    "daemon": {
+     "failcnt": "0",
+     "limit_mb": 201,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 23.5
+    },
+    "monitor": {
+     "failcnt": "0",
+     "limit_mb": 537,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 49.6
+    },
+    "supervisor": {
+     "failcnt": "966",
+     "limit_mb": 805,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 1",
+     "oom_kill": 1,
+     "peak_mb": 805.3
+    }
+   },
+   "checks": [
+    {
+     "check": "warm-up: all three running, broadcast advancing",
+     "detail": [
+      171680.9880180359,
+      "running"
+     ],
+     "ok": true
+    },
+    {
+     "check": "a builder step is running under the supervisor",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the kernel's memory-cgroup OOM killer killed the builder step, not the supervisor",
+     "detail": {
+      "failcnt_after": "966",
+      "group_oom_kill_after": 1,
+      "group_oom_kill_before": 0,
+      "kernel_killed": true,
+      "kind": "cgroup_oom_kill",
+      "limit_mb": 768,
+      "seconds_to_kill": 4.2,
+      "usage_before_mb": 25.6,
+      "victim_oom_score_adj_raised": {
+       "3431": true
+      },
+      "victims": [
+       "3431 python3 step --root"
+      ]
+     },
+     "ok": true
+    },
+    {
+     "check": "the supervisor recorded the failed step (health says so)",
+     "detail": {
+      "builder": {
+       "built": 4,
+       "consecutive_failures": 0,
+       "last_action": "step",
+       "last_error": null,
+       "last_success_at": 1794053667.1783679,
+       "next_attempt_at": null,
+       "season": 2,
+       "state": "building",
+       "total": 47
+      },
+      "problems": [
+       {
+        "code": "capacity_low",
+        "detail": "free disk 12.13 GiB / 15774262 inodes will not hold the season after the next one: add room before it is needed (nothing is deleted automatically)",
+        "severity": "warning",
+        "since": "2026-11-07T12:12:22Z"
+       }
+      ],
+      "status": "warning"
+     },
+     "ok": true
+    },
+    {
+     "check": "it backs off, tries again and the builder builds again (events built 2002 -> 2004)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the daemon and the monitor were not disturbed (no violation, no trip, both running)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "every earlier public file keeps its bytes; indexes keep their earlier entries",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "evidence files written before the kill are still there, unchanged in size",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "public folder and private store pass the reference closure",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the monitor reported only the violations this fault should cause []",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "viewers' position never went back and never ran faster than time (max 1.00/s)",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "no early results: the oracle's final pass over the files finds nothing (position 171743 s)",
+     "detail": 0,
+     "ok": true
+    }
+   ],
+   "copy_s": 10.0,
+   "evidence": {
+    "bytes": 0,
+    "files": 0,
+    "names": []
+   },
+   "health_after_kill": {
+    "builder": {
+     "built": 4,
+     "consecutive_failures": 0,
+     "last_action": "step",
+     "last_error": null,
+     "last_success_at": 1794053667.1783679,
+     "next_attempt_at": null,
+     "season": 2,
+     "state": "building",
+     "total": 47
+    },
+    "problems": [
+     {
+      "code": "capacity_low",
+      "detail": "free disk 12.13 GiB / 15774262 inodes will not hold the season after the next one: add room before it is needed (nothing is deleted automatically)",
+      "severity": "warning",
+      "since": "2026-11-07T12:12:22Z"
+     }
+    ],
+    "status": "warning"
+   },
+   "kill": {
+    "failcnt_after": "966",
+    "group_oom_kill_after": 1,
+    "group_oom_kill_before": 0,
+    "kernel_killed": true,
+    "kind": "cgroup_oom_kill",
+    "limit_mb": 768,
+    "seconds_to_kill": 4.2,
+    "usage_before_mb": 25.6,
+    "victim_oom_score_adj_raised": {
+     "3431": true
+    },
+    "victims": [
+     "3431 python3 step --root"
+    ]
+   },
+   "monitor_violation_kinds": [],
+   "pass": true,
+   "scenario": "builder-oom",
+   "season_folders": [
+    "s002"
+   ],
+   "viewer_position": {
+    "last": 171742.04547905922,
+    "max_rate": 1.0,
+    "samples": 137,
+    "went_back": 0
+   }
+  },
+  {
+   "builder_status": {
+    "events_built": 4,
+    "games_built": 0,
+    "season": 2
+   },
+   "cgroups_end": {
+    "daemon": {
+     "failcnt": "0",
+     "limit_mb": 201,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 23.6
+    },
+    "monitor": {
+     "failcnt": "0",
+     "limit_mb": 537,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+     "oom_kill": 0,
+     "peak_mb": 49.6
+    },
+    "supervisor": {
+     "failcnt": "1004",
+     "limit_mb": 805,
+     "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 2",
+     "oom_kill": 2,
+     "peak_mb": 805.3
+    }
+   },
+   "checks": [
+    {
+     "check": "warm-up: all three running, broadcast advancing",
+     "detail": [
+      171680.99542093277,
+      "running"
+     ],
+     "ok": true
+    },
+    {
+     "check": "the kernel's memory-cgroup OOM killer killed the SUPERVISOR process (oom_kill counter rose, died by signal 9)",
+     "detail": {
+      "failcnt_after": "1004",
+      "group_oom_kill_after": 2,
+      "group_oom_kill_before": 0,
+      "kernel_killed": true,
+      "kind": "cgroup_oom_kill",
+      "limit_mb": 768,
+      "seconds_to_kill": 4.0,
+      "usage_before_mb": 31.1,
+      "victim_oom_score_adj_raised": {
+       "3507": true
+      },
+      "victims": [
+       "3507 python3 /home/claude/dflv2-m6/tools/broadcast_supervisor.py run",
+       "3564 python3 step --root",
+       "3565 python3 /tmp/season/oom/supervisor-oom/root/league/league.db --until-events"
+      ]
+     },
+     "ok": true
+    },
+    {
+     "check": "the daemon and the monitor are untouched by it (separate groups)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "the restarted supervisor takes the lock back and the builder builds again (events built 2002 -> 2004)",
+     "detail": "",
+     "ok": true
+    },
+    {
+     "check": "every earlier public file keeps its bytes; indexes keep their earlier entries",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "evidence files written before the kill are still there, unchanged in size",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "public folder and private store pass the reference closure",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the monitor reported only the violations this fault should cause []",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "viewers' position never went back and never ran faster than time (max 1.00/s)",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "no early results: the oracle's final pass over the files finds nothing (position 171745 s)",
+     "detail": 0,
+     "ok": true
+    }
+   ],
+   "copy_s": 26.5,
+   "evidence": {
+    "bytes": 0,
+    "files": 0,
+    "names": []
+   },
+   "health_end": {
+    "builder": {
+     "built": 4,
+     "consecutive_failures": 0,
+     "last_action": "step",
+     "last_error": null,
+     "last_success_at": 1794053854.2099879,
+     "next_attempt_at": null,
+     "season": 2,
+     "state": "building",
+     "total": 47
+    },
+    "problems": [
+     {
+      "code": "capacity_low",
+      "detail": "free disk 12.13 GiB / 15774262 inodes will not hold the season after the next one: add room before it is needed (nothing is deleted automatically)",
+      "severity": "warning",
+      "since": "2026-11-07T12:15:23Z"
+     }
+    ],
+    "status": "warning"
+   },
+   "kill": {
+    "failcnt_after": "1004",
+    "group_oom_kill_after": 2,
+    "group_oom_kill_before": 0,
+    "kernel_killed": true,
+    "kind": "cgroup_oom_kill",
+    "limit_mb": 768,
+    "seconds_to_kill": 4.0,
+    "usage_before_mb": 31.1,
+    "victim_oom_score_adj_raised": {
+     "3507": true
+    },
+    "victims": [
+     "3507 python3 /home/claude/dflv2-m6/tools/broadcast_supervisor.py run",
+     "3564 python3 step --root",
+     "3565 python3 /tmp/season/oom/supervisor-oom/root/league/league.db --until-events"
+    ]
+   },
+   "left_in_group_after_kill": 0,
+   "monitor_violation_kinds": [],
+   "pass": true,
+   "restart": {
+    "emulated": "systemd Restart=on-failure RestartSec=30 + OOMPolicy=stop",
+    "restarted_after_s": 30.0,
+    "terminated_left_over_pids": []
+   },
+   "scenario": "supervisor-oom",
+   "viewer_position": {
+    "last": 171744.04737114906,
+    "max_rate": 1.0,
+    "samples": 139,
+    "went_back": 0
+   }
+  }
+ ]
+}

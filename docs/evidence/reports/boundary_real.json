@@ -1,0 +1,329 @@
+{
+ "cgroups": {
+  "daemon": {
+   "failcnt": "0",
+   "limit_mb": 201,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 31.7
+  },
+  "monitor": {
+   "failcnt": "0",
+   "limit_mb": 537,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 49.7
+  },
+  "supervisor": {
+   "failcnt": "0",
+   "limit_mb": 805,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 537.7
+  }
+ },
+ "checks": [
+  {
+   "check": "stage 1: season 1 not yet handed over",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "stage 2: the position stands still at the end of season 1 while season 2 is not prepared",
+   "detail": [
+    172800.0,
+    "running"
+   ],
+   "ok": true
+  },
+  {
+   "check": "stage 2: the daemon is alive and the monitor is not tripped",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "stage 2: during the hold no file appeared in the public folder",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "stage 3: the daemon handed over to season 2",
+   "detail": "after 2 s",
+   "ok": true
+  },
+  {
+   "check": "stage 3: the broadcast is 300 s into season 2",
+   "detail": [
+    173101.3454928398,
+    "running"
+   ],
+   "ok": true
+  },
+  {
+   "check": "all three processes ran to the end (none died)",
+   "detail": {
+    "daemon": true,
+    "monitor": true,
+    "supervisor": true
+   },
+   "ok": true
+  },
+  {
+   "check": "stage 5: the broadcast reached the target position (it did not hold on an unbuilt item)",
+   "detail": 185112.1733443737,
+   "ok": true
+  },
+  {
+   "check": "stage 5: the position never went back",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "stage 5: the position never advanced faster than the 20 s tick (max step 20.0 s)",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "historical files: every season-1 public file has its bytes; indexes keep their earlier entries as a prefix",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "historical files: owner, mode, inode, size and modification time unchanged (controls, indexes and live manifests excepted)",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "cumulative indexes: season 1's entries are still there and the indexes did not shrink",
+   "detail": {
+    "broadcast/honors/index.json": [
+     4,
+     4
+    ],
+    "broadcast/replays/index.json": [
+     400,
+     425
+    ],
+    "playback/index.json": [
+     400,
+     424
+    ]
+   },
+   "ok": true
+  },
+  {
+   "check": "cumulative indexes: season 2's first results were appended (the playback index grew past season 1's 400 games)",
+   "detail": {
+    "broadcast/honors/index.json": [
+     4,
+     4
+    ],
+    "broadcast/replays/index.json": [
+     400,
+     425
+    ],
+    "playback/index.json": [
+     400,
+     424
+    ]
+   },
+   "ok": true
+  },
+  {
+   "check": "cumulative indexes: the first 4 entries of each are byte-for-byte the ones from the hold",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "reference closure of the public folder (every index entry has its file, every release matches its manifest)",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "reference closure of the private store",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "carry.json names season 1 as finished and season 2 on air",
+   "detail": {
+    "season": 2,
+    "seasons": [
+     1
+    ]
+   },
+   "ok": true
+  },
+  {
+   "check": "monitor: no violation over the whole real-time run, no trip",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "monitor: it was checking (heartbeats seen)",
+   "detail": 27,
+   "ok": true
+  },
+  {
+   "check": "viewers' position never went back",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "viewers' position never ran faster than time (max rate 1.00/s)",
+   "detail": 1.000125845284663,
+   "ok": true
+  },
+  {
+   "check": "viewers' position never passed the end of season 1 before the hand-over",
+   "detail": 172800.0,
+   "ok": true
+  },
+  {
+   "check": "no early results: the oracle's final pass over the files finds nothing (position 185112 s, season 2 on air)",
+   "detail": 0,
+   "ok": true
+  }
+ ],
+ "copy_s": 4.0,
+ "cpu_seconds": {
+  "daemon": 4.3,
+  "monitor": 12.4,
+  "supervisor": 288.0
+ },
+ "disk_free_gb_end": 14.6,
+ "exempt_files_replaced_by_design": [
+  "broadcast/clock.json",
+  "broadcast/replays/index.json",
+  "broadcast/schedule.json",
+  "latest.json",
+  "playback/index.json",
+  "status.json"
+ ],
+ "handover_after_supervisor_s": 2.0,
+ "hold": {
+  "files": 59290,
+  "indexes": {
+   "broadcast/honors/index.json": 4,
+   "broadcast/replays/index.json": 400,
+   "playback/index.json": 400
+  }
+ },
+ "indexes_before_after": {
+  "broadcast/honors/index.json": [
+   4,
+   4
+  ],
+  "broadcast/replays/index.json": [
+   400,
+   425
+  ],
+  "playback/index.json": [
+   400,
+   424
+  ]
+ },
+ "limits": true,
+ "monitor": {
+  "heartbeats": 27,
+  "violation_count": 0,
+  "violations": []
+ },
+ "pass": true,
+ "peak_rss_mb": {
+  "daemon": 38.1,
+  "monitor": 58.0,
+  "supervisor": 198.5
+ },
+ "processes_alive_until_stopped": {
+  "daemon": true,
+  "monitor": true,
+  "supervisor": true
+ },
+ "public_gb_end": 0.838,
+ "season1": {
+  "length_s": 172800.0,
+  "season": 1
+ },
+ "season2": {
+  "events_built": 20,
+  "season": 2
+ },
+ "stage1": {
+  "position_s": 172440.0,
+  "public_files": 59231,
+  "virtual_to_s": 172440.0,
+  "wall_s": 92.8
+ },
+ "stage5": {
+  "max_step_s": 20.0,
+  "position_s": 185112.1733443737,
+  "ticks": 600,
+  "virtual_seconds": 12000.0,
+  "went_back": 0
+ },
+ "supervisor_health": {
+  "broadcast": {
+   "clock_state": "running",
+   "holding": false,
+   "horizon_s": 222537,
+   "horizon_why": "window w030 not built",
+   "lead_s": 49502.2,
+   "position_s": 173034.8,
+   "season_on_air": 2,
+   "view_error": null
+  },
+  "builder": {
+   "built": 20,
+   "consecutive_failures": 0,
+   "last_action": "step",
+   "last_error": null,
+   "last_success_at": 1794051994.316085,
+   "next_attempt_at": null,
+   "season": 2,
+   "state": "building",
+   "total": 47
+  },
+  "capacity": {
+   "floor_bytes": 8589934592,
+   "free_bytes": 14703329280,
+   "free_inodes": 15874833,
+   "inode_floor": 20000,
+   "low": false,
+   "ok": true,
+   "public": null,
+   "public_cap": {
+    "base_gb": 0.25,
+    "cap_bytes": 2750000000,
+    "ceiling_gb": null,
+    "fraction": 0.283,
+    "measured_at": 1794051726.8224564,
+    "per_season_gb": 1.25,
+    "public_bytes": 778759924,
+    "seasons_on_air": 2
+   },
+   "reasons": []
+  },
+  "checked_at": 1794051994.316085,
+  "checked_at_iso": "2026-11-07T11:46:34Z",
+  "cycle": 21,
+  "format": "dfl-supervisor-health",
+  "format_version": 1,
+  "pid": 2149,
+  "problems": [],
+  "seasons": {
+   "ahead_complete": false,
+   "interrupted_evidence": [],
+   "on_air": 2,
+   "partial_pending": [],
+   "prepared_ahead": 0,
+   "target": 2
+  },
+  "started_at": 1794051726.8222756,
+  "state": "running",
+  "status": "ok"
+ },
+ "viewer_position": {
+  "max_before_handover": 172800.0,
+  "max_rate": 1.0,
+  "samples": 780,
+  "went_back": 0
+ }
+}

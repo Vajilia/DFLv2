@@ -1,0 +1,32 @@
+04:31:46  base ready: position 171600 s of 172800 (virtual time; the units below run in real time from here)
+04:31:46  === scenario builder-oom ===
+04:33:13  [builder-oom] PASS  warm-up: all three running, broadcast advancing  -- (171680.99087548256, 'running', 1794054793.4267256)
+04:33:14  [builder-oom] PASS  a builder step is running under the supervisor
+04:33:19  [builder-oom] PASS  the kernel's memory-cgroup OOM killer killed the builder step, not the supervisor  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 2, 'failcnt_after': '17545', 'limit_mb': 768, 'usage_before_mb': 218.7, 'victim_oom_score_adj_raised': {4154: True, 4155: True}, 'kernel_killed': True, 'seconds_to_kill': 3.4, 'victims': ['4154 python3 step --root', '415
+04:35:01  [builder-oom] PASS  the supervisor recorded the failed step in its health (consecutive_failures or last_error was set at some point)  -- [{'t': 1794054798.3, 'state': 'failed', 'consecutive_failures': 1, 'last_error': 'step failed (exit 1): league runner failed (-9):', 'backing_off': True, 'status': 'warning'}]
+04:35:01  [builder-oom] PASS  it backed off before trying again
+04:35:01  [builder-oom] PASS  the builder builds again (events built 2013 -> 2014)
+04:35:01  [builder-oom] PASS  the failure is cleared from the health once a step succeeds  -- [{'t': 1794054896.4, 'state': 'building', 'consecutive_failures': 0, 'last_error': '', 'backing_off': False, 'status': 'ok'}]
+04:35:01  [builder-oom] PASS  no orphaned engine process is left running after the kill (0 seen at +2 s)
+04:35:01  [builder-oom] PASS  the daemon and the monitor were not disturbed (no violation, no trip, both running)
+04:35:02  [builder-oom] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:35:02  [builder-oom] PASS  evidence files written before the kill are still there, unchanged in size
+04:35:03  [builder-oom] PASS  public folder and private store pass the reference closure
+04:35:03  [builder-oom] PASS  the monitor reported only the violations this fault should cause []
+04:35:03  [builder-oom] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:35:04  [builder-oom] PASS  no early results: the oracle's final pass over the files finds nothing (position 171792 s)
+04:35:20  === scenario daemon-oom ===
+04:36:51  [daemon-oom] PASS  warm-up: all three running, broadcast advancing  -- (171680.98985290527, 'running', 1794055011.9432368)
+04:36:55  [daemon-oom] PASS  the kernel's memory-cgroup OOM killer killed the daemon (oom_kill counter rose, victim died by signal 9)  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 2, 'failcnt_after': '293', 'limit_mb': 192, 'usage_before_mb': 23.1, 'victim_oom_score_adj_raised': {4245: True}, 'kernel_killed': True, 'seconds_to_kill': 1.0, 'victims': ['4245 python3 /home/claude/dflv2-m6/tools/broad
+04:37:25  [daemon-oom] PASS  safe hold: with the daemon dead the position stops (it moved 0.0 s in the last 10 s, 3.6 s since the kill)  -- ((171682.46068143845, 'running', 1794055013.4140654), (171686.03232121468, 'running', 1794055035.4303856), (171686.03232121468, 'running', 1794055045.4308414))
+04:37:25  [daemon-oom] PASS  the monitor has not tripped (a dead daemon is a hold, not a spoiler)
+04:37:32  [daemon-oom] PASS  the restarted daemon is running
+04:38:32  [daemon-oom] PASS  after the restart the position goes on from where the viewers' clocks stopped (+60 s)  -- ((171686.03232121468, 'running', 1794055045.4308414), (171746.00283145905, 'running', 1794055112.447153))
+04:38:32  [daemon-oom] PASS  the downtime is on record in the clock log
+04:38:33  [daemon-oom] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:38:33  [daemon-oom] PASS  evidence files written before the kill are still there, unchanged in size
+04:38:35  [daemon-oom] PASS  public folder and private store pass the reference closure
+04:38:35  [daemon-oom] PASS  the monitor reported only the violations this fault should cause ['daemon_silent']
+04:38:35  [daemon-oom] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:38:35  [daemon-oom] PASS  no early results: the oracle's final pass over the files finds nothing (position 171749 s)
+04:38:49  RESULT: PASS

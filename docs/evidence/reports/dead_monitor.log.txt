@@ -1,0 +1,21 @@
+06:19:54  daemon-restart-monitor-back-within-grace: the daemon is restarted 10 s after its lease lapsed while the monitor is down (its last heartbeat is 10 minutes old); the monitor is back 100 s later, inside the 240 s grace
+06:25:04    -> tripped=None violations=[] position +184.1s paused=False exit={'dfl-broadcast-daemon': 0, 'dfl-broadcast-monitor': 0}
+06:25:04       PASS  no trip
+06:25:04       PASS  monitor reported nothing beyond nothing
+06:25:04       PASS  the broadcast kept going (position advanced 24.1 s in the last 20 s)
+06:25:04       PASS  the monitor ran (heartbeats 7)
+06:25:04       PASS  it was still unlatched after the grace would have ended (240 s): no latch in any sample
+06:25:04       PASS  the daemon did not stop on its own: clock running at the end
+06:25:04  daemon-restart-dead-monitor: the same restart and the monitor never comes back: the daemon must trip itself by 240 s; a monitor started at 255 s, after the trip, must not clear it
+06:30:39    -> tripped=monitor_silent violations=[] position +0.0s paused=True exit={'dfl-broadcast-daemon': 0, 'dfl-broadcast-monitor': 0}
+06:30:39       PASS  tripped by the daemon itself, kind monitor_silent
+06:30:39       PASS  tripped at 240 s, not before (240.2 s after the daemon was started)
+06:30:39       PASS  no latch in any sample before 238 s (first seen at 256.0 s)
+06:30:39       PASS  the position stopped: it advanced 0.0 s from 3 s after the trip to the end (the late monitor started at 255 s)
+06:30:39       PASS  the clock is paused and PAUSE is present
+06:30:39       PASS  exactly one trip recorded, and still one after the late monitor ran
+06:30:39       PASS  the late monitor started and was alive (heartbeats 2) and did NOT clear the latch
+06:30:39       PASS  the latch file stayed in place to the end (every sample after the first sighting)
+06:30:39       PASS  the daemon process stayed up (paused) until it was stopped: exit status 0
+06:30:39       PASS  evidence kept: TRIPPED, trips.jsonl and the clock log were copied
+06:30:39  RESULT: PASS (16 checks, 0 failed)

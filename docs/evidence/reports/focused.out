@@ -1,0 +1,405 @@
+................./home/claude/dflv2-m6/tools/startup_check.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/claude/dflv2-m6/deploy/supervisor/dfl-broadcast-daemon.service' mode='r' encoding='utf-8'>
+  line = [l for l in open(os.path.join(DEPLOY, unit + ".service")).read().splitlines() if l.startswith("ExecStart=")][0][len("ExecStart="):]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/startup_check.py:44: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/claude/dflv2-m6/deploy/supervisor/broadcast.env.template' mode='r' encoding='utf-8'>
+  for line in open(os.path.join(DEPLOY, "broadcast.env.template")).read().splitlines():
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/startup_check.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/claude/dflv2-m6/deploy/supervisor/dfl-broadcast-monitor.service' mode='r' encoding='utf-8'>
+  line = [l for l in open(os.path.join(DEPLOY, unit + ".service")).read().splitlines() if l.startswith("ExecStart=")][0][len("ExecStart="):]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/startup_check.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/claude/dflv2-m6/deploy/supervisor/dfl-supervisor.service' mode='r' encoding='utf-8'>
+  line = [l for l in open(os.path.join(DEPLOY, unit + ".service")).read().splitlines() if l.startswith("ExecStart=")][0][len("ExecStart="):]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+......../home/claude/dflv2-m6/tests/test_rehearsal_guard.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpur8dt14c/monitor/heartbeat' mode='w' encoding='utf-8'>
+  open(p, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:124: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp1zbz35m1/monitor/heartbeat' mode='w' encoding='utf-8'>
+  open(hb, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/broadcast_run.py:137: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp1zbz35m1/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  rec = json.load(open(trip_file(self.dir)))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+{"tripped": true, "kind": "monitor_silent", "detail": "no heartbeat from the monitor for 121 s", "at": 1131.0, "paused": true}
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmphzzodhkd/monitor/heartbeat' mode='w' encoding='utf-8'>
+  open(p, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+refusing to resume: /tmp/tmphzzodhkd/monitor/TRIPPED exists (the monitor or the daemon tripped). Read it, keep the evidence, then run  rehearsal_check.py release --guard /tmp/tmphzzodhkd/monitor --reason ...
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpoe05cqi5/monitor/heartbeat' mode='w' encoding='utf-8'>
+  open(p, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:86: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpoe05cqi5/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  self.assertEqual(json.load(open(os.path.join(self.guard, 'TRIPPED')))['kind'], 'monitor_silent')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+../home/claude/dflv2-m6/tests/test_rehearsal_guard.py:77: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpmwm0wv7f/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  trip = json.load(open(os.path.join(self.guard, 'TRIPPED')))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:80: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpmwm0wv7f/monitor/trips.jsonl' mode='r' encoding='utf-8'>
+  self.assertEqual(len(open(os.path.join(self.guard, 'trips.jsonl')).read().splitlines()), 1)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:113: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdb4i1reg/monitor/heartbeat' mode='w' encoding='utf-8'>
+  open(hb, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/broadcast_run.py:137: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdb4i1reg/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  rec = json.load(open(trip_file(self.dir)))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+{"tripped": true, "kind": "monitor_silent", "detail": "the monitor wrote no new heartbeat in 241 s since this daemon started", "at": 1241.0, "paused": true}
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:118: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdb4i1reg/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  self.assertEqual(json.load(open(os.path.join(self.guard, 'TRIPPED')))['kind'], 'monitor_silent')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:159: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp1ztcuuqf/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp1ztcuuqf/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:156: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpkgtr9pm0/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  return json.load(open(p)) if os.path.exists(p) else None
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpkgtr9pm0/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:156: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdeoz_2xj/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  return json.load(open(p)) if os.path.exists(p) else None
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdeoz_2xj/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+../usr/lib/python3.13/json/decoder.py:361: ResourceWarning: unclosed file <_io.FileIO name='/tmp/tmp8i_zdz7z/watch.log' mode='ab' closefd=True>
+  obj, end = self.scan_once(s, idx)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpw7jptyfm/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:173: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdmhhgjm6/playback/games/EARLY-ONE.json' mode='w' encoding='utf-8'>
+  open(early, 'w').write('{"result":"too early"}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:156: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmppa_hhht0/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  return json.load(open(p)) if os.path.exists(p) else None
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:179: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmppa_hhht0/evidence/trip-19700101T001910Z-early_or_unknown_file/evidence.json' mode='r' encoding='utf-8'>
+  ev = json.load(open(os.path.join(d, 'evidence.json')))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:187: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmppa_hhht0/monitor/trips.jsonl' mode='r' encoding='utf-8'>
+  self.assertGreaterEqual(len(open(os.path.join(self.guard, 'trips.jsonl')).read().splitlines()), 2)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmppa_hhht0/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:156: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  return json.load(open(p)) if os.path.exists(p) else None
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:197: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/watch.log' mode='a' encoding='utf-8'>
+  w = RC.Watch(args(self.tmp, self.pub, self.tmp, evidence=self.ev, guard=self.guard, max_public_gb=1e-9))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:202: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/cg/memory.max' mode='w' encoding='utf-8'>
+  open(os.path.join(cg, 'memory.max'), 'w').write('600000000\n')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:203: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/cg/memory.current' mode='w' encoding='utf-8'>
+  open(os.path.join(cg, 'memory.current'), 'w').write('300000000\n')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:204: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/watch.log' mode='a' encoding='utf-8'>
+  w = RC.Watch(args(self.tmp, self.pub, self.tmp, evidence=self.ev, guard=self.guard, cgroup=cg))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:389: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/cg/memory.current' mode='r' encoding='utf-8'>
+  cur = int(open(os.path.join(self.cgroup, "memory.current")).read())
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:390: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/cg/memory.max' mode='r' encoding='utf-8'>
+  mx = open(os.path.join(self.cgroup, "memory.max")).read().strip()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:207: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/cg/memory.current' mode='w' encoding='utf-8'>
+  open(os.path.join(cg, 'memory.current'), 'w').write('560000000\n')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpj6_7byoi/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:159: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp84mt5ien/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp84mt5ien/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpq93gyxh1/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.refusing: give a reason of at least 10 characters (what was found, what you did about it)
+refusing: the monitor's heartbeat is stale or missing; start the monitor first (otherwise the daemon trips again at once)
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp5un9p9md/monitor/heartbeat' mode='w' encoding='utf-8'>
+  open(p, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:629: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp5un9p9md/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  rec = json.load(open(latch))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+released (kept as /tmp/tmp5un9p9md/ev/released/20261107T141021Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume --root ... --guard /tmp/tmp5un9p9md/monitor
+/home/claude/dflv2-m6/tests/test_rehearsal_guard.py:283: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp5un9p9md/ev/released/20261107T141021Z-TRIPPED.json' mode='r' encoding='utf-8'>
+  rec = json.load(open(os.path.join(self.tmp, 'ev', 'released', kept[0])))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tools/rehearsal_check.py:670: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp3yjex1g7/watch.log' mode='r' encoding='utf-8'>
+  for ln in open(a.log):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_guard.py:54: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpm723w107/monitor/heartbeat' mode='w' encoding='utf-8'>
+  open(p, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:629: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpm723w107/monitor/TRIPPED' mode='r' encoding='utf-8'>
+  rec = json.load(open(latch))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+refusing --drill: only a trip made by the daemon because the monitor was deliberately stopped (monitor_silent) can be a drill; this one is early_or_unknown_file from monitor
+released (kept as /tmp/tmpm723w107/ev/released/20261107T141028Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume --root ... --guard /tmp/tmpm723w107/monitor
+/home/claude/dflv2-m6/tools/rehearsal_check.py:670: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpm723w107/watch.log' mode='r' encoding='utf-8'>
+  for ln in open(a.log):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:686: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpm723w107/monitor/drills.jsonl' mode='r' encoding='utf-8'>
+  drills = [json.loads(ln) for ln in open(os.path.join(a.guard, "drills.jsonl")) if ln.strip()]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:690: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpm723w107/monitor/trips.jsonl' mode='r' encoding='utf-8'>
+  for ln in open(os.path.join(a.guard, "trips.jsonl")):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tools/rehearsal_check.py:670: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpqeadcgrw/watch.log' mode='r' encoding='utf-8'>
+  for ln in open(a.log):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tools/rehearsal_check.py:670: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpc_729v7_/watch.log' mode='r' encoding='utf-8'>
+  for ln in open(a.log):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:690: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpc_729v7_/monitor/trips.jsonl' mode='r' encoding='utf-8'>
+  for ln in open(os.path.join(a.guard, "trips.jsonl")):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tools/rehearsal_check.py:670: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpzikpil3w/watch.log' mode='r' encoding='utf-8'>
+  for ln in open(a.log):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_check.py:156: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpnsnjir_5/web/index.html' mode='w' encoding='utf-8'>
+  open(os.path.join(self.web, 'index.html'), 'w').write('<!doctype html><script src="a.js"></script>')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:177: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 47455)>
+  srv = serve(self.web, [broken])
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed <socket.socket fd=4, family=2, type=1, proto=0, laddr=('127.0.0.1', 47225)>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_check.py:156: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp5uhrw9l0/web/index.html' mode='w' encoding='utf-8'>
+  open(os.path.join(self.web, 'index.html'), 'w').write('<!doctype html><script src="a.js"></script>')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 37077)>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_check.py:201: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpr5udho94/pub/somebody-elses-file' mode='w' encoding='utf-8'>
+  pub = os.path.join(self.tmp.name, 'pub'); os.makedirs(pub); open(os.path.join(pub, 'somebody-elses-file'), 'w').write('x')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.../home/claude/dflv2-m6/tests/test_rehearsal_check.py:312: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpybqwf0t0/broadcast/live/S001-tour-r1-g01/.tmp-630207-s0084.json' mode='w' encoding='utf-8'>
+  open(self.tmpf, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp7aofla_s/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:358: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpknu4_1zl/broadcast/surprise.json' mode='w' encoding='utf-8'>
+  open(os.path.join(self.pubdir, 'broadcast', 'surprise.json'), 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpgiilcbtq/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpgiilcbtq/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpfq7fgisj/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:351: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpis40smal/.tmp-630207-latest.json' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpgwtcpf7t/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpgwtcpf7t/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:344: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp0gw1mh1b/broadcast/live/S901-reg-w02-g01/.tmp-630207-end.json' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp393jf8xn/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp393jf8xn/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:267: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjgo8r95w/broadcast/live/S001-tour-r1-g01/.tmp-630207-s0084.json' mode='w' encoding='utf-8'>
+  open(self.tmpf, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpo6bpl4ra/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpo6bpl4ra/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:275: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpotnkb9vq/broadcast/live/S001-tour-r1-g01/.tmp-630207-s0084.json' mode='w' encoding='utf-8'>
+  open(self.tmpf, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpfwd0chic/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpfwd0chic/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:282: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdi8gkz8e/broadcast/live/S001-tour-r1-g01/.tmp-630207-s0084.json' mode='w' encoding='utf-8'>
+  open(self.tmpf, 'w').write('{}')                                     # fresh and still there: not stale, not an error
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpuvc47wuk/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpuvc47wuk/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:288: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpuxtv129r/broadcast/live/S001-tour-r1-g01/.tmp-630207-s0084.json' mode='w' encoding='utf-8'>
+  open(self.tmpf, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpadkuyocz/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpadkuyocz/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:388: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpswgkc17w/broadcast/live/S901-reg-w02-g01/.tmp-4242-end.json' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:388: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpswgkc17w/broadcast/live/S901-reg-w02-g01/.tmp-end.json' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:388: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpswgkc17w/broadcast/live/S901-reg-w02-g01/.tmp-end.json-4242' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp47l3529h/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp47l3529h/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:334: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4ta_7xl9/.tmp-630207-latest.json' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmprjmlz6wa/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmprjmlz6wa/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:378: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpxfad8cfc/releases/e00001-0000000001/.tmp-manifest.json' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp73atu8w1/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp73atu8w1/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:319: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/claude/dflv2-m6/tools/rehearsal_check.py' mode='r' encoding='utf-8'>
+  src = open(os.path.join(os.path.dirname(RC.__file__), 'rehearsal_check.py')).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:107: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpcofvp4vf/watch.log' mode='a' encoding='utf-8'>
+  for index, test in enumerate(self):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:368: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpztphq5jc/.tmp-status.json-4242' mode='w' encoding='utf-8'>
+  open(t, 'w').write('{}')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:243: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjm3bo3p2/watch.log' mode='r' encoding='utf-8'>
+  return [v for v in (json.loads(x).get('violation') for x in open(p)) if v] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./usr/lib/python3.13/unittest/suite.py:84: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjm3bo3p2/watch.log' mode='a' encoding='utf-8'>
+  return self.run(*args, **kwds)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmps17ib8b5/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:57: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmps17ib8b5/watch.log' mode='a' encoding='utf-8'>
+  w = self.watch(at)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp541te0pc/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:57: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp541te0pc/watch.log' mode='a' encoding='utf-8'>
+  w = self.watch(at)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp2h84y4_h/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:57: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp2h84y4_h/watch.log' mode='a' encoding='utf-8'>
+  w = self.watch(at)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp2zrrz3db/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:57: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp2zrrz3db/watch.log' mode='a' encoding='utf-8'>
+  w = self.watch(at)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjtphyyhl/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:57: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjtphyyhl/watch.log' mode='a' encoding='utf-8'>
+  w = self.watch(at)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpwwsnxeag/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpwwsnxeag/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpq4_8r3x1/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpq4_8r3x1/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmphw777b5z/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmphw777b5z/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp_ff2r3hf/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:73: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp_ff2r3hf/evidence/20261107T141105-early_or_unknown_file.json' mode='r' encoding='utf-8'>
+  first = open(os.path.join(self.tmp.name, 'evidence', ev[0])).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:76: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp_ff2r3hf/evidence/20261107T141105-early_or_unknown_file.json' mode='r' encoding='utf-8'>
+  self.assertEqual(open(os.path.join(self.tmp.name, 'evidence', ev[0])).read(), first)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp_ff2r3hf/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tests/test_rehearsal_check.py:91: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp6ly7_txg/broadcast/.tmp-clock' mode='w' encoding='utf-8'>
+  open(junk, 'w').write('x')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_rehearsal_check.py:47: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmph34vjabm/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(os.path.join(self.tmp.name, 'watch.log'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmph34vjabm/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...../home/claude/dflv2-m6/tests/test_integration_m6.py:250: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmplptccqgu/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(p) if '"violation"' in x] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_integration_m6.py:285: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmplptccqgu/watch.log' mode='a' encoding='utf-8'>
+  b = baseline()['sim']
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/claude/dflv2-m6/tools/broadcast_run.py:137: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpim_ipr0w/guard/TRIPPED' mode='r' encoding='utf-8'>
+  rec = json.load(open(trip_file(self.dir)))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+{"tripped": true, "kind": "disk_low", "detail": "21.2 GB free (the floor is 1000000000.0 GB)", "at": 1422.0, "paused": true}
+/home/claude/dflv2-m6/tests/test_integration_m6.py:312: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpim_ipr0w/guard/TRIPPED' mode='r' encoding='utf-8'>
+  self.assertEqual(json.load(open(os.path.join(sim.guard_dir, 'TRIPPED')))['kind'], 'disk_low')
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tools/rehearsal_check.py:629: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpim_ipr0w/guard/TRIPPED' mode='r' encoding='utf-8'>
+  rec = json.load(open(latch))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+released (kept as /tmp/tmpim_ipr0w/evidence/released/20261107T141128Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume --root ... --guard /tmp/tmpim_ipr0w/guard
+/home/claude/dflv2-m6/tests/test_integration_m6.py:250: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpim_ipr0w/watch.log' mode='r' encoding='utf-8'>
+  return [json.loads(x) for x in open(p) if '"violation"' in x] if os.path.exists(p) else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/dflv2-m6/tests/test_integration_m6.py:413: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpim_ipr0w/guard/trips.jsonl' mode='r' encoding='utf-8'>
+  trips = [json.loads(x) for x in open(os.path.join(sim.guard_dir, 'trips.jsonl'))]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpim_ipr0w/watch.log' mode='a' encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..
+----------------------------------------------------------------------
+Ran 78 tests in 136.303s
+
+OK

@@ -1,0 +1,20 @@
+04:41:03  base ready: position 171600 s of 172800 (virtual time; the units below run in real time from here)
+04:41:03  === scenario monitor-oom ===
+04:42:39  [monitor-oom] PASS  warm-up: all three running, broadcast advancing  -- (171680.96119880676, 'running', 1794055359.3902116)
+04:42:47  [monitor-oom] PASS  the kernel's memory-cgroup OOM killer killed the monitor (oom_kill counter rose, victim died by signal 9)  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 2, 'failcnt_after': '1138', 'limit_mb': 512, 'usage_before_mb': 28.5, 'victim_oom_score_adj_raised': {4511: True}, 'kernel_killed': True, 'seconds_to_kill': 2.6, 'victims': ['4511 python3 /home/claude/dflv2-m6/tools/rehe
+04:44:47  [monitor-oom] PASS  safe hold: with no monitor the daemon stops the broadcast by itself (TRIPPED written, clock paused)  -- {'after_s': 120.0, 'trip': {'kind': 'monitor_silent'}}
+04:45:02  [monitor-oom] PASS  the position does not move while held  -- (171807.03406739235, 'paused', 1794055502.354269)
+04:45:02  [monitor-oom] PASS  the daemon process is still alive (held, not dead)
+04:45:54  [monitor-oom] PASS  the restarted monitor is running and has not found a violation
+04:45:54  [monitor-oom] PASS  the broadcast does NOT resume by itself after the monitor is back (a person must release and resume)
+04:45:54  [monitor-oom] PASS  release keeps the trip as evidence  --  /tmp/season/oom3/monitor-oom/evidence/released/20261107T124554Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume --root ... --guard /tmp/season/oom3/monitor-oom/guard
+
+04:45:54  [monitor-oom] PASS  resume works after the release
+04:46:39  [monitor-oom] PASS  the broadcast is running again from the held position (+44 s)  -- ((171807.03406739235, 'paused', 1794055502.354269), (171851.09295916557, 'running', 1794055599.5367186))
+04:46:41  [monitor-oom] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:46:41  [monitor-oom] PASS  evidence files written before the kill are still there, unchanged in size
+04:46:43  [monitor-oom] PASS  public folder and private store pass the reference closure
+04:46:43  [monitor-oom] PASS  the monitor reported only the violations this fault should cause ['monitor_silent']
+04:46:43  [monitor-oom] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:46:43  [monitor-oom] PASS  no early results: the oracle's final pass over the files finds nothing (position 171855 s)
+04:46:58  RESULT: PASS

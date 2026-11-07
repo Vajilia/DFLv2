@@ -1,0 +1,92 @@
+{
+ "builder": {
+  "count": 38,
+  "events_built": 38,
+  "events_per_minute": 3.17,
+  "seconds_between_events": {
+   "max": 39.1,
+   "median": 9.0
+  }
+ },
+ "cgroup_cache_and_rss_end": {
+  "daemon": {
+   "cache": 5201920,
+   "rss": 0,
+   "total_cache": 5201920,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  },
+  "monitor": {
+   "cache": 4284416,
+   "rss": 0,
+   "total_cache": 4284416,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  },
+  "supervisor": {
+   "cache": 967942144,
+   "rss": 0,
+   "total_cache": 967942144,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  }
+ },
+ "cgroup_parent_peak_mb": 1325.2,
+ "cgroup_peak_mb": {
+  "daemon_cgroup_mb": 28.8,
+  "monitor_cgroup_mb": 28.9,
+  "supervisor_cgroup_mb": 1267.6
+ },
+ "config": "default",
+ "copy_s": 10.7,
+ "cpu": "1 (pinned to cpu 0 of 2)",
+ "cpu_seconds": {
+  "daemon": 2.2,
+  "monitor": 0.3,
+  "supervisor": 691.6
+ },
+ "cpu_share_pct_of_one_cpu": {
+  "daemon": 0.3,
+  "monitor": 0.0,
+  "supervisor": 96.1
+ },
+ "daemon_ticks": {
+  "count": 717,
+  "gap_s": {
+   "max": 1.475,
+   "median": 1.001,
+   "over_1.5s": 0,
+   "over_3s": 0,
+   "p99": 1.019,
+   "p999": 1.475
+  }
+ },
+ "disk_free_gb_end": 5.2,
+ "events": [],
+ "killed": {},
+ "mem_limit_gb": 2.0,
+ "memory_cgroup": true,
+ "minutes": 12.0,
+ "monitor": {
+  "heartbeats": 24,
+  "trips": false,
+  "violation_count": 0,
+  "violations": []
+ },
+ "peak_rss_mb": {
+  "daemon": 32.0,
+  "monitor": 34.1,
+  "supervisor": 216.9
+ },
+ "peak_rss_sum_mb": 283.0,
+ "public_gb_end": 0.003,
+ "supervisor_health_end": {
+  "builder": "building",
+  "built": 38,
+  "problems": [
+   "supervisor_stopped"
+  ],
+  "season": 2,
+  "status": "critical"
+ }
+}

@@ -1,0 +1,84 @@
+03:55:52  base ready: position 171600 s of 172800 (virtual time; the units below run in real time from here)
+03:55:52  === scenario daemon-oom ===
+03:57:24  [daemon-oom] PASS  warm-up: all three running, broadcast advancing  -- (171680.98262000084, 'running')
+03:57:28  [daemon-oom] PASS  the kernel's memory-cgroup OOM killer killed the daemon (oom_kill counter rose, victim died by signal 9)  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 2, 'failcnt_after': '317', 'limit_mb': 192, 'usage_before_mb': 23.1, 'victim_oom_score_adj_raised': {2760: True}, 'kernel_killed': True, 'seconds_to_kill': 1.2, 'victims': ['2760 python3 /home/claude/dflv2-m6/tools/broad
+03:57:58  [daemon-oom] PASS  safe hold: with the daemon dead the position stops (it moved 0.0 s in the last 10 s, 3.5 s since the kill)  -- ((171682.5066230297, 'running'), (171686.02693986893, 'running'), (171686.02693986893, 'running'))
+03:57:58  [daemon-oom] PASS  the monitor has not tripped (a dead daemon is a hold, not a spoiler)
+03:58:05  [daemon-oom] PASS  the restarted daemon is running
+03:59:05  [daemon-oom] PASS  after the restart the position goes on from where the viewers' clocks stopped (+60 s)  -- ((171686.02693986893, 'running'), (171745.9901649952, 'running'))
+03:59:05  [daemon-oom] PASS  the downtime is on record in the clock log
+03:59:06  [daemon-oom] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+03:59:06  [daemon-oom] PASS  evidence files written before the kill are still there, unchanged in size
+03:59:08  [daemon-oom] PASS  public folder and private store pass the reference closure
+03:59:08  [daemon-oom] PASS  the monitor reported only the violations this fault should cause ['daemon_silent']
+03:59:08  [daemon-oom] PASS  viewers' position never went back and never ran faster than time (max 1.26/s)
+03:59:08  [daemon-oom] PASS  no early results: the oracle's final pass over the files finds nothing (position 171749 s)
+03:59:21  === scenario daemon-sigkill ===
+04:00:51  [daemon-sigkill] PASS  warm-up: all three running, broadcast advancing  -- (171680.9806854725, 'running')
+04:00:53  [daemon-sigkill] PASS  the daemon was killed with SIGKILL from outside
+04:01:23  [daemon-sigkill] PASS  safe hold: with the daemon dead the position stops (it moved 0.0 s in the last 10 s, 2.3 s since the kill)  -- ((171682.6822874546, 'running'), (171685.01641726494, 'running'), (171685.01641726494, 'running'))
+04:01:23  [daemon-sigkill] PASS  the monitor has not tripped (a dead daemon is a hold, not a spoiler)
+04:01:30  [daemon-sigkill] PASS  the restarted daemon is running
+04:02:30  [daemon-sigkill] PASS  after the restart the position goes on from where the viewers' clocks stopped (+60 s)  -- ((171685.01641726494, 'running'), (171744.98700284958, 'running'))
+04:02:30  [daemon-sigkill] PASS  the downtime is on record in the clock log
+04:02:31  [daemon-sigkill] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:02:31  [daemon-sigkill] PASS  evidence files written before the kill are still there, unchanged in size
+04:02:33  [daemon-sigkill] PASS  public folder and private store pass the reference closure
+04:02:33  [daemon-sigkill] PASS  the monitor reported only the violations this fault should cause ['daemon_silent']
+04:02:33  [daemon-sigkill] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:02:34  [daemon-sigkill] PASS  no early results: the oracle's final pass over the files finds nothing (position 171749 s)
+04:02:48  === scenario monitor-oom-restart ===
+04:04:34  [monitor-oom-restart] PASS  warm-up: all three running, broadcast advancing  -- (171680.98891043663, 'running')
+04:04:40  [monitor-oom-restart] PASS  the kernel's memory-cgroup OOM killer killed the monitor (oom_kill counter rose, victim died by signal 9)  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 2, 'failcnt_after': '927', 'limit_mb': 512, 'usage_before_mb': 25.6, 'victim_oom_score_adj_raised': {3003: True}, 'kernel_killed': True, 'seconds_to_kill': 3.0, 'victims': ['3003 python3 /home/claude/dflv2-m6/tools/rehea
+04:06:07  [monitor-oom-restart] PASS  the restarted monitor started again (a second `start` record) and is sending heartbeats  -- [{'at': 1794053153.0, 'free_gb': 13.0, 'heartbeat': True, 'ok': True, 'pos': 171759.0, 'public_files': 59230, 'public_gb': 0.778}]
+04:06:07  [monitor-oom-restart] PASS  the daemon never held: no TRIPPED, the clock was running at every sample since the kill
+04:06:07  [monitor-oom-restart] PASS  the daemon process kept running
+04:06:09  [monitor-oom-restart] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:06:09  [monitor-oom-restart] PASS  evidence files written before the kill are still there, unchanged in size
+04:06:10  [monitor-oom-restart] PASS  public folder and private store pass the reference closure
+04:06:10  [monitor-oom-restart] PASS  the monitor reported only the violations this fault should cause []
+04:06:10  [monitor-oom-restart] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:06:11  [monitor-oom-restart] PASS  no early results: the oracle's final pass over the files finds nothing (position 171777 s)
+04:06:24  === scenario monitor-oom ===
+04:08:00  [monitor-oom] PASS  warm-up: all three running, broadcast advancing  -- (171680.96572375298, 'running')
+04:08:06  [monitor-oom] PASS  the kernel's memory-cgroup OOM killer killed the monitor (oom_kill counter rose, victim died by signal 9)  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 2, 'failcnt_after': '582', 'limit_mb': 512, 'usage_before_mb': 24.5, 'victim_oom_score_adj_raised': {3149: True}, 'kernel_killed': True, 'seconds_to_kill': 2.6, 'victims': ['3149 python3 /home/claude/dflv2-m6/tools/rehea
+04:10:02  [monitor-oom] PASS  safe hold: with no monitor the daemon stops the broadcast by itself (TRIPPED written, clock paused)  -- {'after_s': 116.0, 'trip': {'kind': 'monitor_silent'}}
+04:10:17  [monitor-oom] PASS  the position does not move while held  -- (171802.0574054718, 'paused')
+04:10:17  [monitor-oom] PASS  the daemon process is still alive (held, not dead)
+04:11:09  [monitor-oom] PASS  the restarted monitor is running and has not found a violation
+04:11:09  [monitor-oom] PASS  the broadcast does NOT resume by itself after the monitor is back (a person must release and resume)
+04:11:09  [monitor-oom] PASS  release keeps the trip as evidence  -- as /tmp/season/oom/monitor-oom/evidence/released/20261107T121109Z-TRIPPED.json). The daemon is still PAUSED. To continue:  broadcast_run.py resume --root ... --guard /tmp/season/oom/monitor-oom/guard
+
+04:11:09  [monitor-oom] PASS  resume works after the release
+04:11:54  [monitor-oom] PASS  the broadcast is running again from the held position (+44 s)  -- ((171802.0574054718, 'paused'), (171846.48637270927, 'running'))
+04:11:56  [monitor-oom] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:11:56  [monitor-oom] PASS  evidence files written before the kill are still there, unchanged in size
+04:11:58  [monitor-oom] PASS  public folder and private store pass the reference closure
+04:11:58  [monitor-oom] PASS  the monitor reported only the violations this fault should cause ['monitor_silent']
+04:11:58  [monitor-oom] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:11:58  [monitor-oom] PASS  no early results: the oracle's final pass over the files finds nothing (position 171851 s)
+04:12:09  === scenario builder-oom ===
+04:13:37  [builder-oom] PASS  warm-up: all three running, broadcast advancing  -- (171680.9880180359, 'running')
+04:13:55  [builder-oom] PASS  a builder step is running under the supervisor
+04:14:00  [builder-oom] PASS  the kernel's memory-cgroup OOM killer killed the builder step, not the supervisor  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 1, 'failcnt_after': '966', 'limit_mb': 768, 'usage_before_mb': 25.6, 'victim_oom_score_adj_raised': {3431: True}, 'kernel_killed': True, 'seconds_to_kill': 4.2, 'victims': ['3431 python3 step --root']}
+04:14:35  [builder-oom] PASS  the supervisor recorded the failed step (health says so)  -- {'status': 'warning', 'builder': {'built': 4, 'consecutive_failures': 0, 'last_action': 'step', 'last_error': None, 'last_success_at': 1794053667.1783679, 'next_attempt_at': None, 'season': 2, 'state': 'building', 'total': 47}, 'problems': [{'code': 'capacity_low', 'detail': 'free disk 12.13 GiB / 1
+04:14:35  [builder-oom] PASS  it backs off, tries again and the builder builds again (events built 2002 -> 2004)
+04:14:36  [builder-oom] PASS  the daemon and the monitor were not disturbed (no violation, no trip, both running)
+04:14:37  [builder-oom] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:14:37  [builder-oom] PASS  evidence files written before the kill are still there, unchanged in size
+04:14:39  [builder-oom] PASS  public folder and private store pass the reference closure
+04:14:39  [builder-oom] PASS  the monitor reported only the violations this fault should cause []
+04:14:39  [builder-oom] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:14:39  [builder-oom] PASS  no early results: the oracle's final pass over the files finds nothing (position 171743 s)
+04:14:54  === scenario supervisor-oom ===
+04:16:38  [supervisor-oom] PASS  warm-up: all three running, broadcast advancing  -- (171680.99542093277, 'running')
+04:17:02  [supervisor-oom] PASS  the kernel's memory-cgroup OOM killer killed the SUPERVISOR process (oom_kill counter rose, died by signal 9)  -- {'kind': 'cgroup_oom_kill', 'group_oom_kill_before': 0, 'group_oom_kill_after': 2, 'failcnt_after': '1004', 'limit_mb': 768, 'usage_before_mb': 31.1, 'victim_oom_score_adj_raised': {3507: True}, 'kernel_killed': True, 'seconds_to_kill': 4.0, 'victims': ['3507 python3 /home/claude/dflv2-m6/tools/broa
+04:17:02  [supervisor-oom] PASS  the daemon and the monitor are untouched by it (separate groups)
+04:17:39  [supervisor-oom] PASS  the restarted supervisor takes the lock back and the builder builds again (events built 2002 -> 2004)
+04:17:40  [supervisor-oom] PASS  every earlier public file keeps its bytes; indexes keep their earlier entries
+04:17:40  [supervisor-oom] PASS  evidence files written before the kill are still there, unchanged in size
+04:17:42  [supervisor-oom] PASS  public folder and private store pass the reference closure
+04:17:42  [supervisor-oom] PASS  the monitor reported only the violations this fault should cause []
+04:17:42  [supervisor-oom] PASS  viewers' position never went back and never ran faster than time (max 1.00/s)
+04:17:42  [supervisor-oom] PASS  no early results: the oracle's final pass over the files finds nothing (position 171745 s)
+04:17:55  RESULT: PASS

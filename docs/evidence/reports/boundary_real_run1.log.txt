@@ -1,0 +1,27 @@
+03:01:11  season 1 is 172800 s long; copy took 17 s
+03:02:43  stage 1 done: position 172440 s of 172800, 59231 public files, 92 s
+03:02:43  PASS  stage 1: season 1 not yet handed over
+03:08:44  stage 2: at the end of season 1 after 360 s of real time; standing for 90 s
+03:10:14  PASS  stage 2: the position stands still at the end of season 1 while season 2 is not prepared  -- (172800.0, 'running')
+03:10:14  PASS  stage 2: the daemon is alive and the monitor is not tripped
+03:10:14  PASS  stage 2: during the hold no file appeared in the public folder
+03:10:16  hold snapshot: 59290 files, indexes {'playback/index.json': 400, 'broadcast/replays/index.json': 400, 'broadcast/honors/index.json': 4}
+03:10:16  stage 3: supervisor started
+03:10:18  PASS  stage 3: the daemon handed over to season 2  -- after 2 s
+03:15:50  PASS  stage 3: the broadcast is 300 s into season 2  -- (173101.44625401497, 'running')
+03:15:54  PASS  all three processes ran to the end (none died)  -- {'monitor': True, 'daemon': True, 'supervisor': True}
+03:15:54  stage 4: checking the files
+03:15:55  PASS  historical files: every season-1 public file has its bytes; indexes keep their earlier entries as a prefix
+03:15:56  PASS  historical files: owner, mode, inode, size and modification time unchanged (controls, indexes and live manifests excepted)
+03:15:57  PASS  cumulative indexes: season 1's entries are still there and the indexes did not shrink  -- {'playback/index.json': (400, 400), 'broadcast/replays/index.json': (400, 400), 'broadcast/honors/index.json': (4, 4)}
+03:15:59  PASS  cumulative indexes: the first 4 entries of each are byte-for-byte the ones from the hold
+03:16:00  PASS  reference closure of the public folder (every index entry has its file, every release matches its manifest)
+03:16:00  PASS  reference closure of the private store
+03:16:00  PASS  carry.json names season 1 as finished and season 2 on air  -- {'season': 2, 'seasons': [1]}
+03:16:00  FAIL  monitor: no violation over the whole real-time run, no trip  -- [{'at': 1794049363.8, 'detail': "the clock's lease ran out 23 s ago and nothing renewed it", 'violation': 'daemon_silent'}]
+03:16:00  PASS  monitor: it was checking (heartbeats seen)  -- 27
+03:16:00  PASS  viewers' position never went back
+03:16:00  PASS  viewers' position never ran faster than time (max rate 1.00/s)  -- 1.0000443276249997
+03:16:00  PASS  viewers' position never passed the end of season 1 before the hand-over  -- 172800.0
+03:16:01  PASS  no early results: the oracle's final pass over the files finds nothing (position 173107 s, season 2 on air)
+03:16:01  RESULT: FAIL (20 checks, 1 failed)

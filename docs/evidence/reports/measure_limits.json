@@ -1,0 +1,109 @@
+{
+ "builder": {
+  "count": 29,
+  "events_built": 29,
+  "events_per_minute": 3.62,
+  "seconds_between_events": {
+   "max": 38.2,
+   "median": 8.0
+  }
+ },
+ "cgroup_cache_and_rss_end": {
+  "daemon": {
+   "cache": 2629632,
+   "rss": 0,
+   "total_cache": 2629632,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  },
+  "monitor": {
+   "cache": 8192,
+   "rss": 0,
+   "total_cache": 8192,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  },
+  "supervisor": {
+   "cache": 306839552,
+   "rss": 0,
+   "total_cache": 306839552,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  }
+ },
+ "cgroup_limits": {
+  "daemon": {
+   "failcnt": "0",
+   "limit_mb": 201,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0"
+  },
+  "monitor": {
+   "failcnt": "0",
+   "limit_mb": 537,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0"
+  },
+  "supervisor": {
+   "failcnt": "62532",
+   "limit_mb": 537,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0"
+  }
+ },
+ "cgroup_parent_peak_mb": 587.5,
+ "cgroup_peak_mb": {
+  "daemon_cgroup_mb": 26.0,
+  "monitor_cgroup_mb": 24.5,
+  "supervisor_cgroup_mb": 536.9
+ },
+ "config": "tuned",
+ "copy_s": 5.4,
+ "cpu": "1 (pinned to cpu 0 of 2)",
+ "cpu_seconds": {
+  "daemon": 1.5,
+  "monitor": 0.2,
+  "supervisor": 461.4
+ },
+ "cpu_share_pct_of_one_cpu": {
+  "daemon": 0.3,
+  "monitor": 0.0,
+  "supervisor": 96.1
+ },
+ "daemon_ticks": {
+  "count": 477,
+  "gap_s": {
+   "max": 1.239,
+   "median": 1.0,
+   "over_1.5s": 0,
+   "over_3s": 0,
+   "p99": 1.012,
+   "p999": 1.239
+  }
+ },
+ "disk_free_gb_end": 5.5,
+ "events": [],
+ "killed": {},
+ "mem_limit_gb": 2.0,
+ "memory_cgroup": true,
+ "minutes": 8.0,
+ "monitor": {
+  "heartbeats": 16,
+  "trips": false,
+  "violation_count": 0,
+  "violations": []
+ },
+ "peak_rss_mb": {
+  "daemon": 32.1,
+  "monitor": 33.9,
+  "supervisor": 203.6
+ },
+ "peak_rss_sum_mb": 269.6,
+ "public_gb_end": 0.002,
+ "supervisor_health_end": {
+  "builder": "building",
+  "built": 29,
+  "problems": [
+   "supervisor_stopped"
+  ],
+  "season": 2,
+  "status": "critical"
+ }
+}

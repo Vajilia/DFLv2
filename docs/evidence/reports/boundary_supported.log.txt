@@ -1,0 +1,28 @@
+05:37:33  season 1 is 172800 s long; copy took 8 s
+05:39:12  stage 1 done: position 172440 s of 172800, 59231 public files, 99 s
+05:39:12  PASS  stage 1: season 1 not yet handed over
+05:45:10  stage 2: at the end of season 1 after 357 s of real time; standing for 90 s
+05:46:40  PASS  stage 2: the position stands still at the end of season 1 while season 2 is not prepared  -- (172800.0, 'running', 1794059200.3836446)
+05:46:40  PASS  stage 2: the daemon is alive and the monitor is not tripped
+05:46:40  PASS  stage 2: during the hold no file appeared in the public folder
+05:46:42  hold snapshot: 59290 files, indexes {'playback/index.json': 400, 'broadcast/replays/index.json': 400, 'broadcast/honors/index.json': 4}
+05:46:42  stage 3: supervisor started
+05:46:44  PASS  stage 3: the daemon handed over to season 2  -- after 2 s
+05:52:14  PASS  stage 3: the broadcast is 300 s into season 2  -- (173100.3899450302, 'running', 1794059534.3505588)
+05:52:17  PASS  SUPPORTED CONTROLS ONLY during the real-time run: every clock-log entry is one the daemon's own code writes (coverage_wait, downtime); nothing rewrote clock.json or ready_until
+05:52:17  PASS  all three processes ran to the end (none died)  -- {'monitor': True, 'daemon': True, 'supervisor': True}
+05:52:17  stage 4: checking the files
+05:52:19  PASS  historical files: every season-1 public file has its bytes; indexes keep their earlier entries as a prefix
+05:52:19  PASS  historical files: owner, mode, inode, size and modification time unchanged (controls, indexes and live manifests excepted)
+05:52:20  PASS  cumulative indexes: season 1's entries are still there and the indexes did not shrink  -- {'playback/index.json': (400, 400), 'broadcast/replays/index.json': (400, 400), 'broadcast/honors/index.json': (4, 4)}
+05:52:22  PASS  cumulative indexes: every entry that was there at the hold is byte-for-byte unchanged and in the same place (an exact prefix)
+05:52:23  PASS  reference closure of the public folder (every index entry has its file, every release matches its manifest)
+05:52:23  PASS  reference closure of the private store
+05:52:23  PASS  carry.json names season 1 as finished and season 2 on air  -- {'season': 2, 'seasons': [1]}
+05:52:23  PASS  monitor: no violation over the whole real-time run, no trip
+05:52:23  PASS  monitor: it was checking (26 heartbeats seen over 784 s of real time; at least 13 expected)  -- 26
+05:52:23  PASS  viewers' position never went back
+05:52:23  PASS  viewers' position never ran faster than time (max rate 1.00/s)  -- 1.0
+05:52:23  PASS  viewers' position never passed the end of season 1 before the hand-over  -- 172800.0
+05:52:24  PASS  no early results: the oracle's final pass over the files finds nothing (position 173105 s, season 2 on air)
+05:52:24  RESULT: PASS (21 checks, 0 failed)

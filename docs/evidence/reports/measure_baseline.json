@@ -1,0 +1,80 @@
+{
+ "builder": {
+  "count": 0,
+  "events_built": 0,
+  "events_per_minute": 0.0,
+  "seconds_between_events": {
+   "max": null,
+   "median": null
+  }
+ },
+ "cgroup_cache_and_rss_end": {
+  "daemon": {
+   "cache": 237568,
+   "rss": 0,
+   "total_cache": 237568,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  },
+  "monitor": {
+   "cache": 32768,
+   "rss": 0,
+   "total_cache": 32768,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  },
+  "supervisor": {
+   "cache": 0,
+   "rss": 0,
+   "total_cache": 0,
+   "total_mapped_file": 0,
+   "total_rss": 0
+  }
+ },
+ "cgroup_parent_peak_mb": 52.6,
+ "cgroup_peak_mb": {
+  "daemon_cgroup_mb": 24.1,
+  "monitor_cgroup_mb": 28.3,
+  "supervisor_cgroup_mb": null
+ },
+ "config": "baseline",
+ "copy_s": 14.1,
+ "cpu": "1 (pinned to cpu 0 of 2)",
+ "cpu_seconds": {
+  "daemon": 0.7,
+  "monitor": 0.2
+ },
+ "cpu_share_pct_of_one_cpu": {
+  "daemon": 0.4,
+  "monitor": 0.1
+ },
+ "daemon_ticks": {
+  "count": 177,
+  "gap_s": {
+   "max": 1.199,
+   "median": 1.0,
+   "over_1.5s": 0,
+   "over_3s": 0,
+   "p99": 1.022,
+   "p999": 1.199
+  }
+ },
+ "disk_free_gb_end": 6.1,
+ "events": [],
+ "killed": {},
+ "mem_limit_gb": 2.0,
+ "memory_cgroup": true,
+ "minutes": 3.0,
+ "monitor": {
+  "heartbeats": 6,
+  "trips": false,
+  "violation_count": 0,
+  "violations": []
+ },
+ "peak_rss_mb": {
+  "daemon": 31.9,
+  "monitor": 33.7
+ },
+ "peak_rss_sum_mb": 65.6,
+ "public_gb_end": 0.001
+}

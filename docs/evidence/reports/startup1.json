@@ -1,0 +1,1100 @@
+[
+ {
+  "clock_log_kinds": [
+   "start",
+   "fixture",
+   "downtime"
+  ],
+  "daemon_stderr_tail": "",
+  "exit_codes": {
+   "dfl-broadcast-daemon": 0,
+   "dfl-broadcast-monitor": 1
+  },
+  "heartbeats": 2,
+  "order": [
+   [
+    "dfl-broadcast-daemon",
+    0
+   ],
+   [
+    "dfl-broadcast-monitor",
+    5
+   ]
+  ],
+  "paused_file": false,
+  "position": [
+   [
+    6.0,
+    1509.0,
+    "running"
+   ],
+   [
+    7.0,
+    1510.0,
+    "running"
+   ],
+   [
+    8.0,
+    1511.0,
+    "running"
+   ],
+   [
+    9.0,
+    1512.0,
+    "running"
+   ],
+   [
+    10.0,
+    1513.0,
+    "running"
+   ],
+   [
+    11.0,
+    1514.0,
+    "running"
+   ],
+   [
+    12.0,
+    1515.0,
+    "running"
+   ],
+   [
+    13.0,
+    1516.0,
+    "running"
+   ],
+   [
+    14.0,
+    1517.0,
+    "running"
+   ],
+   [
+    15.0,
+    1518.0,
+    "running"
+   ],
+   [
+    16.0,
+    1519.0,
+    "running"
+   ],
+   [
+    17.0,
+    1520.0,
+    "running"
+   ],
+   [
+    18.0,
+    1521.0,
+    "running"
+   ],
+   [
+    19.0,
+    1522.0,
+    "running"
+   ],
+   [
+    20.0,
+    1523.0,
+    "running"
+   ],
+   [
+    21.0,
+    1524.0,
+    "running"
+   ],
+   [
+    22.0,
+    1525.0,
+    "running"
+   ],
+   [
+    23.0,
+    1526.0,
+    "running"
+   ],
+   [
+    24.0,
+    1527.0,
+    "running"
+   ],
+   [
+    25.0,
+    1528.0,
+    "running"
+   ],
+   [
+    26.0,
+    1529.0,
+    "running"
+   ],
+   [
+    27.0,
+    1530.0,
+    "running"
+   ],
+   [
+    28.0,
+    1531.0,
+    "running"
+   ],
+   [
+    29.0,
+    1532.0,
+    "running"
+   ],
+   [
+    30.0,
+    1533.0,
+    "running"
+   ],
+   [
+    31.0,
+    1534.0,
+    "running"
+   ],
+   [
+    32.0,
+    1535.0,
+    "running"
+   ],
+   [
+    33.0,
+    1536.0,
+    "running"
+   ],
+   [
+    34.0,
+    1537.0,
+    "running"
+   ],
+   [
+    35.0,
+    1538.0,
+    "running"
+   ],
+   [
+    36.0,
+    1539.0,
+    "running"
+   ],
+   [
+    37.0,
+    1540.0,
+    "running"
+   ],
+   [
+    38.0,
+    1541.0,
+    "running"
+   ],
+   [
+    39.0,
+    1542.0,
+    "running"
+   ],
+   [
+    40.0,
+    1543.0,
+    "running"
+   ],
+   [
+    41.0,
+    1544.0,
+    "running"
+   ],
+   [
+    42.0,
+    1545.0,
+    "running"
+   ],
+   [
+    43.0,
+    1546.0,
+    "running"
+   ],
+   [
+    44.0,
+    1547.0,
+    "running"
+   ],
+   [
+    45.0,
+    1548.0,
+    "running"
+   ]
+  ],
+  "position_advanced_s": 39.0,
+  "scenario": "daemon-first-fresh",
+  "tripped": null,
+  "violations": [
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 5.5
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 5.5
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 15.4
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 15.4
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 25.4
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 25.4
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 35.5
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 35.5
+   }
+  ],
+  "what": "a first install: no heartbeat file yet; the daemon starts, the monitor 5 s later"
+ },
+ {
+  "clock_log_kinds": [
+   "start",
+   "fixture",
+   "pause"
+  ],
+  "daemon_stderr_tail": "{\"tripped\": true, \"kind\": \"monitor_silent\", \"detail\": \"no heartbeat from the monitor for 3600 s\", \"at\": 1794057211.9732065, \"paused\": true}\n",
+  "exit_codes": {
+   "dfl-broadcast-daemon": 0,
+   "dfl-broadcast-monitor": 1
+  },
+  "heartbeats": 2,
+  "order": [
+   [
+    "dfl-broadcast-daemon",
+    0
+   ],
+   [
+    "dfl-broadcast-monitor",
+    10
+   ]
+  ],
+  "paused_file": true,
+  "position": [
+   [
+    11.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    12.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    13.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    14.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    15.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    16.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    17.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    18.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    19.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    20.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    21.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    22.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    23.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    24.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    25.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    26.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    27.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    28.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    29.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    30.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    31.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    32.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    33.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    34.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    35.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    36.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    37.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    38.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    39.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    40.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    41.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    42.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    43.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    44.0,
+    1503.0,
+    "paused"
+   ],
+   [
+    45.0,
+    1503.0,
+    "paused"
+   ]
+  ],
+  "position_advanced_s": 0.0,
+  "scenario": "daemon-first-after-downtime",
+  "tripped": {
+   "at": 1794057211.9732065,
+   "detail": "no heartbeat from the monitor for 3600 s",
+   "kind": "monitor_silent",
+   "source": "daemon"
+  },
+  "violations": [
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 10.3
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 10.3
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 20.2
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 20.2
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 30.2
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 30.2
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 40.3
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 40.3
+   }
+  ],
+  "what": "after a host outage: a heartbeat file from 1 hour ago is still in the guard folder; the daemon starts, the monitor 10 s later"
+ },
+ {
+  "clock_log_kinds": [
+   "start",
+   "fixture",
+   "downtime"
+  ],
+  "daemon_stderr_tail": "",
+  "exit_codes": {
+   "dfl-broadcast-daemon": 0,
+   "dfl-broadcast-monitor": 1
+  },
+  "heartbeats": 2,
+  "order": [
+   [
+    "dfl-broadcast-monitor",
+    0
+   ],
+   [
+    "dfl-broadcast-daemon",
+    10
+   ]
+  ],
+  "paused_file": false,
+  "position": [
+   [
+    11.0,
+    1504.0,
+    "running"
+   ],
+   [
+    12.0,
+    1505.0,
+    "running"
+   ],
+   [
+    13.0,
+    1506.0,
+    "running"
+   ],
+   [
+    14.0,
+    1507.0,
+    "running"
+   ],
+   [
+    15.0,
+    1508.0,
+    "running"
+   ],
+   [
+    16.0,
+    1509.0,
+    "running"
+   ],
+   [
+    17.0,
+    1510.0,
+    "running"
+   ],
+   [
+    18.0,
+    1511.0,
+    "running"
+   ],
+   [
+    19.0,
+    1512.0,
+    "running"
+   ],
+   [
+    20.0,
+    1513.0,
+    "running"
+   ],
+   [
+    21.0,
+    1514.0,
+    "running"
+   ],
+   [
+    22.0,
+    1515.0,
+    "running"
+   ],
+   [
+    23.0,
+    1516.0,
+    "running"
+   ],
+   [
+    24.0,
+    1517.0,
+    "running"
+   ],
+   [
+    25.0,
+    1518.0,
+    "running"
+   ],
+   [
+    26.0,
+    1519.0,
+    "running"
+   ],
+   [
+    27.0,
+    1520.0,
+    "running"
+   ],
+   [
+    28.0,
+    1521.0,
+    "running"
+   ],
+   [
+    29.0,
+    1522.0,
+    "running"
+   ],
+   [
+    30.0,
+    1523.0,
+    "running"
+   ],
+   [
+    31.0,
+    1524.0,
+    "running"
+   ],
+   [
+    32.0,
+    1525.0,
+    "running"
+   ],
+   [
+    33.0,
+    1526.0,
+    "running"
+   ],
+   [
+    34.0,
+    1527.0,
+    "running"
+   ],
+   [
+    35.0,
+    1528.0,
+    "running"
+   ],
+   [
+    36.0,
+    1529.0,
+    "running"
+   ],
+   [
+    37.0,
+    1530.0,
+    "running"
+   ],
+   [
+    38.0,
+    1531.0,
+    "running"
+   ],
+   [
+    39.0,
+    1532.0,
+    "running"
+   ],
+   [
+    40.0,
+    1533.0,
+    "running"
+   ],
+   [
+    41.0,
+    1534.0,
+    "running"
+   ],
+   [
+    42.0,
+    1535.0,
+    "running"
+   ],
+   [
+    43.0,
+    1536.0,
+    "running"
+   ],
+   [
+    44.0,
+    1537.0,
+    "running"
+   ],
+   [
+    45.0,
+    1538.0,
+    "running"
+   ]
+  ],
+  "position_advanced_s": 34.0,
+  "scenario": "monitor-first-after-downtime",
+  "tripped": null,
+  "violations": [
+   {
+    "detail": "the clock's lease ran out 331 s ago and nothing renewed it",
+    "kind": "daemon_silent",
+    "t": 0.1
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 0.2
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 0.2
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 10.1
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 10.1
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 20.1
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 20.1
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 30.2
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 30.2
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 40.1
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 40.1
+   }
+  ],
+  "what": "the same outage, the monitor started first, the daemon 10 s later"
+ },
+ {
+  "clock_log_kinds": [
+   "start",
+   "fixture",
+   "pause"
+  ],
+  "daemon_stderr_tail": "{\"tripped\": true, \"kind\": \"monitor_silent\", \"detail\": \"no heartbeat from the monitor for 3600 s\", \"at\": 1794057319.8379354, \"paused\": true}\n",
+  "exit_codes": {
+   "dfl-broadcast-daemon": 0,
+   "dfl-broadcast-monitor": 1
+  },
+  "heartbeats": 2,
+  "order": [
+   [
+    "dfl-broadcast-daemon",
+    0
+   ],
+   [
+    "dfl-broadcast-monitor",
+    0.05
+   ]
+  ],
+  "paused_file": true,
+  "position": [
+   [
+    1.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    2.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    3.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    4.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    5.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    6.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    7.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    8.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    9.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    10.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    11.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    12.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    13.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    14.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    15.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    16.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    17.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    18.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    19.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    20.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    21.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    22.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    23.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    24.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    25.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    26.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    27.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    28.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    29.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    30.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    31.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    32.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    33.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    34.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    35.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    36.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    37.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    38.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    39.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    40.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    41.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    42.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    43.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    44.1,
+    1503.0,
+    "paused"
+   ],
+   [
+    45.1,
+    1503.0,
+    "paused"
+   ]
+  ],
+  "position_advanced_s": 0.0,
+  "scenario": "together-after-downtime",
+  "tripped": {
+   "at": 1794057319.8379354,
+   "detail": "no heartbeat from the monitor for 3600 s",
+   "kind": "monitor_silent",
+   "source": "daemon"
+  },
+  "violations": [
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 0.3
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 0.3
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 10.2
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 10.2
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 20.2
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 20.2
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 30.3
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 30.3
+   },
+   {
+    "detail": "status.json -> 200 None",
+    "kind": "http_rule",
+    "t": 40.2
+   },
+   {
+    "detail": "broadcast/clock.json -> 200 None",
+    "kind": "http_rule",
+    "t": 40.2
+   }
+  ],
+  "what": "the same outage, both started in the same instant (what systemd does at boot: After= orders the starts, a simple service counts as started when it is forked)"
+ }
+]

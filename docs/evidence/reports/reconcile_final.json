@@ -1,0 +1,31 @@
+{
+ "counts": {
+  "both": 424,
+  "not_yet": 103,
+  "reveal_delay": 1
+ },
+ "duplicates": [],
+ "ok": true,
+ "playback": 424,
+ "position": [
+  185112.3,
+  185112.3
+ ],
+ "replays": 425,
+ "rows": [
+  {
+   "broadcast_ended_at_s": 184184.95,
+   "class": "reveal_delay",
+   "gap_s": 5275.0,
+   "gid": "S002/reg:w02:g01",
+   "in_playback": false,
+   "in_replays": true,
+   "results_due_at_s": 189460,
+   "results_due_in_s": 4347.7,
+   "season": 2
+  }
+ ],
+ "season": 2,
+ "unique_playback": 424,
+ "unique_replays": 425
+}
