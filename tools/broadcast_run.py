@@ -19,6 +19,8 @@ every second makes P exactly what the clock's position allows (src/dflsite/seaso
 * CAPS (for a rehearsal).  `--deadline` (epoch seconds or ISO-8601, UTC if no zone) ends the run cleanly at that wall-clock time: the daemon creates PAUSE, writes the
   paused status, logs one JSON line `deadline` on stderr and exits 0; the broadcast stays paused until someone runs `resume`. `--max-public-gb` stops the
   daemon (exit 70, one JSON line `cap_exceeded`) if the public folder grows past that size; it is measured every 5 minutes. Neither cap deletes anything.
+  For RECURRING operation use `--max-public-gb-per-season G [--public-base-gb B] [--max-public-ceiling-gb C]` instead (never both): the limit is B + G x the seasons that have
+  been on air (store/carry.json), at most C; see tools/publiccap.py for why a fixed number cannot work past season 3.
 * GUARD (for a rehearsal).  `--guard DIR` (the monitor's folder) makes the daemon obey the monitor. If DIR/TRIPPED exists the daemon creates PAUSE at once and keeps it
   (the clock stands; the process stays up so status.json says paused); `resume --guard DIR` refuses while TRIPPED exists. If the monitor stops proving it is alive
   (DIR/heartbeat not refreshed for --guard-stale seconds, or never written within --guard-grace seconds of the daemon's start) the daemon trips itself
@@ -38,6 +40,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from dflsite import broadcast as B  # noqa: E402
 from dflsite import season as S  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import publiccap as PC  # noqa: E402
 
 
 def check_public(root, public):
@@ -60,16 +64,15 @@ def parse_deadline(text):
         return d.timestamp()
 
 
-def tree_bytes(path):
-    total, stack = 0, [path]
-    while stack:
-        with os.scandir(stack.pop()) as it:
-            for e in it:
-                if e.is_dir(follow_symlinks=False):
-                    stack.append(e.path)
-                elif e.is_file(follow_symlinks=False):
-                    total += e.stat(follow_symlinks=False).st_size
-    return total
+tree_bytes = PC.tree_bytes                                                          # kept under its old name (tests, tools)
+
+
+def current_cap(a, store):
+    """The public folder's limit in bytes right now, or None. `--max-public-gb` is the rehearsal's fixed number; `--max-public-gb-per-season` (tools/publiccap.py) is the
+    recurring one: base + per-season x seasons on air, read from store/carry.json, bounded by the ceiling. The two are never combined (check_arguments)."""
+    if getattr(a, "max_public_gb_per_season", 0.0):
+        return PC.cap_bytes(store, a.max_public_gb_per_season, a.public_base_gb, a.max_public_ceiling_gb or None)
+    return int(a.max_public_gb * 1e9) if a.max_public_gb else None
 
 
 CAP_CHECK_S = 300.0
@@ -162,7 +165,7 @@ def run_loop(a, store, lockfd):
         bc.tick(t)                                                   # the same instant: a start is not a downtime
     failing = False
     deadline = parse_deadline(a.deadline) if a.deadline else None
-    cap = a.max_public_gb * 1e9 if a.max_public_gb else None
+    cap_on = bool(a.max_public_gb or a.max_public_gb_per_season)
     cap_checked = None
     guard = Guard(a.guard, a.guard_stale, a.guard_grace, time.time()) if a.guard else None
     while not stop["flag"]:
@@ -181,11 +184,12 @@ def run_loop(a, store, lockfd):
                 print(json.dumps({"error": type(e).__name__, "detail": str(e)[:200], "at": t0}), file=sys.stderr, flush=True)
             print(json.dumps({"deadline": True, "at": t0, "paused": True}), file=sys.stderr, flush=True)
             return 0
-        if cap is not None and (cap_checked is None or t0 - cap_checked >= CAP_CHECK_S):
+        if cap_on and (cap_checked is None or t0 - cap_checked >= CAP_CHECK_S):
             cap_checked = t0
             size = tree_bytes(a.public)
+            cap = current_cap(a, store)                                       # read AFTER the measurement: a hand-over during the count only raises it
             if size > cap:
-                print(json.dumps({"cap_exceeded": True, "public_bytes": size, "cap_bytes": int(cap), "at": t0}), file=sys.stderr, flush=True)
+                print(json.dumps({"cap_exceeded": True, "public_bytes": size, "cap_bytes": int(cap), "seasons_on_air": PC.seasons_on_air(store), "at": t0}), file=sys.stderr, flush=True)
                 return 70
         try:
             r = bc.tick(t0)
@@ -231,7 +235,8 @@ def main(argv=None):
     p.add_argument("--lease", type=float, default=B.LEASE_S)
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--deadline", help="end the run (paused, exit 0) at this time: epoch seconds or ISO-8601 (UTC if no zone)")
-    p.add_argument("--max-public-gb", type=float, default=0.0, help="exit 70 if the public folder grows past this size (checked every 5 minutes)")
+    p.add_argument("--max-public-gb", type=float, default=0.0, help="exit 70 if the public folder grows past this size (checked every 5 minutes): the REHEARSAL's fixed cap")
+    PC.add_arguments(p)
     p.add_argument("--guard", help="the monitor's folder: obey DIR/TRIPPED and trip when DIR/heartbeat goes stale (rehearsal)")
     p.add_argument("--guard-stale", type=float, default=GUARD_STALE_S)
     p.add_argument("--guard-grace", type=float, default=GUARD_GRACE_S)
@@ -243,6 +248,8 @@ def main(argv=None):
             p.add_argument("--guard", help="refuse to resume while DIR/TRIPPED exists")
         p.set_defaults(fn={"pause": cmd_pause, "resume": lambda a: cmd_pause(a, False), "status": cmd_status}[name])
     a = ap.parse_args(argv)
+    if a.cmd == "run":
+        PC.check_arguments(a, ap)
     return a.fn(a)
 
 

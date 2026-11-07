@@ -50,6 +50,7 @@ from dflsite import broadcast as B  # noqa: E402
 from dflsite import season as S  # noqa: E402
 import broadcast_season_check as SC  # noqa: E402
 import broadcast_run as BR  # noqa: E402
+import publiccap as PC  # noqa: E402
 
 FEED = "/feed"
 # What stops the broadcast. Everything else a check can find is logged as a violation (and fails the rehearsal) but does not pause it.
@@ -414,6 +415,13 @@ class Watch:
         except FileNotFoundError:
             return True
 
+    def cap_bytes(self):
+        """The public folder's limit: the recurring per-season number when given (it takes precedence over the fixed one, whose CLI default is 3 GB), else the fixed number."""
+        per = getattr(self.a, "max_public_gb_per_season", 0.0)
+        if per:
+            return PC.cap_bytes(self.store, per, getattr(self.a, "public_base_gb", 0.25), getattr(self.a, "max_public_ceiling_gb", 0.0) or None)
+        return int(self.a.max_public_gb * 1e9)
+
     def full(self, now, pos_before):
         self.progress()
         listing = SC.list_public(self.public)
@@ -427,8 +435,10 @@ class Watch:
                 if not is_tmp(os.path.basename(f)):
                     raise                                                      # a PUBLISHED file vanished: not normal, still an error
                 # a temporary file renamed into place after the listing (atomic publication): its final name is not in this listing, the next pass sees it
-        if size > self.a.max_public_gb * 1e9:
-            self.violation("public_too_large", "%.2f GB" % (size / 1e9), {"bytes": size})
+        cap = self.cap_bytes()                                                 # read AFTER the listing: a hand-over during it only raises the limit
+        if size > cap:
+            self.violation("public_too_large", "%.2f GB, the limit is %.2f GB%s" % (size / 1e9, cap / 1e9, " (%d season(s) on air)" % PC.seasons_on_air(self.store) if getattr(self.a, "max_public_gb_per_season", 0.0) else ""),
+                           {"bytes": size, "cap_bytes": cap, "seasons_on_air": PC.seasons_on_air(self.store)})
         self.progress()
         early_allowed, _ = self.oracle.expected(pos_after + TOL_S)
         # in the first TOL_S seconds the daemon is still placing its very first files (the clock starts, then the first tick publishes): nothing can be called missing yet
@@ -749,7 +759,8 @@ def main(argv=None):
     p.add_argument("--every", type=float, default=10.0)
     p.add_argument("--full-every", type=float, default=30.0)
     p.add_argument("--min-free-gb", type=float, default=6.0)
-    p.add_argument("--max-public-gb", type=float, default=3.0)
+    p.add_argument("--max-public-gb", type=float, default=3.0, help="the REHEARSAL's fixed limit (ignored when --max-public-gb-per-season is given)")
+    PC.add_arguments(p)
     p.add_argument("--guard", help="the monitor's folder: write TRIPPED and the heartbeat here so the daemon (run with --guard) pauses")
     p.add_argument("--canary", help="the private canary file (its token must never be served)")
     p.add_argument("--cgroup", help="the daemon's cgroup folder (memory.current, memory.max)")

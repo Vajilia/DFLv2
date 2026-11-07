@@ -44,6 +44,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import broadcast_build as BB  # noqa: E402
+import publiccap as PC  # noqa: E402
 import rootlock as RL  # noqa: E402
 from dflsite import broadcast as B  # noqa: E402
 from dflsite import season as S  # noqa: E402
@@ -76,7 +77,8 @@ def capacity(path):
 class Config:
     def __init__(self, root, public=None, builder_cmd=None, capacity_fn=None, floor_gb=8.0, step_margin_gb=0.5, season_gb=2.0, inode_floor=20000, step_inodes=5000,
                  season_inodes=130000, interval=30.0, step_timeout=3600.0, backoff_base=60.0, backoff_max=1800.0, capacity_retry_s=300.0, escalate_after=3,
-                 busy_warn_s=900.0, stall_s=300.0, hold_critical_s=1800.0, retry_now=False):
+                 busy_warn_s=900.0, stall_s=300.0, hold_critical_s=1800.0, retry_now=False, public_gb_per_season=None, public_base_gb=0.25, public_ceiling_gb=None,
+                 public_cap_every_s=300.0):
         self.root = os.path.abspath(root)
         self.public = os.path.abspath(public) if public else None
         self.builder_cmd = list(builder_cmd) if builder_cmd else [sys.executable, os.path.join(ROOT, "tools", "broadcast_build.py")]
@@ -87,6 +89,7 @@ class Config:
         self.backoff_base, self.backoff_max, self.capacity_retry_s = backoff_base, backoff_max, capacity_retry_s
         self.escalate_after, self.busy_warn_s, self.stall_s, self.hold_critical_s = escalate_after, busy_warn_s, stall_s, hold_critical_s
         self.retry_now = retry_now
+        self.public_gb_per_season, self.public_base_gb, self.public_ceiling_gb, self.public_cap_every_s = public_gb_per_season, public_base_gb, public_ceiling_gb, public_cap_every_s
 
 
 def iso(t):
@@ -113,6 +116,7 @@ class Supervisor:
         self._lock_fd = None
         self._child = None
         self.st = None
+        self._cap_seen = None                                   # (at, bytes) of the last public folder measurement
 
     # -------------------------------------------------------------------------------------------------------------------------- the singleton
     def acquire(self):
@@ -226,8 +230,9 @@ class Supervisor:
     def _same_volume(a, b):
         return os.stat(a).st_dev == os.stat(b).st_dev
 
-    def capacity_check(self, action):
+    def capacity_check(self, action, now=None):
         c = self.cfg
+        now = time.time() if now is None else now
         cap = c.capacity_fn(self.cfg.root)
         need_b, need_i, what = self.capacity_need(action or "step")
         low_b = c.floor_gb * GB + c.step_margin_gb * GB + 2 * c.season_gb * GB
@@ -245,7 +250,21 @@ class Supervisor:
         if c.public and os.path.isdir(c.public) and not self._same_volume(c.public, self.cfg.root):
             p = c.capacity_fn(c.public)
             out["public"] = {"free_bytes": p["free_bytes"], "free_inodes": p["free_inodes"], "ok": p["free_bytes"] >= c.floor_gb * GB}
+        out["public_cap"] = self.public_cap(now)
         return out
+
+    def public_cap(self, now):
+        """The recurring public-folder limit (tools/publiccap.py) against the folder's size, so the warning comes before the daemon or the monitor has to stop the broadcast.
+        Read-only: a scan of the public tree at most every `public_cap_every_s` seconds (the daemon counts every 5 minutes too)."""
+        c = self.cfg
+        if not c.public_gb_per_season or not c.public or not os.path.isdir(c.public):
+            return None
+        if self._cap_seen is None or now - self._cap_seen[0] >= c.public_cap_every_s or now < self._cap_seen[0]:
+            self._cap_seen = (now, PC.tree_bytes(c.public))
+        size = self._cap_seen[1]
+        d = PC.describe(self.store, c.public_gb_per_season, c.public_base_gb, c.public_ceiling_gb)
+        return {"public_bytes": size, "cap_bytes": d["cap_bytes"], "fraction": round(size / d["cap_bytes"], 3) if d["cap_bytes"] else None, "seasons_on_air": d["seasons_on_air"],
+                "per_season_gb": d["per_season_gb"], "base_gb": d["base_gb"], "ceiling_gb": d["ceiling_gb"], "measured_at": self._cap_seen[0]}
 
     # -------------------------------------------------------------------------------------------------------------------------- running the builder
     def run_builder(self, args):
@@ -311,7 +330,7 @@ class Supervisor:
         st = self.st
         o = self.observe(now)
         action = self.due(o)
-        cap = self.capacity_check(action)
+        cap = self.capacity_check(action, now)
         outcome = None
         if act and action and not self.stop:
             if st["next_attempt_at"] is not None and now < st["next_attempt_at"]:
@@ -323,7 +342,7 @@ class Supervisor:
                 if outcome == "ok":
                     o = self.observe(now)
                     action = self.due(o)
-                    cap = self.capacity_check(action)
+                    cap = self.capacity_check(action, now)
         health = self.health(o, action, cap, outcome, now)
         if act:
             self.save_state()
@@ -360,6 +379,14 @@ class Supervisor:
             problem("capacity_insufficient", "critical", "nothing is being built: " + detail)
         elif cap["low"]:
             problem("capacity_low", "warning", "free disk %.2f GiB / %d inodes will not hold the season after the next one: add room before it is needed (nothing is deleted automatically)" % (cap["free_bytes"] / GB, cap["free_inodes"]))
+        pc = cap.get("public_cap")
+        if pc and pc["cap_bytes"]:
+            if pc["public_bytes"] > pc["cap_bytes"]:
+                problem("public_cap_exceeded", "critical", "the public folder is %.2f GB, over its %.2f GB limit (%d season(s) on air x %.2f GB + %.2f GB): the daemon exits 70 and the monitor trips the guard; "
+                        "raise the allowance or plan room, nothing is deleted automatically" % (pc["public_bytes"] / 1e9, pc["cap_bytes"] / 1e9, pc["seasons_on_air"], pc["per_season_gb"], pc["base_gb"]))
+            elif pc["public_bytes"] > PC.NEAR * pc["cap_bytes"]:
+                problem("public_cap_near", "warning", "the public folder is %.2f GB of its %.2f GB limit (%.0f%%); the limit rises by %.2f GB at the next hand-over" % (
+                    pc["public_bytes"] / 1e9, pc["cap_bytes"] / 1e9, 100.0 * pc["fraction"], pc["per_season_gb"]))
         if cap["public"] and not cap["public"]["ok"]:
             problem("public_capacity_low", "critical", "the public volume has %.2f GiB free, below the %.2f GiB floor" % (cap["public"]["free_bytes"] / GB, c.floor_gb))
         if bc["holding"]:
@@ -451,6 +478,9 @@ def add_options(p):
     p.add_argument("--hold-critical-s", type=float, default=1800.0)
     p.add_argument("--stall-s", type=float, default=300.0)
     p.add_argument("--busy-warn-s", type=float, default=900.0)
+    p.add_argument("--public-cap-per-season-gb", type=float, default=0.0, help="report the daemon's and monitor's recurring public-folder limit (the same value as their --max-public-gb-per-season; 0 = do not report)")
+    p.add_argument("--public-base-gb", type=float, default=0.25)
+    p.add_argument("--public-ceiling-gb", type=float, default=0.0)
     p.add_argument("--retry-now", action="store_true", help="ignore a remembered backoff (after a person fixed the cause)")
     p.add_argument("--builder-cmd", help="JSON list replacing the builder command (tests only)")
 
@@ -459,7 +489,8 @@ def make(a):
     return Supervisor(Config(root=a.root, public=a.public, builder_cmd=json.loads(a.builder_cmd) if a.builder_cmd else None, floor_gb=a.floor_gb, step_margin_gb=a.step_margin_gb,
                              season_gb=a.season_gb, inode_floor=a.inode_floor, step_inodes=a.step_inodes, season_inodes=a.season_inodes, interval=a.interval, step_timeout=a.step_timeout,
                              backoff_base=a.backoff_base, backoff_max=a.backoff_max, escalate_after=a.escalate_after, hold_critical_s=a.hold_critical_s, stall_s=a.stall_s,
-                             busy_warn_s=a.busy_warn_s, retry_now=a.retry_now))
+                             busy_warn_s=a.busy_warn_s, retry_now=a.retry_now, public_gb_per_season=a.public_cap_per_season_gb or None, public_base_gb=a.public_base_gb,
+                             public_ceiling_gb=a.public_ceiling_gb or None))
 
 
 def cmd_run(a):
