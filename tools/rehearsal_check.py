@@ -247,9 +247,8 @@ def traversal_probe(base, canary_path=None, full=True, paths=None):
 
 
 def make_oracle(store):
-    plan = B.get(os.path.join(store, S.PLAN))
-    builds = B.get(os.path.join(store, S.BUILDS))
-    return SC.Oracle(store, S.materialize(plan, builds), builds)
+    """The oracle follows the store: the season on air (store/carry.json), the builds as the builder adds them, and every earlier season's records as still expected."""
+    return SC.FollowingOracle(store)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- monitor

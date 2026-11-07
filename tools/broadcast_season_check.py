@@ -113,6 +113,78 @@ class Oracle:
         return max(due, key=lambda r: (r["at_s"], r["order"])) if due else None
 
 
+class FollowingOracle:
+    """The oracle for a broadcast that goes on past one season, read from the store while it runs (the monitor of a recurring broadcast, tools/rehearsal_check.py).
+
+    `Oracle` is a snapshot of ONE season whose builds were all in place. This one follows the store the way the daemon does: the season on air is the one named by
+    store/carry.json (the root's season when there is none) and its builds file is read again whenever it, or the carry record, changes (the builder is still adding events).
+    What the earlier seasons made public stays expected for ever: each finished season's whole file set is part of `expected()`, so a historical file that vanishes is
+    reported as missing and a file nothing accounts for is reported as unknown. The refresh happens on every call, AFTER the caller has listed the public folder, so a
+    file published for an event built a moment after the listing is never mistaken for an early one.
+    Same interface as Oracle: expected(p), latest_pointer(p), view, games, builds."""
+
+    def __init__(self, store):
+        self.store = store
+        self.first = int(B.get(os.path.join(store, S.PLAN))["season"])            # the first season stays at the root (as the daemon reads it)
+        self._key = None
+        self._past = {}                                   # finished season -> its complete file set (immutable once finished)
+        self._cur = None
+        self.refresh()
+
+    def _stat(self, path):
+        try:
+            st = os.stat(path)
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
+
+    def _dir(self, season):
+        return self.store if season == self.first else os.path.join(self.store, S.SEASONS, "s%03d" % season)
+
+    def _load(self, season, carry):
+        d = self._dir(season)
+        plan = B.get(os.path.join(d, S.PLAN))
+        bpath = os.path.join(d, S.BUILDS)
+        builds = B.get(bpath) if os.path.exists(bpath) else {"format": S.BUILDS_FORMAT, "events": {}, "games": {}, "honors": {}}
+        return Oracle(self.store, S.materialize(plan, builds, carry), builds)
+
+    def refresh(self):
+        cpath = os.path.join(self.store, S.CARRY)
+        carry = B.get(cpath) if os.path.exists(cpath) else None
+        season = int(carry["season"]) if carry else self.first
+        key = (self._stat(cpath), self._stat(os.path.join(self._dir(season), S.BUILDS)), self._stat(os.path.join(self._dir(season), S.PLAN)))
+        if key == self._key:
+            return
+        for k in (carry["seasons"] if carry else []):
+            if k not in self._past:
+                self._past[k] = self._load(k, None).expected(10 ** 9)[0]
+        self._cur = self._load(season, carry)
+        self._key = key
+
+    @property
+    def view(self):
+        return self._cur.view
+
+    @property
+    def games(self):
+        return self._cur.games
+
+    @property
+    def builds(self):
+        return self._cur.builds
+
+    def expected(self, p):
+        self.refresh()
+        exp, ended = self._cur.expected(p)
+        for files in self._past.values():
+            exp = exp | files
+        return exp, ended
+
+    def latest_pointer(self, p):
+        self.refresh()
+        return self._cur.latest_pointer(p)
+
+
 def list_public(public):
     out = set()
     for d, _, names in os.walk(public):
