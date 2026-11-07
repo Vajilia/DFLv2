@@ -114,7 +114,7 @@ That is about 12 to 14 MB a season. It is **linear and bounded by the disk** (at
 | monitor | **512M** | ~30 seasons at the measured growth (430 MB peak). |
 | supervisor (+ builder step) | **768M** | 3.5x the 217 MB process peak; 512M was **validated** (no kill, no slowdown), 768M adds 50% for an engine step on a real season that has not run under the unit on the host. |
 
-Together 1472M, under a 2 GB machine with room for the system and Caddy. `MemoryMax=1500M` is **not** adopted. Not tested: an out-of-memory kill of each unit and what the monitor and supervisor then do (the fault tests cover a daemon death, which is what an OOM kill looks like from outside).
+Together 1472M, under a 2 GB machine with room for the system and Caddy. `MemoryMax=1500M` is **not** adopted. The induced out-of-memory kills of each unit, and what the others then do, are in section 11.
 
 ## 7. The fixed 3 GB public cap
 
@@ -155,14 +155,113 @@ Templates: `deploy/supervisor/dfl-broadcast-daemon.service`, `dfl-broadcast-moni
 | Builder failing | Broadcast holds at the first unbuilt item; supervisor retries with backoff, escalates | Read `supervisor/health.json` and the build log. Viewers see a hold, not a skip. |
 | Low disk or inodes | Supervisor stops building first (8 GB); monitor trips at 6 GB | Free space (retention is M8, approval-gated), then release and resume as above. |
 
-## 9. Remaining gaps
+## 9. A real-engine season boundary (`tools/boundary_real.py`)
 
-1. **Not run on the host.** Nothing here ran on the Droplet. The measurements are from a sandbox; the kernel, disk and cgroup version differ (cgroup v1 here, v2 under systemd, so `MemoryHigh`/`failcnt` semantics differ).
-2. **No real season boundary with the real engine and daemon** (rehearsal M5). The two-season run uses a synthetic four-event year with the real builder CLI; the real-engine runs are one season's events plus `next-season`. The first real hand-over has not been observed.
-3. **Memory under a real unit** is a hard limit emulated by a cgroup; an actual `MemoryMax` kill of each unit was not exercised.
-4. **Public cap:** no ceiling number; the cumulative-slack limitation (section 7); per-season measurement not built.
-5. **Monitor memory** was modelled on the real file list repeated per season, not measured over real multiple seasons.
-6. **The tuned CPU settings are unproven as necessary** (section 6). The measurement says they were not needed on this host.
-7. **Alerts:** nothing connected or sent. **Installer:** none written. Both need review before use.
-8. **Branch not merged to anything.** The monitor branch's two later commits are excluded (section 1). Heavy regression suites were not rerun (section 4).
-9. Retention (M8) is separate. There is still no automatic space recovery, by design.
+A season is 48 hours of show clock (172,800 s), so the first 47 h 54 min cannot run in real time. **Stage 1** drives the real daemon code in-process over virtual time (as `tests/test_backup_resume_real.py` and `tools/engine_comparison.py` do) on a copy of the finished real season-1 root (47 events, 400 games) up to 6 minutes before its end: 59,231 public files, 93 s. That stage stands in for two days of broadcasting and the monitor does not watch it. Everything after it is real time and separate processes, each in a memory group at its proposed `MemoryMax` (192M, 512M, 768M), started in the production order (daemon, monitor 3 s later, supervisor later):
+
+| Stage | What ran | Result |
+|---|---|---|
+| 2: the hold | Daemon and monitor reach the end of season 1 with **no season 2 prepared**, 90 s of standing | Position stayed at 172,800.0 s, no file appeared in the public folder, daemon alive, monitor not tripped |
+| 3: the hand-over | Supervisor started: `next-season` and the **real engine** build events one after another | The daemon handed over **2 s** after the supervisor started (the plan alone names the season; events follow at ~3.6 a minute: 20 built in 5.5 min); `carry.json` = season 2 on air, season 1 finished; 300 s of season 2 broadcast |
+| 5: first results | After stopping the three processes, the real daemon code ran 12,000 s more of virtual time into season 2 (stand-in, as stage 1) | Position reached 185,112 s, never went back, never faster than the 20 s tick (this virtual clock is **not** gated by publication coverage, so stage 5 shows nothing about holds; holds are shown in stage 2 and in the fault runs); the playback index grew 400 to 424 games, the replay library 400 to 425, Honors stayed at 4 |
+| 4: from the files | Compared with a snapshot taken at the hold | See below |
+
+Checks (24, all passed on the last run): every season-1 public file has its bytes and keeps owner, mode, inode, size and modification time (59,290 files; only `clock.json`, `schedule.json`, `latest.json`, `status.json` and the two indexes that grew were replaced, which is their design); each index keeps every entry it had at the hold as an exact prefix; the public folder and the private store pass the backup tool's reference closure (no dangling index entry, every release matches its manifest); the monitor logged **no violation** and never tripped over the real-time run (27 heartbeats); the viewers' position (780 samples, one a second) never went back, never exceeded 1.0001 s per second, and never passed the end of season 1 before the hand-over; the monitor's independent oracle, run once more over the final files, finds no early result. Peak memory: daemon 38 MB, monitor 58 MB, supervisor and builder 199 MB; the groups peaked at 32, 50 and 538 MB (page cache included) against limits of 192, 512 and 768 with **zero** limit hits and zero kernel kills.
+
+What this does and does not establish:
+
+* **Cumulative indexes grew only in stage 5**, in virtual time. In the 5.5 real minutes after the hand-over no result is due (season 2's first games are released 8,940 s in), so the real-time stages prove the hold, the hand-over and the absence of early results; the indexes' growth and prefix property are shown by the virtual tail on the real files, and only for the 20 events that were built (it needs about 14 built to reach the first results; a 70-second smoke run with 2 built events correctly showed no growth and failed that check). Two hours 29 minutes of real-time broadcasting into season 2 was not run.
+* **Run history, in the open:** run 1 failed one check: the monitor reported `daemon_silent` in its first pass, because the harness started the monitor 3 s *before* the daemon and the clock had been left with a lapsed lease by stage 1. The report was correct (the daemon was not running yet) and the harness order was wrong (production starts the daemon first); I changed the order and reran. Run 2 passed. Run 3 added stage 5 and the index-growth checks and passed. The saved reports of runs 1 to 3 are in `/tmp/season/` (scratch, not committed).
+* The replay library has one more entry than the playback index at the instant the run stopped (425 against 424): the library lists a game when its broadcast ends (`src/dflsite/broadcast.py`, line 402), the playback index when its result is released. I did not investigate that single game separately; the oracle and the closure both accept the final state.
+* The clock was left in `running` with a lapsed lease at the end of stage 1 and a **harness rewrite** of `clock.json` added the production key `ready_until` (the 20 s virtual ticks cannot keep its 3 s horizon). It is documented in the script; the same is done in stage 5 in the other direction.
+
+## 10. Recovery-set and backup-resume suites
+
+| Suite | Result |
+|---|---|
+| `tests.test_recovery_set tests.test_backup_resume` | **24 OK**, 514 s (real engine, 13 events; includes the builder-exclusion, partial-quarantine and hand-over-during-set tests) |
+| `tests.test_backup_resume_real` (opt-in, real engine, a set taken across a real hand-over, originals deleted, restored, both copies resumed in lock step) | **1 test OK**, 621 s (real builder: season 2's first 13 events; real daemon over season 1 in virtual time to a minute before the hand-over; a set taken while the daemon crosses the end of the season inside the non-quiescent public copy; originals deleted; restored; two more real events on each copy with equal league digests; trees equal at every checkpoint; nothing early; earlier files byte-identical) |
+
+The earlier run of this module in this session was *skipped* (no `DFL_SEASON1_ROOT`); a skip is not a pass, so it was run with the finished season-1 root.
+
+## 11. Memory limits, with induced OOM kills (`tools/oom_check.py`)
+
+**Two kinds of kill, kept apart.** *`cgroup_oom_kill`*: the kernel's memory-cgroup OOM killer, in a memory group at the unit's proposed `MemoryMax`, evidence being the group's `oom_kill` counter rising and the victim's wait status (signal 9). *`sigkill`*: `kill -9` from outside, which shows a process can vanish and says nothing about the limit. Both were run for the daemon, side by side.
+
+**How the OOM kill is induced, and what is simulated.** No unit process leaks. A second process in the *same* group allocates until the group is over its limit and the kernel then picks and kills a victim by itself. This sandbox does not let a process lower its `oom_score_adj`, so the allocator cannot be made unkillable (my first design killed the allocator instead of the daemon: found by the first run, which failed); the unit process meant to be the victim has its `oom_score_adj` **raised to 1000** (what `OOMScoreAdjust=1000` does). The kernel does the killing; the *choice* of victim is steered. The host has cgroup v1 and no systemd, so **systemd's reaction is emulated and labelled so in the reports**: after the kill the harness waits the unit's `RestartSec` (daemon 5 s, monitor 10 s, supervisor 30 s), terminates whatever else is in the unit's group (`OOMPolicy=stop`, `KillMode=control-group`) and starts the command again. `StartLimitBurst` is not exercised. On systemd, the default `OOMPolicy` is inherited from `DefaultOOMPolicy=` (and is `continue` for units with `Delegate=`) ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)), so the three templates now say `OOMPolicy=stop` explicitly (a test checks it).
+
+Each scenario starts from the real finished season 1 positioned 20 minutes before its end (live broadcast, about 59,000 public files), with the three units running, warms up 75 s, snapshots the public folder, kills, observes, restarts, and then checks: every earlier public file keeps its bytes and the indexes their prefix, evidence files are unchanged, public folder and store pass the closure, the monitor reported only the violations the fault should cause, the viewers' position never went back or ran fast, and the monitor's oracle finds no early result.
+
+| Scenario | Kind | What happened | Result |
+|---|---|---|---|
+| daemon, 192M | `cgroup_oom_kill` | Kernel killed the daemon 1.2 s after the over-fill (`oom_kill` 0 to 2: the daemon, then the allocator). Position advanced only 3.6 s after the last sample before the kill (the 3 s publication horizon) and then stayed stopped; monitor: `daemon_silent` only, **no trip**; restarted, position resumed from where the viewers' clocks stopped (+60 s in 60 s); downtime recorded in `clock_log.jsonl` | PASS |
+| daemon | `sigkill` | The same, kill by signal from outside | PASS, identical outcome: the recovery path does not depend on how the daemon dies |
+| monitor, 512M, **restarted in 10 s** | `cgroup_oom_kill` | Second `start` record, heartbeats resumed; **the daemon never held** (no TRIPPED, clock `running` at every sample) | PASS |
+| monitor, 512M, **stays dead** | `cgroup_oom_kill` | With no monitor the daemon **stopped the broadcast itself after 120 s** (`monitor_silent` TRIPPED, clock paused, process alive, position frozen). The restarted monitor found nothing and did **not** resume it; `release` kept the trip as evidence (`released/…-TRIPPED.json`, 277 bytes) and `resume` continued from the held position (+44 s) | PASS |
+| builder step, 768M | `cgroup_oom_kill` | Kernel killed the real engine step and its runner. The supervisor recorded `failed: league runner failed (-9)`, backed off, and 98 s later the next step succeeded and health returned to `ok`; no orphaned engine process; daemon and monitor undisturbed (no violation) | PASS (second run, see below) |
+| supervisor process, 768M | `cgroup_oom_kill` | Kernel killed the supervisor (`oom_kill` +2 in all); the step and the engine were gone as well; daemon and monitor untouched (separate groups); restarted after 30 s, took the builder lock back, events built again | PASS |
+
+Normal operation at the limits (the real-time boundary run, section 9): the three groups peaked at 32, 50 and 538 MB and never reached their limits.
+
+**What the tests found.**
+
+1. The first builder-OOM check passed for the wrong reason: it looked for "failed or warning" in the health after 35 s and an unrelated `capacity_low` warning satisfied it. I replaced it with a poller (twice a second) that records every distinct builder state, and the check now needs `failed` with `backing_off` and later `ok`. The scenario was rerun; the evidence above is from that run. (The first, weak run also happened when the free disk was 10.2 GiB: the supervisor correctly did not start a season under its 10.5 GiB rule. Disk scratch from earlier work was cleaned up.)
+2. A daemon death costs viewers **no jump and no spoiler**: the clock stands within seconds and resumes where it stopped. A monitor death is **not** silent: the daemon holds the broadcast after 120 s, by design, and a person must release and resume. If the monitor's unit restarts within 120 s (its `RestartSec` is 10 s) nobody notices.
+3. The monitor's own pre-trip (daemon memory over 90% of its cgroup limit) could not be exercised against a real cgroup: it reads cgroup v2 files (`memory.current`, `memory.max`), this host has v1. It is covered only by the test with fake files (`tests/test_rehearsal_guard.py`). That is a gap for the first host run.
+4. The kernel killed 1 or 2 processes per event (the unit's process plus the allocator, which kept growing until I stopped it); a real leak would kill the unit's process, and `OOMPolicy=stop` takes the rest of the unit with it.
+
+## 12. The monitor-branch commits omitted after `5118701`
+
+`backend/monitor-tmp-race-2026-11-06` has two commits after `5118701`: **`d2e66bb`** "Fresh rehearsal preparation: fresh_run.sh, live monitor drill, plan doc" and **`2711712`** "Record the fresh-rehearsal package and its scratch rehearsal".
+
+| Commit | Files | Does it change code that runs in this candidate? |
+|---|---|---|
+| `d2e66bb` | **new:** `deploy/rehearsal/fresh_run.sh`, `tools/monitor_live_drill.py`, `tests/test_fresh_run.py`, `docs/FRESH_REHEARSAL_2026-11-06.md`; **edited:** two documentation files and the two regenerated patch files under `docs/patches/` | **No.** `git diff 5118701 d2e66bb -- src tools site data deploy` adds only the two new files above; `tools/rehearsal_check.py` is byte-identical to `5118701`'s. The regenerated patch files now include the `.tmp-<name>-<pid>` rule for `status.json` (the three lines at `tools/rehearsal_check.py:408-410`) that **`5118701` already makes in the code** (and 31 added lines in the test patch, an annotation that a stale temporary file also trips `early_or_unknown_file`): they bring the saved patches in line with code that is already merged here, they add nothing new |
+| `2711712` | one new document recording the fresh-rehearsal package | **No.** Documentation only |
+
+**Conclusion: neither contains a fix this candidate needs.** The temporary-file race fix is `5118701` itself, which is what was merged. What `d2e66bb` adds is *rehearsal staging* (a restart from position zero without the installer) and a live drill of the monitor next to a real daemon; both belong with the rehearsal package, not with unattended operation. One piece is useful here: the drill is an independent live check of the monitor, so it was run against this candidate's monitor (the file taken from the branch, run from the working tree, not committed): **17 of 17 expectations held** (clean phase with 90 heartbeats and no violation; a deliberate stale temporary file reported as `stale_tmp`; the latch, release with a reason, resume and position preserved; an unauthorized future file tripped the monitor and paused the daemon; no `monitor_error` in the whole run). The branch's own record says 18: the eighteenth is the optional `--expect-sha256` comparison, which I did not supply because this is not that file. It ran from a `git archive` of this branch's HEAD, so it exercised `FollowingOracle` and the other monitor changes.
+
+## 13. Capacity calculation (the public ceiling stays unset)
+
+**No ceiling is chosen here.** `PUBLIC_CEILING_GB` remains `__CEILING_GB__` in `deploy/supervisor/broadcast.env.template`, so the units will not start until the owner sets it. `tools/capacity_calc.py` is pure arithmetic (no host access, writes nothing, deletes nothing, 10 tests) that turns *measured* inputs into a budget; its defaults are the 2026-11-06 scratch-host figures (`docs/STORAGE_RETENTION.md`, `docs/PUBLIC_BACKUP.md`) and are to be replaced by host measurements.
+
+```
+need(N seasons) = public(N) + private(N) + backup workspace(N) + retained evidence + free-disk reserve + OTHER   <= disk
+public(N)  = 0.25 + N x 0.955 GB        permanent: nothing removed (R1); 0.78 GB by bytes, 0.955 GB on disk
+private(N) = 0.011 + N x 1.073 GB       league file does not grow; archive 145 + feed 50 + replay export 244 + live recordings 633 MB a season (the last is R2's candidate, undecided)
+backup(N)  = sets kept on this volume x N x set + one restore/verify destination (N x set, if the restore test runs here) + 0.27 KB per file of working index
+set        = public + private per season ~ 2.03 GB (a measured recovery set was 1.95 GB per season on disk, 3.9 GB for two seasons)
+evidence   = allowance 0.1 GB + quarantined backup .partial folders (each up to one set)
+             measured: one monitor trip leaves 277 bytes; plan + builds of a full season are 34 KB + 196 KB
+reserve    = max(monitor floor 6 GB, supervisor to start a season: (floor 8 + step margin 0.5 + season 2) GiB = 11.27 GB decimal)
+OTHER      = everything on the volume that is not the broadcast: system, code, caches, rollback copies, tarballs: MEASURE, never assume
+```
+
+The reserve is the supervisor's own rule (`capacity_need('next-season')`), and a test ties the calculator to that code. **Units differ and the tools do not say so:** the supervisor's floors are GiB (2^30), the monitor's floor and the public cap are decimal GB. 8 GiB is 8.59 GB, so "keep the builder's floor above the monitor's" holds, but a person adding the numbers by hand would be off by 7%.
+
+Illustration only (disk 47 GB, OTHER 10 GB: the 47 GB is the last figure the docs record for the Droplet, the 10 GB is an assumption; neither is a measurement):
+
+| Backup policy on this volume | 1 season | 2 | 3 | 4 | 6 | 12 | Seasons that fit |
+|---|---|---|---|---|---|---|---|
+| one set kept here, restore test here, one quarantined partial | 29.8 | 37.9 | 46.1 | 54.2 | 70.5 | 119.4 | **3** |
+| no set kept here, restore test here, one quarantined partial | 27.8 | 33.9 | 40.0 | 46.1 | 58.3 | 95.0 | **4** |
+| backups and restore tests off this volume | 23.7 | 25.8 | 27.8 | 29.9 | 34.0 | 46.4 | **12** |
+
+(GB needed at N seasons.) What this says, plainly:
+
+* **The public ceiling is not what limits the broadcast.** At 3 to 6 seasons the public folder is 3.1 to 6.0 GB. What decides how many seasons the disk holds is *where backups live*: kept on the same volume, a backup costs twice the data it protects (the set plus the restore test's destination), and a quarantined partial costs one more set. In the illustration the same disk holds 3, 4 or 12 seasons depending on that policy alone.
+* The sensible reading for the ceiling: **ceiling = public(N) at the owner's chosen horizon, plus a margin**; with the defaults 3.1 GB for 3 seasons, 4.1 for 4, 6.0 for 6, against a per-season cap that grows 1.25 GB a season (4.0, 5.3, 7.8): the ceiling should sit at or just under the cap's value at the horizon, so it bites when the horizon is reached and not earlier.
+* **Retention (M8) changes the private column most:** R2 would reclaim the 633 MB a season of live recordings (about 59% of the private growth) but is undecided and needs a verified backup first.
+
+What to measure on the host, all read-only, before choosing: `df -B1 /` and `df -i /` (disk, inodes); `du -sx` of everything outside the broadcast (OTHER); `tools/storage_inventory.py --root R --public P --json` for the real per-season sizes; the size of one finished recovery set and of its restore destination; the backup location decided for this volume (the single largest lever); and the evidence folders' sizes after a month. Then `python3 tools/capacity_calc.py --disk-gb D --other-used-gb O --set '{...}'`.
+
+## 14. Remaining gaps
+
+1. **Not run on the host.** Everything here ran in a sandbox; kernel, disk and cgroup version (v1 here, v2 under systemd) differ. No systemd: `Restart=`, `RestartSec=`, `StartLimitBurst`, `OOMPolicy=` are emulated or untested. `MemoryMax` was exercised as a cgroup v1 limit.
+2. **The real-time part of the boundary is 6 minutes before and 5.5 minutes after the hand-over**; the 48 hours before and the first 2 h 29 min of season 2 are virtual time on the real files. A full real-time season boundary is the rehearsal M5 and needs the rehearsal host free.
+3. **The monitor's 90% daemon-memory pre-trip is untested against a real cgroup** (v2 files; only a fake-file test).
+4. **Public ceiling unset**, the cap's cumulative-slack limitation stands (section 7), the backup location is undecided and decides the capacity (section 13).
+5. **Monitor memory** at many seasons is a model on the real file list, not 20 real seasons.
+6. **The tuned CPU settings are unproven as necessary** (section 6).
+7. **Alerts, installer:** none. **Retention (M8)** is separate and there is still no automatic space recovery, by design.
+8. **The branch is not merged** anywhere; the two later monitor-branch commits are excluded on purpose (section 12). `test_multiseason_engine` and the full suite were not run.

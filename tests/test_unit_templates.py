@@ -6,6 +6,7 @@ Required here:
   * the daemon, the monitor and the supervisor are given the SAME public-cap numbers, all from the one environment file
   * every memory limit is a measured number: no leftover 1500M placeholder, and the three add up to less than the 2 GB machine
   * the daemon is not given a fixed cap or a deadline, which would stop a correct recurring broadcast
+  * a process killed for going over MemoryMax takes its whole unit down (OOMPolicy=stop, set explicitly: the default depends on the distribution) so Restart= brings it back clean
 """
 import argparse
 import os
@@ -86,6 +87,15 @@ class Templates(unittest.TestCase):
         d = parsed('dfl-broadcast-daemon')
         self.assertEqual(d.max_public_gb, 0.0)
         self.assertIsNone(d.deadline)
+
+    def test_a_memory_kill_stops_the_whole_unit_and_the_unit_is_restarted(self):
+        for unit in UNITS:
+            text = (DEPLOY / (unit + '.service')).read_text()
+            self.assertRegex(text, r'(?m)^OOMPolicy=stop$', unit)
+            if unit != 'dfl-supervisor':
+                self.assertRegex(text, r'(?m)^Restart=on-failure$', unit)
+        sup = (DEPLOY / 'dfl-supervisor.service').read_text()
+        self.assertRegex(sup, r'(?m)^KillMode=control-group$')
 
     def test_the_monitor_floor_is_below_the_builders_so_building_stops_first(self):
         m, s = parsed('dfl-broadcast-monitor'), parsed('dfl-supervisor')

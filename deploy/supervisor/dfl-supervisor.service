@@ -22,6 +22,9 @@ IOWeight=20
 # 768M is the recommendation: 3.5 times the measured process peak and 50% above the validated limit, because a real season's engine step has not run under the unit on the host.
 # Together with the daemon (192M) and the monitor (512M) the three limits add to 1472M, under a 2 GB machine, leaving room for the system and Caddy.
 MemoryMax=768M
+# When the kernel kills a process of this unit for going over MemoryMax, stop the whole unit (so no orphan survives) and let Restart= bring it back. Set explicitly: the default is inherited
+# from DefaultOOMPolicy= in systemd-system.conf and depends on the distribution. Exercised, with the restart emulated, by tools/oom_check.py (docs/INTEGRATION_CANDIDATE_2026-11-07.md).
+OOMPolicy=stop
 TasksMax=64
 UMask=0022
 ProtectSystem=strict
