@@ -416,5 +416,119 @@ class EveryFault(Base):
         self.assertFalse(os.path.exists(os.path.join(sim.guard_dir, 'TRIPPED')))
 
 
+PROBE = r"""
+import errno, json, os, sys
+pub, victim, victim2 = sys.argv[1], sys.argv[2], sys.argv[3]
+out = {}
+def t(name, f):
+    try:
+        f()
+        out[name] = 'ALLOWED'
+    except OSError as e:
+        out[name] = errno.errorcode.get(e.errno, e.errno)
+t('create', lambda: open(os.path.join(pub, 'NEW.txt'), 'w').close())
+t('overwrite', lambda: open(victim, 'r+b').write(b'x'))
+t('rename', lambda: os.rename(victim, victim + '.moved'))
+t('delete', lambda: os.unlink(victim2))
+t('mkdir', lambda: os.mkdir(os.path.join(pub, 'NEWDIR')))
+print(json.dumps(out))
+"""
+
+
+def as_user(uid, argv, **kw):
+    import subprocess
+
+    def drop():
+        os.setgid(uid)
+        os.setuid(uid)
+    env = dict(os.environ, HOME='/nonexistent')
+    return subprocess.run(argv, preexec_fn=drop, capture_output=True, text=True, env=env, **kw)
+
+
+def meta(base):
+    """Everything a file system comparison can see: content, size, mode, owner, inode and modification time."""
+    out = {}
+    for d, _, names in os.walk(base):
+        for n in names:
+            p = os.path.join(d, n)
+            try:
+                st = os.stat(p)
+                out[os.path.relpath(p, base)] = (sha(p), st.st_size, st.st_mode, st.st_uid, st.st_ino, st.st_mtime_ns)
+            except FileNotFoundError:
+                pass
+    return out
+
+
+@unittest.skipUnless(os.geteuid() == 0, 'needs root to run the supervisor as an unprivileged user')
+class Permissions(Base):
+    """The substantive check that the supervisor and the builder cannot touch the public record: they run as a DIFFERENT, unprivileged user that owns the private root and has
+    no write permission anywhere in the public folder (the production layout: the daemon user writes the public folder; the unit mounts it read-only for the supervisor too).
+    A source scan for deletion calls is supplementary; this compares every public file (content, size, mode, owner, inode, modification time) before and after, and probes the
+    permissions directly. A control, as the daemon's user, shows the probe would have succeeded had the permissions allowed it."""
+    BUILDER, DAEMON = 61002, 61001
+
+    def test_the_supervisor_and_builder_as_their_own_user_cannot_change_the_public_record_or_a_finished_season(self):
+        import subprocess
+        tmp = self.tmpd.name
+        os.chmod(tmp, 0o755)
+        h = TS.Harness(tmp, built=4)                                              # season 1 fully built; season 2 not yet prepared
+        bc = h.daemon(pos=0.0)
+        for t in range(0, h.y1.plan['total_s'] - 5, 2):                           # the daemon publishes the whole of season 1
+            bc.tick(T0 + t)
+        for d in (h.public,):
+            subprocess.check_call(['chown', '-R', '%d:%d' % (self.DAEMON, self.DAEMON), d])
+        for d in (h.root, h.ctl):
+            subprocess.check_call(['chown', '-R', '%d:%d' % (self.BUILDER, self.BUILDER), d])
+        os.chmod(h.public, 0o755)
+        public_before = meta(h.public)
+        self.assertGreater(len(public_before), 50, 'there is a real season-1 public record to protect')
+        finished = {k: v for k, v in meta(h.root).items() if k in ('store/plan.json', 'store/builds.json') or k.startswith('store/feed/releases/e0000')}
+        ends = sorted(k for k in public_before if k.startswith('broadcast/live/') and k.endswith('end.json'))
+        victim, victim2 = os.path.join(h.public, ends[0]), os.path.join(h.public, ends[1])
+
+        # the supervisor, as the builder's user, prepares season 2 and builds it, through the real builder command line
+        cmd = [sys.executable, str(ROOT / 'tools' / 'broadcast_supervisor.py'), 'once', '--root', h.root, '--public', h.public, '--floor-gb', '0.01', '--step-margin-gb', '0.01',
+               '--season-gb', '0.01', '--inode-floor', '10', '--step-inodes', '10', '--season-inodes', '10', '--builder-cmd', json.dumps([sys.executable, TS.FAKE, '--ctl', h.ctl])]
+        for i in range(6):
+            r = as_user(self.BUILDER, cmd)
+            self.assertEqual(r.returncode, 0, r.stderr[-400:])
+        doc = json.loads(r.stdout)
+        self.assertEqual(doc['builder']['state'], 'ahead', doc['builder'])
+        self.assertEqual(h.seasons(), ['s002'])
+        self.assertEqual(sorted(int(k) for k in h.builds(2)['events']), [5, 6, 7, 8], 'the unprivileged supervisor really did its job')
+        self.assertEqual(os.stat(os.path.join(h.root, 'store', 'seasons', 's002', 'plan.json')).st_uid, self.BUILDER)
+
+        # nothing in the public record changed: content, size, mode, owner, inode, modification time
+        self.assertEqual(meta(h.public), public_before, 'the public folder is exactly as the daemon left it')
+        for k, v in finished.items():
+            self.assertEqual(meta(h.root)[k], v, 'a finished season record was rewritten: ' + k)
+
+        # the permissions themselves: as the supervisor's user every way of changing the public record is refused
+        r = as_user(self.BUILDER, [sys.executable, '-c', PROBE, h.public, victim, victim2])
+        refused = json.loads(r.stdout)
+        self.assertEqual(refused, {'create': 'EACCES', 'overwrite': 'EACCES', 'rename': 'EACCES', 'delete': 'EACCES', 'mkdir': 'EACCES'}, r.stderr[-300:])
+        self.assertEqual(meta(h.public), public_before)
+
+        # the control: the daemon's user is allowed, so the refusals above were the permissions and nothing else
+        control = os.path.join(tmp, 'control')
+        os.makedirs(control)
+        control_file, control_file2 = os.path.join(control, 'f'), os.path.join(control, 'g')
+        Path(control_file).write_text('x')
+        Path(control_file2).write_text('y')
+        subprocess.check_call(['chown', '-R', '%d:%d' % (self.DAEMON, self.DAEMON), control])
+        r = as_user(self.DAEMON, [sys.executable, '-c', PROBE, control, control_file, control_file2])
+        self.assertEqual(set(json.loads(r.stdout).values()), {'ALLOWED'}, r.stderr[-300:])
+
+        # and the daemon goes on to hand over and publish season 2 into the same folder without disturbing season 1
+        for t in range(h.y1.plan['total_s'] - 5, h.y1.plan['total_s'] + 200, 2):
+            bc.tick(T0 + t)
+        self.assertEqual(B.get(os.path.join(h.store, S.CARRY))['season'], 2)
+        after = meta(h.public)
+        for k, v in public_before.items():
+            if k.endswith('index.json') or k in VOLATILE or k == 'latest.json':
+                continue
+            self.assertEqual(after[k][:3], v[:3], 'season 1 record changed after the hand-over: ' + k)
+
+
 if __name__ == '__main__':
     unittest.main()
