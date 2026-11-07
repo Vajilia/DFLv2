@@ -126,6 +126,48 @@ class DaemonGuard(Base):
         self.assertFalse(g.step(self.rig.store, started + 100))
         self.assertTrue(g.step(self.rig.store, started + 10 + 121), 'it then stopped: the rule is unchanged')
 
+    def test_the_first_start_grace_never_overrides_an_existing_latch(self):
+        """The grace only decides whether the MONITOR counts as silent. A trip latch (from the monitor, or from an earlier daemon) holds the broadcast whatever the heartbeat looks like:
+        old from before the start, absent, fresh, or inside the grace."""
+        started = 1000.0
+        for beat_mtime in (started - 3600, None, started + 1):
+            for now in (started + 1, started + 100, started + 239, started + 500):
+                guard = os.path.join(self.tmp, 'g-%s-%d' % (beat_mtime, now))
+                os.makedirs(guard)
+                BR.write_trip(guard, 'early_or_unknown_file', 'from an earlier run', 'monitor', started - 7200)        # the latch predates this daemon
+                latch = open(os.path.join(guard, 'TRIPPED')).read()
+                trips = open(os.path.join(guard, 'trips.jsonl')).read()
+                if beat_mtime is not None:
+                    hb = os.path.join(guard, 'heartbeat')
+                    open(hb, 'w').write('{}')
+                    os.utime(hb, (beat_mtime, beat_mtime))
+                if os.path.exists(self.pause):
+                    os.unlink(self.pause)
+                g = BR.Guard(guard, 120.0, 240.0, started)
+                self.assertTrue(g.step(self.rig.store, now), (beat_mtime, now))
+                self.assertTrue(os.path.exists(self.pause), (beat_mtime, now))
+                self.assertEqual(open(os.path.join(guard, 'TRIPPED')).read(), latch, 'the latch is neither replaced nor cleared')
+                self.assertEqual(open(os.path.join(guard, 'trips.jsonl')).read(), trips, 'and no second trip is recorded for it')
+
+    def test_a_monitor_that_starts_after_a_latch_does_not_clear_it(self):
+        started = 1000.0
+        BR.write_trip(self.guard, 'monitor_silent', 'no monitor within the grace', 'daemon', started + 241)
+        g = BR.Guard(self.guard, 120.0, 240.0, started)
+        self.assertTrue(g.step(self.rig.store, started + 242))
+        self.beat()                                                                    # the monitor comes back and writes a fresh heartbeat
+        os.utime(os.path.join(self.guard, 'heartbeat'), (started + 250, started + 250))
+        self.assertTrue(g.step(self.rig.store, started + 251), 'a heartbeat is not a release')
+        self.assertEqual(json.load(open(os.path.join(self.guard, 'TRIPPED')))['kind'], 'monitor_silent')
+        self.assertEqual(BR.main(['resume', '--root', self.tmp, '--guard', self.guard]), 3, 'resume is refused while the latch exists')
+
+    def test_a_daemon_started_over_a_latch_and_an_old_heartbeat_holds_at_once(self):
+        BR.write_trip(self.guard, 'private_exposed', 'earlier', 'monitor', time.time() - 7200)
+        self.beat(age=3600)
+        code, lines = run_daemon(self.daemon_args('--guard-stale', '120', '--guard-grace', '600'))
+        self.assertTrue(any(l.get('tripped') and l.get('kind') == 'private_exposed' for l in lines), lines)
+        self.assertEqual(json.load(open(os.path.join(self.guard, 'TRIPPED')))['kind'], 'private_exposed')
+        self.assertEqual(len(open(os.path.join(self.guard, 'trips.jsonl')).read().splitlines()), 1)
+
     def test_an_unreadable_guard_folder_holds_the_broadcast(self):
         with mock.patch.object(BR.Guard, 'step', side_effect=PermissionError('denied')):
             code, lines = run_daemon(self.daemon_args())

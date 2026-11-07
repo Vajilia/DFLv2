@@ -1,0 +1,539 @@
+{
+ "scenarios": [
+  {
+   "checks": [
+    {
+     "check": "no trip",
+     "detail": null,
+     "ok": true
+    },
+    {
+     "check": "monitor reported nothing beyond nothing",
+     "detail": [],
+     "ok": true
+    },
+    {
+     "check": "the broadcast kept going (position advanced 24.0 s in the last 20 s)",
+     "detail": 24.0,
+     "ok": true
+    },
+    {
+     "check": "the monitor ran (heartbeats 7)",
+     "detail": 7,
+     "ok": true
+    },
+    {
+     "check": "it was still unlatched after the grace would have ended (240 s): no latch in any sample",
+     "detail": null,
+     "ok": true
+    },
+    {
+     "check": "the daemon did not stop on its own: clock running at the end",
+     "detail": "running",
+     "ok": true
+    }
+   ],
+   "clock_final": {
+    "anchor_pos": 1503.0,
+    "anchor_wall": 1794061879.8977752,
+    "epoch": 2,
+    "format": "dfl-broadcast-clock",
+    "lease_until": 1794062254.9693325,
+    "ready_until": 1791.0715572834015,
+    "state": "running"
+   },
+   "clock_log": [
+    {
+     "at": 1794060279.3187451,
+     "epoch": 1,
+     "pos": 0.0,
+     "state": "running",
+     "why": "start"
+    },
+    {
+     "at": 1794061779.3187451,
+     "epoch": 1,
+     "pos": 0.0,
+     "state": "running",
+     "why": "fixture"
+    },
+    {
+     "at": 1794061879.8977752,
+     "down_s": 97.579,
+     "epoch": 2,
+     "pos": 1503.0,
+     "state": "running",
+     "why": "downtime"
+    }
+   ],
+   "exit_codes": {
+    "dfl-broadcast-daemon": 0,
+    "dfl-broadcast-monitor": 0
+   },
+   "latch_first_seen_s": null,
+   "monitor_heartbeats": 7,
+   "paused_file_present": false,
+   "position_advanced_s": 283.1,
+   "position_every_10s": [
+    [
+     10.0,
+     1513.0,
+     "running"
+    ],
+    [
+     20.0,
+     1523.0,
+     "running"
+    ],
+    [
+     30.0,
+     1533.0,
+     "running"
+    ],
+    [
+     40.0,
+     1543.0,
+     "running"
+    ],
+    [
+     50.0,
+     1553.0,
+     "running"
+    ],
+    [
+     60.0,
+     1563.0,
+     "running"
+    ],
+    [
+     70.0,
+     1573.0,
+     "running"
+    ],
+    [
+     80.0,
+     1583.0,
+     "running"
+    ],
+    [
+     90.0,
+     1593.0,
+     "running"
+    ],
+    [
+     100.0,
+     1603.0,
+     "running"
+    ],
+    [
+     110.1,
+     1613.0,
+     "running"
+    ],
+    [
+     120.1,
+     1623.0,
+     "running"
+    ],
+    [
+     130.1,
+     1633.0,
+     "running"
+    ],
+    [
+     140.1,
+     1643.0,
+     "running"
+    ],
+    [
+     150.1,
+     1653.0,
+     "running"
+    ],
+    [
+     160.1,
+     1663.0,
+     "running"
+    ],
+    [
+     170.1,
+     1673.0,
+     "running"
+    ],
+    [
+     180.1,
+     1683.0,
+     "running"
+    ],
+    [
+     190.1,
+     1693.1,
+     "running"
+    ],
+    [
+     200.1,
+     1703.1,
+     "running"
+    ],
+    [
+     210.1,
+     1713.1,
+     "running"
+    ],
+    [
+     220.1,
+     1723.1,
+     "running"
+    ],
+    [
+     230.1,
+     1733.1,
+     "running"
+    ],
+    [
+     240.1,
+     1743.1,
+     "running"
+    ],
+    [
+     250.1,
+     1753.1,
+     "running"
+    ],
+    [
+     260.1,
+     1763.1,
+     "running"
+    ],
+    [
+     270.1,
+     1773.1,
+     "running"
+    ],
+    [
+     280.1,
+     1783.1,
+     "running"
+    ]
+   ],
+   "scenario": "daemon-restart-monitor-back-within-grace",
+   "start_schedule_s": [
+    [
+     "dfl-broadcast-daemon",
+     0
+    ],
+    [
+     "dfl-broadcast-monitor",
+     100
+    ]
+   ],
+   "started_at_s": {
+    "dfl-broadcast-daemon": 0.0,
+    "dfl-broadcast-monitor": 100.01
+   },
+   "tripped_file_TRIPPED": null,
+   "trips_jsonl": [],
+   "violations": [],
+   "what": "the daemon is restarted 10 s after its lease lapsed while the monitor is down (its last heartbeat is 10 minutes old); the monitor is back 100 s later, inside the 240 s grace"
+  },
+  {
+   "checks": [
+    {
+     "check": "tripped by the daemon itself, kind monitor_silent",
+     "detail": {
+      "at": 1794062420.9808867,
+      "detail": "the monitor wrote no new heartbeat in 240 s since this daemon started",
+      "kind": "monitor_silent",
+      "source": "daemon"
+     },
+     "ok": true
+    },
+    {
+     "check": "tripped at 240 s, not before (240.1 s after the daemon was started)",
+     "detail": 240.0937955379486,
+     "ok": true
+    },
+    {
+     "check": "no latch in any 1 s sample before 238 s; first seen at 240.1 s",
+     "detail": 240.1,
+     "ok": true
+    },
+    {
+     "check": "until then the broadcast ran (position advanced 232.1 s between 5 s and 238 s: the grace is a window of operation, not a hold)",
+     "detail": 232.1,
+     "ok": true
+    },
+    {
+     "check": "the clock was seen paused at 240.1 s, within 240 to 247 s",
+     "detail": 240.1,
+     "ok": true
+    },
+    {
+     "check": "the position stopped: it advanced 0.0 s from 3 s after the trip to the end (the late monitor started at 255 s)",
+     "detail": 0.0,
+     "ok": true
+    },
+    {
+     "check": "the clock is paused and PAUSE is present",
+     "detail": "paused",
+     "ok": true
+    },
+    {
+     "check": "exactly one trip recorded, and still one after the late monitor ran",
+     "detail": 1,
+     "ok": true
+    },
+    {
+     "check": "the late monitor started and was alive (heartbeats 2) and did NOT clear the latch",
+     "detail": 2,
+     "ok": true
+    },
+    {
+     "check": "the latch file stayed in place to the end (every sample after the first sighting)",
+     "detail": null,
+     "ok": true
+    },
+    {
+     "check": "the daemon process stayed up (paused) until it was stopped: exit status 0",
+     "detail": {
+      "dfl-broadcast-daemon": 0,
+      "dfl-broadcast-monitor": 0
+     },
+     "ok": true
+    },
+    {
+     "check": "evidence kept: TRIPPED, trips.jsonl and the clock log were copied",
+     "detail": "/tmp/season/dm2/daemon-restart-dead-monitor/evidence-kept",
+     "ok": true
+    }
+   ],
+   "clock_final": {
+    "anchor_pos": 1743.0454363822937,
+    "anchor_wall": 1794062420.9808867,
+    "epoch": 3,
+    "format": "dfl-broadcast-clock",
+    "lease_until": 1794062505.9799597,
+    "ready_until": 1746.0454363822937,
+    "state": "paused"
+   },
+   "clock_log": [
+    {
+     "at": 1794060580.2387424,
+     "epoch": 1,
+     "pos": 0.0,
+     "state": "running",
+     "why": "start"
+    },
+    {
+     "at": 1794062080.2387424,
+     "epoch": 1,
+     "pos": 0.0,
+     "state": "running",
+     "why": "fixture"
+    },
+    {
+     "at": 1794062180.9354503,
+     "down_s": 97.697,
+     "epoch": 2,
+     "pos": 1503.0,
+     "state": "running",
+     "why": "downtime"
+    },
+    {
+     "at": 1794062420.9808867,
+     "epoch": 3,
+     "pos": 1743.0454363822937,
+     "state": "paused",
+     "why": "pause"
+    }
+   ],
+   "exit_codes": {
+    "dfl-broadcast-daemon": 0,
+    "dfl-broadcast-monitor": 0
+   },
+   "latch_first_seen_s": 240.1,
+   "monitor_heartbeats": 2,
+   "paused_file_present": true,
+   "position_advanced_s": 239.0,
+   "position_every_10s": [
+    [
+     10.0,
+     1513.0,
+     "running"
+    ],
+    [
+     20.0,
+     1523.0,
+     "running"
+    ],
+    [
+     30.0,
+     1533.0,
+     "running"
+    ],
+    [
+     40.0,
+     1543.0,
+     "running"
+    ],
+    [
+     50.0,
+     1553.0,
+     "running"
+    ],
+    [
+     60.0,
+     1563.0,
+     "running"
+    ],
+    [
+     70.0,
+     1573.0,
+     "running"
+    ],
+    [
+     80.0,
+     1583.0,
+     "running"
+    ],
+    [
+     90.0,
+     1593.0,
+     "running"
+    ],
+    [
+     100.1,
+     1603.0,
+     "running"
+    ],
+    [
+     110.1,
+     1613.0,
+     "running"
+    ],
+    [
+     120.1,
+     1623.0,
+     "running"
+    ],
+    [
+     130.1,
+     1633.0,
+     "running"
+    ],
+    [
+     140.1,
+     1643.0,
+     "running"
+    ],
+    [
+     150.1,
+     1653.0,
+     "running"
+    ],
+    [
+     160.1,
+     1663.0,
+     "running"
+    ],
+    [
+     170.1,
+     1673.0,
+     "running"
+    ],
+    [
+     180.1,
+     1683.0,
+     "running"
+    ],
+    [
+     190.1,
+     1693.0,
+     "running"
+    ],
+    [
+     200.1,
+     1703.0,
+     "running"
+    ],
+    [
+     210.1,
+     1713.1,
+     "running"
+    ],
+    [
+     220.1,
+     1723.1,
+     "running"
+    ],
+    [
+     230.1,
+     1733.1,
+     "running"
+    ],
+    [
+     240.1,
+     1743.0,
+     "paused"
+    ],
+    [
+     250.1,
+     1743.0,
+     "paused"
+    ],
+    [
+     260.1,
+     1743.0,
+     "paused"
+    ],
+    [
+     270.1,
+     1743.0,
+     "paused"
+    ],
+    [
+     280.1,
+     1743.0,
+     "paused"
+    ],
+    [
+     290.2,
+     1743.0,
+     "paused"
+    ],
+    [
+     300.2,
+     1743.0,
+     "paused"
+    ]
+   ],
+   "scenario": "daemon-restart-dead-monitor",
+   "start_schedule_s": [
+    [
+     "dfl-broadcast-daemon",
+     0
+    ],
+    [
+     "dfl-broadcast-monitor",
+     255
+    ]
+   ],
+   "started_at_s": {
+    "dfl-broadcast-daemon": 0.0,
+    "dfl-broadcast-monitor": 255.02
+   },
+   "tripped_file_TRIPPED": {
+    "at": 1794062420.9808867,
+    "detail": "the monitor wrote no new heartbeat in 240 s since this daemon started",
+    "kind": "monitor_silent",
+    "source": "daemon"
+   },
+   "trips_jsonl": [
+    "{\"at\": 1794062420.9808867, \"detail\": \"the monitor wrote no new heartbeat in 240 s since this daemon started\", \"kind\": \"monitor_silent\", \"source\": \"daemon\"}"
+   ],
+   "violations": [],
+   "what": "the same restart and the monitor never comes back: the daemon must trip itself by 240 s; a monitor started at 255 s, after the trip, must not clear it"
+  }
+ ],
+ "what": "tools/startup_check.py, scenarios daemon-restart-monitor-back-within-grace and daemon-restart-dead-monitor; processes started with the unit files' own ExecStart lines; no systemd (docs/INTEGRATION_CANDIDATE_2026-11-07.md section 15)"
+}

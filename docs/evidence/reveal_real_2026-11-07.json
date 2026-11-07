@@ -1,0 +1,440 @@
+{
+ "cgroups": {
+  "daemon": {
+   "failcnt": "0",
+   "limit_mb": 201,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 46.2
+  },
+  "monitor": {
+   "failcnt": "0",
+   "limit_mb": 537,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 59.5
+  },
+  "supervisor": {
+   "failcnt": "0",
+   "limit_mb": 805,
+   "oom_control": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "peak_mb": 674.7
+  }
+ },
+ "checks": [
+  {
+   "check": "segment A (the supported-controls boundary run) passed all 21 of its checks",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "season 2's first results reveal was found in its plan",
+   "detail": 181740,
+   "ok": true
+  },
+  {
+   "check": "the jump reached its target (position 181594 s of 181590 s)",
+   "detail": {
+    "ended_s_ago": 3.1,
+    "from_s": 173174.1,
+    "ticks": 421,
+    "to_s": 181594.1,
+    "wall_s": 2.1
+   },
+   "ok": true
+  },
+  {
+   "check": "SEGMENT B, SUPPORTED CONTROLS ONLY: every clock-log entry is one the daemon's own code writes (downtime); nothing rewrote clock.json or ready_until",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "segment B: all three processes ran to the end (none died)",
+   "detail": {
+    "daemon": true,
+    "monitor": true,
+    "supervisor": true
+   },
+   "ok": true
+  },
+  {
+   "check": "segment B started 137 s before the reveal (first sample at position 181603 s; the reveal is at 181740 s)",
+   "detail": 181603.0586283207,
+   "ok": true
+  },
+  {
+   "check": "segment B crossed the reveal in real time (samples: 127 before, 171 after)",
+   "detail": [
+    127,
+    171
+   ],
+   "ok": true
+  },
+  {
+   "check": "the playback index did not change before the reveal (400 entries the whole time)",
+   "detail": [
+    400
+   ],
+   "ok": true
+  },
+  {
+   "check": "the playback index grew in ONE step at the reveal: [(181741.1060717106, 400, 424)]",
+   "detail": [
+    [
+     181741.1060717106,
+     400,
+     424
+    ]
+   ],
+   "ok": true
+  },
+  {
+   "check": "the growth appeared within 8 s of the reveal's position (at 181741.1 s, the reveal is 181740.0 s)",
+   "detail": 1.1060717105865479,
+   "ok": true
+  },
+  {
+   "check": "the replay library never shrank and the playback index never shrank",
+   "detail": "",
+   "ok": true
+  },
+  {
+   "check": "before the reveal the replay library ran ahead: 24 games had ended and were waiting for this reveal (intended reveal delay)",
+   "detail": 24,
+   "ok": true
+  },
+  {
+   "check": "after the reveal every one of those 24 games is in BOTH indexes (none left waiting, none missing)",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "the playback index grew by exactly the number of games that were waiting (24 = 24)",
+   "detail": [
+    400,
+    424
+   ],
+   "ok": true
+  },
+  {
+   "check": "the count of games in both indexes rose by that number at the reveal",
+   "detail": [
+    {
+     "both": 400,
+     "not_yet": 192,
+     "reveal_delay": 24
+    },
+    {
+     "both": 424,
+     "not_yet": 296
+    }
+   ],
+   "ok": true
+  },
+  {
+   "check": "every reconcile record (64, by season and game ID) found only intended differences and no duplicate",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "every file and every index entry present at the start of segment B is unchanged and in the same place (indexes grow by appending only)",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "reference closure of the public folder",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "reference closure of the private store",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "monitor over segment B: no violation, no trip, 10 heartbeats",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "viewers' position never went back and never ran faster than time (max rate 1.00/s)",
+   "detail": [],
+   "ok": true
+  },
+  {
+   "check": "no early results: the oracle's final pass over the files finds nothing (position 181933 s)",
+   "detail": 0,
+   "ok": true
+  }
+ ],
+ "first_reveal_s": 181740,
+ "indexes_at_B_start": {
+  "library": 424,
+  "playback": 400
+ },
+ "jump": {
+  "ended_s_ago": 3.1,
+  "from_s": 173174.1,
+  "ticks": 421,
+  "to_s": 181594.1,
+  "wall_s": 2.1
+ },
+ "mode": "segment A and B: supported controls only after each start; the jump between them is fixture preparation with nothing running",
+ "pass": true,
+ "reveal": {
+  "library_after": 424,
+  "library_before": 424,
+  "playback_after": 424,
+  "playback_before": 400,
+  "step": [
+   [
+    181741.1060717106,
+    400,
+    424
+   ]
+  ],
+  "waiting_before": 24
+ },
+ "segment_A": {
+  "checks": 21,
+  "failed": [],
+  "mode": "supported controls only (no clock edit after the processes start)"
+ },
+ "segment_B": {
+  "alive_until_stopped": {
+   "daemon": true,
+   "monitor": true,
+   "supervisor": true
+  },
+  "clock_log_reasons": [
+   "downtime"
+  ],
+  "real_run_s": 317.1,
+  "reconcile_records": 64,
+  "samples": 318
+ },
+ "series_every_10s": [
+  [
+   0.0,
+   181603.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   10.0,
+   181613.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   20.0,
+   181623.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   30.0,
+   181633.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   40.0,
+   181643.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   50.0,
+   181653.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   60.0,
+   181663.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   70.0,
+   181673.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   80.0,
+   181683.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   90.0,
+   181693.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   100.0,
+   181703.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   110.0,
+   181713.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   120.0,
+   181723.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   130.0,
+   181733.0,
+   "running",
+   424,
+   400
+  ],
+  [
+   140.0,
+   181743.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   150.0,
+   181753.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   160.0,
+   181763.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   170.0,
+   181773.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   180.0,
+   181783.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   190.0,
+   181793.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   200.0,
+   181803.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   210.0,
+   181813.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   220.0,
+   181823.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   230.0,
+   181833.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   240.0,
+   181843.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   250.0,
+   181853.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   260.0,
+   181863.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   270.0,
+   181873.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   280.0,
+   181883.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   290.0,
+   181893.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   300.0,
+   181903.0,
+   "running",
+   424,
+   424
+  ],
+  [
+   310.0,
+   181913.0,
+   "running",
+   424,
+   424
+  ]
+ ]
+}

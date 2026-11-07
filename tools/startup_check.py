@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Start the recurring broadcast's processes the way the unit files start them, in different orders, and report what each order does (docs/INTEGRATION_CANDIDATE_2026-11-07.md, section 15).
 
-  startup_check.py --source ROOT --work DIR [--scenarios a,b,c] [--run-s 45] [--out FILE]
+  startup_check.py --source ROOT --work DIR [--scenarios a,b,c] [--out FILE]
 
 Each process is started with the EXACT argument list of its ExecStart line in deploy/supervisor/*.service (the flags and the numbers from broadcast.env.template are read from those files,
 not retyped), with only the placeholders replaced: the pinned checkout is this checkout, the root, public and guard folders are scratch, the ceiling is a test number, and `--url` points
@@ -134,17 +134,21 @@ def position_of(root):
     return B.position(st, time.time()), st
 
 
-# name -> (heartbeat left by an earlier run: seconds old or None, [(process, seconds after the scenario starts)])
+D, M = "dfl-broadcast-daemon", "dfl-broadcast-monitor"
+# name -> what it is, the age of the heartbeat file an earlier run left (None: no file), how long the clock has been stopped, how long to watch, and which process starts when (seconds after the scenario starts)
 SCENARIOS = {
-    "daemon-first-fresh":           ("a first install: no heartbeat file yet; the daemon starts, the monitor 5 s later", None, [("dfl-broadcast-daemon", 0), ("dfl-broadcast-monitor", 5)]),
-    "daemon-first-after-downtime":  ("after a host outage: a heartbeat file from 1 hour ago is still in the guard folder; the daemon starts, the monitor 10 s later", 3600, [("dfl-broadcast-daemon", 0), ("dfl-broadcast-monitor", 10)]),
-    "monitor-first-after-downtime": ("the same outage, the monitor started first, the daemon 10 s later", 3600, [("dfl-broadcast-monitor", 0), ("dfl-broadcast-daemon", 10)]),
-    "together-after-downtime":      ("the same outage, both started in the same instant (what systemd does at boot: After= orders the starts, a simple service counts as started when it is forked)", 3600, [("dfl-broadcast-daemon", 0), ("dfl-broadcast-monitor", 0.05)]),
+    "daemon-first-fresh":           dict(what="a first install: no heartbeat file yet; the daemon starts, the monitor 5 s later", hb=None, lapsed=400.0, run_s=45.0, order=[(D, 0), (M, 5)], expect="clean"),
+    "daemon-first-after-downtime":  dict(what="after a host outage: a heartbeat file from 1 hour ago is still in the guard folder; the daemon starts, the monitor 10 s later", hb=3600, lapsed=400.0, run_s=45.0, order=[(D, 0), (M, 10)], expect="clean"),
+    "monitor-first-after-downtime": dict(what="the same outage, the monitor started first, the daemon 10 s later", hb=3600, lapsed=400.0, run_s=45.0, order=[(M, 0), (D, 10)], expect="monitor-first"),
+    "together-after-downtime":      dict(what="the same outage, both started in the same instant (what systemd does at boot: After= orders the starts, a simple service counts as started when it is forked)", hb=3600, lapsed=400.0, run_s=45.0, order=[(D, 0), (M, 0.05)], expect="clean"),
+    "daemon-restart-monitor-back-within-grace": dict(what="the daemon is restarted 10 s after its lease lapsed while the monitor is down (its last heartbeat is 10 minutes old); the monitor is back 100 s later, inside the 240 s grace", hb=600, lapsed=100.0, run_s=285.0, order=[(D, 0), (M, 100)], expect="recovers"),
+    "daemon-restart-dead-monitor":  dict(what="the same restart and the monitor never comes back: the daemon must trip itself by 240 s; a monitor started at 255 s, after the trip, must not clear it", hb=600, lapsed=100.0, run_s=310.0, order=[(D, 0), (M, 255)], expect="safe-trip"),
 }
 
 
-def run_scenario(name, source, work, run_s, position_s, lapsed_s):
-    what, hb_age, order = SCENARIOS[name]
+def run_scenario(name, source, work, position_s):
+    sc = SCENARIOS[name]
+    what, hb_age, order, run_s, lapsed_s = sc["what"], sc["hb"], sc["order"], sc["run_s"], sc["lapsed"]
     sw = os.path.join(work, name)
     os.makedirs(sw)
     log("%s: %s" % (name, what))
@@ -152,6 +156,22 @@ def run_scenario(name, source, work, run_s, position_s, lapsed_s):
     srv, url = serve(public)
     procs, t0 = {}, time.time()
     samples = []
+    pos_series, latch_series = [], []
+    done = threading.Event()
+
+    def sampler():                                      # from the first second, whatever the start schedule: a trip is seen when it happens, not when the next process starts
+        while not done.wait(1.0):
+            pos, st = position_of(root)
+            now_t = round(time.time() - t0, 1)
+            pos_series.append((now_t, None if pos is None else round(pos, 1), None if st is None else st["state"]))
+            tl = os.path.join(guard, "trips.jsonl")
+            try:
+                n_trips = len(open(tl).read().splitlines()) if os.path.exists(tl) else 0
+            except OSError:
+                n_trips = 0
+            latch_series.append((now_t, os.path.exists(os.path.join(guard, "TRIPPED")), n_trips))
+
+    threading.Thread(target=sampler, daemon=True).start()
     try:
         for unit, delay in order:
             while time.time() - t0 < delay:
@@ -159,11 +179,9 @@ def run_scenario(name, source, work, run_s, position_s, lapsed_s):
             out = open(os.path.join(sw, unit + ".out"), "w")
             procs[unit] = subprocess.Popen(unit_argv(unit, root, public, guard, url), stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
             samples.append((round(time.time() - t0, 2), "started " + unit))
-        pos_series = []
         while time.time() - t0 < run_s:
-            time.sleep(1.0)
-            pos, st = position_of(root)
-            pos_series.append((round(time.time() - t0, 1), None if pos is None else round(pos, 1), None if st is None else st["state"]))
+            time.sleep(0.5)
+        done.set()
     finally:
         for unit in reversed([u for u, _ in order]):
             p = procs.get(unit)
@@ -195,7 +213,7 @@ def run_scenario(name, source, work, run_s, position_s, lapsed_s):
     if os.path.exists(cl):
         clog = [json.loads(l) for l in open(cl) if l.strip()]
     rep = {
-        "scenario": name, "what": what, "order": order,
+        "scenario": name, "what": what, "order": order, "t0": t0,
         "exit_codes": {u: p.returncode for u, p in procs.items()},
         "violations": [{"kind": w["violation"], "detail": w.get("detail", "")[:140], "t": round(w["at"] - t0, 1)} for w in watch if "violation" in w],
         "heartbeats": sum(1 for w in watch if w.get("heartbeat")),
@@ -207,7 +225,80 @@ def run_scenario(name, source, work, run_s, position_s, lapsed_s):
     }
     moved = [p for _, p, s in pos_series if p is not None]
     rep["position_advanced_s"] = round(moved[-1] - moved[0], 1) if len(moved) > 1 else None
+    rep["started_at_s"] = dict(samples_started(samples))
+    rep["latch_series"] = latch_series
+    rep["trips_jsonl"] = [l for l in open(os.path.join(guard, "trips.jsonl")).read().splitlines()] if os.path.exists(os.path.join(guard, "trips.jsonl")) else []
+    rep["clock_log"] = clog
+    rep["clock_final"] = position_of(root)[1]
+    rep["evidence_dir"] = keep_evidence(sw, root, guard)
+    rep["checks"] = [{"check": n, "ok": bool(ok), "detail": d} for n, ok, d in evaluate(name, rep)]
     return rep
+
+
+def samples_started(samples):
+    for t, what in samples:
+        if what.startswith("started "):
+            yield what[len("started "):], t
+
+
+def keep_evidence(sw, root, guard):
+    """Copy what a person would need to understand the run (the latch, the trip log, the heartbeat, the monitor's log and evidence, the clock and its log, the daemon's output) next to the scratch work."""
+    ev = os.path.join(sw, "evidence-kept")
+    os.makedirs(ev)
+    for src, name in ((os.path.join(guard, "TRIPPED"), "TRIPPED"), (os.path.join(guard, "trips.jsonl"), "trips.jsonl"), (os.path.join(guard, "heartbeat"), "heartbeat"),
+                      (os.path.join(guard, "watch.log"), "watch.log"), (os.path.join(root, "store", "clock.json"), "clock.json"), (os.path.join(root, "store", "clock_log.jsonl"), "clock_log.jsonl"),
+                      (os.path.join(sw, "dfl-broadcast-daemon.out"), "daemon.out"), (os.path.join(sw, "dfl-broadcast-monitor.out"), "monitor.out")):
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(ev, name))
+    if os.path.isdir(os.path.join(guard, "evidence")):
+        shutil.copytree(os.path.join(guard, "evidence"), os.path.join(ev, "monitor-evidence"))
+    open(os.path.join(ev, "PAUSE-present"), "w").write(str(os.path.exists(os.path.join(root, "store", S.PAUSE))) + "\n")
+    return ev
+
+
+def evaluate(name, rep):
+    """The expectation of each scenario as checks. Returns [(check, ok, detail)]."""
+    sc = SCENARIOS[name]
+    kinds = {v["kind"] for v in rep["violations"]}
+    tr = rep["tripped"]
+    run_s = sc["run_s"]
+    out = []
+    pos = rep["position"]
+
+    def adv(t_from, t_to):
+        a = [p for t, p, _ in pos if p is not None and t_from <= t <= t_to]
+        return round(a[-1] - a[0], 1) if len(a) > 1 else None
+
+    exp = sc["expect"]
+    if exp in ("clean", "monitor-first", "recovers"):
+        out.append(("no trip", tr is None, tr))
+        allowed = {"daemon_silent"} if exp == "monitor-first" else set()
+        out.append(("monitor reported nothing beyond %s" % (sorted(allowed) or "nothing"), kinds <= allowed, sorted(kinds)))
+        out.append(("the broadcast kept going (position advanced %s s in the last %.0f s)" % (adv(run_s - 25, run_s), 20), (adv(run_s - 25, run_s) or 0) >= 20, adv(run_s - 25, run_s)))
+    if exp == "recovers":
+        out.append(("the monitor ran (heartbeats %s)" % rep["heartbeats"], rep["heartbeats"] >= 5, rep["heartbeats"]))
+        out.append(("it was still unlatched after the grace would have ended (240 s): no latch in any sample", not any(l[1] for l in rep["latch_series"]), None))
+        out.append(("the daemon did not stop on its own: clock running at the end", (rep["clock_final"] or {}).get("state") == "running", (rep["clock_final"] or {}).get("state")))
+    if exp == "safe-trip":
+        d0 = rep["started_at_s"].get("dfl-broadcast-daemon", 0.0)
+        t_trip = (tr["at"] - (rep["t0"] + d0)) if tr else None
+        out.append(("tripped by the daemon itself, kind monitor_silent", bool(tr) and tr.get("kind") == "monitor_silent" and tr.get("source") == "daemon", tr))
+        out.append(("tripped at 240 s, not before (%s s after the daemon was started)" % (None if t_trip is None else round(t_trip, 1)), t_trip is not None and 239.0 <= t_trip <= 247.0, t_trip))
+        first = next((t for t, ex, _ in rep["latch_series"] if ex), None)
+        out.append(("no latch in any 1 s sample before 238 s; first seen at %s s" % first, first is not None and 238.0 <= first <= 247.0, first))
+        ran = adv(5, 238)
+        out.append(("until then the broadcast ran (position advanced %s s between 5 s and 238 s: the grace is a window of operation, not a hold)" % ran, ran is not None and ran >= 200, ran))
+        paused_at = next((t for t, _, st in pos if st == "paused"), None)
+        out.append(("the clock was seen paused at %s s, within 240 to 247 s" % paused_at, paused_at is not None and 239.0 <= paused_at <= 247.0, paused_at))
+        frozen = adv(first + 3 if first else run_s, run_s)
+        out.append(("the position stopped: it advanced %s s from 3 s after the trip to the end (the late monitor started at 255 s)" % frozen, frozen is not None and abs(frozen) < 0.5, frozen))
+        out.append(("the clock is paused and PAUSE is present", (rep["clock_final"] or {}).get("state") == "paused" and rep["paused_file"], (rep["clock_final"] or {}).get("state")))
+        out.append(("exactly one trip recorded, and still one after the late monitor ran", len(rep["trips_jsonl"]) == 1 and all(n <= 1 for _, _, n in rep["latch_series"]), len(rep["trips_jsonl"])))
+        out.append(("the late monitor started and was alive (heartbeats %s) and did NOT clear the latch" % rep["heartbeats"], rep["heartbeats"] >= 1 and tr is not None, rep["heartbeats"]))
+        out.append(("the latch file stayed in place to the end (every sample after the first sighting)", all(ex for t, ex, _ in rep["latch_series"] if first and t >= first), None))
+        out.append(("the daemon process stayed up (paused) until it was stopped: exit status 0", rep["exit_codes"].get("dfl-broadcast-daemon") == 0, rep["exit_codes"]))
+        out.append(("evidence kept: TRIPPED, trips.jsonl and the clock log were copied", all(os.path.exists(os.path.join(rep["evidence_dir"], n)) for n in ("TRIPPED", "trips.jsonl", "clock_log.jsonl")), rep["evidence_dir"]))
+    return out
 
 
 def main(argv=None):
@@ -215,9 +306,7 @@ def main(argv=None):
     ap.add_argument("--source", required=True)
     ap.add_argument("--work", required=True)
     ap.add_argument("--scenarios", default=",".join(SCENARIOS))
-    ap.add_argument("--run-s", type=float, default=45.0)
     ap.add_argument("--position-s", type=float, default=1500.0, help="where the fixture's clock stood when the 'host went down'")
-    ap.add_argument("--lapsed-s", type=float, default=400.0, help="how long ago the clock was last renewed (the lease is 90 s)")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     work = os.path.abspath(a.work)
@@ -228,12 +317,16 @@ def main(argv=None):
     for n in a.scenarios.split(","):
         if n not in SCENARIOS:
             sys.exit("unknown scenario %s (have: %s)" % (n, ", ".join(SCENARIOS)))
-        r = run_scenario(n, os.path.abspath(a.source), work, a.run_s, a.position_s, a.lapsed_s)
+        r = run_scenario(n, os.path.abspath(a.source), work, a.position_s)
         reps.append(r)
         log("  -> tripped=%s violations=%s position +%ss paused=%s exit=%s" % (r["tripped"] and r["tripped"].get("kind"), sorted({v["kind"] for v in r["violations"]}), r["position_advanced_s"], r["paused_file"], r["exit_codes"]))
+        for c in r["checks"]:
+            log("     %s  %s%s" % ("PASS" if c["ok"] else "FAIL", c["check"], "" if c["ok"] or c["detail"] is None else "  -- %s" % (c["detail"],)))
+    failed = [(r["scenario"], c["check"]) for r in reps for c in r["checks"] if not c["ok"]]
+    log("RESULT: %s (%d checks, %d failed)" % ("PASS" if not failed else "FAIL", sum(len(r["checks"]) for r in reps), len(failed)))
     if a.out:
         json.dump(reps, open(a.out, "w"), indent=1, sort_keys=True, default=str)
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

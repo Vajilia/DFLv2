@@ -43,9 +43,20 @@ class Rendering(unittest.TestCase):
         names = set(SU.SCENARIOS)
         self.assertIn('daemon-first-after-downtime', names)
         self.assertIn('together-after-downtime', names)
-        what, hb_age, order = SU.SCENARIOS['daemon-first-after-downtime']
-        self.assertEqual([u for u, _ in order], ['dfl-broadcast-daemon', 'dfl-broadcast-monitor'])
-        self.assertGreater(hb_age, BR.GUARD_STALE_S + BR.GUARD_GRACE_S, 'the heartbeat left behind must be older than both limits, or it proves nothing')
+        sc = SU.SCENARIOS['daemon-first-after-downtime']
+        self.assertEqual([u for u, _ in sc['order']], ['dfl-broadcast-daemon', 'dfl-broadcast-monitor'])
+        self.assertGreater(sc['hb'], BR.GUARD_STALE_S + BR.GUARD_GRACE_S, 'the heartbeat left behind must be older than both limits, or it proves nothing')
+
+    def test_the_restart_scenarios_use_the_real_grace_and_watch_past_it(self):
+        for name in ('daemon-restart-monitor-back-within-grace', 'daemon-restart-dead-monitor'):
+            sc = SU.SCENARIOS[name]
+            self.assertGreater(sc['hb'], BR.GUARD_STALE_S, name)                        # the heartbeat left behind is stale by the guard's own limit
+            self.assertGreater(sc['run_s'], BR.GUARD_GRACE_S + 30, name)                # the run lasts past the 240 s grace, or "no trip" would prove nothing
+        late = dict(SU.SCENARIOS['daemon-restart-dead-monitor']['order'])['dfl-broadcast-monitor']
+        self.assertGreater(late, BR.GUARD_GRACE_S, 'the dead-monitor monitor must start only after the trip')
+        early = dict(SU.SCENARIOS['daemon-restart-monitor-back-within-grace']['order'])['dfl-broadcast-monitor']
+        self.assertLess(early, BR.GUARD_GRACE_S, 'the recovery monitor must start inside the grace')
+        self.assertNotIn('--guard-grace', SU.unit_argv('dfl-broadcast-daemon', '/r', '/p', '/g', 'http://x'), 'the unit does not override the 240 s default')
 
 
 if __name__ == '__main__':
