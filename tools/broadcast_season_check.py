@@ -113,6 +113,41 @@ class Oracle:
         return max(due, key=lambda r: (r["at_s"], r["order"])) if due else None
 
 
+class Expected:
+    """What the public folder may hold: the season on air's files at the position (`cur`) together with every earlier season's complete file set (`past`), WITHOUT making a
+    third copy. A recurring broadcast's earlier seasons are tens of thousands of paths each (about 59,000 a season) and the monitor asks several times a pass; copying them into
+    a new set every time costs memory and time that grow with every season (measured: docs/INTEGRATION_CANDIDATE_2026-11-07.md). Supports exactly what the monitor does with
+    the answer: membership, `listing - expected`, `expected - listing`, iteration, len."""
+    __slots__ = ("cur", "past")
+
+    def __init__(self, cur, past):
+        self.cur, self.past = cur, past
+
+    def __contains__(self, f):
+        return f in self.cur or f in self.past
+
+    def __iter__(self):
+        yield from self.cur
+        for f in self.past:
+            if f not in self.cur:
+                yield f
+
+    def __len__(self):
+        return len(self.cur) + sum(1 for f in self.past if f not in self.cur)
+
+    def __rsub__(self, other):                       # other - self
+        return {f for f in other if f not in self.cur and f not in self.past}
+
+    def __sub__(self, other):                        # self - other
+        return {f for f in self if f not in other}
+
+    def __or__(self, other):
+        return set(self) | set(other)
+
+    def __ror__(self, other):
+        return set(other) | set(self)
+
+
 class FollowingOracle:
     """The oracle for a broadcast that goes on past one season, read from the store while it runs (the monitor of a recurring broadcast, tools/rehearsal_check.py).
 
@@ -127,7 +162,8 @@ class FollowingOracle:
         self.store = store
         self.first = int(B.get(os.path.join(store, S.PLAN))["season"])            # the first season stays at the root (as the daemon reads it)
         self._key = None
-        self._past = {}                                   # finished season -> its complete file set (immutable once finished)
+        self._past = set()                                # every finished season's complete file set, ONE set (finished seasons never change)
+        self._past_seasons = set()
         self._cur = None
         self.refresh()
 
@@ -156,8 +192,9 @@ class FollowingOracle:
         if key == self._key:
             return
         for k in (carry["seasons"] if carry else []):
-            if k not in self._past:
-                self._past[k] = self._load(k, None).expected(10 ** 9)[0]
+            if k not in self._past_seasons:
+                self._past |= self._load(k, None).expected(10 ** 9)[0]
+                self._past_seasons.add(k)
         self._cur = self._load(season, carry)
         self._key = key
 
@@ -176,9 +213,7 @@ class FollowingOracle:
     def expected(self, p):
         self.refresh()
         exp, ended = self._cur.expected(p)
-        for files in self._past.values():
-            exp = exp | files
-        return exp, ended
+        return Expected(exp, self._past), ended
 
     def latest_pointer(self, p):
         self.refresh()

@@ -16,8 +16,12 @@ Group=dflv2
 Nice=15
 CPUWeight=20
 IOWeight=20
-# NOT MEASURED on the host: the league runner unit allows 1200M for the engine alone. Set after the first real build under this unit; the supervisor itself is small.
-MemoryMax=1500M
+# Measured (tools/measure_combined.py, real engine, 1 CPU, 2 GB group, docs/INTEGRATION_CANDIDATE_2026-11-07.md): the supervisor and the builder step it runs peak at 204 to 217 MB
+# of process memory. The unit's cgroup reads 1.2 GB with no limit because the engine's files fill the page cache, which is reclaimable and is not a need. Run under a hard 512M
+# it built at the same rate (3.6 events a minute against 3.2), with no kill; the kernel counted 62,532 reclaim hits (failcnt), which is the cache being trimmed, not memory short.
+# 768M is the recommendation: 3.5 times the measured process peak and 50% above the validated limit, because a real season's engine step has not run under the unit on the host.
+# Together with the daemon (192M) and the monitor (512M) the three limits add to 1472M, under a 2 GB machine, leaving room for the system and Caddy.
+MemoryMax=768M
 TasksMax=64
 UMask=0022
 ProtectSystem=strict
@@ -27,8 +31,9 @@ ReadWritePaths=__ROOT__
 ReadOnlyPaths=/opt/dflv2-src __PUBLIC__
 PrivateTmp=true
 NoNewPrivileges=true
-# --floor-gb: keep it above the monitor's floor (rehearsal: 6) so building stops before the broadcast does. --season-gb: about 2.0 GB a season measured (docs/STORAGE_RETENTION.md).
-ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_supervisor.py run --root __ROOT__ --public __PUBLIC__ --floor-gb 8 --step-margin-gb 0.5 --season-gb 2 --interval 30
+EnvironmentFile=/etc/dflv2/broadcast.env
+# --floor-gb (FLOOR_BUILD_GB in broadcast.env): keep it above the monitor's floor (FLOOR_BROADCAST_GB) so building stops before the broadcast does. The public-cap flags only REPORT (health: public_cap_near, public_cap_exceeded); the same three numbers as the daemon's and the monitor's, from the same file. --season-gb: about 2.0 GB a season measured (docs/STORAGE_RETENTION.md).
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_supervisor.py run --root __ROOT__ --public __PUBLIC__ --floor-gb ${FLOOR_BUILD_GB} --step-margin-gb 0.5 --season-gb 2 --interval 30 --public-cap-per-season-gb ${PUBLIC_GB_PER_SEASON} --public-base-gb ${PUBLIC_BASE_GB} --public-ceiling-gb ${PUBLIC_CEILING_GB}
 # SIGTERM stops the supervisor and the builder step it is running (the builder resumes from its last complete event); nothing half-built is ever recorded.
 KillMode=control-group
 TimeoutStopSec=60

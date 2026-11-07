@@ -152,5 +152,42 @@ class StillGuarding(Base):
         self.assertEqual(self.latch()['kind'], 'early_or_unknown_file')
 
 
+class ExpectedView(unittest.TestCase):
+    """`Expected` is the earlier seasons' files plus the season on air's, without copying them: it must answer exactly as the plain union would."""
+
+    def test_it_answers_like_the_union(self):
+        import random
+        import broadcast_season_check as SC
+        rnd = random.Random(7)
+        names = ['f%03d' % i for i in range(300)]
+        for _ in range(50):
+            cur, past, other = (set(rnd.sample(names, rnd.randint(0, 120))) for _ in range(3))
+            e, u = SC.Expected(cur, past), cur | past
+            self.assertEqual(set(e), u)
+            self.assertEqual(len(e), len(u))
+            self.assertEqual(other - e, other - u)
+            self.assertEqual(e - other, u - other)
+            self.assertEqual(e | other, u | other)
+            self.assertEqual(other | e, other | u)
+            self.assertTrue(all((n in e) == (n in u) for n in names))
+            self.assertEqual(sorted(e - SC.Expected(other, set())), sorted(u - other))
+
+    def test_the_oracle_keeps_one_set_for_all_finished_seasons_not_one_per_season(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        B.FSYNC = False
+        self.addCleanup(setattr, B, 'FSYNC', True)
+        r = Rig(tmp.name)
+        r.y1.build(4)
+        r.y2.build(4)
+        bc = r.started()
+        run(bc, 0, r.end1 + 100)
+        import broadcast_season_check as SC
+        o = SC.FollowingOracle(r.store)
+        self.assertEqual(o._past_seasons, {901})
+        a = o.expected(0)[0]
+        self.assertIs(a.past, o.expected(10 ** 9)[0].past, 'every call shares the one set of earlier seasons: nothing is copied per call')
+
+
 if __name__ == '__main__':
     unittest.main()

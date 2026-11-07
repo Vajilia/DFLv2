@@ -1,0 +1,31 @@
+[Unit]
+Description=DFLv2 recurring broadcast monitor (checks the public folder against the plan across seasons; stops the broadcast on a spoiler, resource or monitor failure)
+After=dfl-broadcast-daemon.service
+StartLimitIntervalSec=3600
+StartLimitBurst=5
+
+# TEMPLATE, NOT INSTALLED. Placeholders as in dfl-broadcast-daemon.service, plus __HOST__ (the site's host name for the URL checks).
+
+[Service]
+Type=simple
+User=dflv2
+Group=dflv2
+Nice=10
+# Measured: 34 MB at one season. It holds every public file name and the earlier seasons file sets in memory: about 59,000 paths a season. Modeled with the shared-set structure
+# (tools/measure_combined.py and docs/INTEGRATION_CANDIDATE_2026-11-07.md): 168 MB at 10 seasons, 293 MB at 20, 384 MB (peak 430) at 30. 512M covers about 30 seasons; the disk holds fewer without retention.
+MemoryMax=512M
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__GUARD__
+ReadOnlyPaths=__ROOT__ __PUBLIC__ /opt/dflv2-src
+PrivateTmp=true
+NoNewPrivileges=true
+EnvironmentFile=/etc/dflv2/broadcast.env
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/rehearsal_check.py watch --root __ROOT__ --public __PUBLIC__ --url https://__HOST__ --log __GUARD__/watch.log --evidence __GUARD__/evidence --guard __GUARD__ --cgroup /sys/fs/cgroup/system.slice/dfl-broadcast-daemon.service --full-every 30 --min-free-gb ${FLOOR_BROADCAST_GB} --max-public-gb-per-season ${PUBLIC_GB_PER_SEASON} --public-base-gb ${PUBLIC_BASE_GB} --max-public-ceiling-gb ${PUBLIC_CEILING_GB}
+Restart=on-failure
+RestartSec=10
+# 1 = violations were logged (a result to read, not a crash to retry); 2 = it could not write its latch: do not retry in a loop, the heartbeat stops and the daemon pauses itself.
+RestartPreventExitStatus=1 2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+[Unit]
+Description=DFLv2 recurring broadcast daemon (the only writer of the public folder; reads the private store; never touches the league)
+After=network.target
+# three starts in an hour and the unit stays failed: a daemon that keeps dying is not restarted forever
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+# TEMPLATE, NOT INSTALLED. __COMMIT__ is the pinned checkout (/opt/dflv2-src/<commit>), __ROOT__ the builder root, __PUBLIC__ the public folder, __GUARD__ the monitor's folder.
+# Unlike the rehearsal unit (deploy/rehearsal/dfl-rehearsal.service): no --deadline (it runs until stopped) and a PER-SEASON public cap instead of a fixed 3 GB, which would stop a
+# correct broadcast in season 3 or 4 (tools/publiccap.py).
+
+[Service]
+Type=simple
+User=dflv2
+Group=dflv2
+# Measured (tools/measure_combined.py, real engine, 1 CPU, 2 GB group): 32 MB resident, +2 MB over ten seasons (docs/BROADCAST_CONTINUITY.md), 29 MB in its cgroup with page cache.
+# 192M is six times what was measured; the rehearsal's 600M was a guess. The monitor trips the guard at 90% of this value (it reads the unit's cgroup), well before a kill.
+MemoryMax=192M
+TasksMax=32
+UMask=0022
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__ROOT__/store __PUBLIC__ __GUARD__
+ReadOnlyPaths=/opt/dflv2-src
+PrivateTmp=true
+NoNewPrivileges=true
+EnvironmentFile=/etc/dflv2/broadcast.env
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py run --root __ROOT__ --public __PUBLIC__ --guard __GUARD__ --max-public-gb-per-season ${PUBLIC_GB_PER_SEASON} --public-base-gb ${PUBLIC_BASE_GB} --max-public-ceiling-gb ${PUBLIC_CEILING_GB}
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+# 75 = another daemon holds the lock; 70 = the public cap was exceeded. Neither is cured by restarting; both need a person (docs/INTEGRATION_CANDIDATE_2026-11-07.md, runbook).
+RestartPreventExitStatus=75 70
+
+[Install]
+WantedBy=multi-user.target
