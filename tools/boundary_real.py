@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """One REAL-ENGINE season-boundary check with the supervisor, the daemon and the monitor running together as separate processes (docs/INTEGRATION_CANDIDATE_2026-11-07.md, section 10).
 
-  boundary_real.py --source ROOT --work DIR [--hold-start-s 360] [--dwell-s 90] [--after-s 300] [--limits] [--cpu 0] [--out FILE]
+  boundary_real.py --source ROOT --work DIR [--hold-start-s 360] [--dwell-s 90] [--after-s 300] [--limits] [--cpu 0] [--accelerated-tail-s 0] [--out FILE]
+
+TWO KINDS OF RUN. The default uses SUPPORTED CONTROLS ONLY: stage 1 below prepares the fixture before any process starts; from then on the harness only starts, waits for and stops the
+processes, and a check reads the clock's own log (store/clock_log.jsonl) to prove that nothing but the daemon's code wrote clock.json during the real-time run (no rewrite of `ready_until`).
+`--accelerated-tail-s N` ALSO runs stage 5, which rewrites clock.json after the processes are stopped and drives the daemon code in virtual time N more seconds into season 2 (12000 reaches the
+first results, which real time cannot in a reasonable run). Everything it shows is labelled [accelerated] and is not a supported control. The processes are started with the exact ExecStart
+argument lists of deploy/supervisor/*.service (tools/startup_check.py), in the documented order: daemon, monitor 3 s later, supervisor later.
 
 SOURCE is a private root whose first season is completely built (47 events; it is only COPIED). A season is 48 hours of show clock, so the first 47 hours 54 minutes are NOT run in
 real time: stage 1 drives the real daemon code in-process over virtual time (the same way tests/test_backup_resume_real.py and tools/engine_comparison.py do) up to --hold-start-s
@@ -38,6 +44,7 @@ import measure_combined as MC                      # noqa: E402
 import public_backup as PBK                        # noqa: E402
 import published_bytes as PUB                      # noqa: E402
 import rehearsal_check as RC                       # noqa: E402
+import startup_check as SU                         # noqa: E402
 from dflsite import broadcast as B, season as S    # noqa: E402
 
 PY = sys.executable
@@ -74,6 +81,21 @@ def clock_pos(root):
     return B.position(st, t), st["state"], t                    # the instant the position was computed for: samples are stamped with it, so a slow read cannot look like a fast clock
 
 
+DAEMON_CLOCK_REASONS = {"start", "pause", "resume", "downtime", "coverage_wait", "publish_failure"}       # every `why` that src/dflsite writes to store/clock_log.jsonl
+
+
+def clock_log(store):
+    try:
+        with open(os.path.join(store, "clock_log.jsonl")) as f:
+            return [json.loads(x) for x in f if x.strip()]
+    except (OSError, ValueError):
+        return []
+
+
+def clock_log_len(store):
+    return len(clock_log(store))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--source", required=True)
@@ -82,7 +104,7 @@ def main(argv=None):
     ap.add_argument("--dwell-s", type=float, default=90.0, help="how long the daemon stands at the end of season 1 before the supervisor is started")
     ap.add_argument("--after-s", type=float, default=300.0, help="seconds of season 2 to broadcast after the hand-over")
     ap.add_argument("--handover-timeout-s", type=float, default=1800.0)
-    ap.add_argument("--virtual-after-s", type=float, default=12000.0, help="stage 5: after the real-time stages, drive the real daemon code in virtual time this many more seconds into season 2, so its first results are published and the cumulative indexes GROW (0 = skip)")
+    ap.add_argument("--accelerated-tail-s", type=float, default=0.0, help="ACCELERATED TEST, off by default: after the real-time stages, rewrite clock.json (drops ready_until) and drive the real daemon code in virtual time this many more seconds into season 2, so its first results are published and the cumulative indexes GROW. 12000 reaches them. Not a supported control: the default run never does it")
     ap.add_argument("--limits", action="store_true", help="run each process in a memory cgroup at the proposed unit limit")
     ap.add_argument("--cpu", type=int, default=0)
     ap.add_argument("--out")
@@ -93,7 +115,7 @@ def main(argv=None):
     os.makedirs(work)
     root, public, guard = (os.path.join(work, n) for n in ("root", "public", "guard"))
     store = os.path.join(root, "store")
-    report = {"checks": [], "limits": bool(a.limits)}
+    report = {"checks": [], "limits": bool(a.limits), "mode": "accelerated tail (clock.json rewritten after the real-time run)" if a.accelerated_tail_s > 0 else "supported controls only (no clock edit after the processes start)"}
     checks = report["checks"]
 
     def check(name, ok, detail=""):
@@ -140,12 +162,11 @@ def main(argv=None):
     g_dae = MC.Group("daemon", shares=1024, limit=mb(192))
     g_sup = MC.Group("supervisor", shares=205, limit=mb(768))
     tools = lambda n: os.path.join(HERE, n)       # noqa: E731
-    cap = ["--max-public-gb-per-season", "1.25", "--public-base-gb", "0.25"]       # no ceiling: that is the owner's number
-    mon = MC.Proc("monitor", [PY, "-I", tools("rehearsal_check.py"), "watch", "--root", root, "--public", public, "--log", os.path.join(work, "watch.log"),
-                              "--evidence", os.path.join(work, "evidence"), "--guard", guard, "--every", "10", "--full-every", "30", "--min-free-gb", "6"] + cap, g_mon, a.cpu, nice=10)
-    dae = MC.Proc("daemon", [PY, "-I", tools("broadcast_run.py"), "run", "--root", root, "--public", public, "--guard", guard, "--verbose"] + cap, g_dae, a.cpu, stdout=True)
-    sup = MC.Proc("supervisor", [PY, "-I", tools("broadcast_supervisor.py"), "run", "--root", root, "--public", public, "--floor-gb", "8", "--step-margin-gb", "0.5", "--season-gb", "2",
-                                 "--interval", "30", "--public-cap-per-season-gb", "1.25", "--public-base-gb", "0.25"], g_sup, a.cpu, nice=15)
+    srv, url = SU.serve(public)                   # the documented monitor probes a URL: a small local server stands in for the front end (tools/startup_check.py)
+    # the EXACT ExecStart argument lists of deploy/supervisor/*.service (placeholders replaced, the ceiling a test number: the owner's is not chosen), not flags retyped here
+    mon = MC.Proc("monitor", SU.unit_argv("dfl-broadcast-monitor", root, public, guard, url), g_mon, a.cpu, nice=10)
+    dae = MC.Proc("daemon", SU.unit_argv("dfl-broadcast-daemon", root, public, guard, url), g_dae, a.cpu, stdout=True)
+    sup = MC.Proc("supervisor", SU.unit_argv("dfl-supervisor", root, public, guard, url), g_sup, a.cpu, nice=15)
     samples = []                     # (wall, position, state)
     stop = threading.Event()
 
@@ -158,8 +179,11 @@ def main(argv=None):
     th = threading.Thread(target=sampler, daemon=True)
     hold_snapshot = hold_meta = None
     carry_seen = None
+    real_run_s = 0.0
     try:
-        dae.start()                                      # the production order: the daemon first (it waits for the monitor's first heartbeat), the monitor 3 s later
+        clog0 = clock_log_len(store)
+        t_procs = time.time()
+        dae.start()                                      # the documented order: the daemon first, the monitor 3 s later (docs/INTEGRATION_CANDIDATE_2026-11-07.md, section 15)
         time.sleep(3)
         mon.start()
         th.start()
@@ -226,6 +250,11 @@ def main(argv=None):
         for p in (sup, mon, dae):
             ru = p.stop()
             rus[p.name] = round(ru.ru_maxrss / 1024.0, 1) if ru else None
+        real_run_s = time.time() - t_procs
+        run_log = clock_log(store)[clog0:]
+        foreign = sorted({e.get("why") for e in run_log} - DAEMON_CLOCK_REASONS)
+        report["clock_log_during_real_time_run"] = {"entries": len(run_log), "reasons": sorted({e.get("why") for e in run_log}), "not_made_by_the_daemon": foreign}
+        check("SUPPORTED CONTROLS ONLY during the real-time run: every clock-log entry is one the daemon's own code writes (%s); nothing rewrote clock.json or ready_until" % ", ".join(sorted({e.get("why") for e in run_log})), not foreign, foreign)
         report["processes_alive_until_stopped"] = alive
         report["peak_rss_mb"] = rus
         report["cpu_seconds"] = cpu_s
@@ -233,6 +262,7 @@ def main(argv=None):
         check("all three processes ran to the end (none died)", all(alive.values()), alive)
     finally:
         stop.set()
+        srv.shutdown()
         for p in (sup, mon, dae):
             try:
                 if p.p is not None and p.p.poll() is None:
@@ -243,7 +273,7 @@ def main(argv=None):
     # ------------------------------------------------------------------------------------------------------------------------------ stage 5: virtual time again
     vtail = {}
     final_now = None
-    if a.virtual_after_s > 0 and carry_seen is not None:
+    if a.accelerated_tail_s > 0 and carry_seen is not None:
         B.FSYNC = False
         bc = S.SeasonBroadcaster(store, public, guard_publication=False)
         vnow = time.time()
@@ -252,7 +282,7 @@ def main(argv=None):
         st["state"] = "running"
         st["lease_until"] = max(st["lease_until"], vnow + 90)
         bc.clock._write(st, "virtual_tail_start", vnow)
-        target = end1 + a.after_s + a.virtual_after_s
+        target = end1 + a.after_s + a.accelerated_tail_s
         vpos = []
         guard_t = 0
         while True:
@@ -268,10 +298,10 @@ def main(argv=None):
         vtail = {"virtual_seconds": round(20.0 * guard_t, 1), "position_s": vpos[-1], "ticks": guard_t,
                  "went_back": sum(1 for x, y in zip(vpos, vpos[1:]) if y < x - 0.01), "max_step_s": round(max([y - x for x, y in zip(vpos, vpos[1:])] or [0]), 1)}
         report["stage5"] = vtail
-        log("stage 5: virtual time to position %.0f s (season 2 + %.0f s), %d ticks" % (vpos[-1], vpos[-1] - end1, guard_t))
-        check("stage 5: the broadcast reached the target position (the virtual clock is NOT gated by publication coverage here, so this says nothing about holds)", vpos[-1] >= target, vpos[-1])
-        check("stage 5: the position never went back", vtail["went_back"] == 0)
-        check("stage 5: the position never advanced faster than the 20 s tick (max step %.1f s)" % vtail["max_step_s"], vtail["max_step_s"] <= 20.5)
+        log("stage 5 (ACCELERATED, not a supported control): virtual time to position %.0f s (season 2 + %.0f s), %d ticks" % (vpos[-1], vpos[-1] - end1, guard_t))
+        check("stage 5 [accelerated]: the broadcast reached the target position (the virtual clock is NOT gated by publication coverage here, so this says nothing about holds)", vpos[-1] >= target, vpos[-1])
+        check("stage 5 [accelerated]: the position never went back", vtail["went_back"] == 0)
+        check("stage 5 [accelerated]: the position never advanced faster than the 20 s tick (max step %.1f s)" % vtail["max_step_s"], vtail["max_step_s"] <= 20.5)
 
     # ------------------------------------------------------------------------------------------------------------------------------ stage 4: from the files
     log("stage 4: checking the files")
@@ -289,7 +319,7 @@ def main(argv=None):
         report["indexes_before_after"] = grew
         check("cumulative indexes: season 1's entries are still there and the indexes did not shrink", all(b >= a_ for a_, b in grew.values()), grew)
         if vtail:
-            check("cumulative indexes: season 2's first results were appended (the playback index grew past season 1's 400 games)", grew.get("playback/index.json", (0, 0))[1] > grew.get("playback/index.json", (0, 0))[0], grew)
+            check("cumulative indexes [accelerated tail only]: season 2's first results were appended (the playback index grew past season 1's 400 games)", grew.get("playback/index.json", (0, 0))[1] > grew.get("playback/index.json", (0, 0))[0], grew)
         check("cumulative indexes: every entry that was there at the hold is byte-for-byte unchanged and in the same place (an exact prefix)", not PUB.changed(hold_snapshot, public), "")
     closure_pub = PBK.CLOSURE["public"](PBK.Tree(public))
     closure_store = PBK.CLOSURE["store"](PBK.Tree(store))
@@ -302,14 +332,15 @@ def main(argv=None):
         pass
     check("carry.json names season 1 as finished and season 2 on air", bool(carry) and carry.get("seasons") == [plan1["season"]] and carry.get("season") == plan1["season"] + 1, carry and {k: carry[k] for k in ("season", "seasons") if k in carry})
     try:
-        with open(os.path.join(work, "watch.log")) as f:
+        with open(os.path.join(guard, "watch.log")) as f:
             mlog = [json.loads(x) for x in f if x.strip()]
     except OSError:
         mlog = []
     viol = [m for m in mlog if "violation" in m]
     report["monitor"] = {"heartbeats": sum(1 for m in mlog if m.get("heartbeat")), "violations": viol[:10], "violation_count": len(viol)}
     check("monitor: no violation over the whole real-time run, no trip", not viol and not os.path.exists(os.path.join(guard, "TRIPPED")), viol[:3])
-    check("monitor: it was checking (heartbeats seen)", report["monitor"]["heartbeats"] > 10, report["monitor"]["heartbeats"])
+    need_beats = max(2, int(real_run_s / 30.0 * 0.5))                       # one heartbeat per 30 s full pass (the unit's --full-every): at least half of them
+    check("monitor: it was checking (%d heartbeats seen over %.0f s of real time; at least %d expected)" % (report["monitor"]["heartbeats"], real_run_s, need_beats), report["monitor"]["heartbeats"] >= need_beats, report["monitor"]["heartbeats"])
     # the viewers' position
     pos_series = [(w, p) for w, p, _ in samples]
     back = [(w, p, q) for (w, p), (_, q) in zip(pos_series, pos_series[1:]) if q < p - 0.01]

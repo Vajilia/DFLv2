@@ -77,7 +77,7 @@ def current_cap(a, store):
 
 CAP_CHECK_S = 300.0
 GUARD_STALE_S = 120.0                     # the monitor refreshes its heartbeat every 5 s while it makes progress
-GUARD_GRACE_S = 240.0                     # time allowed after the daemon starts for the monitor's first heartbeat
+GUARD_GRACE_S = 240.0                     # time allowed after the daemon starts for the monitor's first heartbeat (a heartbeat file older than the daemon's start does not count as one)
 
 
 def trip_file(guard):
@@ -117,11 +117,16 @@ class Guard:
         if not os.path.exists(trip_file(self.dir)):
             hb = os.path.join(self.dir, "heartbeat")
             try:
-                age = now - os.path.getmtime(hb)
+                mtime = os.path.getmtime(hb)
+                age = now - mtime
             except OSError:
+                mtime = age = None
+            if age is not None and mtime < self.started:
+                # Written by a monitor run that ended before this daemon started (the folder outlives a host outage): hours old at a boot. That is "the monitor has not written one
+                # yet", the same as a first install, and gets the same grace measured from the daemon's own start; it is not "the monitor went silent" (tools/startup_check.py).
                 age = None
             if (age is None and now - self.started > self.grace) or (age is not None and age > self.stale):
-                detail = ("no heartbeat from the monitor for %.0f s" % age) if age is not None else ("the monitor never wrote a heartbeat in %.0f s" % (now - self.started))
+                detail = ("no heartbeat from the monitor for %.0f s" % age) if age is not None else ("the monitor wrote no new heartbeat in %.0f s since this daemon started" % (now - self.started))
                 write_trip(self.dir, "monitor_silent", detail, "daemon", now)
         if os.path.exists(trip_file(self.dir)):
             if not os.path.exists(pause):

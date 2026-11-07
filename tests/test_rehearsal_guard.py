@@ -82,7 +82,7 @@ class DaemonGuard(Base):
 
     def test_a_stale_heartbeat_trips_but_a_fresh_one_does_not(self):
         self.beat(age=500)
-        run_daemon(self.daemon_args('--guard-stale', '120', '--guard-grace', '600'))
+        run_daemon(self.daemon_args('--guard-stale', '120', '--guard-grace', '0.4'))                  # the monitor does not come back within the grace: the daemon trips itself
         self.assertEqual(json.load(open(os.path.join(self.guard, 'TRIPPED')))['kind'], 'monitor_silent')
         os.unlink(os.path.join(self.guard, 'TRIPPED')); os.unlink(self.pause)
         stop = threading.Event()
@@ -96,6 +96,35 @@ class DaemonGuard(Base):
         finally:
             stop.set(); t.join()
         self.assertFalse(os.path.exists(os.path.join(self.guard, 'TRIPPED')))
+
+    def test_a_heartbeat_left_by_an_earlier_run_does_not_trip_a_daemon_that_has_just_started(self):
+        """After a host outage the guard folder still holds the last heartbeat of the monitor that ran before it: hours old when the daemon starts first (or together with the monitor, as at
+        boot). That is "the monitor has not written one yet" (the first-start grace), not "the monitor went silent": tripping at once held the broadcast after every reboot
+        (tools/startup_check.py, docs/INTEGRATION_CANDIDATE_2026-11-07.md section 15)."""
+        self.beat(age=3600)
+        code, lines = run_daemon(self.daemon_args('--guard-stale', '120', '--guard-grace', '600'))
+        self.assertFalse(os.path.exists(os.path.join(self.guard, 'TRIPPED')), lines)
+        self.assertFalse([l for l in lines if l.get('tripped')], lines)                 # (the run ends at its --deadline, which pauses; that is the only pause)
+
+    def test_the_first_start_grace_is_measured_from_the_daemons_own_start(self):
+        started = 1000.0
+        g = BR.Guard(self.guard, 120.0, 240.0, started)
+        hb = os.path.join(self.guard, 'heartbeat')
+        open(hb, 'w').write('{}')
+        os.utime(hb, (started - 3600, started - 3600))                                  # left by the previous run
+        self.assertFalse(g.step(self.rig.store, started + 5), 'just started: wait for the monitor')
+        self.assertFalse(g.step(self.rig.store, started + 239), 'still inside the grace')
+        self.assertTrue(g.step(self.rig.store, started + 241), 'no monitor by the end of the grace: the daemon trips itself')
+        self.assertEqual(json.load(open(os.path.join(self.guard, 'TRIPPED')))['kind'], 'monitor_silent')
+
+    def test_a_heartbeat_written_after_the_start_still_goes_stale(self):
+        started = 1000.0
+        g = BR.Guard(self.guard, 120.0, 240.0, started)
+        hb = os.path.join(self.guard, 'heartbeat')
+        open(hb, 'w').write('{}')
+        os.utime(hb, (started + 10, started + 10))                                       # the monitor was alive after the daemon started
+        self.assertFalse(g.step(self.rig.store, started + 100))
+        self.assertTrue(g.step(self.rig.store, started + 10 + 121), 'it then stopped: the rule is unchanged')
 
     def test_an_unreadable_guard_folder_holds_the_broadcast(self):
         with mock.patch.object(BR.Guard, 'step', side_effect=PermissionError('denied')):
