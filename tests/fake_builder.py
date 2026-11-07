@@ -9,7 +9,9 @@ firing the engine), the plan a new season gets (`broadcast_plan.build_plan`), an
   fail_at          an event number (within the season) that fails, every time, while the file exists
   fail_next_season `next-season` fails while the file exists
   enospc           every event fails with "No space left on device" while the file exists
-  crash_next_season  the process dies (os._exit) between the two writes `next-season` makes, once (the file is removed first)
+  crash_next_season  the process dies (os._exit) inside `next-season`, once (the file is removed first). Its content picks the instant: empty or `plan` = after the plan is written and before
+                   the builds file (the original test); `before` = in the new folder, before any file; `torn` = in the middle of writing the plan (a half-written temporary file);
+                   `builds` = both files written, before the folder is renamed into place
   calls.log        one line "<verb> <pid> <season> <seq> <time>" at the start and end of every event (the tests read overlaps and counts from it)
 """
 import errno
@@ -88,13 +90,23 @@ def step_one(P, plan, slot_s):
 
 
 def crashing_put(real_put):
-    state = {"n": 0}
-
     def put(path, obj):
+        mode = None
+        base = os.path.basename(path)
+        if os.sep + "seasons" + os.sep in path and base in (S.PLAN, S.BUILDS):
+            mode = ctl("crash_next_season")
+        die = lambda: (os.unlink(os.path.join(CTL, "crash_next_season")), os._exit(9))     # noqa: E731
+        if mode == "before" and base == S.PLAN:
+            die()
+        if mode == "torn" and base == S.PLAN:
+            with open(os.path.join(os.path.dirname(path), ".tmp-%d-%s" % (os.getpid(), base)), "wb") as f:
+                f.write(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()[:40])
+            die()
         real_put(path, obj)
-        if os.sep + "seasons" + os.sep in path and os.path.basename(path) == S.PLAN and ctl("crash_next_season"):
-            os.unlink(os.path.join(CTL, "crash_next_season"))
-            os._exit(9)
+        if mode in ("1", "plan") and base == S.PLAN:
+            die()
+        if mode == "builds" and base == S.BUILDS:
+            die()
     return put
 
 

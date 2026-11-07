@@ -173,6 +173,10 @@ class Supervisor:
         o = {"P": P, "carry": carry, "on_air": on_air, "target": int(P["season_n"]), "plan": plan, "builds": builds, "built": done - base, "total": total,
              "complete": done - base >= total}
         o["continuous"] = os.path.exists(os.path.join(self.store, S.CONTINUOUS))
+        sd = os.path.join(self.store, S.SEASONS)
+        names = sorted(os.listdir(sd)) if os.path.isdir(sd) else []
+        o["interrupted_evidence"] = [n for n in names if ".partial.interrupted-" in n][:50]       # kept by `next-season` after an interruption; never removed by anything automatic
+        o["partial_pending"] = [n for n in names if n.endswith(".partial")]                      # a leftover not yet set aside (the next `next-season` does it)
         return o
 
     def due(self, o):
@@ -426,7 +430,8 @@ class Supervisor:
                 "builder": {"state": bstate, "season": o["target"], "built": o["built"], "total": o["total"], "last_action": st["last_action"],
                             "consecutive_failures": st["consecutive_failures"], "last_success_at": st["last_success_at"], "last_error": st["last_error"], "next_attempt_at": st["next_attempt_at"]},
                 "capacity": cap, "broadcast": bc,
-                "seasons": {"on_air": o["on_air"], "target": o["target"], "prepared_ahead": len(ahead), "ahead_complete": bool(ahead) and o["complete"]}}
+                "seasons": {"on_air": o["on_air"], "target": o["target"], "prepared_ahead": len(ahead), "ahead_complete": bool(ahead) and o["complete"],
+                            "interrupted_evidence": o["interrupted_evidence"], "partial_pending": o["partial_pending"]}}
 
     def write_health(self, doc):
         os.makedirs(self.dir, exist_ok=True)

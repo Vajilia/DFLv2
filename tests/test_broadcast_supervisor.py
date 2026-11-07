@@ -142,7 +142,7 @@ class Rollover(Base):
         self.assertEqual(h.seasons(), ['s002'], 'one season ahead, never two')
         b = h.builds(2)
         self.assertEqual(sorted(int(k) for k in b['events']), [5, 6, 7, 8])
-        self.assertEqual(hl['seasons'], {'on_air': 1, 'target': 2, 'prepared_ahead': 1, 'ahead_complete': True})
+        self.assertEqual(hl['seasons'], {'on_air': 1, 'target': 2, 'prepared_ahead': 1, 'ahead_complete': True, 'interrupted_evidence': [], 'partial_pending': []})
         n = len(h.calls())
         for i in range(4):
             sup.cycle(now + 10 + i)
@@ -664,3 +664,95 @@ class NoDeletion(Base):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------- an interrupted `sNNN.partial`
+class Partial(Base):
+    """A process killed while `next-season` was creating the season leaves `sNNN.partial` behind (the folder is renamed into place only when both files are complete).
+    The restart must (1) not mistake it for a season, (2) keep it as evidence, never delete or overwrite it, and (3) not be blocked by it, however it was cut off."""
+
+    MODES = ('before', 'plan', 'torn', 'builds')
+
+    def leftover(self):
+        d = os.path.join(self.h.store, 'seasons')
+        return sorted(n for n in os.listdir(d) if '.partial' in n) if os.path.isdir(d) else []
+
+    def snapshot(self, name):
+        base = os.path.join(self.h.store, 'seasons', name)
+        out = {}
+        for d, _, names in os.walk(base):
+            for n in names:
+                out[os.path.relpath(os.path.join(d, n), base)] = Path(d, n).read_bytes()
+        return out
+
+    def crash(self, sup, mode, now=T0):
+        self.h.set('crash_next_season', mode)
+        hl = sup.cycle(now)
+        self.assertEqual(hl['builder']['state'], 'failed', hl['builder'])
+        return hl
+
+    def test_every_interruption_point_recovers_and_keeps_the_leftover_as_evidence(self):
+        for mode in self.MODES:
+            with self.subTest(mode=mode):
+                with tempfile.TemporaryDirectory() as tmp:
+                    h = Harness(tmp)
+                    self.h = h
+                    sup = h.sup()
+                    self.crash(sup, mode)
+                    self.assertEqual(h.seasons(), [], 'the leftover is not a season')
+                    self.assertEqual(self.leftover(), ['s002.partial'])
+                    evidence = self.snapshot('s002.partial')
+                    hl, _ = self.run_until(sup, 'ahead', now=T0 + 1000, limit=30, step=100)
+                    self.assertEqual(h.seasons(), ['s002'])
+                    self.assertEqual(sorted(int(k) for k in h.builds(2)['events']), [5, 6, 7, 8])
+                    kept = [n for n in self.leftover() if '.interrupted-' in n]
+                    self.assertEqual(len(kept), 1, self.leftover())
+                    self.assertEqual(self.snapshot(kept[0]), evidence, 'the evidence is byte for byte what the crash left')
+                    self.assertNotIn('s002.partial', self.leftover(), 'the working name is free again')
+                    self.assertEqual(hl['seasons']['interrupted_evidence'], kept)
+                    self.assertEqual(hl['status'], 'ok', hl['problems'])
+
+    def test_two_interruptions_keep_two_pieces_of_evidence(self):
+        h = self.h
+        sup = h.sup()
+        self.crash(sup, 'plan')
+        first = self.snapshot('s002.partial')
+        self.crash(sup, 'torn', now=T0 + 1000)
+        second_name = [n for n in self.leftover() if n == 's002.partial']
+        self.assertEqual(second_name, ['s002.partial'])
+        self.run_until(sup, 'ahead', now=T0 + 5000, limit=30, step=100)
+        kept = [n for n in self.leftover() if '.interrupted-' in n]
+        self.assertEqual(len(kept), 2, kept)
+        self.assertIn(first, [self.snapshot(n) for n in kept])
+
+    def test_a_leftover_that_is_a_file_does_not_block_the_next_season(self):
+        h = self.h
+        os.makedirs(os.path.join(h.store, 'seasons'), exist_ok=True)
+        Path(h.store, 'seasons', 's002.partial').write_bytes(b'not a folder')
+        sup = h.sup()
+        self.run_until(sup, 'ahead', limit=30)
+        self.assertEqual(h.seasons(), ['s002'])
+        kept = [n for n in self.leftover() if '.interrupted-' in n]
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(Path(h.store, 'seasons', kept[0]).read_bytes(), b'not a folder')
+
+    def test_the_daemon_never_starts_a_season_from_a_complete_looking_partial(self):
+        h = self.h
+        sup = h.sup()
+        self.crash(sup, 'builds')                                  # both files written; the folder was never renamed into place
+        self.assertEqual(sorted(os.listdir(os.path.join(h.store, 'seasons', 's002.partial'))), ['builds.json', 'plan.json'])
+        bc = h.daemon(pos=h.y1.plan['total_s'] - 30)
+        for t in range(400):
+            bc.tick(T0 + t)
+        self.assertFalse(os.path.exists(os.path.join(h.store, S.CARRY)), 'no hand-over to a season that was never completed')
+        st = bc.clock.state()
+        self.assertEqual(round(bc.clock.position(T0 + 399), 1), float(h.y1.plan['total_s']), 'the clock holds at the end of the season on air')
+
+    def test_the_supervisor_never_writes_into_or_removes_a_leftover_itself(self):
+        h = self.h
+        sup = h.sup()
+        self.crash(sup, 'plan')
+        before = self.snapshot('s002.partial')
+        for i in range(3):
+            sup.cycle(T0 + 1 + i, act=False)                       # observation only: the leftover is untouched
+        self.assertEqual(self.snapshot('s002.partial'), before)

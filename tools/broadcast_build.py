@@ -249,6 +249,20 @@ def cmd_step(a):
     return 0
 
 
+def set_aside(path):
+    """Whatever is at `path` (a folder, a file, a link) is renamed to `<path>.interrupted-<UTC time>-<pid>` (a number is added if that name exists): one atomic rename in the
+    same folder, so nothing is copied, deleted or overwritten. -> the new path, or None if there was nothing."""
+    if not os.path.lexists(path):
+        return None
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    for k in range(1000):
+        dst = "%s.interrupted-%s-%d%s" % (path, stamp, os.getpid(), "" if k == 0 else "-%d" % k)
+        if not os.path.lexists(dst):
+            os.rename(path, dst)
+            return dst
+    raise SystemExit("cannot keep the leftover %s as evidence: 1000 names are taken" % path)
+
+
 def cmd_next_season(a):
     """Prepare the next season in store/seasons/sNNN/ once the one being built is complete. The league has fired exactly the events built so far, so the next
     season's first event is the league's next one; its plan carries the league's own event numbers (event_base). Nothing of it is public: only the daemon, at the
@@ -269,13 +283,17 @@ def cmd_next_season(a):
     import broadcast_plan as BP
     # Both files are written into `sNNN.partial` and the folder is renamed into place only when both are complete: a process killed between the two writes leaves
     # nothing the builder (which selects the highest folder with a plan) or the daemon (which starts a season whose plan and builds exist) could mistake for a season.
-    # A leftover `.partial` from such a crash is simply written again.
+    # A leftover `.partial` from such a crash is EVIDENCE of what was interrupted: it is renamed aside (never deleted, never overwritten) and the season is made again.
     tmp = d + ".partial"
-    os.makedirs(tmp, exist_ok=True)
+    aside = set_aside(tmp)
+    os.makedirs(tmp)
     B.put(os.path.join(tmp, S.PLAN), BP.build_plan(season=n, event_base=done))
     B.put(os.path.join(tmp, S.BUILDS), {"format": S.BUILDS_FORMAT, "format_version": 1, "events": {}, "games": {}, "honors": {}, "league_id": builds.get("league_id")})
     os.rename(tmp, d)
-    print(json.dumps({"season": n, "dir": d, "event_base": done}))
+    out = {"season": n, "dir": d, "event_base": done}
+    if aside:
+        out["interrupted_leftover"] = aside
+    print(json.dumps(out))
     return 0
 
 
