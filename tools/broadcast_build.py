@@ -267,9 +267,14 @@ def cmd_next_season(a):
     if os.path.exists(d):
         raise SystemExit("season %d is already prepared: %s" % (n, d))
     import broadcast_plan as BP
-    os.makedirs(d)
-    B.put(os.path.join(d, S.PLAN), BP.build_plan(season=n, event_base=done))
-    B.put(os.path.join(d, S.BUILDS), {"format": S.BUILDS_FORMAT, "format_version": 1, "events": {}, "games": {}, "honors": {}, "league_id": builds.get("league_id")})
+    # Both files are written into `sNNN.partial` and the folder is renamed into place only when both are complete: a process killed between the two writes leaves
+    # nothing the builder (which selects the highest folder with a plan) or the daemon (which starts a season whose plan and builds exist) could mistake for a season.
+    # A leftover `.partial` from such a crash is simply written again.
+    tmp = d + ".partial"
+    os.makedirs(tmp, exist_ok=True)
+    B.put(os.path.join(tmp, S.PLAN), BP.build_plan(season=n, event_base=done))
+    B.put(os.path.join(tmp, S.BUILDS), {"format": S.BUILDS_FORMAT, "format_version": 1, "events": {}, "games": {}, "honors": {}, "league_id": builds.get("league_id")})
+    os.rename(tmp, d)
     print(json.dumps({"season": n, "dir": d, "event_base": done}))
     return 0
 

@@ -1,0 +1,41 @@
+[Unit]
+Description=DFLv2 broadcast SUPERVISOR (prepares the next season ahead of the clock through the builder; never writes the public folder; deletes nothing)
+After=network.target
+# five starts in an hour and the unit stays failed: a supervisor that keeps dying is not restarted forever (the health file then goes stale and `check` says unknown)
+StartLimitIntervalSec=3600
+StartLimitBurst=5
+
+# TEMPLATE, NOT INSTALLED. __COMMIT__ is the pinned checkout (/opt/dflv2-src/<commit>), __ROOT__ the builder root (R/league, R/store), __PUBLIC__ the public folder the daemon
+# writes. Nothing renders or installs this file yet (docs/UNATTENDED_OPERATION.md, section 8).
+
+[Service]
+Type=simple
+User=dflv2
+Group=dflv2
+# The builder it starts runs the engine: keep it behind the broadcast daemon on a one-CPU host (the daemon unit has Nice=10; the daemon matters more).
+Nice=15
+CPUWeight=20
+IOWeight=20
+# NOT MEASURED on the host: the league runner unit allows 1200M for the engine alone. Set after the first real build under this unit; the supervisor itself is small.
+MemoryMax=1500M
+TasksMax=64
+UMask=0022
+ProtectSystem=strict
+ProtectHome=true
+# The builder writes the root (league, store, build log, its lock) and the supervisor writes ROOT/supervisor. The public folder is READ-ONLY here: nothing in this unit can write it.
+ReadWritePaths=__ROOT__
+ReadOnlyPaths=/opt/dflv2-src __PUBLIC__
+PrivateTmp=true
+NoNewPrivileges=true
+# --floor-gb: keep it above the monitor's floor (rehearsal: 6) so building stops before the broadcast does. --season-gb: about 2.0 GB a season measured (docs/STORAGE_RETENTION.md).
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_supervisor.py run --root __ROOT__ --public __PUBLIC__ --floor-gb 8 --step-margin-gb 0.5 --season-gb 2 --interval 30
+# SIGTERM stops the supervisor and the builder step it is running (the builder resumes from its last complete event); nothing half-built is ever recorded.
+KillMode=control-group
+TimeoutStopSec=60
+Restart=on-failure
+RestartSec=30
+# 75 = another supervisor holds the lock; 2 = the root has no store. Neither is cured by restarting.
+RestartPreventExitStatus=75 2
+
+[Install]
+WantedBy=multi-user.target

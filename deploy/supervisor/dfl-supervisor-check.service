@@ -1,0 +1,17 @@
+[Unit]
+Description=DFLv2 broadcast supervisor health check (exit 0 ok, 1 warning, 2 critical or stopped, 3 unknown)
+
+# TEMPLATE, NOT INSTALLED (docs/UNATTENDED_OPERATION.md, section 8). It reads one file and prints one JSON line to the journal. It sends nothing and needs no credential.
+# A warning (exit 1) is journaled but does not fail the unit; critical (2) and unknown (3) do, so `systemctl --failed` and an OnFailure= hook (not created here) can see them.
+
+[Service]
+Type=oneshot
+User=dflv2
+Group=dflv2
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=__ROOT__/supervisor /opt/dflv2-src
+PrivateTmp=true
+NoNewPrivileges=true
+SuccessExitStatus=1
+ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_supervisor.py check --root __ROOT__ --max-age-s 180
