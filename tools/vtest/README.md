@@ -18,7 +18,7 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 | Stage | Question |
 |---|---|
 | V1 | Real cgroup-v2 cache growth: no false trip during a sustained healthy workload |
-| V2 | Sustained anonymous pressure trips as designed (V2a); an OOM: incident record and hold, victim, systemd's actual recovery (V2b) |
+| V2 | Sustained anonymous pressure trips as designed (V2a); an OOM: incident record and hold, reported victim, systemd's actual recovery (V2b); the same with the daemon as the OOM victim (V2c) |
 | V3 | Monitor killed, stopped, hung, or repeatedly OOM-killed: the daemon pauses itself safely |
 | V4 | An existing latch survives restarts and kill -9 of either service, and keeps the daemon paused; only the documented `release` clears it |
 
@@ -36,6 +36,10 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 4. `sudo python3 tools/vtest/vtest.py plan` to read exactly what will run; then `sudo python3 tools/vtest/vtest.py install` (renders `dfl-vtest-*` units from the pinned templates, prints each layout change, starts nothing).
 5. `sudo python3 tools/vtest/vtest.py run --smoke` first (non-qualifying shakedown), then `run` for the qualifying run. `--with-reboot` adds the V4 reboot phase; after the reboot run `--after-reboot`.
 6. Copy `/srv/dfl-vtest/evidence/<run-id>/` off the machine (each stage has `MANIFEST.sha256`). Review before publishing anything.
+
+## Privileges needed
+
+root; for V2c also write access to `/proc/<pid>/oom_score_adj` of the daemon's test-cgroup processes (raising needs nothing more; lowering would need `CAP_SYS_RESOURCE` and is refused) and a readable kernel log (`journalctl -k`, or `dmesg` as root / `kernel.dmesg_restrict=0`). Without the log the victim is unknown and the check is incomplete.
 
 ## Rules the harness enforces
 
@@ -63,6 +67,6 @@ Unit names, paths and the loopback URL; `User=`/`Group=` dropped (runs as root) 
 
 ## Known limits
 
-* OOM victim: normally the injected load, not the daemon. V2b reports the victim from the kernel log; a load-only or unknown victim leaves `V2b.daemon_oom_exercised` **incomplete (not_run)**, so V2 is not a pass. Exercising a daemon kill is a step not yet written.
-* V2b requires a persistent incident record and hold after an OOM (latch, new evidence, daemon paused, clock stopped, latch unchanged). No latch fails V2 and is a defect of the candidate, to be fixed in a new candidate; the harness contains no runtime fix.
+* OOM victim: in V2b normally the injected load. V2c makes the daemon the preferred victim by **raising** `oom_score_adj` to 1000 for the processes already in the daemon's test cgroup (guarded, raise-only, 0..1000, that cgroup only, undone by the restart; the load keeps the default). `V2.daemon_oom_exercised` passes only with **kernel evidence naming the daemon** as a victim; otherwise it is **incomplete (not_run)** and V2 is not a pass. An incomplete stage blocks the full run.
+* V2b and V2c require a persistent incident record and hold after an OOM (latch, new evidence, daemon paused, clock stopped, latch unchanged). No latch fails V2 and is a defect of the candidate, to be fixed in a new candidate; the harness contains no runtime fix.
 * Injecting load into the daemon's cgroup stands in for a real leak; it does not exercise the daemon's own allocation behaviour.

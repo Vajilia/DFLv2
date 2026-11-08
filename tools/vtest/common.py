@@ -140,6 +140,27 @@ class Env:
         except OSError as e:
             return False, e.errno
 
+    def oom_adjust(self, pid, value):
+        """Raise (never lower) the oom_score_adj of ONE process that is at this moment inside the DAEMON's dfl-vtest cgroup, to a value in 0..1000. This is the only way a stage influences which process the
+        kernel's OOM killer picks, and only inside that disposable group: not the monitor's cgroup, not the host, nothing persistent (a restarted process starts at its default). -> (ok, errno or None)."""
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 1000:
+            raise Unsafe("refusing oom_score_adj %r: only 0..1000 (never a value that makes a process unkillable)" % (value,))
+        pid = int(pid)
+        if str(pid) not in (self.read("%s/%s/cgroup.procs" % (SLICE, UNIT["daemon"])) or "").split():
+            raise Unsafe("refusing to touch pid %d: it is not in the daemon's dfl-vtest cgroup" % pid)
+        path = "/proc/%d/oom_score_adj" % pid
+        cur = (self.read(path) or "").strip()
+        if not cur.lstrip("-").isdigit():
+            return False, None
+        if value < int(cur):
+            raise Unsafe("refusing to lower oom_score_adj of pid %d from %s to %d" % (pid, cur, value))
+        try:
+            with open(path, "w") as f:
+                f.write(str(value))
+            return True, None
+        except OSError as e:
+            return False, e.errno
+
     def sc(self, verb, *args, timeout=60):
         if verb in SC_WRITE:
             bad = [a for a in args if not (a.startswith(PREFIX) and a.endswith((".service", ".timer", ".scope")))]

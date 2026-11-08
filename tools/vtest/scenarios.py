@@ -186,6 +186,26 @@ class Ctx:
         rc, out, _ = self.env.run(["journalctl", "-u", UNIT[k], "--since", "@%d" % int(since_epoch), "--no-pager", "-o", "cat"], timeout=60)
         return out
 
+    def daemon_pids(self):
+        return [int(x) for x in (self.env.read(self.cg("daemon") + "/cgroup.procs") or "").split() if x.isdigit()]
+
+    def oom_adj_of(self, pids):
+        """{pid: oom_score_adj or None}"""
+        out = {}
+        for p in pids:
+            v = (self.env.read("/proc/%d/oom_score_adj" % p) or "").strip()
+            out[p] = int(v) if v.lstrip("-").isdigit() else None
+        return out
+
+    def prefer_daemon_as_oom_victim(self):
+        """Test-only: make the processes now inside the daemon's disposable cgroup the OOM killer's preferred victims (oom_score_adj 1000), so the daemon, not the injected load, is what the kernel kills.
+        Raises only; only pids of that cgroup; the loader is not touched (it is not in the cgroup yet and keeps the default); undone by the restart. -> {pid: {"ok", "readback"}}"""
+        res = {}
+        for p in self.daemon_pids():
+            ok, err = self.env.oom_adjust(p, 1000)
+            res[p] = {"ok": ok, "errno": err, "readback": self.oom_adj_of([p])[p]}
+        return res
+
     def kernel_log(self, since_epoch):
         """The kernel log since a time (read-only): where the OOM killer names its victim. '' when it cannot be read (the victim is then reported as unknown)."""
         rc, out, _ = self.env.run(["journalctl", "-k", "--since", "@%d" % int(since_epoch), "--no-pager", "-o", "cat"], timeout=60)

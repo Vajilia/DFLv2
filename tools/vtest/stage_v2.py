@@ -1,12 +1,14 @@
 """V2: sustained anonymous-memory pressure, then an OOM. What the monitor does, and what systemd actually does.
 
 The load is a loader process moved INTO the daemon's own cgroup, so the daemon's real MemoryMax, OOMPolicy and Restart settings apply unchanged.
-Limit of the method (stated, not hidden): the injected load is the largest process in the cgroup, so the kernel's victim is normally the load, not the daemon. systemd reacts to the cgroup's
-oom_kill event whoever the victim is, so the unit is stopped and restarted either way, but that does NOT show that the daemon's own death is recovered from. V2b therefore reads the kernel log,
-REPORTS the victim, and leaves the check "daemon_oom_exercised" INCOMPLETE (not_run, never pass) unless the daemon itself was killed.
+Limit of the method (stated, not hidden): the injected load is the largest process in the cgroup, so in the natural overrun (V2b) the kernel's victim is normally the load, not the daemon. systemd reacts
+to the cgroup's oom_kill event whoever the victim is, so the unit is stopped and restarted either way, but that does NOT show that the daemon's own death is recovered from. Both scenarios read the kernel
+log and REPORT the victim. V2c is the scenario that makes the daemon the victim, without making anything unkillable: it RAISES oom_score_adj to 1000 for the processes already inside the daemon's
+disposable cgroup (Env.oom_adjust: raise only, 0..1000, only pids of that cgroup, nothing persistent), then applies a bounded load. The summary check V2.daemon_oom_exercised passes ONLY with kernel
+evidence that the daemon itself was killed; no evidence (log unreadable, other victim, selection not applied) leaves it INCOMPLETE (not_run), and an incomplete stage blocks the full run.
 
 V2a  plateau at 93 % of MemoryMax: the monitor must trip on its sustained rule, with evidence, and the daemon must pause, before any kernel kill.
-V2b  growth past the limit: the kernel kills; the whole unit must stop, restart as configured, leave no survivor and no damaged public file. REQUIRED: a persistent incident record (the latch and
+V2b/V2c  growth past the limit: the kernel kills; the whole unit must stop, restart as configured, leave no survivor and no damaged public file. REQUIRED: a persistent incident record (the latch and
      its evidence) and a hold: after the restart the daemon stays paused, its clock does not advance, and the latch is unchanged. An OOM that leaves no latch FAILS the stage: a quick restart must
      not erase or bypass the protection. If that happens it is a defect of the candidate, to be fixed in a new, separately tested candidate; the harness does not fix it.
 """
@@ -26,10 +28,16 @@ PLAN = [("V2a.baseline", "units up, no latch; idle samples of the daemon's cgrou
         ("V2b.overrun", "anonymous loader at 25 MB/s to 3 x MemoryMax in the daemon's cgroup"),
         ("V2b.timeline", "record the unit, the loader, the latch every second for up to 150 s after the kill"),
         ("V2b.hold", "after the recovery, 15 s: the latch is unchanged, the daemon still paused, the clock stopped; read the kernel log for the OOM victim"),
-        ("V2b.evaluate", "judge V2b")]
+        ("V2b.evaluate", "judge V2b"),
+        ("V2c.reset", "daemon-victim scenario: clear the latch the documented way; record pids, restarts, positions, public files"),
+        ("V2c.prefer", "raise oom_score_adj to 1000 (raise only, never lower) of the processes already in the daemon's cgroup; read it back; the injected load is untouched"),
+        ("V2c.overrun", "bounded anonymous load (1.5 x MemoryMax at 25 MB/s, finite wait, always stopped) in the daemon's cgroup"),
+        ("V2c.timeline", "record the unit, the loader, the latch every second for up to 150 s after the kill"),
+        ("V2c.hold", "after the recovery, 15 s: latch unchanged, daemon paused, clock stopped; read the kernel log for the victim"),
+        ("V2c.evaluate", "judge V2c, then the summary check V2.daemon_oom_exercised (kernel evidence that the daemon itself was the victim, else incomplete)")]
 
-DEFAULTS = {"qualifying": {"baseline_s": 30, "plateau_rate": 5e6, "trip_wait_s": 300, "overrun_rate": 25e6, "timeline_s": 150},
-            "smoke": {"baseline_s": 10, "plateau_rate": 10e6, "trip_wait_s": 240, "overrun_rate": 40e6, "timeline_s": 90}}
+DEFAULTS = {"qualifying": {"baseline_s": 30, "plateau_rate": 5e6, "trip_wait_s": 300, "overrun_rate": 25e6, "timeline_s": 150, "v2c_factor": 1.5},
+            "smoke": {"baseline_s": 10, "plateau_rate": 10e6, "trip_wait_s": 240, "overrun_rate": 40e6, "timeline_s": 90, "v2c_factor": 1.5}}
 
 
 def evaluate_v2a(recs, latch, evidence, pause, loader, cfg):
@@ -112,14 +120,14 @@ def evaluate_v2b(kills, journal, pre, post, tl, latch, inv_before, inv_after, pa
     desc = lambda l: ", ".join("pid %s (%s)" % (v["pid"], v["comm"]) for v in l) or "none"
     if not victims:
         rows.append(("V2b.victim_reported", "not_run", "INCOMPLETE: the kernel log could not be read or names no victim; who was killed is UNKNOWN", {"victims": []}))
-        daemon_row = ("V2b.daemon_oom_exercised", "not_run", "INCOMPLETE: the victim is unknown, so it is not shown that the daemon's own termination and recovery were exercised", None)
+        daemon_row = ("V2b.daemon_oom_exercised", "not_run", "INCOMPLETE: the victim is unknown, so it is not shown that the daemon's own termination and recovery were exercised", None, False)
     else:
         rows.append(("V2b.victim_reported", "pass", "OOM victims: daemon %s; injected load %s; other %s" % (desc(cls["daemon"]), desc(cls["loader"]), desc(cls["other"])), {"victims": victims, "classes": cls}))
         if cls["daemon"]:
-            daemon_row = ("V2b.daemon_oom_exercised", "pass", "the kernel killed the daemon itself (%s); the recovery rows above judge what followed" % desc(cls["daemon"]), {"classes": cls})
+            daemon_row = ("V2b.daemon_oom_exercised", "pass", "the kernel killed the daemon itself (%s); the recovery rows above judge what followed" % desc(cls["daemon"]), {"classes": cls}, False)
         else:
             daemon_row = ("V2b.daemon_oom_exercised", "not_run", "INCOMPLETE: the kernel killed only %s, not the daemon. systemd's OOMPolicy=stop then stopped and restarted the unit, which is not the same as recovering from the daemon's own death. Daemon-OOM validation is NOT done." % (
-                "the injected load (%s)" % desc(cls["loader"]) if cls["loader"] else "other processes (%s)" % desc(cls["other"])), {"classes": cls})
+                "the injected load (%s)" % desc(cls["loader"]) if cls["loader"] else "other processes (%s)" % desc(cls["other"])), {"classes": cls}, False)
     rows.append(daemon_row)
     damaged = {p: (inv_before[p], inv_after.get(p)) for p in inv_before if inv_after.get(p) != inv_before[p]}
     rows.append(("V2b.public_files_intact", "pass" if not damaged and not partial else "fail", "%d immutable public files compared: %d changed or missing, %d partial files" % (len(inv_before), len(damaged), len(partial)), {"changed": dict(list(damaged.items())[:5]), "partial": partial[:5]}))
@@ -171,47 +179,66 @@ def run(ctx):
     rows.append(("V2a.latch_sha256", "info", "sha256 of TRIPPED after V2a: %s (V4 starts from the latch kept)" % sha, {"sha256": sha}, False))
     rec.add_all(rows)
     rec.stop_if_failed()
-    # ---------------- V2b
-    ctx.mark("V2b.reset")
-    ctx.ensure_baseline("vtest: reset after the V2a plateau trip, before the OOM scenario")
-    smp = ctx.sampler("daemon", "v2b_cgroup")
+    # ---------------- V2b: the natural overrun (the victim is normally the injected load), then V2c: the daemon is made the preferred victim
+    rows_b = _overrun(ctx, "V2b", SCEN["V2b"], prefer=False, factor=3.0)
+    rec.add_all(rows_b)
+    rec.stop_if_failed()
+    rows_c = _overrun(ctx, "V2c", SCEN["V2c"], prefer=True, factor=cfg.get("v2c_factor", 1.5))
+    rec.add_all(rows_c)
+    rec.stop_if_failed()
+    summary = daemon_oom_summary(rows_b, rows_c)
+    rec.add_all([summary])
+    return rows_b + rows_c + [summary]
+
+
+def _overrun(ctx, tag, m, prefer, factor):
+    """One OOM scenario in the daemon's own cgroup. prefer=False: the injected load grows to `factor` x MemoryMax and the kernel picks whom it likes. prefer=True (V2c): first the processes already in the daemon's
+    cgroup get oom_score_adj 1000 (a test-only, raise-only change confined to that group, see Env.oom_adjust), then a BOUNDED load (factor x MemoryMax, finite wait, always stopped) pushes the group over its limit."""
+    cfg, env = ctx.cfg, ctx.env
+    ctx.mark(m["reset"])
+    ctx.ensure_baseline("vtest: reset before the %s OOM scenario" % tag)
+    smp = ctx.sampler("daemon", tag.lower() + "_cgroup")
     env.sleep(cfg["baseline_s"])
+    mx = ctx.limit_of("daemon")
     pre, mon_before = ctx.show("daemon"), ctx.show("monitor")
     inv_before, pos_before, t0 = ctx.public_inventory(), ctx.position(), ctx.now()
-    daemon_pids = [int(x) for x in (env.read(ctx.cg("daemon") + "/cgroup.procs") or "").split() if x.isdigit()]
+    daemon_pids = ctx.daemon_pids()
     evid_before = {d for d in env.listdir(GUARD + "/evidence")} if env.exists(GUARD + "/evidence") else set()
-    ld = ctx.loader("anon", "daemon", "v2b_anon", target_bytes=3 * mx, rate_bps=cfg["overrun_rate"])
+    adj_set = None
+    if prefer:
+        adj_set = ctx.prefer_daemon_as_oom_victim()
+        ctx.mark(m["prefer"], applied={str(k): v for k, v in adj_set.items()})
+    ld = ctx.loader("anon", "daemon", tag.lower() + "_anon", target_bytes=int(factor * mx), rate_bps=cfg["overrun_rate"])
     old_loader_pid = ld.pid()
-    ctx.mark("V2b.overrun", loader_pid=old_loader_pid, daemon_pid=pre.get("MainPID"))
+    ctx.mark(m["overrun"], loader_pid=old_loader_pid, daemon_pid=pre.get("MainPID"), daemon_pids=daemon_pids, target_bytes=int(factor * mx))
 
     def killed():
         sh = ctx.show("daemon")
         return (sh.get("NRestarts", 0) > pre.get("NRestarts", 0) or sh.get("ActiveState") != "active" or E.event_delta(E.readable(smp.records())[-30:], "oom_kill") > 0) or (not ld.alive())
-    v, _ = ctx.wait(killed, 3 * mx / cfg["overrun_rate"] + 120, every=0.5)
+    v, _ = ctx.wait(killed, factor * mx / cfg["overrun_rate"] + 120, every=0.5)       # finite: the load's own size over its rate, plus 2 minutes
     t_kill = ctx.now()
-    ctx.mark("V2b.killed_or_timeout", seen=bool(v))
-    ctx.mark("V2b.timeline")
+    ctx.mark(m["killed"], seen=bool(v))
+    ctx.mark(m["timeline"])
     tl = []
     while ctx.now() - t_kill < cfg["timeline_s"]:
         sh = ctx.show("daemon")
         lat, _ = ctx.latch()
         tl.append({"t": round(ctx.now(), 1), "ActiveState": sh.get("ActiveState"), "MainPID": sh.get("MainPID"), "NRestarts": sh.get("NRestarts"), "Result": sh.get("Result"), "loader_alive": ld.alive(), "latch": bool(lat)})
-        ctx.mark("V2b.tick", **tl[-1])
+        ctx.mark(m["tick"], **tl[-1])
         if sh.get("ActiveState") == "active" and sh.get("MainPID") != pre.get("MainPID") and sh.get("NRestarts", 0) > pre.get("NRestarts", 0) and ctx.now() - t_kill > 45:
             break
         env.sleep(1)
     if ld.alive():
-        ld.stop()
+        ld.stop()                                                   # the bounded load is always stopped
     smp.stop()
     post, mon_after = ctx.show("daemon"), ctx.show("monitor")
-    latch, _ = ctx.latch()
     recs = [r for r in smp.records() if r["t"] >= t0]
-    procs_new = []
-    for pid in (env.read(ctx.cg("daemon") + "/cgroup.procs") or "").split():
-        procs_new.append((env.read("/proc/%s/cmdline" % pid) or "").replace("\0", " "))
+    new_pids = ctx.daemon_pids()
+    procs_new = [(env.read("/proc/%d/cmdline" % pid) or "").replace("\0", " ") for pid in new_pids]
+    adj_after = ctx.oom_adj_of(new_pids)
     old_alive = [p for p in (old_loader_pid, pre.get("MainPID")) if p and p != post.get("MainPID") and env.exists("/proc/%s" % p)]
     mem_t = (env.read(ctx.cg("daemon") + "/memory.current") or "").strip()
-    ctx.mark("V2b.hold")
+    ctx.mark(m["hold"])
     lat0, sha0 = ctx.latch()
     pos_a, ta = ctx.position(), ctx.now()
     env.sleep(15)
@@ -219,10 +246,57 @@ def run(ctx):
     new_evidence = sorted(d for d in (env.listdir(GUARD + "/evidence") if env.exists(GUARD + "/evidence") else []) if d not in evid_before and env.exists("%s/evidence/%s/evidence.json" % (GUARD, d)))
     incident = {"sha_before": sha0, "sha_after": sha1, "paused": ctx.paused(), "pos_a": pos_a, "pos_b": ctx.position(), "dt": ctx.now() - ta, "new_evidence": new_evidence}
     victims = E.parse_oom_victims(ctx.kernel_log(t0 - 2), UNIT["daemon"])
-    latch = lat1
-    ctx.mark("V2b.evaluate")
-    rows = evaluate_v2b(E.event_delta(recs, "oom_kill"), ctx.journal("daemon", t0 - 2), pre, post, tl, latch, inv_before, ctx.public_inventory(), ctx.partial_files(), procs_new, mon_before, mon_after, old_alive,
+    ctx.mark(m["evaluate"])
+    rows = evaluate_v2b(E.event_delta(recs, "oom_kill"), ctx.journal("daemon", t0 - 2), pre, post, tl, lat1, inv_before, ctx.public_inventory(), ctx.partial_files(), procs_new, mon_before, mon_after, old_alive,
                         int(mem_t) if mem_t.isdigit() else None, mx, pos_before, ctx.position(), ctx.now() - t0, cfg,
                         victims=victims, daemon_pids=daemon_pids, loader_pid=old_loader_pid, incident=incident, t0=t0)
-    rec.add_all(rows)
+    rows = rename_rows(rows, "V2b", tag)
+    if prefer:
+        rows += evaluate_v2c_extra(daemon_pids, adj_set, adj_after)
     return rows
+
+
+SCEN = {"V2b": dict(reset="V2b.reset", overrun="V2b.overrun", killed="V2b.killed_or_timeout", timeline="V2b.timeline", tick="V2b.tick", hold="V2b.hold", evaluate="V2b.evaluate"),
+        "V2c": dict(reset="V2c.reset", prefer="V2c.prefer", overrun="V2c.overrun", killed="V2c.killed_or_timeout", timeline="V2c.timeline", tick="V2c.tick", hold="V2c.hold", evaluate="V2c.evaluate")}
+
+
+def rename_rows(rows, old, new):
+    return [(new + r[0][len(old):],) + tuple(r[1:]) if r[0].startswith(old + ".") else r for r in rows]
+
+
+def evaluate_v2c_extra(daemon_pids, adj_set, adj_after):
+    """The checks only the daemon-victim scenario has. adj_set: {pid: {"ok","readback"}} from Ctx.prefer_daemon_as_oom_victim; adj_after: {pid: oom_score_adj or None} of the processes in the cgroup after the recovery."""
+    rows = []
+    applied = bool(daemon_pids) and bool(adj_set) and set(adj_set) == set(daemon_pids) and all(v.get("ok") and v.get("readback") == 1000 for v in adj_set.values())
+    rows.append(("V2c.victim_selection_applied", "pass" if applied else "invalid",
+                 "oom_score_adj raised to 1000 and read back for every process in the daemon's cgroup: %s" % (sorted(adj_set or {}) if applied else
+                 "NOT applied (%s): the scenario did not test what it was meant to" % (adj_set or "no processes in the cgroup")), {"applied": adj_set}))
+    vals = list((adj_after or {}).values())
+    if not vals or any(v is None for v in vals):
+        rows.append(("V2c.adjustment_not_persistent", "not_run", "INCOMPLETE: the new daemon's oom_score_adj could not be read, so it is not shown that the change ended with the old process", {"after": adj_after}))
+    else:
+        rows.append(("V2c.adjustment_not_persistent", "pass" if all(v != 1000 for v in vals) else "fail",
+                     "oom_score_adj of the processes in the cgroup after the restart: %s (must not still be 1000)" % sorted(set(vals)), {"after": adj_after}))
+    return rows
+
+
+def daemon_oom_summary(rows_b, rows_c):
+    """THE check that daemon-OOM termination and recovery were exercised. Passes only with kernel evidence that the daemon itself (a pid that was in its cgroup before the load) was the OOM victim, in the natural
+    scenario or in the daemon-victim scenario (whose selection step must also have been applied). Anything else, including no readable kernel log, is INCOMPLETE (not_run), never pass."""
+    by = {}
+    for r in list(rows_b) + list(rows_c):
+        by[r[0]] = r
+    reasons, evidence = [], None
+    for tag in ("V2b", "V2c"):
+        row = by.get(tag + ".daemon_oom_exercised")
+        if row is None:
+            reasons.append("%s: not run" % tag)
+        elif row[1] != "pass":
+            reasons.append("%s: %s" % (tag, row[2]))
+        elif tag == "V2c" and (by.get("V2c.victim_selection_applied") or ("", ""))[1] != "pass":
+            reasons.append("V2c: victim selection was not shown to be applied")
+        elif evidence is None:
+            evidence = (tag, row)
+    if evidence:
+        return ("V2.daemon_oom_exercised", "pass", "the kernel killed the daemon itself (%s): %s" % (evidence[0], evidence[1][2]), {"scenario": evidence[0], "classes": (evidence[1][3] or {}).get("classes")})
+    return ("V2.daemon_oom_exercised", "not_run", "INCOMPLETE: no kernel evidence that the daemon itself was the OOM victim. Daemon-OOM termination and recovery are NOT validated. " + " | ".join(reasons), {"reasons": reasons})

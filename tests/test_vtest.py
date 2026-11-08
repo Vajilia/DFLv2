@@ -418,17 +418,37 @@ class V2Evaluator(unittest.TestCase):
         r.add_all([v for v in rows_by_id.values()])
         return r.overall()
 
+    def stage_overall(self, rows_b, rows_c=None):
+        """The stage verdict as run() computes it: V2b rows, V2c rows, and the summary check."""
+        rb = list(rows_b.values())
+        rc = list((rows_c or {}).values())
+        summary = stage_v2.daemon_oom_summary(rb, rc)
+        r = C.Recorder('V2', tempfile.mkdtemp(), {}, echo=lambda *_: None)
+        self.addCleanup(subprocess.run, ['rm', '-rf', r.outdir])
+        r.add_all(rb + rc + [summary])
+        return r.overall(), summary
+
+    def c(self, selection=None, after=None, **over):
+        """The V2c rows: the same evaluation as V2b under the V2c prefix, plus the checks only V2c has."""
+        st, rows = self.b(**over)
+        renamed = stage_v2.rename_rows(list(rows.values()), 'V2b', 'V2c')
+        applied = {10: {'ok': True, 'readback': 1000}} if selection is None else selection
+        renamed += stage_v2.evaluate_v2c_extra([10], applied, {22: 0} if after is None else after)
+        return {r[0]: r[1] for r in renamed}, {r[0]: r for r in renamed}
+
     def test_a_daemon_oom_with_a_record_and_a_hold_passes_everything(self):
         st, rows = self.b()
-        self.assertEqual(set(st.values()), {'pass'}, st)
-        self.assertEqual(self.overall(rows), 'pass')
+        self.assertEqual({v for k, v in st.items() if k != 'V2b.daemon_oom_exercised'}, {'pass'}, st)
+        self.assertEqual(st['V2b.daemon_oom_exercised'], 'pass')
+        verdict, summary = self.stage_overall(rows)
+        self.assertEqual((verdict, summary[1]), ('pass', 'pass'))
 
     def test_an_oom_without_a_persistent_incident_record_fails_the_stage(self):
         st, rows = self.b(latch=None)
         self.assertEqual(st['V2b.incident_record_and_hold'], 'fail')
         self.assertIn('no latch', rows['V2b.incident_record_and_hold'][2])
         self.assertIn('DEFECT', rows['V2b.incident_record_and_hold'][2])
-        self.assertEqual(self.overall(rows), 'fail', 'a clean systemd recovery must not outweigh a missing incident record')
+        self.assertEqual(self.stage_overall(rows)[0], 'fail', 'a clean systemd recovery must not outweigh a missing incident record')
         self.assertNotIn('V2b.monitor_response', st, 'there is no longer an information-only outcome for a missing latch')
 
     def test_a_record_that_is_not_a_hold_fails(self):
@@ -439,7 +459,7 @@ class V2Evaluator(unittest.TestCase):
                            ('hold never observed', dict(incident=None)), ('clock unreadable', dict(incident=dict(self.GOOD_INCIDENT, pos_b=None)))):
             st, rows = self.b(**over)
             self.assertEqual(st['V2b.incident_record_and_hold'], 'fail', name)
-            self.assertEqual(self.overall(rows), 'fail', name)
+            self.assertEqual(self.stage_overall(rows)[0], 'fail', name)
 
     def test_the_requirement_cannot_be_tested_without_a_confirmed_oom(self):
         st, _ = self.b(kills=0, journal='nothing', latch=None, incident=None)
@@ -454,13 +474,14 @@ class V2Evaluator(unittest.TestCase):
         self.assertIn('NOT done', rows['V2b.daemon_oom_exercised'][2])
         others = {k: v for k, v in st.items() if k != 'V2b.daemon_oom_exercised'}
         self.assertEqual(set(others.values()), {'pass'}, 'everything else can pass; it must still not add up to a pass')
-        self.assertEqual(self.overall(rows), 'review')
+        verdict, summary = self.stage_overall(rows)
+        self.assertEqual((verdict, summary[1]), ('review', 'not_run'), 'an incomplete stage is not a pass, so it blocks the full run')
 
     def test_an_unknown_victim_is_incomplete_too(self):
         for victims in (None, []):
             st, rows = self.b(victims=victims)
             self.assertEqual((st['V2b.victim_reported'], st['V2b.daemon_oom_exercised']), ('not_run', 'not_run'))
-            self.assertEqual(self.overall(rows), 'review')
+            self.assertEqual(self.stage_overall(rows)[0], 'review')
 
     def test_another_process_as_victim_does_not_count_as_the_daemon(self):
         st, _ = self.b(victims=[self.victim(999, 'sleep')])
@@ -499,6 +520,147 @@ class V2Evaluator(unittest.TestCase):
             self.assertEqual(E.parse_oom_victims(empty, 'u'), [], 'no victim line means UNKNOWN, not a guess')
         c = E.classify_victims([{'pid': 4242, 'comm': 'p'}, {'pid': 10, 'comm': 'd'}, {'pid': 3, 'comm': 'o'}], [10], 4242)
         self.assertEqual(({k: [x['pid'] for x in l] for k, l in c.items()}), {'daemon': [10], 'loader': [4242], 'other': [3]})
+
+
+    # ---- V2c: the isolated daemon-victim scenario
+    def test_v2c_with_kernel_evidence_that_the_daemon_died_completes_the_check(self):
+        _, rb = self.b(victims=[self.victim(self.LOADER_PID)])
+        st, rc = self.c()
+        self.assertEqual({v for v in st.values()}, {'pass'}, st)
+        verdict, summary = self.stage_overall(rb, rc)
+        self.assertEqual((verdict, summary[1]), ('pass', 'pass'))
+        self.assertEqual(summary[3]['scenario'], 'V2c')
+
+    def test_v2c_without_kernel_evidence_is_incomplete_never_passed(self):
+        _, rb = self.b(victims=[self.victim(self.LOADER_PID)])
+        for name, over in (('log unreadable', dict(victims=None)), ('kernel still chose the load', dict(victims=[self.victim(self.LOADER_PID)])), ('another process', dict(victims=[self.victim(999)]))):
+            st, rc = self.c(**over)
+            self.assertEqual(st['V2c.daemon_oom_exercised'], 'not_run', name)
+            verdict, summary = self.stage_overall(rb, rc)
+            self.assertEqual((verdict, summary[1]), ('review', 'not_run'), name)
+            self.assertIn('NOT validated', summary[2])
+
+    def test_v2c_whose_selection_step_was_not_applied_cannot_complete_the_check(self):
+        _, rb = self.b(victims=[self.victim(self.LOADER_PID)])
+        for sel in ({10: {'ok': False, 'readback': 0}}, {10: {'ok': True, 'readback': 500}}, {}, {11: {'ok': True, 'readback': 1000}}):
+            st, rc = self.c(selection=sel)
+            self.assertEqual(st['V2c.victim_selection_applied'], 'invalid', sel)
+            verdict, summary = self.stage_overall(rb, rc)
+            self.assertNotEqual(verdict, 'pass', sel)
+            self.assertEqual(summary[1], 'not_run', sel)
+
+    def test_v2c_still_requires_the_incident_record_and_the_hold(self):
+        _, rb = self.b(victims=[self.victim(self.LOADER_PID)])
+        st, rc = self.c(latch=None)
+        self.assertEqual(st['V2c.incident_record_and_hold'], 'fail')
+        self.assertEqual(self.stage_overall(rb, rc)[0], 'fail')
+
+    def test_v2c_the_adjustment_must_end_with_the_old_process(self):
+        self.assertEqual(self.c(after={22: 1000})[0]['V2c.adjustment_not_persistent'], 'fail')
+        self.assertEqual(self.c(after={})[0]['V2c.adjustment_not_persistent'], 'not_run')
+        self.assertEqual(self.c(after={22: None})[0]['V2c.adjustment_not_persistent'], 'not_run')
+        _, rb = self.b(victims=[self.victim(self.LOADER_PID)])
+        self.assertEqual(self.stage_overall(rb, self.c(after={22: 1000})[1])[0], 'fail')
+
+    def test_a_natural_daemon_kill_in_v2b_also_completes_the_check_and_v2c_adds_nothing_false(self):
+        _, rb = self.b()
+        self.assertEqual(self.stage_overall(rb)[1][1], 'pass')
+        _, rc = self.c(victims=None)
+        self.assertEqual(self.stage_overall(rb, rc)[1][1], 'pass', 'one scenario with kernel evidence is enough; the other one is still judged on its own rows')
+
+    def test_the_summary_is_incomplete_when_a_scenario_never_ran(self):
+        self.assertEqual(stage_v2.daemon_oom_summary([], [])[1], 'not_run')
+
+    def test_the_v2c_rows_use_the_v2c_prefix_and_the_summary_is_required(self):
+        st, rows = self.c()
+        self.assertTrue(all(k.startswith('V2c.') for k in st), st)
+        self.assertFalse(any(r[-1] is False for r in [stage_v2.daemon_oom_summary(list(self.b()[1].values()), [])]), 'a tuple ending in False marks a row as not required')
+        self.assertFalse(self.b()[1]['V2b.daemon_oom_exercised'][-1], 'the per-scenario row is not required on its own; the summary is')
+
+
+class Oom_adjust_is_confined(unittest.TestCase):
+    CG = C.SLICE + '/' + C.UNIT['daemon'] + '/cgroup.procs'
+
+    def env_with_procs(self, pids):
+        orig = C.Env.read
+        return mock.patch.object(C.Env, 'read', lambda self, p, default=None: ('\n'.join(map(str, pids)) + '\n') if p == Oom_adjust_is_confined.CG else orig(self, p, default))
+
+    def test_values_that_could_make_a_process_unkillable_or_out_of_range_are_refused(self):
+        with self.env_with_procs([os.getpid()]):
+            for bad in (-1000, -1, 1001, 5000, True, '1000', 1.5, None):
+                with self.assertRaises(C.Unsafe, msg=repr(bad)):
+                    C.Env().oom_adjust(os.getpid(), bad)
+
+    def test_the_range_guard_holds_on_its_own_not_only_through_the_no_lowering_guard(self):
+        ghost = 4_000_000 + 12345                      # no such process: a write that slipped through could not hurt anything, and would not raise
+        orig = C.Env.read
+        cg = Oom_adjust_is_confined.CG
+
+        def fake(self, p, default=None):
+            if p == cg:
+                return '%d\n' % ghost
+            if p == '/proc/%d/oom_score_adj' % ghost:
+                return '-1000\n'                      # the process already sits at the floor, so "lowering" is not what stops -1000
+            return orig(self, p, default)
+        with mock.patch.object(C.Env, 'read', fake):
+            for bad in (-1000, -999, -1):
+                with self.assertRaises(C.Unsafe, msg=bad):
+                    C.Env().oom_adjust(ghost, bad)
+
+    def test_only_processes_in_the_daemons_disposable_cgroup_may_be_touched(self):
+        with self.env_with_procs([4242]):
+            for pid in (1, os.getpid(), 4243):
+                with self.assertRaises(C.Unsafe, msg=pid):
+                    C.Env().oom_adjust(pid, 1000)
+        with self.env_with_procs([]):
+            with self.assertRaises(C.Unsafe):
+                C.Env().oom_adjust(os.getpid(), 1000)
+
+    def test_the_monitors_cgroup_is_not_accepted(self):
+        monitor_cg = C.SLICE + '/' + C.UNIT['monitor'] + '/cgroup.procs'
+        orig = C.Env.read
+        with mock.patch.object(C.Env, 'read', lambda self, p, default=None: ('%d\n' % os.getpid()) if p == monitor_cg else orig(self, p, default)):
+            with self.assertRaises(C.Unsafe):
+                C.Env().oom_adjust(os.getpid(), 1000)
+
+    def test_it_raises_a_real_process_and_refuses_to_lower_it_again(self):
+        child = subprocess.Popen(['sleep', '30'])
+        self.addCleanup(child.wait)
+        self.addCleanup(child.kill)
+        with self.env_with_procs([child.pid]):
+            ok, err = C.Env().oom_adjust(child.pid, 1000)
+            if not ok:
+                self.skipTest('this sandbox does not allow writing oom_score_adj (errno %s)' % err)
+            self.assertEqual(open('/proc/%d/oom_score_adj' % child.pid).read().strip(), '1000')
+            with self.assertRaises(C.Unsafe):
+                C.Env().oom_adjust(child.pid, 500)
+            self.assertEqual(open('/proc/%d/oom_score_adj' % child.pid).read().strip(), '1000', 'a refused call changes nothing')
+        self.assertEqual(open('/proc/%d/oom_score_adj' % os.getpid()).read().strip(), open('/proc/self/oom_score_adj').read().strip())
+
+    def test_the_scenario_helper_touches_only_the_daemons_cgroup_and_reports_the_readback(self):
+        calls = []
+
+        class FakeEnv2:
+            def oom_adjust(self, pid, value):
+                calls.append((pid, value))
+                return True, None
+        fake = mock.Mock()
+        fake.env = FakeEnv2()
+        fake.daemon_pids.return_value = [10, 11]
+        fake.oom_adj_of.side_effect = lambda pids: {p: 1000 for p in pids}
+        import scenarios
+        res = scenarios.Ctx.prefer_daemon_as_oom_victim(fake)
+        self.assertEqual(calls, [(10, 1000), (11, 1000)])
+        self.assertEqual({k: v['readback'] for k, v in res.items()}, {10: 1000, 11: 1000})
+
+    def test_the_loader_is_never_adjusted_and_the_write_lives_in_one_place(self):
+        allowed = {'common.py', 'scenarios.py', 'stage_v2.py', 'selftest.py'}
+        for f in VT.glob('*.py'):
+            if f.name not in allowed:
+                self.assertNotIn('oom_score_adj', f.read_text(), f.name)
+        self.assertNotIn('oom_score_adj', (VT / 'loaders.py').read_text(), 'the injected load keeps the default, so it stays killable')
+        self.assertNotIn('.oom_adjust(', (VT / 'stage_v2.py').read_text(), 'stages go through Ctx.prefer_daemon_as_oom_victim only')
+        self.assertEqual(len(re.findall(r'open\(path, "w"\)', (VT / 'common.py').read_text().split('def oom_adjust', 1)[1].split('def sc', 1)[0])), 1)
 
 
 class V3Evaluator(unittest.TestCase):
