@@ -2,6 +2,7 @@
 
 A sample record is what sampler.py writes: {"t", "exists", "readable", "sample": {...read_cgroup_memory...}, "pinned", "reclaimable", "stat": {...}, "events": {...}, "procs"}.
 """
+import re
 
 
 def readable(recs):
@@ -120,3 +121,49 @@ def loader_summary(recs, now, alive):
                 old = [r for r in ticks if r["t"] <= cut]
                 out[key + "_last_60s"] = ticks[-1][key] - (old[-1][key] if old else 0)
     return out
+
+
+_KILLED = re.compile(r"Killed process (\d+) \(([^)]*)\)")
+
+
+def _fields(line):
+    return dict(kv.split("=", 1) for kv in line.split("oom-kill:", 1)[1].replace(" ", ",").split(",") if "=" in kv)
+
+
+def parse_oom_victims(kernel_log, unit_name):
+    """Processes the kernel's OOM killer killed in the cgroup of `unit_name`, from kernel-log text -> [{"pid": int, "comm": str, "line": str}].
+    A line that names a different cgroup is ignored. A log that names no victim gives []: the victim is then UNKNOWN, which callers must not read as 'the daemon' or 'the load'."""
+    out, seen, rejected = [], set(), set()
+    for line in (kernel_log or "").splitlines():
+        pid = comm = None
+        if "oom-kill:" in line:
+            f = _fields(line)
+            cg = f.get("task_memcg", "") + " " + f.get("oom_memcg", "")
+            if cg.strip() and unit_name not in cg:
+                if f.get("pid", "").isdigit():
+                    rejected.add(int(f["pid"]))
+                continue
+            if f.get("pid", "").isdigit():
+                pid, comm = int(f["pid"]), f.get("task", "")
+        else:
+            m = _KILLED.search(line)
+            if m:
+                pid, comm = int(m.group(1)), m.group(2)
+        if pid is not None and pid not in seen and pid not in rejected:
+            seen.add(pid)
+            out.append({"pid": pid, "comm": comm, "line": line.strip()[:300]})
+    return out
+
+
+def classify_victims(victims, daemon_pids, loader_pid):
+    """-> {"daemon": [...], "loader": [...], "other": [...]} by pid. daemon_pids: the pids in the daemon's cgroup BEFORE the load was added."""
+    d = {"daemon": [], "loader": [], "other": []}
+    dp = {int(x) for x in daemon_pids}
+    for v in victims or []:
+        if v["pid"] == loader_pid:
+            d["loader"].append(v)
+        elif v["pid"] in dp:
+            d["daemon"].append(v)
+        else:
+            d["other"].append(v)
+    return d

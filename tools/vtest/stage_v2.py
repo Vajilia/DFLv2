@@ -1,14 +1,14 @@
 """V2: sustained anonymous-memory pressure, then an OOM. What the monitor does, and what systemd actually does.
 
 The load is a loader process moved INTO the daemon's own cgroup, so the daemon's real MemoryMax, OOMPolicy and Restart settings apply unchanged.
-Limit of the method (stated, not hidden): the kernel's victim is the loader (the largest process in the cgroup), not the daemon. systemd reacts to the cgroup's oom_kill event, which
-is the same event whoever the victim is; the case where the daemon itself is the victim is not exercised here.
+Limit of the method (stated, not hidden): the injected load is the largest process in the cgroup, so the kernel's victim is normally the load, not the daemon. systemd reacts to the cgroup's
+oom_kill event whoever the victim is, so the unit is stopped and restarted either way, but that does NOT show that the daemon's own death is recovered from. V2b therefore reads the kernel log,
+REPORTS the victim, and leaves the check "daemon_oom_exercised" INCOMPLETE (not_run, never pass) unless the daemon itself was killed.
 
 V2a  plateau at 93 % of MemoryMax: the monitor must trip on its sustained rule, with evidence, and the daemon must pause, before any kernel kill.
-V2b  growth past the limit: the kernel kills; the whole unit must stop, restart as configured, leave no survivor and no damaged public file. The monitor's response is RECORDED:
-       outcome A  a latch (the monitor's oom_event / the daemon's silence trip), the broadcast stays paused for a person;
-       outcome B  no latch: systemd restarts the daemon quickly enough that no lease lapses and the broadcast resumes by itself.
-     Both are acceptable to this stage; which one happened goes in the result and is for the owner to read (B means a person is not involved).
+V2b  growth past the limit: the kernel kills; the whole unit must stop, restart as configured, leave no survivor and no damaged public file. REQUIRED: a persistent incident record (the latch and
+     its evidence) and a hold: after the restart the daemon stays paused, its clock does not advance, and the latch is unchanged. An OOM that leaves no latch FAILS the stage: a quick restart must
+     not erase or bypass the protection. If that happens it is a defect of the candidate, to be fixed in a new, separately tested candidate; the harness does not fix it.
 """
 import json
 import os
@@ -25,6 +25,7 @@ PLAN = [("V2a.baseline", "units up, no latch; idle samples of the daemon's cgrou
         ("V2b.reset", "clear the latch the documented way (release, resume); record pids, restarts, positions, public files"),
         ("V2b.overrun", "anonymous loader at 25 MB/s to 3 x MemoryMax in the daemon's cgroup"),
         ("V2b.timeline", "record the unit, the loader, the latch every second for up to 150 s after the kill"),
+        ("V2b.hold", "after the recovery, 15 s: the latch is unchanged, the daemon still paused, the clock stopped; read the kernel log for the OOM victim"),
         ("V2b.evaluate", "judge V2b")]
 
 DEFAULTS = {"qualifying": {"baseline_s": 30, "plateau_rate": 5e6, "trip_wait_s": 300, "overrun_rate": 25e6, "timeline_s": 150},
@@ -58,7 +59,10 @@ def evaluate_v2a(recs, latch, evidence, pause, loader, cfg):
     return rows
 
 
-def evaluate_v2b(kills, journal, pre, post, tl, latch, inv_before, inv_after, partial, procs_new, mon_before, mon_after, old_pids_alive, mem_end, mx, pos_before, pos_after, elapsed, cfg):
+def evaluate_v2b(kills, journal, pre, post, tl, latch, inv_before, inv_after, partial, procs_new, mon_before, mon_after, old_pids_alive, mem_end, mx, pos_before, pos_after, elapsed, cfg,
+                 victims=None, daemon_pids=(), loader_pid=None, incident=None, t0=0.0):
+    """`victims`: the OOM killer's victims from the kernel log (evaluate.parse_oom_victims); None or [] means the victim is UNKNOWN. `daemon_pids`: pids in the daemon's cgroup before the load was added.
+    `incident`: what was observed after the recovery: {"sha_before","sha_after","paused","pos_a","pos_b","dt","new_evidence": [trip folders with evidence.json created since t0]}; None means nothing was observed."""
     rows = []
     jr = journal.lower()
     saw = ("oom-kill" in jr) or ("oom killer" in jr) or ("out of memory" in jr)
@@ -69,10 +73,54 @@ def evaluate_v2b(kills, journal, pre, post, tl, latch, inv_before, inv_after, pa
     stray = [p for p in procs_new if "broadcast_run.py" not in p]
     rows.append(("V2b.no_survivors", "pass" if not old_pids_alive and not stray else "fail", "old loader/daemon processes alive: %s; processes in the new cgroup that are not the daemon: %s" % (old_pids_alive or "none", stray or "none"), {"old_alive": old_pids_alive, "stray": stray}))
     rows.append(("V2b.monitor_stayed_up", "pass" if mon_after.get("ActiveState") == "active" and mon_after.get("NRestarts") == mon_before.get("NRestarts") else "fail", "monitor %s, restarts %s -> %s" % (mon_after.get("ActiveState"), mon_before.get("NRestarts"), mon_after.get("NRestarts")), None))
-    if latch:
-        rows.append(("V2b.monitor_response", "pass", "OUTCOME A: a latch was written: kind=%s source=%s; the broadcast waits for a person" % (latch.get("kind"), latch.get("source")), {"outcome": "A", "latch": latch}))
+    # --- the persistent incident record and the hold (a REQUIRED outcome, not an observation)
+    oom = kills >= 1 or saw
+    inc = incident or {}
+    problems = []
+    if not oom:
+        pass
+    elif not latch:
+        problems.append("no latch (TRIPPED) exists after the OOM: systemd restarted the daemon and nothing recorded or held the incident")
+    elif latch.get("unreadable"):
+        problems.append("the latch exists but cannot be parsed")
     else:
-        rows.append(("V2b.monitor_response", "info", "OUTCOME B (OWNER REVIEW): no latch. systemd restarted the daemon fast enough that no trip fired and the broadcast resumed unattended. This is what Restart=on-failure is for, but it means an OOM does not by itself stop the broadcast.", {"outcome": "B"}))
+        if (latch.get("at") or 0) < t0 - 1:
+            problems.append("the latch predates the OOM (at=%s, scenario started %.0f)" % (latch.get("at"), t0))
+        if not inc.get("new_evidence"):
+            problems.append("no new evidence folder (with evidence.json) was written for the incident")
+        if not inc:
+            problems.append("the hold was not observed")
+        else:
+            if not inc.get("paused"):
+                problems.append("the daemon is not paused after the restart (no PAUSE file)")
+            if inc.get("pos_a") is None or inc.get("pos_b") is None or inc["pos_b"] - inc["pos_a"] > 1.0:
+                problems.append("the broadcast clock advanced during the hold (%s -> %s)" % (inc.get("pos_a"), inc.get("pos_b")))
+            if not inc.get("sha_before") or inc.get("sha_before") != inc.get("sha_after"):
+                problems.append("the latch changed or vanished during the hold")
+            if (inc.get("dt") or 0) < 10:
+                problems.append("the hold was observed for under 10 s")
+    if not oom:
+        rows.append(("V2b.incident_record_and_hold", "invalid", "no confirmed OOM, so the requirement could not be tested", None))
+    elif problems:
+        rows.append(("V2b.incident_record_and_hold", "fail", "DEFECT OF THE CANDIDATE (not of the harness): a confirmed OOM must leave a persistent incident record and hold the broadcast for review, and a quick restart must not bypass it. " + "; ".join(problems),
+                     {"problems": problems, "latch": latch, "incident": inc}))
+    else:
+        rows.append(("V2b.incident_record_and_hold", "pass", "the OOM left a latch (kind=%s source=%s), new evidence %s, and the daemon stayed paused with the clock stopped and the latch unchanged for %.0f s" % (latch.get("kind"), latch.get("source"), inc.get("new_evidence"), inc.get("dt") or 0),
+                     {"latch": latch, "incident": inc}))
+    # --- who the OOM killer killed
+    cls = E.classify_victims(victims or [], daemon_pids, loader_pid)
+    desc = lambda l: ", ".join("pid %s (%s)" % (v["pid"], v["comm"]) for v in l) or "none"
+    if not victims:
+        rows.append(("V2b.victim_reported", "not_run", "INCOMPLETE: the kernel log could not be read or names no victim; who was killed is UNKNOWN", {"victims": []}))
+        daemon_row = ("V2b.daemon_oom_exercised", "not_run", "INCOMPLETE: the victim is unknown, so it is not shown that the daemon's own termination and recovery were exercised", None)
+    else:
+        rows.append(("V2b.victim_reported", "pass", "OOM victims: daemon %s; injected load %s; other %s" % (desc(cls["daemon"]), desc(cls["loader"]), desc(cls["other"])), {"victims": victims, "classes": cls}))
+        if cls["daemon"]:
+            daemon_row = ("V2b.daemon_oom_exercised", "pass", "the kernel killed the daemon itself (%s); the recovery rows above judge what followed" % desc(cls["daemon"]), {"classes": cls})
+        else:
+            daemon_row = ("V2b.daemon_oom_exercised", "not_run", "INCOMPLETE: the kernel killed only %s, not the daemon. systemd's OOMPolicy=stop then stopped and restarted the unit, which is not the same as recovering from the daemon's own death. Daemon-OOM validation is NOT done." % (
+                "the injected load (%s)" % desc(cls["loader"]) if cls["loader"] else "other processes (%s)" % desc(cls["other"])), {"classes": cls})
+    rows.append(daemon_row)
     damaged = {p: (inv_before[p], inv_after.get(p)) for p in inv_before if inv_after.get(p) != inv_before[p]}
     rows.append(("V2b.public_files_intact", "pass" if not damaged and not partial else "fail", "%d immutable public files compared: %d changed or missing, %d partial files" % (len(inv_before), len(damaged), len(partial)), {"changed": dict(list(damaged.items())[:5]), "partial": partial[:5]}))
     ok = pos_before is not None and pos_after is not None and pos_after >= pos_before - 1 and pos_after <= pos_before + elapsed + 10
@@ -130,6 +178,8 @@ def run(ctx):
     env.sleep(cfg["baseline_s"])
     pre, mon_before = ctx.show("daemon"), ctx.show("monitor")
     inv_before, pos_before, t0 = ctx.public_inventory(), ctx.position(), ctx.now()
+    daemon_pids = [int(x) for x in (env.read(ctx.cg("daemon") + "/cgroup.procs") or "").split() if x.isdigit()]
+    evid_before = {d for d in env.listdir(GUARD + "/evidence")} if env.exists(GUARD + "/evidence") else set()
     ld = ctx.loader("anon", "daemon", "v2b_anon", target_bytes=3 * mx, rate_bps=cfg["overrun_rate"])
     old_loader_pid = ld.pid()
     ctx.mark("V2b.overrun", loader_pid=old_loader_pid, daemon_pid=pre.get("MainPID"))
@@ -161,8 +211,18 @@ def run(ctx):
         procs_new.append((env.read("/proc/%s/cmdline" % pid) or "").replace("\0", " "))
     old_alive = [p for p in (old_loader_pid, pre.get("MainPID")) if p and p != post.get("MainPID") and env.exists("/proc/%s" % p)]
     mem_t = (env.read(ctx.cg("daemon") + "/memory.current") or "").strip()
+    ctx.mark("V2b.hold")
+    lat0, sha0 = ctx.latch()
+    pos_a, ta = ctx.position(), ctx.now()
+    env.sleep(15)
+    lat1, sha1 = ctx.latch()
+    new_evidence = sorted(d for d in (env.listdir(GUARD + "/evidence") if env.exists(GUARD + "/evidence") else []) if d not in evid_before and env.exists("%s/evidence/%s/evidence.json" % (GUARD, d)))
+    incident = {"sha_before": sha0, "sha_after": sha1, "paused": ctx.paused(), "pos_a": pos_a, "pos_b": ctx.position(), "dt": ctx.now() - ta, "new_evidence": new_evidence}
+    victims = E.parse_oom_victims(ctx.kernel_log(t0 - 2), UNIT["daemon"])
+    latch = lat1
     ctx.mark("V2b.evaluate")
     rows = evaluate_v2b(E.event_delta(recs, "oom_kill"), ctx.journal("daemon", t0 - 2), pre, post, tl, latch, inv_before, ctx.public_inventory(), ctx.partial_files(), procs_new, mon_before, mon_after, old_alive,
-                        int(mem_t) if mem_t.isdigit() else None, mx, pos_before, ctx.position(), ctx.now() - t0, cfg)
+                        int(mem_t) if mem_t.isdigit() else None, mx, pos_before, ctx.position(), ctx.now() - t0, cfg,
+                        victims=victims, daemon_pids=daemon_pids, loader_pid=old_loader_pid, incident=incident, t0=t0)
     rec.add_all(rows)
     return rows

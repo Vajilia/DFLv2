@@ -18,7 +18,7 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 | Stage | Question |
 |---|---|
 | V1 | Real cgroup-v2 cache growth: no false trip during a sustained healthy workload |
-| V2 | Sustained anonymous pressure trips as designed (V2a); an OOM: the monitor's response and systemd's actual recovery (V2b) |
+| V2 | Sustained anonymous pressure trips as designed (V2a); an OOM: incident record and hold, victim, systemd's actual recovery (V2b) |
 | V3 | Monitor killed, stopped, hung, or repeatedly OOM-killed: the daemon pauses itself safely |
 | V4 | An existing latch survives restarts and kill -9 of either service, and keeps the daemon paused; only the documented `release` clears it |
 
@@ -63,6 +63,6 @@ Unit names, paths and the loopback URL; `User=`/`Group=` dropped (runs as root) 
 
 ## Known limits
 
-* The OOM victim: the kernel picks the biggest process in the cgroup, which may be the injected loader rather than the daemon. V2b records which one died; the unit-level recovery is judged either way.
-* V2b outcome B (OOM, quick restart, **no latch**) is accepted by the stage but flagged for owner review: the broadcast would resume unattended.
+* OOM victim: normally the injected load, not the daemon. V2b reports the victim from the kernel log; a load-only or unknown victim leaves `V2b.daemon_oom_exercised` **incomplete (not_run)**, so V2 is not a pass. Exercising a daemon kill is a step not yet written.
+* V2b requires a persistent incident record and hold after an OOM (latch, new evidence, daemon paused, clock stopped, latch unchanged). No latch fails V2 and is a defect of the candidate, to be fixed in a new candidate; the harness contains no runtime fix.
 * Injecting load into the daemon's cgroup stands in for a real leak; it does not exercise the daemon's own allocation behaviour.

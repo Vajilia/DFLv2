@@ -186,6 +186,13 @@ class Ctx:
         rc, out, _ = self.env.run(["journalctl", "-u", UNIT[k], "--since", "@%d" % int(since_epoch), "--no-pager", "-o", "cat"], timeout=60)
         return out
 
+    def kernel_log(self, since_epoch):
+        """The kernel log since a time (read-only): where the OOM killer names its victim. '' when it cannot be read (the victim is then reported as unknown)."""
+        rc, out, _ = self.env.run(["journalctl", "-k", "--since", "@%d" % int(since_epoch), "--no-pager", "-o", "cat"], timeout=60)
+        if not (out or "").strip():
+            rc, out, _ = self.env.run(["dmesg"], timeout=30)
+        return out or ""
+
     def mark(self, name, **data):
         """An event line in the stage's own timeline file."""
         with open(os.path.join(self.dir, "timeline.jsonl"), "a") as f:

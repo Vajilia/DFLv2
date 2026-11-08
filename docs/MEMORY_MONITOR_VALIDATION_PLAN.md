@@ -19,7 +19,7 @@ It deploys nothing, touches no existing service, running broadcast or real seaso
 |---|---|---|
 | **V1** | Does real cache growth cause a false trip? | Clean file cache fills the daemon's cgroup to its limit for at least 30 min (invalid if it does not). No trip, no `oom_kill`, no restart, loader still reading; the kernel was demonstrably reclaiming; pressure stays low; heartbeat breakdown present and consistent. |
 | **V2a** | Does sustained anonymous memory trip as designed? | Anonymous load to 93 % of `MemoryMax`, held. Latch kind `memory_high` from the monitor 58-90 s after the 90 % line is crossed, before any kill; evidence has the breakdown; daemon paused and its clock stopped. |
-| **V2b** | What happens on an OOM? | Load to 3x the limit. Kernel kill seen; systemd recognises the OOM; with `OOMPolicy=stop` no process of the unit survives; the unit restarts as configured; public files intact; clock continues from where it was; memory recovers. Monitor response recorded: **A** a latch (pass), **B** no latch because systemd restarted quickly (recorded as information, flagged for the owner, see 4). |
+| **V2b** | What happens on an OOM? | Load to 3x the limit. Kernel kill seen; systemd recognises the OOM; with `OOMPolicy=stop` no process of the unit survives; the unit restarts as configured; public files intact; clock continues. **Required: a persistent incident record and a hold.** After the restart a latch with new evidence exists, the daemon stays paused, the clock does not advance and the latch is unchanged over 15 s. An OOM that leaves no latch **fails V2**: a quick restart must not bypass the protection. **The victim is reported** (read from the kernel log: daemon, injected load, other, or unknown). Unless the daemon itself was killed, `V2b.daemon_oom_exercised` is **not_run (incomplete), never pass**. |
 | **V3** | Monitor dies or hangs | `kill -9` (V3a): restarts in time, no trip. Stop (V3b) and `SIGSTOP` hang (V3c): the daemon trips itself (`monitor_silent`, source daemon) within the stale limit and pauses safely; recoverable by the documented `release` and `resume`. Repeated monitor OOM until the start limit leaves the unit failed (V3d): the daemon trips. |
 | **V4** | Does a latch survive restarts? | With an existing latch: daemon restart, monitor restart, both in each order, `kill -9` of each: latch byte-identical, daemon still paused, clock stopped, public files unchanged, `resume` refused. Refusals (`resume` rc 3, short reason rc 2, stale heartbeat rc 4). Documented `release` keeps the latch in `evidence/released/`, deletes nothing, and `resume` then works. A second trip makes a second latch. Optional reboot phase. |
 
@@ -41,10 +41,10 @@ The kernel offers no exact "non-reclaimable footprint". The monitor's `pinned` i
 * **Fixture:** a generated league and season (the repository's test generator), a loopback static server, no real data.
 * **Smoke run first** (`run --smoke`): short settings, non-qualifying, to shake out harness faults before the real run. Its results are never reported as acceptance.
 
-## 4. Known limits and the flag for the owner
+## 4. Known limits
 
-* **OOM victim.** The kernel kills the largest process in the cgroup, which may be the injected loader, not the daemon. V2b records which died and judges unit-level recovery either way; a loader kill alone does not exercise `OOMPolicy=stop` on a real daemon death.
-* **V2b outcome B.** An OOM kill followed by a fast restart can leave **no latch**: the monitor may never see the `oom_kill` event if the cgroup is recreated between its 10 s samples (a hypothesis V2b tests, not a known fact). Then the broadcast resumes unattended after a memory emergency. The stage records this without failing it; **it is a design question for the owner**, not something the harness decides.
+* **OOM victim and incompleteness.** The kernel kills the largest process in the cgroup, which is normally the injected load, not the daemon. A load-only kill makes systemd stop and restart the unit (`OOMPolicy=stop`) but does not show that the daemon's own death is recovered from. V2b reports the victim from the kernel log; if the daemon was not killed, or the log cannot be read, the daemon-OOM check stays **incomplete** and V2 is not a pass. Exercising a daemon kill (for example by making the load unkillable so the daemon is the only candidate) is a harness step **not yet written**; until then daemon-OOM validation cannot be completed. An incomplete V2 stops a full run (anything but pass stops it); later stages can be run with `--stages V3,V4 --acknowledge-stop '<reason>'`.
+* **Missing incident record is a defect, not a finding.** If V2b fails `incident_record_and_hold`, that is a defect of the candidate: it is fixed in a new, separately tested candidate with its own pin and a full re-run. The harness proposes no runtime fix and contains none. Whether the monitor misses the kill because the cgroup is recreated between its 10 s samples is a hypothesis the stage tests, not a known fact.
 * Injected load stands in for a leak; it does not reproduce the daemon's own allocation behaviour.
 * The harness has not run under systemd. Results are valid only for the machine, kernel and systemd version recorded.
 
@@ -74,7 +74,7 @@ Minimum: 1 vCPU, 1 GiB RAM with swap off, 5 GiB free disk, kernel >= 5.4 (>= 5.1
 
 ## 8. Report
 
-The revision tested and the pin; the machine facts (`uname -r`, systemd version, controllers); every check with its status and deciding file; V1 stated as in section 2, with no error figure; trip times against the 58-90 s window; the V2b outcome A or B; every deviation; and a recommendation. Delivered to the owner, who decides.
+The revision tested and the pin; the machine facts (`uname -r`, systemd version, controllers); every check with its status and deciding file; V1 stated as in section 2, with no error figure; trip times against the 58-90 s window; the V2b incident-record result and the reported OOM victim, and whether daemon-OOM validation is complete or incomplete; every deviation; and a recommendation. Delivered to the owner, who decides.
 
 ## 9. Not covered
 

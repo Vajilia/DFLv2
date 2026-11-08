@@ -395,22 +395,82 @@ class V2Evaluator(unittest.TestCase):
         low = [rec(1000 + i, current=60 * MB, pinned=50 * MB) for i in range(100)]
         self.assertEqual(self.a(recs=low)['V2a.line_crossed'], 'invalid')
 
+    DAEMON_PID, LOADER_PID = 10, 77
+    GOOD_LATCH = {'kind': 'memory_high', 'source': 'monitor', 'at': 1010.0}
+    GOOD_INCIDENT = {'sha_before': 'a' * 64, 'sha_after': 'a' * 64, 'paused': True, 'pos_a': 140.0, 'pos_b': 140.2, 'dt': 15.0, 'new_evidence': ['trip-1-memory_high']}
+
+    def victim(self, pid, comm='python3'):
+        return {'pid': pid, 'comm': comm, 'line': 'x'}
+
     def b(self, **over):
-        d = dict(kills=1, journal="Failed with result 'oom-kill'.", pre={'NRestarts': 0, 'MainPID': 10}, post={'ActiveState': 'active', 'NRestarts': 1, 'MainPID': 22}, tl=[], latch=None,
+        d = dict(kills=1, journal="Failed with result 'oom-kill'.", pre={'NRestarts': 0, 'MainPID': 10}, post={'ActiveState': 'active', 'NRestarts': 1, 'MainPID': 22}, tl=[], latch=dict(self.GOOD_LATCH),
                  inv_before={'a': (1, 'x')}, inv_after={'a': (1, 'x'), 'b': (2, 'y')}, partial=[], procs_new=['/usr/bin/python3 -I /x/tools/broadcast_run.py run'], mon_before={'NRestarts': 0}, mon_after={'ActiveState': 'active', 'NRestarts': 0},
-                 old_alive=[], mem_end=40 * MB, mx=MX, pos_before=100.0, pos_after=140.0, elapsed=45.0, cfg={})
+                 old_alive=[], mem_end=40 * MB, mx=MX, pos_before=100.0, pos_after=140.0, elapsed=45.0, cfg={},
+                 victims=[self.victim(self.DAEMON_PID)], daemon_pids=[self.DAEMON_PID], loader_pid=self.LOADER_PID, incident=dict(self.GOOD_INCIDENT), t0=1000.0)
         d.update(over)
-        rows = stage_v2.evaluate_v2b(d['kills'], d['journal'], d['pre'], d['post'], d['tl'], d['latch'], d['inv_before'], d['inv_after'], d['partial'], d['procs_new'], d['mon_before'], d['mon_after'], d['old_alive'], d['mem_end'], d['mx'], d['pos_before'], d['pos_after'], d['elapsed'], d['cfg'])
+        rows = stage_v2.evaluate_v2b(d['kills'], d['journal'], d['pre'], d['post'], d['tl'], d['latch'], d['inv_before'], d['inv_after'], d['partial'], d['procs_new'], d['mon_before'], d['mon_after'], d['old_alive'], d['mem_end'], d['mx'],
+                                     d['pos_before'], d['pos_after'], d['elapsed'], d['cfg'], victims=d['victims'], daemon_pids=d['daemon_pids'], loader_pid=d['loader_pid'], incident=d['incident'], t0=d['t0'])
         return {r[0]: r[1] for r in rows}, {r[0]: r for r in rows}
 
-    def test_a_clean_oom_recovery_passes_and_outcome_b_is_information_for_the_owner(self):
+    def overall(self, rows_by_id):
+        r = C.Recorder('V2', tempfile.mkdtemp(), {}, echo=lambda *_: None)
+        self.addCleanup(subprocess.run, ['rm', '-rf', r.outdir])
+        r.add_all([v for v in rows_by_id.values()])
+        return r.overall()
+
+    def test_a_daemon_oom_with_a_record_and_a_hold_passes_everything(self):
         st, rows = self.b()
-        self.assertEqual(st['V2b.monitor_response'], 'info')
-        self.assertIn('OWNER REVIEW', rows['V2b.monitor_response'][2])
-        self.assertEqual({v for k, v in st.items() if k != 'V2b.monitor_response'}, {'pass'}, st)
-        st, rows = self.b(latch={'kind': 'memory_high', 'source': 'monitor'})
-        self.assertEqual(st['V2b.monitor_response'], 'pass')
-        self.assertIn('OUTCOME A', rows['V2b.monitor_response'][2])
+        self.assertEqual(set(st.values()), {'pass'}, st)
+        self.assertEqual(self.overall(rows), 'pass')
+
+    def test_an_oom_without_a_persistent_incident_record_fails_the_stage(self):
+        st, rows = self.b(latch=None)
+        self.assertEqual(st['V2b.incident_record_and_hold'], 'fail')
+        self.assertIn('no latch', rows['V2b.incident_record_and_hold'][2])
+        self.assertIn('DEFECT', rows['V2b.incident_record_and_hold'][2])
+        self.assertEqual(self.overall(rows), 'fail', 'a clean systemd recovery must not outweigh a missing incident record')
+        self.assertNotIn('V2b.monitor_response', st, 'there is no longer an information-only outcome for a missing latch')
+
+    def test_a_record_that_is_not_a_hold_fails(self):
+        for name, over in (('unparsable latch', dict(latch={'unreadable': True})), ('stale latch', dict(latch={'kind': 'memory_high', 'at': 500.0})),
+                           ('no evidence', dict(incident=dict(self.GOOD_INCIDENT, new_evidence=[]))), ('not paused', dict(incident=dict(self.GOOD_INCIDENT, paused=False))),
+                           ('clock advanced', dict(incident=dict(self.GOOD_INCIDENT, pos_b=150.0))), ('latch changed', dict(incident=dict(self.GOOD_INCIDENT, sha_after='b' * 64))),
+                           ('latch vanished', dict(incident=dict(self.GOOD_INCIDENT, sha_before=None, sha_after=None))), ('hold too short', dict(incident=dict(self.GOOD_INCIDENT, dt=3.0))),
+                           ('hold never observed', dict(incident=None)), ('clock unreadable', dict(incident=dict(self.GOOD_INCIDENT, pos_b=None)))):
+            st, rows = self.b(**over)
+            self.assertEqual(st['V2b.incident_record_and_hold'], 'fail', name)
+            self.assertEqual(self.overall(rows), 'fail', name)
+
+    def test_the_requirement_cannot_be_tested_without_a_confirmed_oom(self):
+        st, _ = self.b(kills=0, journal='nothing', latch=None, incident=None)
+        self.assertEqual(st['V2b.incident_record_and_hold'], 'invalid')
+
+    def test_killing_only_the_injected_load_leaves_daemon_oom_validation_incomplete_never_passed(self):
+        st, rows = self.b(victims=[self.victim(self.LOADER_PID)])
+        self.assertEqual(st['V2b.victim_reported'], 'pass')
+        self.assertIn('pid 77', rows['V2b.victim_reported'][2])
+        self.assertEqual(st['V2b.daemon_oom_exercised'], 'not_run')
+        self.assertIn('INCOMPLETE', rows['V2b.daemon_oom_exercised'][2])
+        self.assertIn('NOT done', rows['V2b.daemon_oom_exercised'][2])
+        others = {k: v for k, v in st.items() if k != 'V2b.daemon_oom_exercised'}
+        self.assertEqual(set(others.values()), {'pass'}, 'everything else can pass; it must still not add up to a pass')
+        self.assertEqual(self.overall(rows), 'review')
+
+    def test_an_unknown_victim_is_incomplete_too(self):
+        for victims in (None, []):
+            st, rows = self.b(victims=victims)
+            self.assertEqual((st['V2b.victim_reported'], st['V2b.daemon_oom_exercised']), ('not_run', 'not_run'))
+            self.assertEqual(self.overall(rows), 'review')
+
+    def test_another_process_as_victim_does_not_count_as_the_daemon(self):
+        st, _ = self.b(victims=[self.victim(999, 'sleep')])
+        self.assertEqual(st['V2b.daemon_oom_exercised'], 'not_run')
+
+    def test_a_daemon_child_counts_as_the_daemon_and_the_daemon_plus_load_is_reported_in_full(self):
+        st, rows = self.b(victims=[self.victim(11, 'python3'), self.victim(self.LOADER_PID)], daemon_pids=[10, 11])
+        self.assertEqual(st['V2b.daemon_oom_exercised'], 'pass')
+        self.assertIn('pid 11', rows['V2b.victim_reported'][2])
+        self.assertIn('pid 77', rows['V2b.victim_reported'][2])
 
     def test_each_way_the_recovery_can_be_wrong(self):
         self.assertEqual(self.b(journal='nothing relevant', kills=0)[0]['V2b.kernel_killed'], 'invalid')
@@ -426,6 +486,19 @@ class V2Evaluator(unittest.TestCase):
         self.assertEqual(self.b(pos_after=50.0)[0]['V2b.clock_continuity'], 'fail')
         self.assertEqual(self.b(pos_after=900.0)[0]['V2b.clock_continuity'], 'fail')
         self.assertEqual(self.b(mem_end=int(MX * 0.9))[0]['V2b.memory_recovered'], 'fail')
+
+    def test_victims_are_read_from_the_kernel_log(self):
+        log = ('kernel: oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0,oom_memcg=/system.slice/dfl-vtest-daemon.service,task_memcg=/system.slice/dfl-vtest-daemon.service,task=python3,pid=4242,uid=0\n'
+               'kernel: Memory cgroup out of memory: Killed process 4242 (python3) total-vm:1 kB\n'
+               'kernel: oom-kill:constraint=CONSTRAINT_MEMCG,oom_memcg=/system.slice/other.service,task_memcg=/system.slice/other.service,task=x,pid=7,uid=0\n'
+               'kernel: Memory cgroup out of memory: Killed process 7 (x) total-vm:1 kB\n')
+        v = E.parse_oom_victims(log, 'dfl-vtest-daemon.service')
+        self.assertEqual([(x['pid'], x['comm']) for x in v], [(4242, 'python3')], 'another unit\'s victim and the duplicate line are not reported')
+        self.assertEqual(E.parse_oom_victims('Killed process 55 (old-kernel-format) total', 'u'), [{'pid': 55, 'comm': 'old-kernel-format', 'line': 'Killed process 55 (old-kernel-format) total'}])
+        for empty in ('', None, 'nothing about oom here'):
+            self.assertEqual(E.parse_oom_victims(empty, 'u'), [], 'no victim line means UNKNOWN, not a guess')
+        c = E.classify_victims([{'pid': 4242, 'comm': 'p'}, {'pid': 10, 'comm': 'd'}, {'pid': 3, 'comm': 'o'}], [10], 4242)
+        self.assertEqual(({k: [x['pid'] for x in l] for k, l in c.items()}), {'daemon': [10], 'loader': [4242], 'other': [3]})
 
 
 class V3Evaluator(unittest.TestCase):
