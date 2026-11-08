@@ -1,0 +1,306 @@
+"""Shared parts of the validation harness (docs/MEMORY_MONITOR_VALIDATION_PLAN.md): the pin, the environment facade, the recorder and the safety rules.
+
+Everything the harness does to a machine goes through `Env`, so that tests can substitute a fake and so that the safety rules live in one place:
+  * writes are allowed only under the harness's own directories and `dfl-vtest-*` unit files;
+  * systemctl verbs that change anything are allowed only on `dfl-vtest-*` units;
+  * nothing here deletes anything except `teardown`, which is run by a person with --yes and never by a stage.
+"""
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+TOOLS = os.path.dirname(HERE)
+REPO = os.path.dirname(TOOLS)
+if TOOLS not in sys.path:
+    sys.path.insert(0, TOOLS)
+
+BASE = "/srv/dfl-vtest"                       # fixtures, loaders' files, guard folder, public folder, evidence
+SRC_BASE = "/opt/dfl-vtest-src"               # the pinned tree, extracted from git
+ETC = "/etc/dfl-vtest"                        # the environment file
+MARKER = "/etc/dfl-vtest-disposable"          # the operator's declaration that this machine may be abused
+UNIT_DIR = "/etc/systemd/system"
+PREFIX = "dfl-vtest-"
+UNIT = {"daemon": PREFIX + "daemon.service", "monitor": PREFIX + "monitor.service", "site": PREFIX + "site.service"}
+PORT = 18080
+CGROOT = "/sys/fs/cgroup"
+SLICE = CGROOT + "/system.slice"
+ROOT_DIR, WEB_DIR, PUBLIC, GUARD, EVID, LOADDIR, STATE = (BASE + "/root", BASE + "/web", BASE + "/web/feed", BASE + "/guard", BASE + "/evidence", BASE + "/load", BASE + "/state")
+
+STATUSES = ("pass", "fail", "invalid", "review", "not_run", "info")
+STAGES = ("V1", "V2", "V3", "V4")
+
+# What the daemon's own guard does (tools/broadcast_run.py): numbers the checks compare with. Read from the pinned tree at run time when possible; these are the fallbacks and are
+# asserted equal to the tree's by `vtest.py pin-check`.
+GUARD_STALE_S, GUARD_GRACE_S = 120.0, 240.0
+MON_EVERY_S, MEM_SUSTAIN_S, MEM_FRAC = 10.0, 60.0, 0.90
+
+
+class Unsafe(Exception):
+    """A step tried to touch something outside the harness's own territory."""
+
+
+class StageStop(Exception):
+    """An acceptance check failed (or the stage cannot continue): stop, keep everything as it is."""
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def read_pin(repo=REPO):
+    for line in open(os.path.join(repo, "tools", "vtest", "PIN")):
+        m = re.match(r"candidate=([0-9a-f]{40})\s*$", line)
+        if m:
+            return m.group(1)
+    raise SystemExit("tools/vtest/PIN has no candidate=<40 hex> line")
+
+
+def allowed_path(path):
+    p = os.path.realpath(path) if os.path.exists(path) else os.path.abspath(path)
+    for root in (BASE, SRC_BASE, ETC):
+        if p == root or p.startswith(root + "/"):
+            return True
+    return bool(re.match(re.escape(UNIT_DIR) + r"/" + re.escape(PREFIX) + r"[A-Za-z0-9@._-]*(\.d(/[A-Za-z0-9._-]+)?)?$", p))
+
+
+SC_READ = {"show", "is-active", "is-enabled", "is-failed", "status", "list-units", "list-unit-files", "is-system-running", "--version", "daemon-reload", "cat"}
+SC_WRITE = {"start", "stop", "restart", "kill", "reset-failed", "disable", "mask", "unmask", "enable"}
+CG_WRITE_FILES = ("cgroup.procs", "memory.reclaim")
+
+
+class Env:
+    """The real machine."""
+    def read(self, path, default=None):
+        try:
+            with open(path) as f:
+                return f.read()
+        except (OSError, UnicodeDecodeError):
+            return default
+
+    def exists(self, path):
+        return os.path.exists(path)
+
+    def listdir(self, path):
+        try:
+            return sorted(os.listdir(path))
+        except OSError:
+            return []
+
+    def euid(self):
+        return os.geteuid()
+
+    def free_bytes(self, path):
+        st = os.statvfs(path)
+        return st.f_bavail * st.f_frsize
+
+    def now(self):
+        return time.time()
+
+    def sleep(self, s):
+        time.sleep(s)
+
+    def run(self, argv, timeout=60, input=None):
+        try:
+            r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, input=input)
+            return r.returncode, r.stdout, r.stderr
+        except FileNotFoundError:
+            return 127, "", "not found: %s" % argv[0]
+        except subprocess.TimeoutExpired:
+            return 124, "", "timeout after %ss: %s" % (timeout, " ".join(argv))
+
+    def popen(self, argv, **kw):
+        return subprocess.Popen(argv, **kw)
+
+    def write(self, path, text, mode=0o644):
+        if not allowed_path(path):
+            raise Unsafe("refusing to write %s" % path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+        os.chmod(path, mode)
+
+    def cg_write(self, path, text):
+        """Only the two control files a stage needs, only under a dfl-vtest unit's cgroup. -> (ok, errno or None)."""
+        unit = os.path.basename(os.path.dirname(path))
+        if not (os.path.basename(path) in CG_WRITE_FILES and os.path.dirname(os.path.dirname(path)) == SLICE and unit.startswith(PREFIX)):
+            raise Unsafe("refusing to write cgroup file %s" % path)
+        try:
+            with open(path, "w") as f:
+                f.write(text)
+            return True, None
+        except OSError as e:
+            return False, e.errno
+
+    def sc(self, verb, *args, timeout=60):
+        if verb in SC_WRITE:
+            bad = [a for a in args if not (a.startswith(PREFIX) and a.endswith((".service", ".timer", ".scope")))]
+            if bad or not args:
+                raise Unsafe("systemctl %s on a unit that is not a dfl-vtest unit: %s" % (verb, bad or "(none named)"))
+        elif verb not in SC_READ:
+            raise Unsafe("systemctl %s is not allowed" % verb)
+        return self.run(["systemctl", verb, *args], timeout=timeout)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------- pin
+def git(repo, *args):
+    r = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
+    return r.returncode, r.stdout.strip(), r.stderr.strip()
+
+
+# Which paths are what. `docs` and `none` never invalidate a result; `stages` names the stages whose results a change to the path invalidates; code under test invalidates all.
+CODE_UNDER_TEST_DEFAULT = "any other path under src/, tools/ or deploy/ (the safe default: when unsure, repeat)"
+HARNESS_STAGE = {"stage_v1.py": {"V1"}, "stage_v2.py": {"V2"}, "stage_v3.py": {"V3"}, "stage_v4.py": {"V4"}}
+HARNESS_ALL = {"common.py", "render.py", "sampler.py", "loaders.py", "site_server.py", "evaluate.py", "scenarios.py", "PIN"}
+HARNESS_NONE = {"vtest.py", "preflight.py", "README.md"}      # the driver and the go/no-go gate: they decide whether to run, they do not measure
+
+
+def classify(path):
+    """-> (kind, stages): kind is 'docs', 'none', 'harness' or 'code'; stages the set of stages a change invalidates."""
+    if path.startswith("docs/"):
+        return "docs", set()
+    if path.startswith("tools/vtest/"):
+        name = path[len("tools/vtest/"):]
+        if name in HARNESS_STAGE:
+            return "harness", set(HARNESS_STAGE[name])
+        if name in HARNESS_NONE:
+            return "none", set()
+        return "harness", set(STAGES)                   # shared harness code (including anything new): every stage
+    if path == "tests/test_season.py" or path.startswith("tests/fixtures/"):
+        return "code", set(STAGES)                 # the fixture generator and its data are what the daemon runs on
+    if path.startswith("tests/"):
+        return "none", set()
+    if path.startswith(("src/", "tools/", "deploy/")):
+        return "code", set(STAGES)
+    return "none", set()
+
+
+def changed_files(repo, a, b="HEAD"):
+    rc, out, err = git(repo, "diff", "--name-only", a, b)
+    if rc:
+        raise SystemExit("git diff %s %s failed: %s" % (a, b, err))
+    return [x for x in out.splitlines() if x]
+
+
+def affected(repo, recorded_rev, current="HEAD"):
+    """-> {"changed": [(path, kind)], "repeat": [stages], "code_changed": bool}. Documentation-only changes repeat nothing."""
+    rows, stages = [], set()
+    for p in changed_files(repo, recorded_rev, current):
+        kind, st = classify(p)
+        rows.append((p, kind))
+        stages |= st
+    return {"changed": rows, "repeat": [s for s in STAGES if s in stages], "code_changed": any(k == "code" for _, k in rows)}
+
+
+def pin_check(repo=REPO, pin=None):
+    """-> (ok, [messages]). The pinned commit exists, is an ancestor of HEAD, and HEAD differs from it only in ways that cannot change what is under test."""
+    pin = pin or read_pin(repo)
+    msgs = []
+    rc, _, _ = git(repo, "cat-file", "-e", pin + "^{commit}")
+    if rc:
+        return False, ["pinned commit %s is not in this repository" % pin]
+    rc, _, _ = git(repo, "merge-base", "--is-ancestor", pin, "HEAD")
+    if rc:
+        return False, ["pinned commit %s is not an ancestor of HEAD" % pin]
+    a = affected(repo, pin)
+    code = [p for p, k in a["changed"] if k == "code"]
+    ok = True
+    if code:
+        ok = False
+        msgs.append("code under test differs from the pin in: %s (the harness installs the PINNED tree, but a changed pin line or changed code means this is not the approved candidate)" % ", ".join(code[:8]))
+    rc, out, _ = git(repo, "status", "--porcelain")
+    dirty = [l for l in out.splitlines() if l.strip()]
+    if dirty:
+        ok = False
+        msgs.append("working tree is not clean (%d paths): commit or discard first so the harness revision is a real commit" % len(dirty))
+    return ok, msgs or ["HEAD differs from the pin only in docs / harness / tests: the code under test is the pinned tree"]
+
+
+def harness_rev(repo=REPO):
+    rc, out, _ = git(repo, "rev-parse", "HEAD")
+    return out if not rc else "unknown"
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------- results
+class Recorder:
+    """The checks of one stage, written as they are made. A stage's result is `pass` only if every required check passed."""
+    def __init__(self, stage, outdir, meta, echo=print):
+        self.stage, self.outdir, self.meta, self.echo = stage, outdir, dict(meta), echo
+        self.checks, self.started = [], time.time()
+        os.makedirs(outdir, exist_ok=True)
+
+    def check(self, cid, status, detail, data=None, required=True):
+        assert status in STATUSES, status
+        self.checks.append({"id": cid, "status": status, "detail": detail, "data": data, "required": required, "t": round(time.time(), 1)})
+        self.echo("  [%s] %s: %s" % (status.upper(), cid, detail))
+        self._flush()
+        return status
+
+    def add_all(self, rows):
+        for r in rows:
+            self.check(*r)
+
+    def failed(self):
+        return [c for c in self.checks if c["status"] in ("fail", "invalid")]
+
+    def stop_if_failed(self):
+        bad = self.failed()
+        if bad:
+            raise StageStop("%s: %s" % (bad[0]["id"], bad[0]["detail"]))
+
+    def overall(self):
+        st = [c for c in self.checks if c["required"] or c["status"] in ("fail", "invalid")]
+        if any(c["status"] == "fail" for c in st):
+            return "fail"
+        if any(c["status"] == "invalid" for c in st):
+            return "invalid"
+        if any(c["status"] in ("review", "not_run") for c in st):
+            return "review"
+        return "pass" if st else "not_run"
+
+    def _flush(self):
+        with open(os.path.join(self.outdir, "result.json"), "w") as f:
+            json.dump(dict(self.meta, stage=self.stage, checks=self.checks, overall=self.overall(), started=self.started, finished=None), f, indent=1, sort_keys=True)
+
+    def finish(self, note=None):
+        res = dict(self.meta, stage=self.stage, checks=self.checks, overall=self.overall(), started=self.started, finished=time.time(), note=note)
+        with open(os.path.join(self.outdir, "result.json"), "w") as f:
+            json.dump(res, f, indent=1, sort_keys=True)
+        write_manifest(self.outdir)
+        return res
+
+
+def write_manifest(outdir):
+    """sha256 of every file in the stage's evidence folder (the manifest itself excluded): evidence is only ever added to."""
+    lines = []
+    for d, _, names in sorted(os.walk(outdir)):
+        for n in sorted(names):
+            if n == "MANIFEST.sha256":
+                continue
+            p = os.path.join(d, n)
+            lines.append("%s  %s" % (sha256_file(p), os.path.relpath(p, outdir)))
+    with open(os.path.join(outdir, "MANIFEST.sha256"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def jsonl_read(path):
+    out = []
+    try:
+        for line in open(path):
+            line = line.strip()
+            if line:
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    pass                                   # a torn last line (the writer was killed): skip it
+    except OSError:
+        pass
+    return out

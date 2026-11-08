@@ -1,0 +1,3 @@
+# The code under test. The harness refuses to run unless the unit files, the daemon and the monitor it installs are byte-for-byte this commit's
+# (it extracts them with `git archive`, then compares every file's git blob hash). Changing this line is a new candidate and needs the owner's approval.
+candidate=bfa632b0e8961d9d576bdcded86abea90a3cc675
