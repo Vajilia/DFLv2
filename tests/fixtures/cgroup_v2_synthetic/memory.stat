@@ -1,0 +1,17 @@
+anon 31457280
+file 150994944
+kernel 20971520
+kernel_stack 262144
+pagetables 262144
+percpu 0
+sock 0
+shmem 0
+file_mapped 0
+file_dirty 24576
+file_writeback 0
+inactive_file 146800640
+active_file 4194304
+unevictable 0
+slab_reclaimable 19922944
+slab_unreclaimable 524288
+slab 20447232
