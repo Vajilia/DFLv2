@@ -141,7 +141,7 @@ class Rule(unittest.TestCase):
 
     # ---- genuinely dangerous: what the kernel cannot give back ---------------------------------------------------------------------------------------------------------------
     def test_anonymous_memory_held_near_the_limit_trips_with_the_breakdown(self):
-        i, v = feed(self.judge(), [sample(anon=(560 + i) * MB, file=40 * MB) for i in range(10)])
+        i, v = feed(self.judge(), [sample(anon=(580 + i) * MB, file=20 * MB) for i in range(10)])
         self.assertIsNotNone(v)
         self.assertEqual(v['reason'], 'sustained_unreclaimable')
         ev = v['evidence']
@@ -225,7 +225,9 @@ class WatchIntegration(unittest.TestCase):
 
     def put(self, **kw):
         s = sample(**kw)
-        w = lambda n, v: open(os.path.join(self.cg, n), 'w').write(v)
+        def w(n, v):
+            with open(os.path.join(self.cg, n), 'w') as f:
+                f.write(v)
         w('memory.current', '%d\n' % s['current']); w('memory.max', '%d\n' % s['max'])
         w('memory.stat', ''.join('%s %d\n' % kv for kv in dict(
             anon=s['anon'], file=s['file'], kernel=s['kernel'], shmem=s['shmem'], file_mapped=s['file_mapped'], file_dirty=s['file_dirty'], file_writeback=s['file_writeback'],

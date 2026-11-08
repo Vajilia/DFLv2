@@ -1,0 +1,543 @@
+{
+ "finished_at": "2026-11-08T08:34:39Z",
+ "host": {
+  "cgroup": "v1 (memory controller), no systemd",
+  "kernel": "6.18.44-fc-v310"
+ },
+ "limit_bytes": 268435456,
+ "ok": true,
+ "rule": {
+  "frac": 0.9,
+  "min_samples": 3,
+  "sustain_s": 60.0
+ },
+ "scenarios": [
+  {
+   "checks": [
+    {
+     "check": "old rule trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (live, 1 Hz) does not trip",
+     "ok": true
+    },
+    {
+     "check": "new rule (10 s cadence, all ten phases) does not trip",
+     "ok": true
+    },
+    {
+     "check": "nothing was killed",
+     "ok": true
+    }
+   ],
+   "duration_s": 149.0,
+   "exit_codes": [
+    -9
+   ],
+   "expect": {
+    "new": false,
+    "old": true
+   },
+   "failcnt_end": 83120,
+   "killed_by_kernel_at_s": null,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "phases_tripped": 0,
+    "reasons": []
+   },
+   "new_rule_live_1hz": null,
+   "ok": true,
+   "old_rule_first_trip_s": 1.0,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "oom_kill_count_end": 0,
+   "peak_anon": 20074496,
+   "peak_current": 268283904,
+   "peak_dirty_plus_writeback": 4096,
+   "peak_file": 247488512,
+   "peak_full_avg10": 0.18,
+   "peak_kernel": 6811648,
+   "peak_pinned": 26042368,
+   "peak_some_avg10": 0.18,
+   "peak_usage_bytes": 268435456,
+   "samples": 150,
+   "scenario": "healthy_cache"
+  },
+  {
+   "checks": [
+    {
+     "check": "old rule trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (live, 1 Hz) does not trip",
+     "ok": true
+    },
+    {
+     "check": "new rule (10 s cadence, all ten phases) does not trip",
+     "ok": true
+    },
+    {
+     "check": "nothing was killed",
+     "ok": true
+    }
+   ],
+   "duration_s": 149.0,
+   "exit_codes": [
+    -9
+   ],
+   "expect": {
+    "new": false,
+    "old": true
+   },
+   "failcnt_end": 0,
+   "killed_by_kernel_at_s": null,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "phases_tripped": 0,
+    "reasons": []
+   },
+   "new_rule_live_1hz": null,
+   "ok": true,
+   "old_rule_first_trip_s": 6.0,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "oom_kill_count_end": 0,
+   "peak_anon": 250650624,
+   "peak_current": 251699200,
+   "peak_dirty_plus_writeback": 0,
+   "peak_file": 0,
+   "peak_full_avg10": 0.0,
+   "peak_kernel": 622592,
+   "peak_pinned": 251699200,
+   "peak_some_avg10": 0.0,
+   "peak_usage_bytes": 251699200,
+   "samples": 150,
+   "scenario": "anon_spike"
+  },
+  {
+   "checks": [
+    {
+     "check": "old rule trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (live, 1 Hz) does not trip",
+     "ok": true
+    },
+    {
+     "check": "new rule (10 s cadence, all ten phases) does not trip",
+     "ok": true
+    },
+    {
+     "check": "nothing was killed",
+     "ok": true
+    }
+   ],
+   "duration_s": 149.0,
+   "exit_codes": [
+    -9,
+    -9
+   ],
+   "expect": {
+    "new": false,
+    "old": true
+   },
+   "failcnt_end": 89069,
+   "killed_by_kernel_at_s": null,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "phases_tripped": 0,
+    "reasons": []
+   },
+   "new_rule_live_1hz": null,
+   "ok": true,
+   "old_rule_first_trip_s": 1.0,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "oom_kill_count_end": 0,
+   "peak_anon": 148619264,
+   "peak_current": 268349440,
+   "peak_dirty_plus_writeback": 4096,
+   "peak_file": 206360576,
+   "peak_full_avg10": 0.18,
+   "peak_kernel": 6029312,
+   "peak_pinned": 149381120,
+   "peak_some_avg10": 0.36,
+   "peak_usage_bytes": 268435456,
+   "samples": 150,
+   "scenario": "anon_plus_cache"
+  },
+  {
+   "checks": [
+    {
+     "check": "old rule trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (live, 1 Hz) trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (10 s cadence, all ten phases) trips",
+     "ok": true
+    },
+    {
+     "check": "new rule's reason is sustained_unreclaimable",
+     "ok": true
+    }
+   ],
+   "duration_s": 149.0,
+   "exit_codes": [
+    -9
+   ],
+   "expect": {
+    "new": true,
+    "old": true,
+    "reason": "sustained_unreclaimable"
+   },
+   "failcnt_end": 0,
+   "killed_by_kernel_at_s": null,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     90.02,
+     91.02,
+     82.01,
+     83.01,
+     84.02,
+     85.02,
+     86.02,
+     87.02,
+     88.02,
+     89.02
+    ],
+    "phases_tripped": 10,
+    "reasons": [
+     "sustained_unreclaimable"
+    ]
+   },
+   "new_rule_live_1hz": {
+    "detail": "sustained for 60 s over 61 samples: pinned (not reclaimable) 251 MB of a 268 MB limit; memory.current 254 MB = anon 251 + file 2 (dirty 0, writeback 0, mapped 0, shmem 0) + kernel 1 (reclaimable slab 0)",
+    "reason": "sustained_unreclaimable",
+    "t": 82.01
+   },
+   "ok": true,
+   "old_rule_first_trip_s": 22.0,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "oom_kill_count_end": 0,
+   "peak_anon": 250658816,
+   "peak_current": 253952000,
+   "peak_dirty_plus_writeback": 0,
+   "peak_file": 2498560,
+   "peak_full_avg10": 0.0,
+   "peak_kernel": 626688,
+   "peak_pinned": 251453440,
+   "peak_some_avg10": 0.0,
+   "peak_usage_bytes": 253952000,
+   "samples": 150,
+   "scenario": "anon_plateau"
+  },
+  {
+   "checks": [
+    {
+     "check": "old rule trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (live, 1 Hz) trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (10 s cadence, all ten phases) trips",
+     "ok": true
+    },
+    {
+     "check": "new rule's reason is sustained_unreclaimable",
+     "ok": true
+    },
+    {
+     "check": "new rule trips before the kernel's kill (live 107.02 s, 10 s cadence 107.02..116.02 s, kill 134.03 s)",
+     "ok": true
+    }
+   ],
+   "duration_s": 239.0,
+   "exit_codes": [
+    -9
+   ],
+   "expect": {
+    "before_kill": true,
+    "new": true,
+    "old": true,
+    "reason": "sustained_unreclaimable"
+   },
+   "failcnt_end": 105,
+   "killed_by_kernel_at_s": 134.03,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     110.02,
+     111.02,
+     112.02,
+     113.02,
+     114.02,
+     115.02,
+     116.02,
+     107.02,
+     108.02,
+     109.02
+    ],
+    "phases_tripped": 10,
+    "reasons": [
+     "sustained_unreclaimable"
+    ]
+   },
+   "new_rule_live_1hz": {
+    "detail": "sustained for 60 s over 61 samples: pinned (not reclaimable) 261 MB of a 268 MB limit; memory.current 261 MB = anon 260 + file 0 (dirty 0, writeback 0, mapped 0, shmem 0) + kernel 1 (reclaimable slab 0)",
+    "reason": "sustained_unreclaimable",
+    "t": 107.02
+   },
+   "note": "re-run after correcting the check 'before the kernel kills anything' (the first pass demanded that no kill ever happened, but the harness lets the leak run on; the new check compares the trip time with the kill time). Same code, same limit; the first-pass trace is replaced.",
+   "ok": true,
+   "old_rule_first_trip_s": 47.01,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 1",
+   "oom_kill_count_end": 1,
+   "peak_anon": 267571200,
+   "peak_current": 268242944,
+   "peak_dirty_plus_writeback": 0,
+   "peak_file": 0,
+   "peak_full_avg10": 0.03,
+   "peak_kernel": 659456,
+   "peak_pinned": 268242944,
+   "peak_some_avg10": 0.03,
+   "peak_usage_bytes": 268435456,
+   "run_started_at": "2026-11-08T08:34:39Z",
+   "samples": 240,
+   "scenario": "anon_slow_leak"
+  },
+  {
+   "checks": [
+    {
+     "check": "old rule trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (live, 1 Hz) trips",
+     "ok": true
+    },
+    {
+     "check": "new rule (10 s cadence, all ten phases) trips",
+     "ok": true
+    },
+    {
+     "check": "new rule's reason is oom_event",
+     "ok": true
+    },
+    {
+     "check": "the kernel really killed the workload (oom_kill rose, exit -9)",
+     "ok": true
+    }
+   ],
+   "duration_s": 59.0,
+   "exit_codes": [
+    -9
+   ],
+   "expect": {
+    "new": true,
+    "old": true,
+    "reason": "oom_event"
+   },
+   "failcnt_end": 1731,
+   "killed_by_kernel_at_s": 17.0,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     20.0,
+     21.0,
+     22.0,
+     23.0,
+     24.0,
+     25.0,
+     26.0,
+     17.0,
+     18.0,
+     19.0
+    ],
+    "phases_tripped": 10,
+    "reasons": [
+     "oom_event"
+    ]
+   },
+   "new_rule_live_1hz": {
+    "detail": "the kernel's memory controller reported oom_kill +1 (memory.events); pinned (not reclaimable) 0 MB of a 268 MB limit; memory.current 0 MB = anon 0 + file 0 (dirty 0, writeback 0, mapped 0, shmem 0) + kernel 0 (reclaimable slab 0)",
+    "reason": "oom_event",
+    "t": 17.0
+   },
+   "ok": true,
+   "old_rule_first_trip_s": 15.0,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 1",
+   "oom_kill_count_end": 1,
+   "peak_anon": 265375744,
+   "peak_current": 268406784,
+   "peak_dirty_plus_writeback": 0,
+   "peak_file": 6529024,
+   "peak_full_avg10": 0.0,
+   "peak_kernel": 761856,
+   "peak_pinned": 266346496,
+   "peak_some_avg10": 0.0,
+   "peak_usage_bytes": 268435456,
+   "samples": 60,
+   "scenario": "anon_fast_growth"
+  },
+  {
+   "checks": [
+    {
+     "check": "the live verdict follows the data (longest run over the line 4 s, trip no)",
+     "ok": true
+    },
+    {
+     "check": "dirty and writeback pages were counted as pinned",
+     "ok": true
+    }
+   ],
+   "duration_s": 149.0,
+   "exit_codes": [
+    -9
+   ],
+   "expect": null,
+   "failcnt_end": 173186,
+   "killed_by_kernel_at_s": null,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "phases_tripped": 0,
+    "reasons": []
+   },
+   "new_rule_live_1hz": null,
+   "ok": true,
+   "old_rule_first_trip_s": 4.0,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "oom_kill_count_end": 0,
+   "peak_anon": 19034112,
+   "peak_current": 268431360,
+   "peak_dirty_plus_writeback": 242221056,
+   "peak_file": 242221056,
+   "peak_full_avg10": 18.09,
+   "peak_kernel": 6823936,
+   "peak_pinned": 268419072,
+   "peak_some_avg10": 18.45,
+   "peak_usage_bytes": 268435456,
+   "samples": 150,
+   "scenario": "dirty_flood"
+  },
+  {
+   "checks": [
+    {
+     "check": "the live verdict follows the data (longest run over the line 8 s, trip no)",
+     "ok": true
+    },
+    {
+     "check": "dirty and writeback pages were counted as pinned",
+     "ok": true
+    }
+   ],
+   "duration_s": 149.0,
+   "exit_codes": [
+    -9,
+    -9
+   ],
+   "expect": null,
+   "failcnt_end": 222589,
+   "killed_by_kernel_at_s": null,
+   "limit_bytes": 268435456,
+   "line_bytes": 241591910,
+   "new_rule_at_10s_cadence": {
+    "first_trip_s": [
+     null,
+     101.02,
+     72.01,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "phases_tripped": 2,
+    "reasons": [
+     "sustained_unreclaimable"
+    ]
+   },
+   "new_rule_live_1hz": null,
+   "ok": true,
+   "old_rule_first_trip_s": 1.0,
+   "oom_control_end": "oom_kill_disable 0; under_oom 0; oom_kill 0",
+   "oom_kill_count_end": 0,
+   "peak_anon": 214986752,
+   "peak_current": 268435456,
+   "peak_dirty_plus_writeback": 143654912,
+   "peak_file": 207618048,
+   "peak_full_avg10": 34.25,
+   "peak_kernel": 6053888,
+   "peak_pinned": 268435456,
+   "peak_some_avg10": 34.26,
+   "peak_usage_bytes": 268435456,
+   "samples": 150,
+   "scenario": "anon_plus_dirty"
+  }
+ ],
+ "started_at": "2026-11-08T08:09:25Z"
+}
