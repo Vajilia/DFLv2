@@ -33,7 +33,7 @@ exiting with an error twice in an hour; anything touching production.
 | Wall-clock | deadline = start + 54 h. At the deadline the daemon **pauses and exits 0**, and systemd does not restart it. The installed env file holds a deadline **in the past**, so an accidental `start` pauses at once (rehearsed: paused at 0.2 s, exit 0) | `broadcast_run.py --deadline` |
 | Free disk | **6 GB everywhere.** The installer refuses unless free ≥ 6 GB **plus** the 3 GB the public folder may grow to; the pre-flight repeats it; the monitor stops the broadcast if free space falls below 6 GB | `install_rehearsal.sh`, `rehearsal_check.py preflight` / `watch --min-free-gb 6` |
 | Public folder | 3 GB (a full season measured 0.78 GB / 59,290 files in virtual time) | daemon `--max-public-gb 3` (exit 70, no restart) and the monitor (stops the broadcast) |
-| Daemon memory | 600 MB (`MemoryMax`); the monitor stops the broadcast at 90 % of the limit | unit + `watch --cgroup` |
+| Daemon memory | 600 MB (`MemoryMax`, the hard boundary); the monitor stops the broadcast when the estimated non-reclaimable footprint (anonymous, dirty, mapped, unreclaimable kernel; clean file cache is NOT counted) stays above 90 % of the limit for 60 s, or when the kernel reports an OOM event: `docs/MEMORY_MONITOR_RULE.md` | unit + `watch --cgroup` |
 | Restarts | 3 starts in an hour, then the unit stays failed | `StartLimitBurst` |
 | Writes | the daemon writes only `private/`, `feed/` and `monitor/`; the monitor writes only `monitor/` | `ProtectSystem=strict`, `ReadWritePaths` |
 | Timers | none are created; units are installed **disabled** | no `.timer` ships |

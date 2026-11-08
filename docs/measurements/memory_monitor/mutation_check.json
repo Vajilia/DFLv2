@@ -1,0 +1,85 @@
+{
+ "baseline": {
+  "tests": 22,
+  "failed": []
+ },
+ "mutants": [
+  {
+   "mutant": "earlier rule: footprint = memory.current (no discount)",
+   "killed": true,
+   "failing_tests": [
+    "test_a_cache_full_group_trips_nothing_and_a_pinned_group_trips_after_the_window",
+    "test_a_mostly_cache_state_has_a_small_estimated_footprint",
+    "test_dirty_and_writeback_pages_count_but_the_same_pages_clean_do_not",
+    "test_only_clean_unmapped_cache_is_discounted_never_all_file_cache",
+    "test_slab_that_can_be_reclaimed_is_discounted_and_slab_that_cannot_is_not",
+    "test_the_kernel_reclaiming_at_the_limit_is_not_a_trip_by_itself"
+   ]
+  },
+  {
+   "mutant": "subtract ALL file cache (dirty, writeback, mapped, shmem too)",
+   "killed": true,
+   "failing_tests": [
+    "test_dirty_and_writeback_pages_count_but_the_same_pages_clean_do_not",
+    "test_mapped_files_and_shared_memory_are_not_discounted",
+    "test_only_clean_unmapped_cache_is_discounted_never_all_file_cache"
+   ]
+  },
+  {
+   "mutant": "treat all kernel memory as reclaimable",
+   "killed": true,
+   "failing_tests": [
+    "test_only_clean_unmapped_cache_is_discounted_never_all_file_cache",
+    "test_slab_that_can_be_reclaimed_is_discounted_and_slab_that_cannot_is_not"
+   ]
+  },
+  {
+   "mutant": "no sustain window: one high sample trips",
+   "killed": true,
+   "failing_tests": [
+    "test_a_cache_full_group_trips_nothing_and_a_pinned_group_trips_after_the_window",
+    "test_anonymous_memory_held_near_the_limit_trips_with_the_breakdown",
+    "test_dropping_below_the_line_resets_the_clock",
+    "test_one_high_sample_is_not_a_trip_but_the_same_number_held_is",
+    "test_the_sustain_window_is_in_seconds_and_in_samples"
+   ]
+  },
+  {
+   "mutant": "window by time only (no minimum number of samples)",
+   "killed": true,
+   "failing_tests": [
+    "test_the_sustain_window_is_in_seconds_and_in_samples"
+   ]
+  },
+  {
+   "mutant": "raise the line above the limit (the rule can never fire)",
+   "killed": true,
+   "failing_tests": [
+    "test_a_cache_full_group_trips_nothing_and_a_pinned_group_trips_after_the_window",
+    "test_anonymous_memory_held_near_the_limit_trips_with_the_breakdown",
+    "test_dirty_and_writeback_pages_count_but_the_same_pages_clean_do_not",
+    "test_mapped_files_and_shared_memory_are_not_discounted",
+    "test_one_high_sample_is_not_a_trip_but_the_same_number_held_is",
+    "test_slab_that_can_be_reclaimed_is_discounted_and_slab_that_cannot_is_not",
+    "test_the_sustain_window_is_in_seconds_and_in_samples"
+   ]
+  },
+  {
+   "mutant": "ignore the kernel's OOM events",
+   "killed": true,
+   "failing_tests": [
+    "test_an_oom_event_trips_at_once",
+    "test_an_oom_kill_event_trips_the_broadcast",
+    "test_old_oom_counts_at_monitor_start_are_not_new_events"
+   ]
+  },
+  {
+   "mutant": "trip on `max` events (the kernel reclaiming)",
+   "killed": true,
+   "failing_tests": [
+    "test_the_kernel_reclaiming_at_the_limit_is_not_a_trip_by_itself"
+   ]
+  }
+ ],
+ "ok": true
+}
