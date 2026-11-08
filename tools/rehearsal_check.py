@@ -12,7 +12,7 @@
         (file listings, positions, response headers) so a failure is never lost to a rerun. The log ALSO holds normal lines: {"start"}, one {"heartbeat"} per full
         cycle, {"stop"}: a healthy log is full of heartbeats and holds ZERO "violation" lines. Exit status 1 if any violation was logged.
         With --guard DIR the monitor can STOP the broadcast: a spoiler-class violation (early file, a guessed future URL served, a wrong pointer, a private file
-        reachable by path traversal), a resource violation (free disk under --min-free-gb, public folder over --max-public-gb, daemon memory over 90% of its cgroup limit)
+        reachable by path traversal), a resource violation (free disk under --min-free-gb, public folder over --max-public-gb, daemon memory the kernel cannot take back held over 90% of its cgroup limit for 60 s, or a kernel OOM event; docs/MEMORY_MONITOR_FIX_2026-11-08.md)
         or the monitor's own failure (an exception, or the site unreachable three cycles in a row) writes DIR/TRIPPED, snapshots the evidence under
         --evidence/trip-<time>-<kind>/ and the daemon (run with the same --guard) pauses within a second. The monitor refreshes DIR/heartbeat every 5 s while it makes
         progress; if it dies or hangs the DAEMON trips itself (broadcast_run.py --guard). A trip is cleared only by `release` and then `broadcast_run.py resume`.
@@ -29,6 +29,7 @@
   Stop `watch` with SIGTERM or Ctrl-C.
 """
 import argparse
+import collections
 import http.client
 import json
 import os
@@ -68,6 +69,176 @@ TRIP_KINDS = SPOILER_KINDS | RESOURCE_KINDS | MONITOR_KINDS
 HEARTBEAT_EVERY_S = 5.0
 HANG_S = 90.0                 # no progress for this long: the heartbeat stops and the daemon trips itself after BR.GUARD_STALE_S
 TOL_S = 6.0           # a viewer's clock and the daemon's tick differ by up to a second or two; files are placed within a tick of their time
+
+
+# ---- the daemon's memory (docs/MEMORY_MONITOR_RULE.md) -------------------------------------------------------------------------------------------------------------
+# MemoryMax is the hard boundary and is the kernel's: it is never raised, lowered or written here. What this reads is whether the daemon is HEADING for that boundary in a way the
+# kernel cannot fix by itself. memory.current counts clean file cache, which the kernel gives back when it needs the room, so it is not that measure: a long run that writes tens of
+# thousands of files fills the cache up to the limit and stays there, healthy, with memory.events all zero. (An earlier version of this rule judged memory.current itself and could
+# stop a broadcast for that reason alone.) `pinned` below is an ESTIMATE of the non-reclaimable footprint, built from memory.stat; it is not a kernel measurement.
+MEM_PINNED_FRAC = 0.90        # of memory.max: the estimated non-reclaimable footprint, as a share of the limit
+MEM_SUSTAIN_S = 60.0          # ... on every sample for this long (at --every 10 that is 6 samples) ...
+MEM_MIN_SAMPLES = 3           # ... and on at least this many samples: a monitor that was stalled has not "seen" a sustained condition
+MEM_RECENT = 12               # samples kept for the trip's evidence (two minutes at --every 10)
+V1_UNLIMITED = 1 << 60
+
+
+def _text(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _keyvals(text):
+    out = {}
+    for ln in (text or "").splitlines():
+        parts = ln.split()
+        if len(parts) == 2 and parts[1].lstrip("-").isdigit():
+            out[parts[0]] = int(parts[1])
+    return out
+
+
+def _psi(path):
+    """memory.pressure / /proc/pressure/memory -> {"some": {avg10, avg60, avg300, total}, "full": {...}}; None if absent."""
+    text = _text(path)
+    if not text:
+        return None
+    out = {}
+    for ln in text.splitlines():
+        parts = ln.split()
+        if parts and parts[0] in ("some", "full"):
+            kv = dict(p.split("=", 1) for p in parts[1:] if "=" in p)
+            try:
+                out[parts[0]] = {"avg10": float(kv["avg10"]), "avg60": float(kv["avg60"]), "avg300": float(kv["avg300"]), "total": int(kv["total"])}
+            except (KeyError, ValueError):
+                pass
+    return out or None
+
+
+def read_cgroup_memory(path, psi_path=None):
+    """One reading of a memory cgroup, in one shape. -> None if `path` is not a memory cgroup.
+
+    Version 2 (memory.current, memory.max, memory.stat, memory.events, memory.pressure). Version 1 is read only so that the rule can be validated with real workloads on a
+    host that has no v2 memory controller; its fields are mapped onto the same names (failcnt stands in for events.max, the pressure file is the whole system's, said so in `source`)."""
+    zero = ("anon", "file", "file_dirty", "file_writeback", "file_mapped", "shmem", "kernel", "slab_reclaimable", "slab_unreclaimable", "unevictable", "active_file", "inactive_file")
+    s = dict.fromkeys(zero, 0)
+    cur = _text(os.path.join(path, "memory.current"))
+    if cur is not None:
+        s["version"] = 2
+        s["current"] = int(cur.strip())
+        mx = (_text(os.path.join(path, "memory.max")) or "max").strip()
+        s["max"] = int(mx) if mx.isdigit() else None
+        st = _keyvals(_text(os.path.join(path, "memory.stat")))
+        s["stat_ok"] = bool(st)
+        for k in zero:
+            s[k] = st.get(k, 0)
+        s["events"] = {k: v for k, v in dict.fromkeys(("low", "high", "max", "oom", "oom_kill"), 0).items()}
+        s["events"].update({k: v for k, v in _keyvals(_text(os.path.join(path, "memory.events"))).items() if k in s["events"]})
+        s["pressure"] = None
+        p = _psi(os.path.join(path, "memory.pressure"))
+        if p:
+            s["pressure"] = dict(p, source="cgroup")
+        return s
+    cur = _text(os.path.join(path, "memory.usage_in_bytes"))
+    if cur is None:
+        return None
+    s["version"] = 1
+    s["current"] = int(cur.strip())
+    lim = int((_text(os.path.join(path, "memory.limit_in_bytes")) or "0").strip() or 0)
+    s["max"] = lim if 0 < lim < V1_UNLIMITED else None
+    st = _keyvals(_text(os.path.join(path, "memory.stat")))
+    s["stat_ok"] = bool(st)
+    s.update(anon=st.get("rss", 0), file=st.get("cache", 0), file_dirty=st.get("dirty", 0), file_writeback=st.get("writeback", 0), file_mapped=st.get("mapped_file", 0), shmem=st.get("shmem", 0),
+             unevictable=st.get("unevictable", 0), active_file=st.get("active_file", 0), inactive_file=st.get("inactive_file", 0))
+    kmem = _text(os.path.join(path, "memory.kmem.usage_in_bytes"))
+    s["kernel"] = int(kmem.strip()) if kmem and kmem.strip().isdigit() else max(0, s["current"] - s["anon"] - s["file"])
+    fail = _text(os.path.join(path, "memory.failcnt"))
+    oc = _keyvals((_text(os.path.join(path, "memory.oom_control")) or ""))
+    s["events"] = {"low": 0, "high": 0, "max": int(fail.strip()) if fail and fail.strip().isdigit() else 0, "oom": 1 if oc.get("under_oom") else 0, "oom_kill": oc.get("oom_kill", 0)}
+    p = _psi(psi_path or "/proc/pressure/memory")
+    s["pressure"] = dict(p, source="system") if p else None
+    return s
+
+
+def memory_estimates(s):
+    """-> {"reclaimable", "pinned"}: an ESTIMATE of what the kernel can take back without killing anything, and of the rest (the estimated non-reclaimable footprint; the kernel does not report it). Only CLEAN, UNMAPPED file cache and RECLAIMABLE slab are discounted. Dirty and
+    writeback pages (they must be written first), mapped files, shared memory, anonymous memory (there is no swap) and unreclaimable kernel memory all count in full. Where a pair of these
+    overlaps (a mapped shared page is in both file_mapped and shmem) the overlap is subtracted twice, so `reclaimable` is never too high. Without memory.stat nothing is discounted."""
+    cur = int(s["current"])
+    if not s.get("stat_ok"):
+        return {"reclaimable": 0, "pinned": cur}
+    clean = max(0, s["file"] - s["file_dirty"] - s["file_writeback"] - s["file_mapped"] - s["shmem"])
+    rec = min(cur, clean + s["slab_reclaimable"])
+    return {"reclaimable": rec, "pinned": max(cur - rec, min(cur, s.get("unevictable", 0)))}
+
+
+class MemoryJudge:
+    """The sustained-pressure rule. observe(sample, now) -> None, or {"reason", "detail", "evidence"} when the broadcast must stop.
+
+    * the kernel's own verdict: memory.events `oom` or `oom_kill` rose since the last sample -> at once (the first sample only sets the baseline). `high` and `max` events are the
+      kernel reclaiming, which is what it is for; they are recorded and never trip by themselves.
+    * sustained non-reclaimable memory: the estimated `pinned` footprint above MEM_PINNED_FRAC of memory.max on every sample for MEM_SUSTAIN_S and at least MEM_MIN_SAMPLES samples. Once it has fired it does not
+      fire again until the memory has come back under the line.
+    Memory pressure (PSI) is recorded with every sample and is not a trigger: stalls the kernel causes while reclaiming clean cache are not a danger to the broadcast, and a daemon that
+    is actually starved stops renewing its lease, which the monitor already reports."""
+
+    def __init__(self, frac=MEM_PINNED_FRAC, sustain_s=MEM_SUSTAIN_S, min_samples=MEM_MIN_SAMPLES):
+        self.frac, self.sustain_s, self.min_samples = frac, sustain_s, min_samples
+        self.over_since, self.over_n, self.fired = None, 0, False
+        self.base = None
+        self.hist = collections.deque(maxlen=MEM_RECENT)
+
+    def recent(self):
+        return list(self.hist)
+
+    @staticmethod
+    def compact(s, est, now):
+        p = s.get("pressure") or {}
+        return {"t": round(now, 1), "current": s["current"], "pinned": est["pinned"], "anon": s["anon"], "file": s["file"], "dirty": s["file_dirty"], "writeback": s["file_writeback"],
+                "kernel": s["kernel"], "some_avg10": (p.get("some") or {}).get("avg10"), "full_avg10": (p.get("full") or {}).get("avg10")}
+
+    def evidence(self, s, est):
+        mx = s.get("max")
+        keys = ("version", "current", "max", "anon", "file", "file_dirty", "file_writeback", "file_mapped", "shmem", "kernel", "slab_reclaimable", "slab_unreclaimable", "unevictable",
+                "active_file", "inactive_file", "events", "pressure", "stat_ok")
+        ev = {k: s.get(k) for k in keys}
+        ev.update(reclaimable_estimate=est["reclaimable"], pinned_estimate=est["pinned"], pinned_fraction=round(est["pinned"] / mx, 4) if mx else None,
+                  rule={"frac": self.frac, "sustain_s": self.sustain_s, "min_samples": self.min_samples}, over_samples=self.over_n, recent=self.recent())
+        return ev
+
+    @staticmethod
+    def describe(s, est):
+        mb = lambda n: "%.0f" % (n / 1e6)
+        return ("estimated non-reclaimable footprint (pinned) %s MB of a %s MB limit; memory.current %s MB = anon %s + file %s (dirty %s, writeback %s, mapped %s, shmem %s) + kernel %s (reclaimable slab %s)"
+                % (mb(est["pinned"]), mb(s["max"] or 0), mb(s["current"]), mb(s["anon"]), mb(s["file"]), mb(s["file_dirty"]), mb(s["file_writeback"]), mb(s["file_mapped"]), mb(s["shmem"]),
+                   mb(s["kernel"]), mb(s["slab_reclaimable"])))
+
+    def observe(self, s, now):
+        est = memory_estimates(s)
+        self.hist.append(self.compact(s, est, now))
+        ev = s.get("events") or {}
+        verdict = None
+        if self.base is not None:
+            rose = {k: ev.get(k, 0) - self.base.get(k, 0) for k in ("oom", "oom_kill") if ev.get(k, 0) > self.base.get(k, 0)}
+            if rose:
+                verdict = {"reason": "oom_event", "detail": "the kernel's memory controller reported %s (memory.events); %s" % (", ".join("%s +%d" % kv for kv in sorted(rose.items())), self.describe(s, est))}
+        self.base = {k: ev.get(k, 0) for k in ("oom", "oom_kill")}
+        mx = s.get("max")
+        if mx and est["pinned"] > self.frac * mx:
+            if self.over_since is None:
+                self.over_since, self.over_n = now, 1
+            else:
+                self.over_n += 1
+            if verdict is None and not self.fired and self.over_n >= self.min_samples and now - self.over_since >= self.sustain_s:
+                self.fired = True
+                verdict = {"reason": "sustained_unreclaimable", "detail": "sustained for %.0f s over %d samples: %s" % (now - self.over_since, self.over_n, self.describe(s, est))}
+        else:
+            self.over_since, self.over_n, self.fired = None, 0, False
+        if verdict:
+            verdict["evidence"] = dict(self.evidence(s, est), reason=verdict["reason"])
+        return verdict
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- HTTP
@@ -269,6 +440,8 @@ class Watch:
         self.guard = getattr(a, "guard", None)
         self.canary = getattr(a, "canary", None)
         self.cgroup = getattr(a, "cgroup", None)
+        self.mem = MemoryJudge()
+        self.mem_last = None
         self.progress_at = time.time()
         self.blind = 0
         self.stop = threading.Event()
@@ -384,15 +557,27 @@ class Watch:
         free = shutil.disk_usage(self.public).free / 1e9
         if free < self.a.min_free_gb:
             self.violation("disk_low", "%.1f GB free (the floor is %.1f GB)" % (free, self.a.min_free_gb), {"free_gb": free})
-        if self.cgroup:
-            try:
-                cur = int(open(os.path.join(self.cgroup, "memory.current")).read())
-                mx = open(os.path.join(self.cgroup, "memory.max")).read().strip()
-                if mx.isdigit() and cur > 0.9 * int(mx):
-                    self.violation("memory_high", "daemon memory %.0f MB of a %.0f MB limit" % (cur / 1e6, int(mx) / 1e6), {"current": cur, "max": int(mx)})
-            except (OSError, ValueError):
-                pass                                                           # no cgroup files (not systemd, or not yet started): the unit's MemoryMax still holds
+        self.memory_check(now)
         return pos
+
+    def memory_check(self, now):
+        """Read the daemon's cgroup, remember the reading for the heartbeat line, and stop the broadcast only on a sustained or kernel-confirmed condition (MemoryJudge)."""
+        if not self.cgroup:
+            return
+        try:
+            s = read_cgroup_memory(self.cgroup)
+        except (OSError, ValueError):
+            s = None
+        if s is None:
+            return                                                         # no cgroup files (not systemd, or not yet started): the unit's MemoryMax still holds
+        est = memory_estimates(s)
+        p = s.get("pressure") or {}
+        self.mem_last = {"current": s["current"], "max": s["max"], "anon": s["anon"], "file": s["file"], "dirty": s["file_dirty"], "writeback": s["file_writeback"], "mapped": s["file_mapped"],
+                         "shmem": s["shmem"], "kernel": s["kernel"], "slab_reclaimable": s["slab_reclaimable"], "pinned": est["pinned"], "events": s["events"],
+                         "psi_some10": (p.get("some") or {}).get("avg10"), "psi_full10": (p.get("full") or {}).get("avg10")}
+        v = self.mem.observe(s, now)
+        if v:
+            self.violation("memory_high", v["detail"], v["evidence"])
 
     def in_flight(self, rel, allowed):
         """True only for a daemon temporary file that is being published right now: a `.tmp-` name that is fresh (or already gone: renamed into place) AND whose final name the
@@ -497,6 +682,8 @@ class Watch:
                         self.violation("private_exposed", "private content reachable: %s" % exposed[:3], {"exposed": exposed})
                     info["traversal_probes"] = len(sl)
         self.progress()
+        if self.mem_last:
+            info["mem"] = self.mem_last
         self.emit(heartbeat=True, ok=not (unexpected or missing), **info)
 
     def run(self):
@@ -763,7 +950,7 @@ def main(argv=None):
     PC.add_arguments(p)
     p.add_argument("--guard", help="the monitor's folder: write TRIPPED and the heartbeat here so the daemon (run with --guard) pauses")
     p.add_argument("--canary", help="the private canary file (its token must never be served)")
-    p.add_argument("--cgroup", help="the daemon's cgroup folder (memory.current, memory.max)")
+    p.add_argument("--cgroup", help="the daemon's cgroup folder (memory.current, memory.max, memory.stat, memory.events, memory.pressure)")
     p = sub.add_parser("release")
     p.add_argument("--guard", required=True)
     p.add_argument("--reason", required=True)

@@ -246,8 +246,12 @@ class MonitorTrips(Base):
         w = RC.Watch(args(self.tmp, self.pub, self.tmp, evidence=self.ev, guard=self.guard, cgroup=cg))
         self.check(w, 150)
         self.assertIsNone(self.latch())                                                  # half the limit: fine
+        # no memory.stat here, so nothing can be discounted (the conservative reading); ONE high sample is no longer a trip (tests/test_memory_rule.py has the rule), a held one is
         open(os.path.join(cg, 'memory.current'), 'w').write('560000000\n')
         self.check(w, 150)
+        self.assertIsNone(self.latch())
+        for at in range(160, 230, 10):
+            w.memory_check(T0 + at)
         self.assertEqual(self.latch()['kind'], 'memory_high')
 
     def test_the_first_seconds_after_the_clock_starts_are_not_a_missing_file(self):
