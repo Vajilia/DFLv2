@@ -1,5 +1,7 @@
 # Validation criteria: what counts as passing, fixed before any further run
 
+**Correction before any run (harness commit):** the first draft of B2 and of section 3 said a `downtime` entry means a lapsed lease. Reading `Clock.heartbeat` again while testing showed it records any stand-still past `clock_limit`; B2 above is the corrected wording. No run had been made under either wording.
+
 **Status.** Written and committed BEFORE the harness changes that implement it and before any further run. It supersedes the V1 pressure gate of `docs/MEMORY_MONITOR_VALIDATION_PLAN.md` (section 1, row V1: "pressure stays low"). Nothing below was chosen by looking at samples from an earlier run; every number is a constant of the pinned candidate (`bfa632b0e8961d9d576bdcded86abea90a3cc675`) or is marked as a sample-size or resolution choice.
 
 **The earlier result is not rewritten.** The first smoke run (`smoke1`, harness `24a805d`) failed V1 on a memory-pressure gate of 5% ("full" average over 60 s). That failure stays what it is: a recorded failure of that gate on that run. Its evidence is private to the owner and is not in this repository. A run made under this document is a new run with a new id; it does not replace, re-grade or "fix" `smoke1`.
@@ -34,7 +36,7 @@ Consequences of the design that the criteria rest on:
 
 * **A late tick is invisible up to `DELAY_S`, and a stall beyond it.** After each tick the clock may advance only to `ready_until = position + DELAY_S` (`clock_limit`, `broadcast.py:76`). If the next tick is later than that, the clock stands still until it arrives. The viewer sees a freeze.
 * **A segment is needed by viewers at position `start + n x SEG_S + DELAY_S`.** A viewer shows game time `position - start - DELAY_S`, and shows the plays that start at or before it. A segment published after that position has been reached is an underrun: the viewer has nothing to show for the next plays.
-* **A lapsed lease stops the clock and is recorded.** The daemon writes the gap as a pause (`clock_log.jsonl`, why `downtime`, or `publish_failure` after a failed publication).
+* **A lapsed lease stops the clock; any stand-still is recorded.** `heartbeat` writes a `downtime` entry to `clock_log.jsonl` whenever the wall time is past `clock_limit`, whatever the cause (a tick later than `DELAY_S` is enough; the lease need not have lapsed), and a `publish_failure` entry after a failed publication.
 
 ## 4. Monitor-correctness criteria (M)
 
@@ -47,7 +49,7 @@ Measured from the daemon's own files, once a second, outside the daemon's cgroup
 | Id | Criterion | Rationale |
 |---|---|---|
 | **B1 clock stall** | No sample at which the clock is running, not paused, and has stood still for more than one sampling interval (1 s) beyond its own limit: i.e. `now - clock_limit <= 1 s` at every sample. | A stall is what a late tick or a lapsed lease looks like to a viewer. 1 s is the resolution of the observation, not a tolerance on the design. |
-| **B2 lease** | `lease_until > now` at every sample, and no `downtime` or `publish_failure` entry in `clock_log.jsonl` during the phase. | A lapse stops the clock for every viewer; the design records it. No other margin is claimed: the observed margin is reported (see D). |
+| **B2 lease** | `lease_until > now` at every sample, and no `publish_failure` entry in `clock_log.jsonl` during the phase. | A lapse stops the clock for every viewer. No other margin is claimed: the observed margin is reported (see D). `downtime` entries are reported alongside but are not a B2 criterion: they record any stand-still past the clock's limit, which B1 already judges. |
 | **B3 publication deadline** | Every live segment of every game on air is published no later than the wall time at which the clock reaches `start + n x SEG_S + DELAY_S` (plus the 1 s observation resolution); every game of the window ends with all its segments and state `final`. | This is the viewer's underrun condition, per segment, from file modification times and the clock's own position. Only applicable while games are on air (section 6, phase P); in the stress phase it is reported `not_run`, never silently passed. |
 | **B4 no publication error** | No `error` line from the daemon in its journal for the phase. | The daemon logs a publication failure as JSON on stderr (`broadcast_run.py`, PUBLISH FAILURE). |
 
