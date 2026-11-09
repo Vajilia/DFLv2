@@ -11,7 +11,9 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 * a controlled input: the loader logs the bytes it read; the estimate must be consistent with that known input (a bound, not an error figure);
 * kernel reclaim activity (`memory.events max`, `pgscan`, `pgsteal`) proving the cache was really being reclaimed;
 * reclaim probes (`memory.reclaim`, kernel 5.19+): memory the kernel gave back is a lower-bound evidence of reclaimable memory, never a truth value;
-* pressure counters (PSI) and workload survival (no trip, no OOM, no restart, loader still reading).
+* workload survival (no trip, no OOM, no restart, loader still reading);
+* broadcast behaviour measured directly, in two phases that never overlap (publication of the fixture's first window, then cache stress): the clock never stands still past its limit, the lease never lapses, every live segment is published before viewers need it, no publication error. Criteria and their rationale: `docs/MEMORY_MONITOR_VALIDATION_CRITERIA.md`. `broadcast_probe.py` samples the clock once a second from outside the daemon's cgroup;
+* pressure counters (PSI) are recorded as a diagnostic and gate nothing (they include the loader).
 
 ## Stages (the four requested checks)
 
@@ -35,7 +37,8 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 3. `python3 tools/vtest/vtest.py preflight`: must say READY (read-only).
 4. `sudo python3 tools/vtest/vtest.py plan` to read exactly what will run; then `sudo python3 tools/vtest/vtest.py install` (renders `dfl-vtest-*` units from the pinned templates, prints each layout change, starts nothing).
 5. `sudo python3 tools/vtest/vtest.py run --smoke` first (non-qualifying shakedown), then `run` for the qualifying run. `--with-reboot` adds the V4 reboot phase; after the reboot run `--after-reboot`.
-6. Copy `/srv/dfl-vtest/evidence/<run-id>/` off the machine (each stage has `MANIFEST.sha256`). Review before publishing anything.
+6. `sudo python3 tools/vtest/vtest.py archive --run-id <run-id>`: collects the unit journals, kernel log and OOM lines, unit states and machine facts, writes `EVIDENCE_MANIFEST.json/.txt` (every required item with size and SHA-256, or `MISSING` / `NOT_PRODUCED` with the reason), makes one compressed archive in `/srv/dfl-vtest/export/`, reads it back and verifies it. Exit 3 prints `DO NOT CLEAN UP THE HOST`: the archive does not verify or required evidence is missing.
+7. Copy the archive off the machine by the approved private method and check its SHA-256 there. Review before publishing anything; evidence is private and never goes to GitHub. `teardown --include-evidence --yes` refuses until a verified archive of every run exists.
 
 ## Privileges needed
 

@@ -157,6 +157,19 @@ class Ctx:
         self.procs.append(pr)
         return pr
 
+    def probe(self, name):
+        """The broadcast clock probe (broadcast_probe.py): one sample a second of the clock file, read-only, outside the daemon's cgroup."""
+        out = os.path.join(self.dir, name + ".jsonl")
+        p = self.env.popen([sys.executable, os.path.join(HERE, "broadcast_probe.py"), "--store", ROOT_DIR + "/store", "--out", out])
+        pr = Proc(p, out, name)
+        self.procs.append(pr)
+        return pr
+
+    def save(self, name, text):
+        """A copy of something the stage looked at, kept with the stage's evidence (a journal, a log, an inventory)."""
+        with open(os.path.join(self.dir, name), "w") as f:
+            f.write(text if isinstance(text, str) else json.dumps(text, indent=1, sort_keys=True, default=str))
+
     def loader(self, kind, k, name, **kw):
         log = os.path.join(self.dir, name + ".jsonl")
         argv = [sys.executable, os.path.join(HERE, "loaders.py"), kind, "--cgroup", self.cg(k), "--log", log]

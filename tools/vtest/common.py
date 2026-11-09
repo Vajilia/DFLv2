@@ -29,6 +29,7 @@ UNIT = {"daemon": PREFIX + "daemon.service", "monitor": PREFIX + "monitor.servic
 PORT = 18080
 CGROOT = "/sys/fs/cgroup"
 SLICE = CGROOT + "/system.slice"
+EXPORT = BASE + "/export"                     # archives made by `vtest.py archive` (kept by teardown)
 ROOT_DIR, WEB_DIR, PUBLIC, GUARD, EVID, LOADDIR, STATE = (BASE + "/root", BASE + "/web", BASE + "/web/feed", BASE + "/guard", BASE + "/evidence", BASE + "/load", BASE + "/state")
 
 STATUSES = ("pass", "fail", "invalid", "review", "not_run", "info")
@@ -38,6 +39,8 @@ STAGES = ("V1", "V2", "V3", "V4")
 # asserted equal to the tree's by `vtest.py pin-check`.
 GUARD_STALE_S, GUARD_GRACE_S = 120.0, 240.0
 MON_EVERY_S, MEM_SUSTAIN_S, MEM_FRAC = 10.0, 60.0, 0.90
+# The broadcast design's own numbers (src/dflsite/broadcast.py) the broadcast-performance criteria rest on; asserted equal to the pinned tree's by `vtest.py pin-check`.
+BC_SEG_S, BC_DELAY_S, BC_LEASE_S = 5, 3, 90
 
 
 class Unsafe(Exception):
@@ -181,7 +184,7 @@ def git(repo, *args):
 CODE_UNDER_TEST_DEFAULT = "any other path under src/, tools/ or deploy/ (the safe default: when unsure, repeat)"
 HARNESS_STAGE = {"stage_v1.py": {"V1"}, "stage_v2.py": {"V2"}, "stage_v3.py": {"V3"}, "stage_v4.py": {"V4"}}
 HARNESS_ALL = {"common.py", "render.py", "sampler.py", "loaders.py", "site_server.py", "evaluate.py", "scenarios.py", "PIN"}
-HARNESS_NONE = {"vtest.py", "preflight.py", "README.md"}      # the driver and the go/no-go gate: they decide whether to run, they do not measure
+HARNESS_NONE = {"vtest.py", "preflight.py", "evidence.py", "README.md"}      # the driver and the go/no-go gate: they decide whether to run, they do not measure
 
 
 def classify(path):

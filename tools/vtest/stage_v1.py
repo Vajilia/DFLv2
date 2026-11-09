@@ -7,22 +7,30 @@ So V1 does NOT measure the estimate's error and no check here compares the estim
   * the kernel's reclaim behaviour: the group sat at its limit and the kernel reclaimed (memory.events max, pgscan/pgsteal rose);
   * reclaim probes (kernels with memory.reclaim): ask the kernel to reclaim a quarter of what the estimate calls reclaimable and see that it does. This can show that AT LEAST that much
     was reclaimable at that moment; it says nothing about the rest;
-  * pressure counters (memory.pressure) and whether the workload and the daemon survived.
+  * pressure counters (memory.pressure), recorded as a DIAGNOSTIC only (docs/MEMORY_MONITOR_VALIDATION_CRITERIA.md): they do not decide the stage, and they cannot be attributed to the
+    daemon, because the loader runs inside the same cgroup. Whether the broadcast suffered is judged from the clock, the lease and the publication of live segments, measured directly.
+
+TWO PHASES, in this order, never overlapping (criteria document, section 6):
+  publication only   no loader: the daemon publishes the fixture's first window (two games on air) on its own clock. Monitor: no trip. Broadcast: clock stall, lease, publication deadline, errors.
+  cache stress       the loader, unchanged. Monitor: every check below. Broadcast: clock stall, lease, errors; no live segment may be published in this phase (`V1.separation`).
 """
+import json
 import os
 
+import broadcast_probe as P
 import evaluate as E
-from common import GUARD, LOADDIR, UNIT, StageStop
+from common import GUARD, LOADDIR, PUBLIC, ROOT_DIR, UNIT, StageStop, jsonl_read
 
 STAGE = "V1"
-PLAN = [("V1.baseline", "units up, no latch; sample the daemon's cgroup at idle for baseline_s"),
+PLAN = [("V1.baseline", "units up, no latch; sample the daemon's cgroup at idle for baseline_s; start the clock probe"),
         ("V1.dataset", "create 3 x MemoryMax of random files OUTSIDE the unit, written through and dropped from the cache"),
-        ("V1.load", "start the cache loader INSIDE the daemon's cgroup for duration_s; every 5 s stop on a latch, a dead unit or a dead loader"),
+        ("V1.publish", "PHASE 1, no loader: wait until the fixture's first window (two live games) has been on air to its end; judge the monitor (no trip) and the broadcast (stall, lease, deadlines, errors)"),
+        ("V1.load", "PHASE 2: start the cache loader INSIDE the daemon's cgroup for duration_s; every 5 s stop on a latch, a dead unit or a dead loader"),
         ("V1.probe", "reclaim probes at evenly spaced instants (kernels with memory.reclaim)"),
-        ("V1.evaluate", "judge from the recorded samples; write result.json and the evidence manifest")]
+        ("V1.evaluate", "judge both phases from the recorded samples; keep the probe, inventories, journals and logs with the evidence; write result.json and the evidence manifest")]
 
-DEFAULTS = {"qualifying": {"baseline_s": 60, "duration_s": 2400, "need_above_s": 1800, "probes": 10, "psi_full_max": 5.0, "margin_frac": 0.10},
-            "smoke": {"baseline_s": 15, "duration_s": 150, "need_above_s": 60, "probes": 4, "psi_full_max": 5.0, "margin_frac": 0.10}}
+DEFAULTS = {"qualifying": {"baseline_s": 60, "duration_s": 2400, "need_above_s": 1800, "probes": 10, "margin_frac": 0.10, "publish_slack_s": 180},
+            "smoke": {"baseline_s": 15, "duration_s": 150, "need_above_s": 60, "probes": 4, "margin_frac": 0.10, "publish_slack_s": 180}}
 
 
 def evaluate_v1(load, base, probes, before, after, latch, loader, watch, position_moved, cfg):
@@ -59,9 +67,10 @@ def evaluate_v1(load, base, probes, before, after, latch, loader, watch, positio
     rows.append(("V1.survival", "pass" if not surv else "fail", "daemon, monitor and loader alive, no restart, no OOM event, clock advancing" if not surv else "; ".join(surv), {"problems": surv, "loader": loader}))
     full, some = E.pressure_peak(load, "full", "avg60"), E.pressure_peak(load, "some", "avg60")
     if full is None:
-        rows.append(("V1.pressure", "not_run", "no pressure counters on this kernel", None, False))
+        rows.append(("V1.pressure_diagnostic", "not_run", "no pressure counters on this kernel", None, False))
     else:
-        rows.append(("V1.pressure", "pass" if full < cfg["psi_full_max"] else "fail", "memory.pressure avg60: some peak %.2f%%, full peak %.2f%% (gate: full below %.1f%%, a chosen bound, not a kernel constant)" % (some or 0, full, cfg["psi_full_max"]), {"some_avg60_peak": some, "full_avg60_peak": full}))
+        rows.append(("V1.pressure_diagnostic", "info", "DIAGNOSTIC, not gating. memory.pressure of the daemon's cgroup (which also holds the loader, so it cannot be attributed to the daemon): avg60 some peak %.2f%%, full peak %.2f%%; "
+                     "the 60 s average lags the load" % (some or 0, full), {"some_avg60_peak": some, "full_avg60_peak": full}, False))
     base_pin = E.median([r["pinned"] for r in E.readable(base)]) or 0
     bound = base_pin + loader.get("rss_peak", 0) + cfg["margin_frac"] * (mx or 0)
     pk = E.peak(load, "pinned") or 0
@@ -80,13 +89,42 @@ def evaluate_v1(load, base, probes, before, after, latch, loader, watch, positio
     return rows
 
 
+def judge_publish_phase(B, samples, clock_log, live, window, t0, t1, reached, latch, viol, journal_text):
+    """Phase 1 rows (pure): the monitor did not trip with the daemon publishing, and the broadcast did what the design says. `window` is broadcast_probe.first_window()."""
+    rows = [("V1.publish.window_reached", "pass" if reached else "invalid",
+             "the clock reached the end of the first window (every game final, position %.0f s)" % window["end_pos"] if reached else
+             "the clock did not reach the end of the first window (position %.0f s) in time: the publication phase did not run to completion" % window["end_pos"], None),
+            ("V1.publish.no_trip", "pass" if (latch is None and not viol) else "fail",
+             "no TRIPPED latch and no violation line while the daemon was publishing" if (latch is None and not viol) else "LATCH %s / %d violation lines" % (latch, len(viol)), {"latch": latch, "violations": viol[:5]})]
+    rows += P.clock_rows("V1.publish", B, samples, clock_log, t0, t1)
+    rows.append(P.publication_row("V1.publish", B, samples, live, window["segments"], 0.0, t1))        # from the probe's first sample: the whole window must have been observed
+    rows.append(P.error_row("V1.publish", journal_text))
+    return rows
+
+
+def judge_stress_phase(B, samples, clock_log, live, window, t0, t1, pos_end, journal_text):
+    """Phase 2 broadcast rows (pure): the daemon's clock and lease under the cache stress, errors, and the proof that no publication overlapped the stress."""
+    rows = P.clock_rows("V1.cache", B, samples, clock_log, t0, t1)
+    during = sorted((name, n) for name, g in live.items() for n, t in g["segments"].items() if t0 <= t <= t1)
+    clean = not during and (pos_end is not None and pos_end < window["next_start_s"])
+    rows.append(("V1.separation", "pass" if clean else "invalid",
+                 "no live segment was published during the cache stress and the clock stayed before the next window (position %.0f s < %s s)" % (pos_end, window["next_start_s"]) if clean else
+                 "publication overlapped the cache stress (%d segment files written in it, end position %s, next window at %s s): this phase no longer isolates the cache effect" % (len(during), pos_end, window["next_start_s"]), {"segments_in_phase": len(during)}))
+    rows.append(("V1.cache.deadline", "not_run", "no live game is on air in this phase by design (publication is judged in the publication phase)", None, False))
+    rows.append(P.error_row("V1.cache", journal_text))
+    return rows
+
+
 def run(ctx):
     import sampler as SM
     cfg, rec, env = ctx.cfg, ctx.rec, ctx.env
     rcm = SM.load_rc(ctx.tree)
+    B = P.load_broadcast(ctx.tree)
+    store = ROOT_DIR + "/store"
     cg = ctx.cg("daemon")
     ctx.ensure_baseline()
     smp = ctx.sampler("daemon", "daemon_cgroup")
+    prb = ctx.probe("broadcast_probe")
     ctx.mark("V1.baseline", seconds=cfg["baseline_s"])
     env.sleep(cfg["baseline_s"])
     base = smp.records()
@@ -96,6 +134,48 @@ def run(ctx):
         rec.stop_if_failed()
     ctx.mark("V1.dataset", bytes=3 * mx)
     ctx.dataset(3 * mx)
+    window = P.first_window(json.loads(env.read(store + "/plan.json") or "{}"), json.loads(env.read(store + "/builds.json") or "{}"), B.DELAY_S, B.SEG_S)
+    if not window:
+        rec.check("V1.window", "invalid", "the installed plan has no live window: nothing can be published, so the publication phase cannot run")
+        rec.stop_if_failed()
+
+    # ---- phase 1: publication only (no loader)
+    tp0, abort = ctx.now(), None
+    ctx.mark("V1.publish", window_start=window["start_s"], until_position=window["end_pos"])
+    pos = ctx.position() or 0.0
+    reached = False
+    while ctx.now() - tp0 < max(0.0, window["end_pos"] - pos) + cfg["publish_slack_s"]:
+        p = ctx.position()
+        if p is not None and p >= window["end_pos"]:
+            reached = True
+            break
+        lat, _ = ctx.latch()
+        if lat:
+            abort = "a latch appeared while the daemon was publishing: %s" % lat
+        elif not ctx.active("daemon") or not ctx.active("monitor"):
+            abort = "daemon or monitor is no longer active"
+        if abort:
+            break
+        env.sleep(5)
+    tp1 = ctx.now()
+    live_p = P.scan_live(PUBLIC)
+    jp = ctx.journal("daemon", tp0)
+    ctx.save("segment_inventory_publish.json", live_p)
+    ctx.save("journal_daemon_publish.txt", jp)
+    lat_p, _ = ctx.latch()
+    watch_p = E.summarize_watch(ctx.watch_lines())
+    rows_p = judge_publish_phase(B, jsonl_read(prb.log), jsonl_read(store + "/clock_log.jsonl"), live_p, window, tp0, tp1, reached, lat_p, watch_p["violations"], jp)
+    if abort:
+        rows_p.insert(0, ("V1.aborted", "fail", abort, None))
+        for p_ in (prb, smp):
+            p_.stop()
+        ctx.mark("V1.evaluate")
+        rec.add_all(rows_p)
+        return rows_p
+    quiet = [r for r in smp.records() if tp1 - 30 <= r["t"] <= tp1]
+    base = quiet if len(quiet) >= 10 else base                     # the idle footprint right before the load, after the daemon has been publishing
+
+    # ---- phase 2: cache stress
     before = {k: ctx.show(k) for k in ("daemon", "monitor")}
     pos0, t0 = ctx.position(), ctx.now()
     n = cfg["probes"]
@@ -119,7 +199,9 @@ def run(ctx):
     if ld.alive():
         ld.stop()
     env.sleep(2)
+    t1 = ctx.now()
     smp.stop()
+    prb.stop()
     pos1 = ctx.position()
     after = {k: ctx.show(k) for k in ("daemon", "monitor")}
     load = [r for r in smp.records() if r["t"] >= t0]
@@ -127,8 +209,16 @@ def run(ctx):
     loader = E.loader_summary(ld.records(), ctx.now(), False)
     loader["ended_normally"] = ended
     probes = [p for p in probes if p.get("supported", True)]
+    live_c = P.scan_live(PUBLIC)
+    ctx.save("segment_inventory_cache.json", live_c)
+    jc = ctx.journal("daemon", t0)
+    ctx.save("journal_daemon_cache.txt", jc)
+    ctx.save("clock_log.jsonl", env.read(store + "/clock_log.jsonl") or "")
+    ctx.save("monitor_watch.log", env.read(GUARD + "/watch.log") or "")
+    ctx.save("monitor_trips.jsonl", env.read(GUARD + "/trips.jsonl") or "")
     ctx.mark("V1.evaluate")
-    rows = evaluate_v1(load, base, probes, before, after, lat, loader, E.summarize_watch(ctx.watch_lines()), E.moved(pos0, pos1, 1.5), cfg)
+    rows = rows_p + evaluate_v1(load, base, probes, before, after, lat, loader, E.summarize_watch(ctx.watch_lines()), E.moved(pos0, pos1, 1.5), cfg)
+    rows += judge_stress_phase(B, jsonl_read(prb.log), jsonl_read(store + "/clock_log.jsonl"), live_c, window, t0, t1, pos1, jc)
     if abort:
         rows.insert(0, ("V1.aborted", "fail", abort, None))
     rec.add_all(rows)

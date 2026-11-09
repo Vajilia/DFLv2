@@ -16,7 +16,9 @@ VT = ROOT / 'tools' / 'vtest'
 sys.path.insert(0, str(VT))
 sys.path.insert(0, str(ROOT / 'tools'))
 import common as C                      # noqa: E402
+import broadcast_probe as BP            # noqa: E402
 import evaluate as E                    # noqa: E402
+import evidence as EV                   # noqa: E402
 import preflight as PF                  # noqa: E402
 import render as RN                     # noqa: E402
 import sampler as SM                    # noqa: E402
@@ -279,6 +281,9 @@ class Render(unittest.TestCase):
         self.assertFalse([c for c in env.sc.call_args_list if c[0][0] in ('stop', 'daemon-reload')])
 
 
+ACTIVE = {'ActiveState': 'active', 'NRestarts': 0}
+
+
 class V1Evaluator(unittest.TestCase):
     CFG = dict(stage_v1.DEFAULTS['qualifying'], need_above_s=100)
 
@@ -299,7 +304,8 @@ class V1Evaluator(unittest.TestCase):
 
     def test_a_healthy_run_passes_every_check(self):
         st = self.run_eval()
-        self.assertEqual(set(st.values()), {'pass'}, st)
+        self.assertEqual(set(st.values()), {'pass', 'info'}, st)
+        self.assertEqual(st['V1.pressure_diagnostic'], 'info')
 
     def test_a_workload_that_never_reached_the_limit_is_invalid_not_a_pass(self):
         low = [rec(1000 + i, current=int(MX * 0.5), pinned=45 * MB, stat={'pgscan': 0, 'pgsteal': 0}) for i in range(200)]
@@ -330,13 +336,24 @@ class V1Evaluator(unittest.TestCase):
         for r in rows.values():
             self.assertNotRegex(r[2].lower(), r'estimation error of|error was|exact')
 
-    def test_pressure_gate_and_missing_pressure(self):
+    def test_pressure_is_a_diagnostic_and_never_decides_the_stage(self):
         load = self.healthy()
         for r in load:
-            r['sample']['pressure']['full']['avg60'] = 9.0
-        self.assertEqual(self.run_eval(load=load)['V1.pressure'], 'fail')
+            r['sample']['pressure']['full']['avg60'] = 40.0          # far above the old 5% gate
+            r['sample']['pressure']['some']['avg60'] = 41.0
+        rows = {r[0]: r for r in stage_v1.evaluate_v1(load, [rec(900 + i, current=40 * MB, pinned=36 * MB) for i in range(30)], [{'ok': True}] * 10, {'daemon': ACTIVE, 'monitor': ACTIVE}, {'daemon': ACTIVE, 'monitor': ACTIVE},
+                                                       None, {'alive': True, 'rss_peak': 14 * MB, 'bytes_read_last_60s': 10 ** 9}, {'violations': [], 'heartbeats': 10, 'mem_lines': 10, 'mem_consistent': 10}, True, self.CFG)}
+        self.assertNotIn('V1.pressure', rows, 'the old gating row is gone')
+        row = rows['V1.pressure_diagnostic']
+        self.assertEqual((row[1], row[4]), ('info', False))
+        self.assertIn('cannot be attributed to the daemon', row[2])
+        d = tempfile.mkdtemp()
+        self.addCleanup(subprocess.run, ['rm', '-rf', d])
+        r = C.Recorder('V1', d, {}, echo=lambda *_: None)
+        r.add_all(list(rows.values()))
+        self.assertEqual(r.overall(), 'pass', 'high pressure alone does not fail the stage')
         none = [rec(1000 + i, current=int(MX * 0.99), pinned=45 * MB, events={'max': i * 40, 'oom': 0, 'oom_kill': 0}, stat={'pgscan': i * 900, 'pgsteal': i * 800}, with_pressure=False) for i in range(200)]
-        self.assertEqual(self.run_eval(load=none)['V1.pressure'], 'not_run')
+        self.assertEqual(self.run_eval(load=none)['V1.pressure_diagnostic'], 'not_run')
 
     def test_reclaim_probes(self):
         self.assertEqual(self.run_eval(probes=[{'ok': True}] * 7 + [{'ok': False}] * 3)['V1.reclaim_probes'], 'fail')
@@ -798,6 +815,9 @@ class RecorderAndStop(unittest.TestCase):
             self.assertEqual(vtest.main(['run', '--stages', 'V1', '--run-id', 'r3', '--acknowledge-stop', 'short']), 2)
             self.assertFalse(os.path.exists(tmp + '/evidence/r2'), 'a refused run leaves nothing behind')
             self.assertTrue(os.path.exists(tmp + '/evidence/r1/V1/MANIFEST.sha256'), 'the stopped stage kept its evidence and a manifest')
+            out = Path(tmp, 'evidence', 'r1', 'command_output.txt').read_text()
+            self.assertIn('V1.x', out, 'everything the run printed is kept with its evidence')
+            self.assertIn('STOPPED at V1', out)
 
     def test_a_safety_refusal_inside_a_stage_is_a_failed_stage(self):
         import vtest
