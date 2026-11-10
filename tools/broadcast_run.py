@@ -26,13 +26,21 @@ every second makes P exactly what the clock's position allows (src/dflsite/seaso
   (DIR/heartbeat not refreshed for --guard-stale seconds, or never written within --guard-grace seconds of the daemon's start) the daemon trips itself
   (writes DIR/TRIPPED with kind monitor_silent, appends DIR/trips.jsonl) and pauses. A trip never deletes anything and is cleared only by
   `rehearsal_check.py release` followed by `resume`. See docs/BROADCAST_REHEARSAL.md.
+* OOM INCIDENT (`incident`, run by the unit's ExecStopPost=).  A kernel OOM kill of ANY process in the daemon's service cgroup (the daemon or a child) makes systemd stop the unit
+  (OOMPolicy=stop, result `oom-kill`) and restart it a few seconds later in a NEW cgroup whose counters are zero: a monitor polling memory.events can miss it. ExecStopPost= runs after
+  the stop and before the restart, so the recorder creates PAUSE, then the latch (DIR/TRIPPED kind `oom_kill` source `systemd`, trips.jsonl) with an evidence folder, before any restarted
+  daemon exists. The victim is named from the kernel log when the service user can read it and is otherwise reported as UNKNOWN, never assumed to be the daemon. If the latch cannot
+  be written (retried), PAUSE still holds, the recorder exits 1 (the stop shows as failed) and says so on stderr; a daemon whose guard folder is not writable holds too. A stop
+  that is not an OOM (clean stop, crash, kill -9) records nothing. See docs/OOM_INCIDENT_RECORD.md.
 * SAFETY.  P must be an empty folder, or one this daemon filled before; it must not be inside R, nor R inside it. Never point it at a served production feed.
 """
 import argparse
+import errno
 import fcntl
 import json
 import os
 import signal
+import subprocess
 import sys
 import time
 
@@ -84,25 +92,47 @@ def trip_file(guard):
     return os.path.join(guard, "TRIPPED")
 
 
+def _fsync_dir(path):
+    """Flush a folder's entries (a file's own fsync does not make its NAME durable)."""
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def write_trip(guard, kind, detail, source, now):
-    """Create DIR/TRIPPED if it does not exist (the FIRST trip is the one kept) and append every trip to DIR/trips.jsonl. Returns True if this call made the latch."""
+    """Create DIR/TRIPPED if it does not exist (the FIRST trip is the one kept) and append every trip to DIR/trips.jsonl. Returns True if this call made the latch. The latch is made WHOLE or
+    not at all (written to a temporary file, flushed, then linked into place), and it and its folder entry are flushed to disk before this returns; an OSError means the latch was NOT made."""
     rec = {"kind": kind, "detail": detail, "source": source, "at": now}
     try:
         with open(os.path.join(guard, "trips.jsonl"), "a") as f:
             f.write(json.dumps(rec, sort_keys=True) + "\n")
             f.flush()
             os.fsync(f.fileno())
+        _fsync_dir(guard)
     except OSError:
         pass
-    try:
-        fd = os.open(trip_file(guard), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-    except FileExistsError:
+    target = trip_file(guard)
+    if os.path.exists(target):
         return False
-    with os.fdopen(fd, "w") as f:
-        json.dump(rec, f, sort_keys=True)
-        f.write("\n")
-        f.flush()
-        os.fsync(f.fileno())
+    tmp = "%s.%d.tmp" % (target, os.getpid())
+    try:
+        with open(tmp, "w") as f:
+            json.dump(rec, f, sort_keys=True)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        try:
+            os.link(tmp, target)                                                # atomic, and refuses if the latch already exists
+        except FileExistsError:
+            return False
+        _fsync_dir(guard)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
     return True
 
 
@@ -114,6 +144,8 @@ class Guard:
     def step(self, store, now):
         """Called before every tick. Returns True if the broadcast must be held (PAUSE exists)."""
         pause = os.path.join(store, S.PAUSE)
+        if not os.access(self.dir, os.W_OK | os.X_OK):
+            raise PermissionError(errno.EACCES, "the guard folder is not writable, so an incident could not be recorded", self.dir)       # run_loop holds on any OSError
         if not os.path.exists(trip_file(self.dir)):
             hb = os.path.join(self.dir, "heartbeat")
             try:
@@ -210,6 +242,236 @@ def run_loop(a, store, lockfd):
     return 0
 
 
+INCIDENT_KIND = "oom_kill"
+INCIDENT_TRIES = 3                         # the latch is retried (0.5 s, 1 s) inside the stop timeout before the recorder gives up
+
+
+def _keyvals(text):
+    out = {}
+    for ln in (text or "").splitlines():
+        parts = ln.split()
+        if len(parts) == 2 and parts[1].isdigit():
+            out[parts[0]] = int(parts[1])
+    return out
+
+
+def cgroup_events(cgroup):
+    """memory.events of the unit's cgroup (it still exists while ExecStopPost runs); None if it cannot be read."""
+    try:
+        with open(os.path.join(cgroup, "memory.events")) as f:
+            return _keyvals(f.read())
+    except OSError:
+        return None
+
+
+def parse_oom_victims(text, unit):
+    """The kernel's own `oom-kill:` lines -> [{pid, comm, task_memcg, oom_memcg}] for tasks of the cgroup named `unit` (any depth below it). Other cgroups' victims are not this incident's."""
+    out = []
+    for ln in (text or "").splitlines():
+        if "oom-kill:" not in ln:
+            continue
+        kv = dict(p.split("=", 1) for p in ln.split("oom-kill:", 1)[1].replace(" ", ",").split(",") if "=" in p)
+        memcg = kv.get("task_memcg", "")
+        if unit and unit not in memcg.split("/"):
+            continue
+        try:
+            pid = int(kv["pid"])
+        except (KeyError, ValueError):
+            continue
+        out.append({"pid": pid, "comm": kv.get("task", "?"), "task_memcg": memcg, "oom_memcg": kv.get("oom_memcg")})
+    return out
+
+
+def read_kernel_log(path=None, timeout=5.0):
+    """Recent kernel messages, or None. The service user usually cannot read them; that leaves the victim UNKNOWN, which is recorded as such."""
+    try:
+        if path:
+            with open(path) as f:
+                return f.read()
+        r = subprocess.run(["journalctl", "-k", "-o", "cat", "--no-pager", "-n", "1000"], capture_output=True, text=True, timeout=timeout)
+        return r.stdout if r.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def is_oom_stop(env, events):
+    """systemd says the unit was stopped for an OOM kill (result `oom-kill`), or the cgroup's own counter shows one whatever the stop was called."""
+    return env.get("SERVICE_RESULT") == "oom-kill" or (events or {}).get("oom_kill", 0) > 0
+
+
+def describe_incident(oom):
+    if oom["victim_status"] == "identified":
+        who = "victim " + ", ".join("pid %d (%s)" % (v["pid"], v["comm"]) for v in oom["victims"])
+        who += "; the daemon itself was among them" if oom["daemon_was_victim"] else "; not the daemon (main pid %s)" % oom["daemon_main_pid"]
+    else:
+        who = "victim unknown (the kernel log could not be read or names nobody in this cgroup)"
+    return ("the kernel OOM-killed in the daemon's service cgroup (systemd result %s, main process %s %s, memory.events oom_kill %s): %s. The unit is restarted by systemd; "
+            "the broadcast stays held until this latch is released." % (oom["service_result"] or "unknown", oom["exit_code"] or "?", oom["exit_status"] or "?", (oom["cgroup_events"] or {}).get("oom_kill", "unreadable"), who))
+
+
+RUN_OPEN = "RUN_OPEN"                      # DIR/RUN_OPEN: the run marker (see cmd_gate)
+UNACCOUNTED_KIND = "unaccounted_stop"
+
+
+def read_boot_id():
+    try:
+        with open("/proc/sys/kernel/random/boot_id") as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def _marker_path(guard):
+    return os.path.join(guard, RUN_OPEN)
+
+
+def read_run_marker(guard):
+    """-> (state, doc): ("absent", None) | ("open", {...}) | ("unreadable", None). A marker that cannot be parsed still means a stop nobody accounted for."""
+    try:
+        with open(_marker_path(guard)) as f:
+            raw = f.read()
+    except FileNotFoundError:
+        return "absent", None
+    try:
+        doc = json.loads(raw)
+        return "open", doc if isinstance(doc, dict) else {}
+    except ValueError:
+        return "unreadable", None
+
+
+def open_run_marker(guard, env, now):
+    """Write the marker durably and atomically (temporary file, flush, rename, flush the folder). Raises OSError if it cannot."""
+    path = _marker_path(guard)
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    try:
+        with open(tmp, "w") as f:
+            json.dump({"opened_at": now, "boot_id": read_boot_id(), "invocation_id": env.get("INVOCATION_ID"), "pid": os.getpid()}, f, sort_keys=True)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        _fsync_dir(guard)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def close_run_marker(guard):
+    """Remove the marker (the stop is accounted for) and flush the folder. Raises OSError if it cannot."""
+    try:
+        os.unlink(_marker_path(guard))
+    except FileNotFoundError:
+        return
+    _fsync_dir(guard)
+
+
+def record_incident(a, kind, detail, evidence, now):
+    """The hold first (PAUSE: one empty file, works even if the latch cannot be written), then the latch (retried), then the evidence folder (a help: its failure never loses the latch).
+    -> (recorded, held, extra)"""
+    held = False
+    try:
+        open(os.path.join(os.path.abspath(a.root), "store", S.PAUSE), "a").close()
+        held = True
+    except OSError:
+        pass
+    err = None
+    for i in range(INCIDENT_TRIES):
+        try:
+            write_trip(a.guard, kind, detail, "systemd", now)
+            err = None
+            break
+        except OSError as e:
+            err = e
+            if i + 1 < INCIDENT_TRIES:
+                time.sleep(0.5 * (i + 1))
+    if err is not None:
+        return False, held, {"error": str(err)[:200]}
+    extra = {}
+    try:
+        d = os.path.join(getattr(a, "evidence", None) or os.path.join(a.guard, "evidence"), "trip-%s-%s" % (time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now)), kind))
+        os.makedirs(d, exist_ok=True)
+        snap = {"kind": kind, "detail": detail, "evidence": evidence, "at": now, "pause_file": held}
+        for name, path in (("store_clock", os.path.join(os.path.abspath(a.root), "store", "clock.json")), ("public_status", os.path.join(a.public, "status.json") if a.public else None)):
+            try:
+                snap[name] = B.get(path) if path else None
+            except Exception as e:
+                snap[name] = "unreadable: %s" % e
+        with open(os.path.join(d, "evidence.json"), "w") as f:
+            json.dump(snap, f, indent=1, sort_keys=True, default=str)
+            f.flush()
+            os.fsync(f.fileno())
+        extra["evidence_dir"] = d
+    except Exception as e:
+        extra["evidence_error"] = str(e)[:200]
+    return True, held, extra
+
+
+def _say(obj):
+    print(json.dumps(obj, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def cmd_incident(a):
+    """ExecStopPost=: account for the stop. An OOM is recorded (latch, hold, evidence) and then the run marker is closed; a stop systemd says was not an OOM closes the marker; anything that could
+    not be recorded or closed leaves the marker, so the next start (cmd_gate) holds instead of carrying on."""
+    now = time.time()
+    env = os.environ
+    events = cgroup_events(a.cgroup) if a.cgroup else None
+    if not is_oom_stop(env, events):
+        if not env.get("SERVICE_RESULT"):
+            return 0                                                            # not told why the unit stopped: nobody can say it was accounted for, the marker stays
+        try:
+            close_run_marker(a.guard)
+        except OSError as e:
+            _say({"incident": "marker_not_closed", "error": str(e)[:200], "at": now, "result": env.get("SERVICE_RESULT")})
+            return 1
+        return 0
+    main_pid = int(env["MAINPID"]) if env.get("MAINPID", "").isdigit() and int(env["MAINPID"]) > 0 else None
+    log = read_kernel_log(a.kernel_log)
+    victims = parse_oom_victims(log, os.path.basename(a.cgroup.rstrip("/")) if a.cgroup else None)
+    oom = {"service_result": env.get("SERVICE_RESULT"), "exit_code": env.get("EXIT_CODE"), "exit_status": env.get("EXIT_STATUS"), "daemon_main_pid": main_pid, "cgroup_events": events,
+           "kernel_log_read": log is not None, "victims": victims, "victim_status": "identified" if victims else "unknown",
+           "daemon_was_victim": (main_pid in [v["pid"] for v in victims]) if (victims and main_pid) else None}
+    detail = describe_incident(oom)
+    recorded, held, extra = record_incident(a, INCIDENT_KIND, detail, oom, now)
+    if not recorded:
+        _say({"incident": "unrecorded", "held": held, "detail": detail, "at": now, "marker": "left open: the next start will hold", **extra})
+        return 1
+    out = {"incident": "recorded", "kind": INCIDENT_KIND, "held": held, "victim_status": oom["victim_status"], "at": now, **extra}
+    try:
+        close_run_marker(a.guard)                                               # the latch carries the incident now
+    except OSError as e:
+        out["marker_error"] = str(e)[:200]
+    _say(out)
+    return 0
+
+
+def cmd_gate(a):
+    """ExecStartPre=: run before the daemon. If the previous run's marker is still there, that stop was never accounted for (the OOM hook failed or did not finish, or the host died): make
+    it a latch (kind unaccounted_stop) so the daemon starts held. Then open a marker for the run that is about to start. Exit 1 (the daemon does not start) if either cannot be done."""
+    now = time.time()
+    state, doc = read_run_marker(a.guard)
+    if state != "absent":
+        boot = read_boot_id()
+        before = (doc or {}).get("boot_id")
+        where = ("the host restarted since (boot id changed)" if (boot and before and boot != before) else "same boot" if (boot and before) else "boot id unknown")
+        since = (doc or {}).get("opened_at")
+        detail = ("the previous run of the daemon ended without its stop being accounted for (%s; marker %s%s). The OOM hook may have failed to record an incident, or the host died; "
+                  "it cannot be told apart. The broadcast stays held until this latch is released." % (where, "unreadable" if state == "unreadable" else "left open",
+                                                                                                          "" if since is None else ", run opened %s" % time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime(since))))
+        recorded, held, extra = record_incident(a, UNACCOUNTED_KIND, detail, {"previous_run": doc, "marker_state": state, "boot_id": boot, "same_boot": (boot == before) if (boot and before) else None}, now)
+        if not recorded:
+            _say({"gate": "refused", "why": "an unaccounted stop could not be recorded", "held": held, "detail": detail, "at": now, **extra})
+            return 1
+    try:
+        open_run_marker(a.guard, os.environ, now)
+    except OSError as e:
+        _say({"gate": "refused", "why": "the run marker could not be written", "error": str(e)[:200], "at": now})
+        return 1
+    return 0
+
+
 def cmd_pause(a, on=True):
     path = os.path.join(os.path.abspath(a.root), "store", S.PAUSE)
     if not on and getattr(a, "guard", None) and os.path.exists(trip_file(a.guard)):
@@ -246,6 +508,20 @@ def main(argv=None):
     p.add_argument("--guard-stale", type=float, default=GUARD_STALE_S)
     p.add_argument("--guard-grace", type=float, default=GUARD_GRACE_S)
     p.set_defaults(fn=cmd_run)
+    p = sub.add_parser("incident", help="run by the unit's ExecStopPost=: record an OOM stop as a latch before systemd restarts the daemon (reads $SERVICE_RESULT, $MAINPID, $EXIT_CODE, $EXIT_STATUS)")
+    p.add_argument("--root", required=True)
+    p.add_argument("--public", help="the public folder (its status.json goes into the evidence)")
+    p.add_argument("--guard", required=True, help="the monitor's folder: where the latch is written")
+    p.add_argument("--evidence", help="evidence folder (default DIR/evidence)")
+    p.add_argument("--cgroup", help="the unit's cgroup folder: its memory.events is read while it still exists, and its name picks the victims out of the kernel log")
+    p.add_argument("--kernel-log", help="read kernel messages from this file instead of journalctl (tests)")
+    p.set_defaults(fn=cmd_incident)
+    p = sub.add_parser("gate", help="run by the unit's ExecStartPre=: turn a stop nobody accounted for into a latch, or refuse to start the daemon; then open the run marker")
+    p.add_argument("--root", required=True)
+    p.add_argument("--public", help="the public folder (its status.json goes into the evidence)")
+    p.add_argument("--guard", required=True)
+    p.add_argument("--evidence", help="evidence folder (default DIR/evidence)")
+    p.set_defaults(fn=cmd_gate)
     for name in ("pause", "resume", "status"):
         p = sub.add_parser(name)
         p.add_argument("--root", required=True)

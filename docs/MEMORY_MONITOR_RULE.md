@@ -30,6 +30,8 @@ The broadcast stops (the existing `memory_high` trip kind, same latch, same evid
 
 **What the monitor can and cannot catch.** After `pinned` crosses the line the daemon has 10 % of `MemoryMax` left. If it grows faster than `0.1 × MemoryMax / 60 s` (about 0.3 MB/s for a 192 MB limit, 1.0 MB/s for 600 MB) the kernel reaches the limit before the window ends. Then the protection is the kernel's: it OOM-kills, `OOMPolicy=stop` is meant to stop the unit, the daemon stops renewing its lease and the monitor trips on `daemon_silent` and on the `oom_kill` event. That is the protection that existed before this change; the sustained rule adds early warning, with evidence, for a slow leak the kernel would reach minutes later. `OOMPolicy=stop` under real systemd is **not yet verified** (validation plan, stage V3).
 
+**Update (second candidate).** That protection did not hold in the first validation run (stage V2b): systemd restarted the unit within seconds, its cgroup counters went back to zero, and the monitor's poll never saw the kill, so no latch was written. The incident is now recorded by the unit's own lifecycle (`ExecStopPost=`, before the restart), not by polling: see `docs/OOM_INCIDENT_RECORD.md`. The monitor's rule is unchanged and remains a second signal.
+
 **What is recorded.** Every trip's evidence holds `anon`, `file`, `file_dirty`, `file_writeback`, `file_mapped`, `shmem`, `kernel`, `slab_reclaimable`, `slab_unreclaimable`, `unevictable`, `active_file`, `inactive_file`, the full `memory.events`, the pressure files, both estimates, the rule's parameters and the **last 12 samples**. Every heartbeat line carries a compact `mem` object (`current`, `max`, `anon`, `file`, `dirty`, `writeback`, `mapped`, `shmem`, `kernel`, `slab_reclaimable`, `pinned`, `events`, `psi_some10`, `psi_full10`), about 320 bytes per line, so a run has a memory time series.
 
 ## 3. Tests
@@ -71,7 +73,7 @@ Every sample (1 Hz) was judged by the earlier rule (one reading of `memory.curre
 ## 5. Scope
 
 Changed: `tools/rehearsal_check.py` only, in the monitor's memory check (the reader, `memory_estimates`, `MemoryJudge`, `Watch.memory_check` replacing the short block in `cheap()`, and the `mem` object in the heartbeat; about 200 lines, mostly the reader and the evidence). New: `tests/test_memory_rule.py`, `tests/fixtures/cgroup_v2_synthetic/`, `tools/memory_workloads.py`, `tools/memory_rule_mutants.py`, `docs/measurements/memory_monitor/`, this document and the validation plan. One test and one doc row were updated.
-**Not changed:** the daemon, the guard, the units (`MemoryMax`, `OOMPolicy`, `--every`, `--cgroup` paths), the engine, `src/dfl`, data, the site, league rules. No limit was raised or lowered.
+**Not changed (first candidate):** the daemon, the guard, the units (`MemoryMax`, `OOMPolicy`, `--every`, `--cgroup` paths), the engine, `src/dfl`, data, the site, league rules. No limit was raised or lowered. (The second candidate does change the daemon's recorder and units: `docs/OOM_INCIDENT_RECORD.md`.)
 The v1 branch of the reader exists only so the rule can be exercised against real workloads on a host without a v2 memory controller; the target units are cgroup v2.
 
 ## 6. Limits and uncertainties

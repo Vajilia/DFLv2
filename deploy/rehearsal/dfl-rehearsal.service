@@ -4,6 +4,8 @@ After=network.target
 # three starts in an hour and the unit stays failed: a daemon that keeps dying is not restarted forever
 StartLimitIntervalSec=3600
 StartLimitBurst=3
+# A clean stop closes the run marker in ExecStopPost=, which must run before the filesystem is unmounted at shutdown (docs/OOM_INCIDENT_RECORD.md).
+RequiresMountsFor=/srv/dflv2-rehearsal
 
 [Service]
 Type=simple
@@ -26,7 +28,13 @@ NoNewPrivileges=true
 # The operator sets the real deadline (start + 54 h) when the rehearsal is approved. The daemon pauses and exits 0 at the deadline; Restart=on-failure does not restart that.
 EnvironmentFile=/etc/dflv2/rehearsal.env
 # __COMMIT__ is the pinned checkout (/opt/dflv2-src/<commit>), filled in by install_rehearsal.sh; this file is a template, not installable as it is.
+# Before the daemon: turn a stop nobody accounted for (a marker left in the guard folder) into a latch, or fail so the daemon does not start; then open the marker for this run (docs/OOM_INCIDENT_RECORD.md).
+ExecStartPre=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py gate --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --guard /srv/dflv2-rehearsal/monitor
 ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py run --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --deadline ${REHEARSAL_DEADLINE} --max-public-gb 3 --guard /srv/dflv2-rehearsal/monitor
+# An OOM kill of any process in this cgroup stops the whole unit (set explicitly: the default depends on the distribution); ExecStopPost= then records it as a latch BEFORE Restart= starts a
+# new daemon, so the restarted daemon starts held (docs/OOM_INCIDENT_RECORD.md). A stop that is not an OOM records nothing.
+OOMPolicy=stop
+ExecStopPost=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py incident --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --guard /srv/dflv2-rehearsal/monitor --cgroup /sys/fs/cgroup/system.slice/dfl-rehearsal.service
 # SIGTERM: the daemon finishes the tick and exits; it leaves the folder as it is (the clock stops by itself within its lease, and a restart carries on from there).
 TimeoutStopSec=30
 Restart=on-failure
