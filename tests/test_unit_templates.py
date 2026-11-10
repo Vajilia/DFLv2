@@ -12,6 +12,8 @@ import argparse
 import os
 import re
 import shlex
+import shutil
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -153,11 +155,31 @@ class Templates(unittest.TestCase):
 
     def test_the_marker_is_closed_before_storage_goes_away_at_shutdown(self):
         """A clean reboot must close the marker (ExecStopPost= runs at shutdown), or every reboot would hold the broadcast. The unit therefore depends on the mounts it writes to."""
-        text = (DEPLOY / 'dfl-broadcast-daemon.service').read_text()
-        m = re.search(r'(?m)^RequiresMountsFor=(.+)$', text)
-        self.assertIsNotNone(m, 'RequiresMountsFor= orders the unit before the unmount of what it writes to')
-        for need in ('__ROOT__', '__PUBLIC__', '__GUARD__'):
-            self.assertIn(need, m.group(1))
+        for path, needs in ((DEPLOY / 'dfl-broadcast-daemon.service', ('__ROOT__', '__PUBLIC__', '__GUARD__')), (ROOT / 'deploy' / 'rehearsal' / 'dfl-rehearsal.service', ('/srv/dflv2-rehearsal',))):
+            with self.subTest(unit=path.name):
+                text = path.read_text()
+                unit_section = text.split('[Unit]', 1)[1].split('[Service]', 1)[0]
+                m = re.search(r'(?m)^RequiresMountsFor=(.+)$', unit_section)
+                self.assertIsNotNone(m, 'RequiresMountsFor= is a [Unit] setting (in [Service] systemd ignores it with a warning): it orders the unit before the unmount of what it writes to')
+                for need in needs:
+                    self.assertIn(need, m.group(1))
+
+    @unittest.skipUnless(shutil.which('systemd-analyze'), 'needs systemd-analyze (parses unit files offline; no systemd needs to be running)')
+    def test_systemd_itself_parses_the_units_without_ignoring_a_setting(self):
+        """`systemd-analyze verify --root=` is systemd's own parser. It does not RUN anything. What it catches here: a directive in the wrong section ("Unknown key ... ignoring"), a misspelled key, a bad value.
+        Its other messages (no python3 under the fake root, no sysinit.target) are artefacts of the fake root and are ignored."""
+        import tempfile
+        for path, name in ((DEPLOY / 'dfl-broadcast-daemon.service', 'dfl-broadcast-daemon.service'), (ROOT / 'deploy' / 'rehearsal' / 'dfl-rehearsal.service', 'dfl-rehearsal.service')):
+            with self.subTest(unit=name), tempfile.TemporaryDirectory() as root:
+                os.makedirs(os.path.join(root, 'etc', 'systemd', 'system'))
+                text = path.read_text()
+                for k, v in (('__COMMIT__', 'c'), ('__ROOT__', '/srv/x'), ('__PUBLIC__', '/srv/x/public'), ('__GUARD__', '/srv/x/guard')):
+                    text = text.replace(k, v)
+                with open(os.path.join(root, 'etc', 'systemd', 'system', name), 'w') as f:
+                    f.write(text)
+                r = subprocess.run(['systemd-analyze', 'verify', '--root=' + root, name], capture_output=True, text=True, timeout=60)
+                bad = [l for l in (r.stdout + r.stderr).splitlines() if l.strip() and 'is not executable' not in l and 'sysinit.target' not in l]
+                self.assertEqual(bad, [], 'systemd would ignore or reject something in %s' % name)
 
     def test_the_monitor_floor_is_below_the_builders_so_building_stops_first(self):
         m, s = parsed('dfl-broadcast-monitor'), parsed('dfl-supervisor')

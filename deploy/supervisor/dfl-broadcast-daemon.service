@@ -1,6 +1,8 @@
 [Unit]
 Description=DFLv2 recurring broadcast daemon (the only writer of the public folder; reads the private store; never touches the league)
 After=network.target
+# A clean stop closes the run marker in ExecStopPost=, which must run before these filesystems are unmounted at shutdown: otherwise every reboot would look like an unaccounted stop.
+RequiresMountsFor=__ROOT__ __PUBLIC__ __GUARD__
 # three starts in an hour and the unit stays failed: a daemon that keeps dying is not restarted forever
 StartLimitIntervalSec=3600
 StartLimitBurst=3
@@ -28,6 +30,9 @@ ReadOnlyPaths=/opt/dflv2-src
 PrivateTmp=true
 NoNewPrivileges=true
 EnvironmentFile=/etc/dflv2/broadcast.env
+# Before the daemon: if the previous run's marker (RUN_OPEN in the guard folder) is still there, that stop was never accounted for (the OOM hook below failed or did not finish, or the host died):
+# make it a latch so the daemon starts held, or FAIL (no "-" prefix), in which case systemd does not start the daemon. Then open the marker for this run. docs/OOM_INCIDENT_RECORD.md.
+ExecStartPre=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py gate --root __ROOT__ --public __PUBLIC__ --guard __GUARD__
 ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py run --root __ROOT__ --public __PUBLIC__ --guard __GUARD__ --max-public-gb-per-season ${PUBLIC_GB_PER_SEASON} --public-base-gb ${PUBLIC_BASE_GB} --max-public-ceiling-gb ${PUBLIC_CEILING_GB}
 # After the unit stopped and BEFORE Restart= starts it again: if the stop was an OOM kill of any process in this cgroup (the daemon or a child), write the latch (kind oom_kill), the evidence and
 # PAUSE, so a restarted daemon starts held. A monitor polling memory.events can miss the event: the restart recreates the cgroup with its counters at zero. A stop that is not an OOM records

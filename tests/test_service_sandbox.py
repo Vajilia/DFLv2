@@ -65,6 +65,8 @@ class AsService(Base):
                 if not os.path.islink(p):
                     os.chown(p, UID, GID)
         os.chown(self.tmp, UID, GID)
+        os.chown(self.pub, UID, GID)
+        os.chmod(self.pub, 0o755)
 
     def healthy(self):
         for d in (self.guard, self.rig.store):
@@ -77,10 +79,10 @@ class AsService(Base):
             os.chown(d, 0, 0)
             os.chmod(d, 0o555)
 
-    def service(self, sub, env=None, extra=(), timeout=90):
+    def service(self, sub, env=None, extra=(), timeout=90, public=True):
         env = dict(env or {})
         cmd = ['setpriv', '--reuid', str(UID), '--regid', str(GID), '--clear-groups', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/nonexistent'] + ['%s=%s' % kv for kv in env.items()]
-        cmd += ['python3', '-I', os.path.join(self.src, 'tools', 'broadcast_run.py'), sub, '--root', self.tmp, '--public', self.pub, '--guard', self.guard] + list(extra)
+        cmd += ['python3', '-I', os.path.join(self.src, 'tools', 'broadcast_run.py'), sub, '--root', self.tmp] + (['--public', self.pub] if public else []) + ['--guard', self.guard] + list(extra)
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         lines = [json.loads(l) for l in r.stderr.splitlines() if l.startswith('{')]
         return r.returncode, lines, r.stderr
@@ -178,7 +180,7 @@ class BothWritesFail(AsService):
     def test_resume_is_refused_afterwards_as_for_any_latch(self):
         self.healthy()
         self.gate()
-        rc, lines, err = self.service('resume')
+        rc, lines, err = self.service('resume', public=False)
         self.assertEqual(rc, 3, 'resume is refused while the latch exists: only release, then resume, clears it')
 
 
