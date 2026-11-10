@@ -97,6 +97,44 @@ class Templates(unittest.TestCase):
         sup = (DEPLOY / 'dfl-supervisor.service').read_text()
         self.assertRegex(sup, r'(?m)^KillMode=control-group$')
 
+    def test_the_daemon_records_an_oom_stop_before_it_can_be_restarted(self):
+        """ExecStopPost= runs after the unit stopped and before Restart= starts it again; systemd gives it $SERVICE_RESULT (oom-kill when OOMPolicy=stop ended the unit because ANY process of
+        the cgroup was OOM-killed). The recorder writes the latch and the hold there, so the restarted daemon cannot advance the broadcast (tools/broadcast_run.py incident)."""
+        for path, cgroup in ((DEPLOY / 'dfl-broadcast-daemon.service', 'dfl-broadcast-daemon.service'), (ROOT / 'deploy' / 'rehearsal' / 'dfl-rehearsal.service', 'dfl-rehearsal.service')):
+            with self.subTest(unit=path.name):
+                text = path.read_text()
+                self.assertRegex(text, r'(?m)^OOMPolicy=stop$', 'set explicitly: the default depends on the distribution')
+                self.assertRegex(text, r'(?m)^Restart=on-failure$')
+                lines = [l for l in text.splitlines() if l.startswith('ExecStopPost=')]
+                self.assertEqual(len(lines), 1, lines)
+                line = lines[0][len('ExecStopPost='):]
+                self.assertFalse(line.startswith('-'), 'a recorder that fails must show as a failure, not be ignored')
+                self.assertFalse(line.startswith('+'), 'no extra privileges: it runs as the service user, inside the same sandbox')
+                for k, v in (('__COMMIT__', 'x'), ('__ROOT__', '/r'), ('__PUBLIC__', '/p'), ('__GUARD__', '/g')):
+                    line = line.replace(k, v)
+                argv = shlex.split(line)
+                self.assertIn('broadcast_run.py', argv[argv.index('-I') + 1] if '-I' in argv else '', 'python -I: isolated, as the daemon is')
+                got = {}
+
+                def grab(self_, a=None, ns=None):
+                    got['ns'] = ArgParse(self_, a, ns)
+                    raise Stop
+                ArgParse = argparse.ArgumentParser.parse_args
+                with mock.patch.object(argparse.ArgumentParser, 'parse_args', grab):
+                    try:
+                        BR.main(argv[[i for i, a in enumerate(argv) if a.endswith('broadcast_run.py')][0] + 1:])
+                    except Stop:
+                        pass
+                ns = got['ns']
+                self.assertEqual(ns.cmd, 'incident')
+                self.assertEqual(ns.cgroup, '/sys/fs/cgroup/system.slice/' + cgroup, 'the unit\'s own cgroup, which still exists while ExecStopPost runs')
+                run_line = [l for l in text.splitlines() if l.startswith('ExecStart=')][0]
+                self.assertIn('--guard', run_line)
+                self.assertEqual(ns.guard, '/g', 'the same guard folder the daemon obeys and the monitor writes')
+                self.assertEqual(ns.root, '/r' if 'supervisor' in str(path) else ns.root)
+                tout = int(re.search(r'(?m)^TimeoutStopSec=(\d+)$', text).group(1))
+                self.assertGreaterEqual(tout, 30, 'ExecStopPost shares the stop timeout: the recorder (retries, a 5 s log read) must fit')
+
     def test_the_monitor_floor_is_below_the_builders_so_building_stops_first(self):
         m, s = parsed('dfl-broadcast-monitor'), parsed('dfl-supervisor')
         self.assertLess(m.min_free_gb, s.floor_gb)
