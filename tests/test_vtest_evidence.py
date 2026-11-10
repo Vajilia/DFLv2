@@ -220,5 +220,24 @@ class Evidence(unittest.TestCase):
                 self.assertIn(i['sha256'], text)
 
 
+class Plan(unittest.TestCase):
+    def test_plan_prints_an_estimate_for_every_stage_in_both_modes(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = VT.cmd_plan(SimpleNamespace(stages=[]))
+        self.assertEqual(rc, 0)
+        self.assertIn('rough wall-clock', out.getvalue())
+        for st in C.STAGES:
+            mod = VT.stage_module(st)
+            for mode in ('qualifying', 'smoke'):
+                self.assertGreater(VT.estimate(mod, mode), 0, (st, mode))
+
+    def test_the_v1_estimate_includes_the_publication_window(self):
+        v1 = VT.stage_module('V1')
+        d = v1.DEFAULTS['smoke']
+        self.assertEqual(VT.estimate(v1, 'smoke'), d['baseline_s'] + 900 + d['duration_s'] + 300)
+        self.assertGreater(VT.estimate(v1, 'smoke'), 880, 'the smoke run must be long enough to reach the end of the first window (position about 878 s)')
+
+
 if __name__ == '__main__':
     unittest.main()

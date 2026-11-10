@@ -84,7 +84,10 @@ def cmd_preflight(a):
 
 def estimate(mod, mode):
     d = mod.DEFAULTS[mode]
-    return {"V1": d.get("baseline_s", 0) + 900 + d.get("duration_s", 0) + 300,            # 900: the publication phase waits for the fixture's first window (ends at broadcast position about 880 s) "V2": 2 * d.get("baseline_s", 0) + 600 + d.get("timeline_s", 0) + 300, "V3": d.get("watch_s", 0) + 2 * 330 + 700,
+    # V1: 900 s is the publication phase, which waits for the fixture's first window to end (broadcast position about 880 s)
+    return {"V1": d.get("baseline_s", 0) + 900 + d.get("duration_s", 0) + 300,
+            "V2": 2 * d.get("baseline_s", 0) + 600 + d.get("timeline_s", 0) + 300,
+            "V3": d.get("watch_s", 0) + 2 * 330 + 700,
             "V4": 6 * 150 + 400 + 2 * 400 + 200}[mod.STAGE]
 
 
