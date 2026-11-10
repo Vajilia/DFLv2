@@ -11,6 +11,12 @@ import re
 
 # path -> (owner, mode); owner 'svc' or 'root'. `mode` is exact for directories the service needs to reach or own; 'noworld' means: root-owned and not writable by group or other.
 # The root folder is root-owned (the builder's, in production): the service user owns only its private store inside it.
+def layout_paths(tree):
+    """The folders the layout and the installer's ownership step name, from the harness's own constants. One definition for the installer and for V0."""
+    from common import BASE, ETC, EVID, GUARD, LOADDIR, PROBE, PUBLIC, ROOT_DIR, STATE, WEB_DIR
+    return {"BASE": BASE, "ROOT_DIR": ROOT_DIR, "WEB_DIR": WEB_DIR, "PUBLIC": PUBLIC, "GUARD": GUARD, "TREE": tree.rstrip("/"), "ETC": ETC, "EVID": EVID, "STATE": STATE, "LOADDIR": LOADDIR, "PROBE": PROBE}
+
+
 def layout(paths):
     return [(paths["BASE"], "root", 0o755), (paths["ROOT_DIR"], "root", 0o755), (paths["ROOT_DIR"] + "/store", "svc", 0o700), (paths["WEB_DIR"], "root", 0o755), (paths["PUBLIC"], "svc", 0o755),
             (paths["GUARD"], "svc", 0o700), (paths["TREE"], "root", "noworld"), (paths["ETC"] + "/broadcast.env", "root", 0o644),

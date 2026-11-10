@@ -115,6 +115,22 @@ class ApplyLayout(unittest.TestCase):
         self.assertEqual(self.modes[p['PUBLIC']], 0o755)
         self.assertEqual(self.modes[p['TREE'] + '/tools/x.py'] & 0o022, 0, 'the code is not writable by group or other')
 
+    def test_the_installers_own_path_set_is_enough_for_the_ownership_step(self):
+        """Found on the first real install: the installer's path dict lacked a key the ownership step reads. Both now take their paths from one function."""
+        keys = P.layout_paths('/t')
+        self.assertEqual(set(keys), set(PATHS))
+        j = lambda *a: os.path.join(self.d, 'x', *a)
+        paths = {k: j(k) for k in keys}
+        for k, p in paths.items():
+            os.makedirs(p, exist_ok=True)
+        os.makedirs(paths['ROOT_DIR'] + '/store', exist_ok=True)
+        Path(paths['ETC'], 'broadcast.env').write_text('X=1\n')
+        P.apply_layout(USER, paths, lambda p: p.startswith(self.d), chown=lambda p, u, g: None, chmod=lambda p, m: None, getpw=lambda n: self.pw)
+
+    def test_render_install_uses_that_function(self):
+        src = (VT / 'render.py').read_text()
+        self.assertIn('perms.layout_paths(t)', src)
+
     def test_the_environment_file_is_roots_and_world_readable_not_writable(self):
         os.makedirs(self.paths['ETC'])
         Path(self.paths['ETC'], 'broadcast.env').write_text('X=1\n')

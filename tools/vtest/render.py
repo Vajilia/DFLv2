@@ -221,8 +221,7 @@ def install(env, repo, pin=None, user=SERVICE_USER, apply=True):
     env.write(WEB_DIR + "/index.html", "<!doctype html><title>vtest</title>\n")
     if apply:
         import perms
-        layout_done = perms.apply_layout(user, {"BASE": BASE, "ROOT_DIR": ROOT_DIR, "WEB_DIR": WEB_DIR, "PUBLIC": PUBLIC, "GUARD": GUARD, "TREE": t.rstrip("/"), "EVID": EVID, "STATE": STATE, "LOADDIR": LOADDIR, "PROBE": PROBE}, allowed_path)
-        os.chmod(ETC + "/broadcast.env", 0o644)
+        layout_done = perms.apply_layout(user, perms.layout_paths(t), allowed_path)
         log["steps"].append(("layout", True, "%d folders given their owners and modes (%s)" % (len(layout_done), user)))
     env.sc("daemon-reload")
     log["units"] = units

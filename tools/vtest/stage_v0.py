@@ -39,8 +39,7 @@ ACCESS_SNIPPET = ("import os,sys,errno\n"
 
 
 def paths(tree):
-    return {"BASE": BASE, "ROOT_DIR": ROOT_DIR, "WEB_DIR": WEB_DIR, "PUBLIC": PUBLIC, "GUARD": GUARD, "TREE": tree.rstrip("/"), "ETC": ETC, "EVID": EVID, "STATE": STATE,
-            "LOADDIR": LOADDIR, "PROBE": PROBE}
+    return P.layout_paths(tree)
 
 
 def user_facts(env, name):
