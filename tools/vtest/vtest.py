@@ -3,9 +3,9 @@
 
   vtest.py pin-check                      the code under test is the pinned commit; HEAD differs only in docs/harness/tests; the guard constants match the pinned tree
   vtest.py preflight [--json]             read-only: is this machine a usable, disposable environment? (changes nothing)
-  vtest.py plan [V1..V4]                  print every step and the durations; executes nothing
-  vtest.py install [--user U]             extract and verify the pinned tree, render the test units, build the generated fixture. Starts nothing
-  vtest.py run [--stages V1,V2,V3,V4] [--smoke] [--run-id ID] [--with-reboot] [--after-reboot | --after-hard-reset] [--acknowledge-stop REASON]
+  vtest.py plan [V0..V4]                  print every step and the durations; executes nothing
+  vtest.py install [--user U]             extract and verify the pinned tree, render the test units (running as U, default dfl-vtest, which the operator creates first), build the generated fixture, set owners and modes. Starts nothing
+  vtest.py run [--stages V0,V1,V2,V3,V4] [--smoke] [--run-id ID] [--after-reboot | --after-hard-reset | --capture-reboot-state] [--acknowledge-stop REASON]
                                           run stages in order; STOPS at the first stage that does not pass (units and evidence are left exactly as they are)
   vtest.py archive --run-id ID [--out F] host records + manifest of required evidence (MISSING is explicit) + ONE compressed archive, read back and verified; exit 3: do not clean up the host
   vtest.py status                         runs, results, any STOPPED marker
@@ -85,7 +85,8 @@ def cmd_preflight(a):
 def estimate(mod, mode):
     d = mod.DEFAULTS[mode]
     # V1: 900 s is the publication phase, which waits for the fixture's first window to end (broadcast position about 880 s)
-    return {"V1": d.get("baseline_s", 0) + 900 + d.get("duration_s", 0) + 300,
+    return {"V0": 120 + 8 * 20 + d.get("settle_s", 0) + 120,
+            "V1": d.get("baseline_s", 0) + 900 + d.get("duration_s", 0) + 300,
             "V2": 2 * d.get("baseline_s", 0) + 600 + d.get("timeline_s", 0) + 300,
             "V3": d.get("watch_s", 0) + 2 * 330 + 700,
             "V4": 6 * 150 + 400 + 2 * 400 + 200}[mod.STAGE]
@@ -116,7 +117,7 @@ def cmd_install(a):
     if not PF.ready(rows):
         print(PF.report(rows))
         return 1
-    log = RN.install(C.Env(), C.REPO, user=a.user)
+    log = RN.install(C.Env(), C.REPO, user=a.user or C.SERVICE_USER)
     print(json.dumps({"pin": log["pin"], "deviations": log["deviations"]}, indent=1))
     return 0
 
@@ -163,6 +164,13 @@ def cmd_run(a):
     if inst.get("pin") != pin:
         print("REFUSING: not installed for pin %s (run `install`)" % pin[:12])
         return 1
+    if not inst.get("user") or inst.get("user") == "root":
+        print("REFUSING: the units were installed without a dedicated unprivileged service user (run `install`)")
+        return 1
+    if inst.get("harness_rev") != C.harness_rev():
+        print("REFUSING: installed by harness revision %s, this checkout is %s: the ownership and modes the install sets are part of the harness (run `install` again)" % ((inst.get("harness_rev") or "?")[:12], C.harness_rev()[:12]))
+        return 1
+    env.service_user = inst["user"]
     stops = run_dir_state(env)
     if stops and not a.acknowledge_stop:
         print("REFUSING: an earlier run STOPPED on a failed check: %s\nRead its evidence, then re-run with --acknowledge-stop 'reason of at least 10 characters' (recorded)." % (stops[-1],))
@@ -186,7 +194,7 @@ def cmd_run(a):
 
 
 def run_stages(a, env, pin, inst, rows, run_id, rdir, mode):
-    meta = {"started": time.time(), "pin": pin, "harness_rev": C.harness_rev(), "mode": mode, "qualifying": mode == "qualifying", "run_id": run_id, "kernel": (env.read("/proc/sys/kernel/osrelease") or "").strip(),
+    meta = {"started": time.time(), "pin": pin, "harness_rev": C.harness_rev(), "mode": mode, "qualifying": mode == "qualifying", "run_id": run_id, "service_user": inst.get("user"), "kernel": (env.read("/proc/sys/kernel/osrelease") or "").strip(),
             "preflight": [{"id": c, "status": s, "detail": d} for c, s, d in rows], "deviations": inst.get("deviations"), "acknowledged_stop": a.acknowledge_stop}
     env.write(os.path.join(rdir, "run.json"), json.dumps(meta, indent=1))
     stages = [s.strip().upper() for s in a.stages.split(",")] if a.stages else list(C.STAGES)
@@ -201,7 +209,9 @@ def run_stages(a, env, pin, inst, rows, run_id, rdir, mode):
         print("== %s (%s)" % (name, mode))
         note = None
         try:
-            if name == "V4" and (a.after_reboot or a.after_hard_reset):
+            if name == "V4" and a.capture_reboot_state:
+                mod.capture_reboot_state(ctx)
+            elif name == "V4" and (a.after_reboot or a.after_hard_reset):
                 mod.run_after_reboot(ctx, "hard" if a.after_hard_reset else "clean")
             else:
                 mod.run(ctx)
@@ -320,9 +330,9 @@ def main(argv=None):
     p.add_argument("--stages")
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--run-id")
-    p.add_argument("--with-reboot", action="store_true")
     p.add_argument("--after-reboot", action="store_true")
     p.add_argument("--after-hard-reset", action="store_true")
+    p.add_argument("--capture-reboot-state", action="store_true")
     p.add_argument("--acknowledge-stop")
     p.set_defaults(fn=cmd_run)
     p = sub.add_parser("archive")

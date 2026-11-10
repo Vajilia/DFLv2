@@ -33,7 +33,9 @@ EXPORT = BASE + "/export"                     # archives made by `vtest.py archi
 ROOT_DIR, WEB_DIR, PUBLIC, GUARD, EVID, LOADDIR, STATE = (BASE + "/root", BASE + "/web", BASE + "/web/feed", BASE + "/guard", BASE + "/evidence", BASE + "/load", BASE + "/state")
 
 STATUSES = ("pass", "fail", "invalid", "review", "not_run", "info")
-STAGES = ("V1", "V2", "V3", "V4")
+STAGES = ("V0", "V1", "V2", "V3", "V4")
+SERVICE_USER = "dfl-vtest"                    # the dedicated unprivileged user (and group of the same name) the daemon and monitor run as; created by the operator, never by the harness
+PROBE = BASE + "/probe"                       # scratch folders of the lifecycle probe (V0): the real gate and hook run there under strace, never over the live guard folder
 
 # What the daemon's own guard does (tools/broadcast_run.py): numbers the checks compare with. Read from the pinned tree at run time when possible; these are the fallbacks and are
 # asserted equal to the tree's by `vtest.py pin-check`.
@@ -167,6 +169,32 @@ class Env:
     def monotonic(self):
         return time.monotonic()
 
+    def user_exists(self, name):
+        import pwd
+        try:
+            pwd.getpwnam(name)
+            return True
+        except KeyError:
+            return False
+
+    def which(self, name):
+        import shutil
+        return shutil.which(name)
+
+    service_user = None                       # set by the driver from the install record; None: the units run as root (a recorded deviation, never a qualifying run)
+
+    def as_service(self, argv):
+        """argv wrapped to run as the service user with no supplementary groups: how an operator runs the documented commands (`release`, `resume`), so that the files they create are the service's.
+        Without a service user: argv unchanged."""
+        if not self.service_user:
+            return list(argv)
+        import pwd
+        pw = pwd.getpwnam(self.service_user)
+        return ["setpriv", "--reuid", str(pw.pw_uid), "--regid", str(pw.pw_gid), "--clear-groups", "--"] + list(argv)
+
+    def operator(self, argv, timeout=60, input=None):
+        return self.run(self.as_service(argv), timeout=timeout, input=input)
+
     def boot_id(self):
         return (self.read("/proc/sys/kernel/random/boot_id") or "").strip() or None
 
@@ -202,29 +230,72 @@ def git(repo, *args):
 
 # Which paths are what. `docs` and `none` never invalidate a result; `stages` names the stages whose results a change to the path invalidates; code under test invalidates all.
 CODE_UNDER_TEST_DEFAULT = "any other path under src/, tools/ or deploy/ (the safe default: when unsure, repeat)"
-HARNESS_STAGE = {"stage_v1.py": {"V1"}, "stage_v2.py": {"V2"}, "stage_v3.py": {"V3"}, "stage_v4.py": {"V4"}}
+HARNESS_STAGE = {"stage_v0.py": {"V0"}, "stage_v1.py": {"V1"}, "stage_v2.py": {"V2"}, "stage_v3.py": {"V3"}, "stage_v4.py": {"V4"}}
+# Harness modules whose code is used by named stages only (their judgments), not by the machinery that runs every stage.
+HARNESS_JUDGES = {"lifecycle.py": {"V2", "V3", "V4"}, "perms.py": {"V0"}, "durability.py": {"V0"}}
 HARNESS_ALL = {"common.py", "render.py", "sampler.py", "loaders.py", "site_server.py", "evaluate.py", "scenarios.py", "PIN"}
 HARNESS_NONE = {"vtest.py", "preflight.py", "evidence.py", "README.md"}      # the driver and the go/no-go gate: they decide whether to run, they do not measure
 
+# What each file of the code under test is read by. A stage is repeated when a changed file is one it depends on; a file nobody has analysed repeats everything (said, not hidden).
+# V0 (setup facts: users, permissions, applied sandbox, lifecycle probe) is cheap and follows every change to code that runs under the units.
+CODE_BEHAVIOUR = {
+    "tools/broadcast_run.py": ({"V0", "V2", "V3", "V4"}, "the daemon, its start gate, its stop hook and its own guard; the monitor's memory rule is not in this file (V1)"),
+    "tools/rehearsal_check.py": ({"V0", "V1", "V2", "V3", "V4"}, "the monitor: the memory rule (V1), its heartbeat and trips (V2, V3) and `release` (V4)"),
+}
+UNIT_LIFECYCLE = ("ExecStartPre", "ExecStopPost", "RequiresMountsFor", "OOMPolicy", "TimeoutStopSec", "Restart", "RestartSec", "RestartPreventExitStatus", "StartLimitIntervalSec", "StartLimitBurst")
+UNIT_RESOURCE = ("MemoryMax", "MemoryHigh", "MemorySwapMax", "TasksMax", "Nice")
+DAEMON_UNITS = ("deploy/supervisor/dfl-broadcast-daemon.service", "deploy/supervisor/dfl-broadcast-monitor.service")
 
-def classify(path):
-    """-> (kind, stages): kind is 'docs', 'none', 'harness' or 'code'; stages the set of stages a change invalidates."""
+
+def unit_diff_stages(diff_text):
+    """Which stages a change to a unit template invalidates, read from the changed lines: lifecycle directives -> V0, V2-V4; resource limits also V1; comments nothing; anything else (sandbox, user, paths,
+    ExecStart) -> every stage. -> (stages, why)"""
+    changed = [l[1:].strip() for l in diff_text.splitlines() if l[:1] in "+-" and l[:3] not in ("+++", "---") and l[1:].strip()]
+    changed = [l for l in changed if not l.startswith("#")]
+    stages, why = set(), []
+    for l in changed:
+        key = l.split("=", 1)[0].strip()
+        if key in UNIT_LIFECYCLE:
+            stages |= {"V0", "V2", "V3", "V4"}
+            why.append(key + " (lifecycle)")
+        elif key in UNIT_RESOURCE:
+            stages |= {"V0", "V1", "V2", "V3", "V4"}
+            why.append(key + " (resource limit)")
+        else:
+            return set(STAGES), [key + " (not analysed: every stage)"]
+    return stages, why
+
+
+def classify(path, diff=None):
+    """-> (kind, stages): kind is 'docs', 'none', 'harness' or 'code'; stages the set of stages a change invalidates. `diff`: the file's diff, used for unit templates."""
+    return classify_why(path, diff)[:2]
+
+
+def classify_why(path, diff=None):
+    """-> (kind, stages, why)."""
     if path.startswith("docs/"):
-        return "docs", set()
+        return "docs", set(), "documentation"
     if path.startswith("tools/vtest/"):
         name = path[len("tools/vtest/"):]
         if name in HARNESS_STAGE:
-            return "harness", set(HARNESS_STAGE[name])
+            return "harness", set(HARNESS_STAGE[name]), "that stage's own steps"
+        if name in HARNESS_JUDGES:
+            return "harness", set(HARNESS_JUDGES[name]), "judgments used only by %s" % ", ".join(sorted(HARNESS_JUDGES[name]))
         if name in HARNESS_NONE:
-            return "none", set()
-        return "harness", set(STAGES)                   # shared harness code (including anything new): every stage
+            return "none", set(), "the driver / go-no-go gate: decides whether to run, measures nothing"
+        return "harness", set(STAGES), "shared harness machinery (runs every stage)"
     if path == "tests/test_season.py" or path.startswith("tests/fixtures/"):
-        return "code", set(STAGES)                 # the fixture generator and its data are what the daemon runs on
+        return "code", set(STAGES), "the fixture generator: what the daemon runs on"
     if path.startswith("tests/"):
-        return "none", set()
+        return "none", set(), "tests"
+    if path in CODE_BEHAVIOUR:
+        return "code", set(CODE_BEHAVIOUR[path][0]), CODE_BEHAVIOUR[path][1]
+    if path in DAEMON_UNITS and diff is not None:
+        st, why = unit_diff_stages(diff)
+        return "code", st, "unit template: " + ", ".join(why or ["comments only"])
     if path.startswith(("src/", "tools/", "deploy/")):
-        return "code", set(STAGES)
-    return "none", set()
+        return "code", set(STAGES), "not analysed: every stage"
+    return "none", set(), "not part of the code under test"
 
 
 def changed_files(repo, a, b="HEAD"):
@@ -235,13 +306,18 @@ def changed_files(repo, a, b="HEAD"):
 
 
 def affected(repo, recorded_rev, current="HEAD"):
-    """-> {"changed": [(path, kind)], "repeat": [stages], "code_changed": bool}. Documentation-only changes repeat nothing."""
-    rows, stages = [], set()
+    """-> {"changed": [(path, kind)], "repeat": [stages], "code_changed": bool, "why": {path: [stages, reason]}}. Documentation-only changes repeat nothing; a stage is repeated only if a changed file is one it depends on."""
+    rows, stages, why = [], set(), {}
     for p in changed_files(repo, recorded_rev, current):
-        kind, st = classify(p)
+        diff = None
+        if p in DAEMON_UNITS:
+            diff = git(repo, "diff", recorded_rev, current, "--", p)[1]
+        kind, st, reason = classify_why(p, diff)
         rows.append((p, kind))
         stages |= st
-    return {"changed": rows, "repeat": [s for s in STAGES if s in stages], "code_changed": any(k == "code" for _, k in rows)}
+        if st:
+            why[p] = [sorted(st), reason]
+    return {"changed": rows, "repeat": [s for s in STAGES if s in stages], "code_changed": any(k == "code" for _, k in rows), "why": why}
 
 
 def pin_check(repo=REPO, pin=None):

@@ -7,7 +7,7 @@ Minimum resources, stated once (MIN): 1 vCPU, 1 GiB RAM with no swap, 5 GiB free
 """
 import re
 
-from common import BASE, CGROOT, MARKER, SLICE, PREFIX, UNIT_DIR
+from common import BASE, CGROOT, MARKER, SERVICE_USER, SLICE, PREFIX, UNIT_DIR
 
 MIN = {"cpus": 1, "mem_gib": 1.0, "free_disk_gib": 5.0, "systemd": 243, "kernel": (5, 4)}
 # Names that exist only on the machines the harness must never run on. Their presence is a hard refusal.
@@ -69,6 +69,10 @@ def preflight(env, base=BASE):
     add("disk", free >= MIN["free_disk_gib"], "%.1f GiB free on the filesystem of %s (minimum %.0f)" % (free, probe, MIN["free_disk_gib"]))
     rc, py, _ = env.run(["/usr/bin/python3", "-c", "import sys;print(sys.version_info[:2] >= (3,8))"])
     add("python3", rc == 0 and py.strip() == "True", "/usr/bin/python3 (the units' interpreter) is %s" % ("3.8 or newer" if py.strip() == "True" else "missing or older than 3.8"))
+    for tool, why, hard in (("setpriv", "the documented commands and the probe run as the service user", True), ("strace", "V0's durability probe of the start gate and stop hook (install it before the run)", True),
+                            ("chattr", "V4's immutable-guard-folder scenario (invalid, not a pass, without it)", False), ("lsattr", "V4's immutable-guard-folder scenario", False)):
+        add("tool_" + tool, bool(env.which(tool)), "%s %s: %s" % (tool, "found" if env.which(tool) else "NOT found", why), warn=not hard)
+    add("service_user", env.user_exists(SERVICE_USER), "the dedicated service user %r %s (the operator creates it; the harness never does)" % (SERVICE_USER, "exists" if env.user_exists(SERVICE_USER) else "does not exist"))
     rc, lu, _ = env.sc("list-units", "--all", "--no-legend", "--no-pager", PREFIX + "*")
     leftovers = [l.split()[0] for l in (lu or "").splitlines() if l.strip()]
     add("no_leftover_vtest_units", True, "dfl-vtest units already present: %s (a run continues or `teardown` clears them)" % (", ".join(leftovers) or "none"))

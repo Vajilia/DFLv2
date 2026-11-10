@@ -150,8 +150,8 @@ class Ctx:
 
     def release_and_resume(self, reason):
         """The documented two-step procedure. -> (release rc, resume rc, outputs)."""
-        r1 = self.env.run([PYTHON, "-I", self.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", reason, "--evidence", GUARD + "/evidence"])
-        r2 = self.env.run([PYTHON, "-I", self.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])
+        r1 = self.env.operator([PYTHON, "-I", self.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", reason, "--evidence", GUARD + "/evidence"])
+        r2 = self.env.operator([PYTHON, "-I", self.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])
         return r1[0], r2[0], (r1[1] + r1[2] + r2[1] + r2[2])[-400:]
 
     def ensure_baseline(self, reason="vtest: reset to the baseline between scenarios"):

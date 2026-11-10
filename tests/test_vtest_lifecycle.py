@@ -143,7 +143,7 @@ class V2Rows(unittest.TestCase):
     def test_the_designed_outcome_passes_every_row(self):
         r = self.rows()
         self.assertEqual(set(r.values()), {'pass'}, r)
-        self.assertEqual(len(r), 5)
+        self.assertEqual(len(r), 6)
 
     def test_the_gates_fail_safe_alone_fails_the_stop_hook_row(self):
         r = self.rows(latch=dict(LATCH, kind='unaccounted_stop'), trips_after=[{'kind': 'memory_high'}, {'kind': 'unaccounted_stop'}])
@@ -217,25 +217,25 @@ class V4GateFault(unittest.TestCase):
         self.assertEqual(set(r.values()), {'pass'}, r)
 
     def test_a_new_daemon_over_an_unrecorded_incident_fails(self):
-        self.assertEqual(self.refusal(window=[{'t': 1, 'ActiveState': 'active', 'MainPID': 22}])['V4.gate.no_daemon_while_storage_broken'], 'fail')
+        self.assertEqual(self.refusal(window=[{'t': 1, 'ActiveState': 'active', 'MainPID': 22}])['V4.immutable_guard.no_daemon_while_storage_broken'], 'fail')
 
     def test_the_old_pid_active_is_not_a_new_daemon(self):
-        self.assertEqual(self.refusal(window=[{'t': 1, 'ActiveState': 'active', 'MainPID': 10}])['V4.gate.no_daemon_while_storage_broken'], 'pass')
+        self.assertEqual(self.refusal(window=[{'t': 1, 'ActiveState': 'active', 'MainPID': 10}])['V4.immutable_guard.no_daemon_while_storage_broken'], 'pass')
 
     def test_no_samples_is_invalid(self):
-        self.assertEqual(self.refusal(window=[])['V4.gate.no_daemon_while_storage_broken'], 'invalid')
+        self.assertEqual(self.refusal(window=[])['V4.immutable_guard.no_daemon_while_storage_broken'], 'invalid')
 
     def test_not_held_and_a_moving_clock_fail(self):
-        self.assertEqual(self.refusal(paused=False)['V4.gate.held_while_storage_broken'], 'fail')
-        self.assertEqual(self.refusal(held_pos=(5.0, 20.0))['V4.gate.held_while_storage_broken'], 'fail')
+        self.assertEqual(self.refusal(paused=False)['V4.immutable_guard.held_while_storage_broken'], 'fail')
+        self.assertEqual(self.refusal(held_pos=(5.0, 20.0))['V4.immutable_guard.held_while_storage_broken'], 'fail')
 
     def test_a_marker_that_was_closed_or_replaced_fails(self):
-        self.assertEqual(self.refusal(after=ABSENT)['V4.gate.marker_left_open'], 'fail')
-        self.assertEqual(self.refusal(after=marker('inv-9'))['V4.gate.marker_left_open'], 'fail')
+        self.assertEqual(self.refusal(after=ABSENT)['V4.immutable_guard.marker_left_open'], 'fail')
+        self.assertEqual(self.refusal(after=marker('inv-9'))['V4.immutable_guard.marker_left_open'], 'fail')
 
     def test_a_journal_without_the_refusal_fails(self):
-        self.assertEqual(self.refusal(journal='started')['V4.gate.refusal_is_in_the_journal'], 'fail')
-        self.assertEqual(self.refusal(journal='{"gate":"refused"}')['V4.gate.refusal_is_in_the_journal'], 'pass')
+        self.assertEqual(self.refusal(journal='started')['V4.immutable_guard.refusal_is_in_the_journal'], 'fail')
+        self.assertEqual(self.refusal(journal='{"gate":"refused"}')['V4.immutable_guard.refusal_is_in_the_journal'], 'pass')
 
     def recovery(self, **over):
         prev = marker()
@@ -249,18 +249,18 @@ class V4GateFault(unittest.TestCase):
         self.assertEqual(set(r.values()), {'pass'}, r)
 
     def test_each_recovery_failure(self):
-        self.assertEqual(self.recovery(latch=None)['V4.gate.latched_when_storage_recovered'], 'fail')
-        self.assertEqual(self.recovery(latch={'kind': 'oom_kill', 'source': 'systemd'})['V4.gate.latched_when_storage_recovered'], 'fail')
-        self.assertEqual(self.recovery(doc={'evidence': {'previous_run': {'invocation_id': 'other'}, 'same_boot': True}})['V4.gate.names_the_previous_run'], 'fail')
-        self.assertEqual(self.recovery(doc={'evidence': {'previous_run': {'invocation_id': 'inv-1'}, 'same_boot': False}})['V4.gate.names_the_previous_run'], 'fail')
-        self.assertEqual(self.recovery(doc=None)['V4.gate.names_the_previous_run'], 'fail')
-        self.assertEqual(self.recovery(hold={'paused': False, 'pos_a': 7.0, 'pos_b': 7.1, 'dt': 15.0, 'sha_before': 'a', 'sha_after': 'a'})['V4.gate.started_held'], 'fail')
-        self.assertEqual(self.recovery(hold={'paused': True, 'pos_a': 7.0, 'pos_b': 30.0, 'dt': 15.0, 'sha_before': 'a', 'sha_after': 'a'})['V4.gate.started_held'], 'fail')
-        self.assertEqual(self.recovery(hold={'paused': True, 'pos_a': 7.0, 'pos_b': 7.0, 'dt': 15.0, 'sha_before': 'a', 'sha_after': 'b'})['V4.gate.started_held'], 'fail')
-        self.assertEqual(self.recovery(hold={'paused': True, 'pos_a': 7.0, 'pos_b': 7.0, 'dt': 3.0, 'sha_before': 'a', 'sha_after': 'a'})['V4.gate.started_held'], 'fail')
-        self.assertEqual(self.recovery(post=10)['V4.gate.started_held'], 'fail')           # the old daemon, not a new one
-        self.assertEqual(self.recovery(after=ABSENT)['V4.gate.new_marker_open'], 'fail')
-        self.assertEqual(self.recovery(after=marker('inv-1'))['V4.gate.new_marker_open'], 'fail')
+        self.assertEqual(self.recovery(latch=None)['V4.immutable_guard.latched_when_storage_recovered'], 'fail')
+        self.assertEqual(self.recovery(latch={'kind': 'oom_kill', 'source': 'systemd'})['V4.immutable_guard.latched_when_storage_recovered'], 'fail')
+        self.assertEqual(self.recovery(doc={'evidence': {'previous_run': {'invocation_id': 'other'}, 'same_boot': True}})['V4.immutable_guard.names_the_previous_run'], 'fail')
+        self.assertEqual(self.recovery(doc={'evidence': {'previous_run': {'invocation_id': 'inv-1'}, 'same_boot': False}})['V4.immutable_guard.names_the_previous_run'], 'fail')
+        self.assertEqual(self.recovery(doc=None)['V4.immutable_guard.names_the_previous_run'], 'fail')
+        self.assertEqual(self.recovery(hold={'paused': False, 'pos_a': 7.0, 'pos_b': 7.1, 'dt': 15.0, 'sha_before': 'a', 'sha_after': 'a'})['V4.immutable_guard.started_held'], 'fail')
+        self.assertEqual(self.recovery(hold={'paused': True, 'pos_a': 7.0, 'pos_b': 30.0, 'dt': 15.0, 'sha_before': 'a', 'sha_after': 'a'})['V4.immutable_guard.started_held'], 'fail')
+        self.assertEqual(self.recovery(hold={'paused': True, 'pos_a': 7.0, 'pos_b': 7.0, 'dt': 15.0, 'sha_before': 'a', 'sha_after': 'b'})['V4.immutable_guard.started_held'], 'fail')
+        self.assertEqual(self.recovery(hold={'paused': True, 'pos_a': 7.0, 'pos_b': 7.0, 'dt': 3.0, 'sha_before': 'a', 'sha_after': 'a'})['V4.immutable_guard.started_held'], 'fail')
+        self.assertEqual(self.recovery(post=10)['V4.immutable_guard.started_held'], 'fail')           # the old daemon, not a new one
+        self.assertEqual(self.recovery(after=ABSENT)['V4.immutable_guard.new_marker_open'], 'fail')
+        self.assertEqual(self.recovery(after=marker('inv-1'))['V4.immutable_guard.new_marker_open'], 'fail')
 
 
 class Reboot(unittest.TestCase):
@@ -396,7 +396,7 @@ class GuardFault(unittest.TestCase):
 
     def test_the_stage_never_leaves_the_folder_immutable(self):
         src = (VT / 'stage_v4.py').read_text()
-        body = src.split('def _gate_failure', 1)[1].split('def evaluate_gate_refusal_rows', 1)[0]
+        body = src.split('def _immutable_guard_scenario', 1)[1].split('def evaluate_gate_refusal_rows', 1)[0]
         self.assertIn('finally:', body)
         self.assertIn('env.immutable(GUARD, False)', body.split('finally:', 1)[1].split('\n    if not ok2', 1)[0])
         self.assertIn('STILL IMMUTABLE', body)
@@ -406,7 +406,7 @@ class StageWiring(unittest.TestCase):
     def test_the_plans_name_the_new_steps(self):
         self.assertIn('V3e.daemon_kill9', [s for s, _ in stage_v3.PLAN])
         self.assertIn('V3.monitor_failures_summary', [s for s, _ in stage_v3.PLAN])
-        self.assertIn('V4.gate', [s for s, _ in stage_v4.PLAN])
+        self.assertIn('V4.immutable_guard', [s for s, _ in stage_v4.PLAN])
 
     def test_v4_defaults_carry_the_numbers_the_gate_step_reads(self):
         for mode in ('qualifying', 'smoke'):
@@ -471,6 +471,9 @@ class ScriptedMachine:
     def run(self, argv, timeout=60, input=None):
         return 3, '', ''                                # `resume` is refused while a latch exists
 
+    def operator(self, argv, timeout=60, input=None):
+        return self.run(argv, timeout=timeout, input=input)
+
     def exists(self, p):
         return p.endswith('evidence.json') or p.endswith('/evidence')
 
@@ -534,7 +537,7 @@ class GateFailureGlue(unittest.TestCase):
         rec = Rec()
         ctx = make_ctx(m, rec)
         try:
-            stage_v4._gate_failure(ctx, rec)
+            stage_v4._immutable_guard_scenario(ctx, rec)
             err = None
         except C.StageStop as e:
             err = e
@@ -546,7 +549,7 @@ class GateFailureGlue(unittest.TestCase):
         bad = [r for r in rec.rows if r[1] not in ('pass', 'info')]
         self.assertEqual(bad, [])
         self.assertEqual(m.fault_log, [True, False])
-        self.assertIn('V4.gate.recoverable_the_documented_way', [r[0] for r in rec.rows])
+        self.assertIn('V4.immutable_guard.recoverable_the_documented_way', [r[0] for r in rec.rows])
         self.assertFalse(m.fault)
 
     def test_a_fault_that_cannot_be_removed_stops_the_stage_and_says_how_to_fix_it(self):
@@ -559,8 +562,8 @@ class GateFailureGlue(unittest.TestCase):
         m = ScriptedMachine()
         m.immutable = lambda path, on: (False, 'chattr rc 1: Operation not supported')
         rec = Rec()
-        stage_v4._gate_failure(make_ctx(m, rec), rec)
-        self.assertEqual([(r[0], r[1]) for r in rec.rows], [('V4.gate.fault_applied', 'invalid')])
+        stage_v4._immutable_guard_scenario(make_ctx(m, rec), rec)
+        self.assertEqual([(r[0], r[1]) for r in rec.rows], [('V4.immutable_guard.fault_applied', 'invalid')])
 
     def test_an_exception_during_the_fault_still_removes_it(self):
         m = ScriptedMachine()
@@ -568,7 +571,7 @@ class GateFailureGlue(unittest.TestCase):
         ctx = make_ctx(m, rec)
         ctx.loader = mock.Mock(side_effect=RuntimeError('boom'))
         with self.assertRaises(RuntimeError):
-            stage_v4._gate_failure(ctx, rec)
+            stage_v4._immutable_guard_scenario(ctx, rec)
         self.assertEqual(m.fault_log, [True, False])
 
     def test_a_unit_that_never_comes_back_by_itself_is_reset_the_documented_way(self):
@@ -577,7 +580,7 @@ class GateFailureGlue(unittest.TestCase):
         ctx = make_ctx(m, rec)
         orig = m.daemon_back
         m.daemon_back = lambda: bool(any(v == 'start' for v, _ in m.calls)) and orig()
-        stage_v4._gate_failure(ctx, rec)
+        stage_v4._immutable_guard_scenario(ctx, rec)
         verbs = [v for v, _ in m.calls]
         self.assertEqual(verbs[:2], ['reset-failed', 'start'])
         self.assertIn('after reset-failed and start', ' '.join(str(r[2]) for r in rec.rows))
@@ -640,6 +643,46 @@ class RebootGlue(unittest.TestCase):
         ids = {r[0]: r[1] for r in rec.rows}
         self.assertEqual(ids['V4.reboot.hard_reset_left_the_marker'], 'pass')
         self.assertEqual(ids['V4.reboot.hard_start_recorded_the_stop'], 'pass')
+
+
+class CaptureRebootState(unittest.TestCase):
+    def go(self, latch=True, units=True, held=True, marker_state='open'):
+        m = ScriptedMachine()
+        m.boot_id = lambda: 'b00t-3'
+        written = {}
+        m.write = lambda p, text: written.__setitem__(p, text)
+        rec = Rec()
+        ctx = make_ctx(m, rec)
+        ctx.latch = lambda: (({'kind': 'memory_high', 'at': 7.0}, 'x') if latch else (None, None))
+        ctx.active = lambda k: units
+        ctx.paused = lambda: held
+        ctx.run_marker = lambda: marker('inv-5', 10.0) if marker_state == 'open' else ABSENT
+        ctx.trips = lambda: [{'kind': 'memory_high'}]
+        with mock.patch.object(stage_v4, 'fingerprint', return_value={'sha256': 'a' * 64, 'size': 1, 'mtime': 1.0}), mock.patch.object(stage_v4, 'jsonl_read', return_value=[{'kind': 'memory_high'}]):
+            try:
+                stage_v4.capture_reboot_state(ctx)
+                err = None
+            except C.StageStop as e:
+                err = e
+        return written, rec, err
+
+    def test_the_state_v4_leaves_is_recorded_for_the_next_reboot_variant(self):
+        written, rec, err = self.go()
+        self.assertIsNone(err)
+        saved = json.loads(written[stage_v4.PREREBOOT])
+        self.assertEqual((saved['boot_id'], saved['marker']['invocation_id'], saved['latch']['kind']), ('b00t-3', 'inv-5', 'memory_high'))
+
+    def test_each_missing_condition_refuses_and_writes_nothing(self):
+        for kw in (dict(latch=False), dict(units=False), dict(held=False), dict(marker_state='absent')):
+            written, rec, err = self.go(**kw)
+            self.assertIsNotNone(err, kw)
+            self.assertEqual(written, {}, kw)
+            self.assertEqual([r[1] for r in rec.rows], ['fail'], kw)
+
+    def test_the_driver_offers_it_and_no_longer_has_a_flag_that_did_nothing(self):
+        src = (Path(__file__).resolve().parent.parent / 'tools' / 'vtest' / 'vtest.py').read_text()
+        self.assertIn('--capture-reboot-state', src)
+        self.assertNotIn('--with-reboot', src)
 
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ import evidence as EV                   # noqa: E402
 import preflight as PF                  # noqa: E402
 import render as RN                     # noqa: E402
 import sampler as SM                    # noqa: E402
-import stage_v1, stage_v2, stage_v3, stage_v4   # noqa: E402
+import stage_v0, stage_v1, stage_v2, stage_v3, stage_v4   # noqa: E402
 
 MB = 1_000_000
 MX = 192 * 1024 * 1024
@@ -48,10 +48,14 @@ class Pin(unittest.TestCase):
         self.assertEqual(vtest.constants_check(str(ROOT), C.read_pin()), [])
 
     def test_classification(self):
-        cases = {'docs/anything.md': ('docs', set()), 'tests/test_other.py': ('none', set()), 'tests/test_season.py': ('code', set(C.STAGES)), 'tests/fixtures/x.json': ('code', set(C.STAGES)),
-                 'tools/rehearsal_check.py': ('code', set(C.STAGES)), 'tools/broadcast_run.py': ('code', set(C.STAGES)), 'src/dflsite/season.py': ('code', set(C.STAGES)), 'deploy/supervisor/dfl-broadcast-daemon.service': ('code', set(C.STAGES)),
-                 'tools/something_new.py': ('code', set(C.STAGES)), 'tools/vtest/stage_v2.py': ('harness', {'V2'}), 'tools/vtest/stage_v4.py': ('harness', {'V4'}), 'tools/vtest/loaders.py': ('harness', set(C.STAGES)),
-                 'tools/vtest/sampler.py': ('harness', set(C.STAGES)), 'tools/vtest/PIN': ('harness', set(C.STAGES)), 'tools/vtest/vtest.py': ('none', set()), 'tools/vtest/preflight.py': ('none', set()), 'README.md': ('none', set())}
+        ALL = set(C.STAGES)
+        cases = {'docs/anything.md': ('docs', set()), 'tests/test_other.py': ('none', set()), 'tests/test_season.py': ('code', ALL), 'tests/fixtures/x.json': ('code', ALL),
+                 'tools/rehearsal_check.py': ('code', ALL), 'tools/broadcast_run.py': ('code', {'V0', 'V2', 'V3', 'V4'}), 'src/dflsite/season.py': ('code', ALL),
+                 'deploy/supervisor/dfl-broadcast-daemon.service': ('code', ALL), 'tools/something_new.py': ('code', ALL),
+                 'tools/vtest/stage_v0.py': ('harness', {'V0'}), 'tools/vtest/perms.py': ('harness', {'V0'}), 'tools/vtest/durability.py': ('harness', {'V0'}),
+                 'tools/vtest/stage_v2.py': ('harness', {'V2'}), 'tools/vtest/stage_v4.py': ('harness', {'V4'}), 'tools/vtest/lifecycle.py': ('harness', {'V2', 'V3', 'V4'}),
+                 'tools/vtest/loaders.py': ('harness', ALL), 'tools/vtest/sampler.py': ('harness', ALL), 'tools/vtest/PIN': ('harness', ALL), 'tools/vtest/common.py': ('harness', ALL),
+                 'tools/vtest/vtest.py': ('none', set()), 'tools/vtest/preflight.py': ('none', set()), 'README.md': ('none', set())}
         for path, want in cases.items():
             self.assertEqual(C.classify(path), want, path)
 
@@ -111,6 +115,15 @@ class FakeEnv:
 
     def euid(self):
         return self.uid
+
+    def which(self, name):
+        return None if name in getattr(self, 'missing_tools', ()) else '/usr/bin/' + name
+
+    def user_exists(self, name):
+        return name not in getattr(self, 'missing_users', ())
+
+    def operator(self, argv, timeout=60, input=None):
+        return self.run(argv, timeout=timeout, input=input)
 
     def free_bytes(self, p):
         return self.free
@@ -809,7 +822,7 @@ class RecorderAndStop(unittest.TestCase):
         fake.run = failing
         second = mock.Mock(STAGE='V2', PLAN=[], DEFAULTS={'qualifying': {}, 'smoke': {}}, run=lambda ctx: order.append('V2'))
         mods = {'V1': fake, 'V2': second}
-        install = json.dumps({'pin': C.read_pin(), 'deviations': []})
+        install = json.dumps({'pin': C.read_pin(), 'deviations': [], 'user': 'dfl-vtest', 'harness_rev': C.harness_rev()})
         with mock.patch.object(C, 'BASE', tmp), mock.patch.object(C, 'EVID', tmp + '/evidence'), mock.patch.object(C, 'STATE', tmp + '/state'), \
                 mock.patch.object(vtest.C, 'pin_check', lambda *a, **k: (True, [])), mock.patch.object(vtest, 'constants_check', lambda *a: []), \
                 mock.patch.object(vtest.PF, 'preflight', lambda env: [('x', 'pass', '')]), mock.patch.object(vtest, 'stage_module', lambda n: mods[n]):
@@ -839,7 +852,7 @@ class RecorderAndStop(unittest.TestCase):
                 mock.patch.object(vtest.C, 'pin_check', lambda *a, **k: (True, [])), mock.patch.object(vtest, 'constants_check', lambda *a: []), \
                 mock.patch.object(vtest.PF, 'preflight', lambda env: [('x', 'pass', '')]), mock.patch.object(vtest, 'stage_module', lambda n: mod):
             os.makedirs(tmp + '/state')
-            Path(tmp, 'state', 'install.json').write_text(json.dumps({'pin': C.read_pin()}))
+            Path(tmp, 'state', 'install.json').write_text(json.dumps({'pin': C.read_pin(), 'user': 'dfl-vtest', 'harness_rev': C.harness_rev()}))
             self.assertEqual(vtest.main(['run', '--stages', 'V1', '--run-id', 'r1']), 2)
             res = json.load(open(tmp + '/evidence/r1/V1/result.json'))
             self.assertEqual(res['overall'], 'fail')
@@ -848,7 +861,7 @@ class RecorderAndStop(unittest.TestCase):
 
 class PlanMatchesCode(unittest.TestCase):
     def test_every_planned_step_appears_in_its_stage_and_nothing_is_unplanned(self):
-        for mod in (stage_v1, stage_v2, stage_v3, stage_v4):
+        for mod in (stage_v0, stage_v1, stage_v2, stage_v3, stage_v4):
             src = Path(mod.__file__).read_text()
             for sid, text in mod.PLAN:
                 self.assertIn('"%s"' % sid, src.split('PLAN = [', 1)[1].split(']\n', 1)[1] if sid in src else src, '%s is planned but never appears in the code' % sid)
@@ -858,7 +871,8 @@ class PlanMatchesCode(unittest.TestCase):
             self.assertTrue(planned <= marks | {s for s in planned if s in src.split('def run', 1)[1]}, (mod.STAGE, planned - marks))
 
     def test_the_four_requested_checks_are_the_four_stages(self):
-        self.assertEqual(C.STAGES, ('V1', 'V2', 'V3', 'V4'))
+        self.assertEqual(C.STAGES, ('V0', 'V1', 'V2', 'V3', 'V4'))
+        self.assertIn('service user', stage_v0.__doc__.lower())
         self.assertIn('cache', stage_v1.__doc__.lower())
         self.assertIn('anonymous', stage_v2.__doc__.lower())
         self.assertIn('hang', stage_v3.__doc__.lower())

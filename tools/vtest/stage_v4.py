@@ -2,7 +2,7 @@
 
 Starts from a REAL latch (the monitor's own memory trip, produced the way V2a does; or the one V2a left, if it is the monitor's memory trip). Then, after each disturbance, the latch's
 sha256, size and mtime must be identical, the daemon must still be paused with its clock stopped and its public files unchanged, and `resume` must still be refused.
-`--with-reboot` adds a pause for a machine reboot (units are not enabled; after the reboot run `run V4 --after-reboot` BEFORE starting anything: the stage first reads the run marker the daemon had open, then starts the
+The full V4 saves the state a machine reboot is judged against (units are not enabled; after the reboot run `run V4 --after-reboot` BEFORE starting anything: the stage first reads the run marker the daemon had open, then starts the
 units itself). `--after-hard-reset` is the same after the operator cut the power or reset the machine instead of rebooting it.
 The candidate's lifecycle design is exercised here too: every disturbance must close and reopen the daemon's run marker and add no incident line; a fault injected into the guard folder (made immutable) during an OOM must
 keep the daemon from running over an unrecorded incident (the start gate refuses), and once the folder works again the daemon must start HELD with an unaccounted_stop latch; a clean reboot must close the marker, a hard
@@ -22,9 +22,9 @@ PLAN = [("V4.latch", "use or produce a real memory latch; record its sha256, siz
         ("V4.disturb", "after each of: daemon restart, monitor restart, both (two orders), daemon kill -9, monitor kill -9: latch identical, daemon paused, clock stopped, public files unchanged, resume refused"),
         ("V4.refusals", "resume refused (rc 3); release with a short reason refused (rc 2); release with a stale heartbeat refused (rc 4); the latch intact after each"),
         ("V4.release", "release (rc 0): the latch moves into evidence/released/ and nothing is deleted; resume (rc 0); the clock advances"),
-        ("V4.gate", "failure injection (guard folder immutable) + a bounded OOM of the daemon: no new daemon runs, PAUSE holds, the marker stays, the journal shows the refusal; the folder works again: the daemon starts HELD with an unaccounted_stop latch naming the previous run; release + resume the documented way"),
+        ("V4.immutable_guard", "SCENARIO (its own; not a stand-in for a full disk): guard folder immutable + a bounded OOM of the daemon: no new daemon runs, PAUSE holds, the marker stays, the journal shows the refusal; the folder works again: the daemon starts HELD with an unaccounted_stop latch naming the previous run; release + resume the documented way"),
         ("V4.second_trip", "produce a second latch: a second evidence folder appears and the first stays in released/"),
-        ("V4.after_reboot", "optional (--with-reboot, then --after-reboot for a clean reboot or --after-hard-reset for a power cut): the run marker is closed (clean) or still there (hard) BEFORE any unit starts; then the same preservation checks, and no new incident line (clean) or exactly one unaccounted_stop saying the host restarted (hard)")]
+        ("V4.after_reboot", "optional, after the full V4 (--after-reboot for a clean reboot or --after-hard-reset for a power cut; `--capture-reboot-state` re-records the state before the second variant): the run marker is closed (clean) or still there (hard) BEFORE any unit starts; then the same preservation checks, and no new incident line (clean) or exactly one unaccounted_stop saying the host restarted (hard)")]
 DEFAULTS = {"qualifying": {"settle_s": 25, "watch_s": 15, "stale_wait_s": 40, "overrun_rate": 25e6, "gate_watch_s": 15, "gate_wait_s": 120, "gate_hold_s": 15},
             "smoke": {"settle_s": 20, "watch_s": 10, "stale_wait_s": 40, "overrun_rate": 40e6, "gate_watch_s": 15, "gate_wait_s": 120, "gate_hold_s": 12}}
 
@@ -105,7 +105,7 @@ def _held(ctx, label, fp0, trips0, inv0, rec, marker_before=None, daemon_restart
     ctx.env.sleep(ctx.cfg["settle_s"])
     pos_a, ta = ctx.position(), ctx.now()
     ctx.env.sleep(ctx.cfg["watch_s"])
-    rc_resume = ctx.env.run(["/usr/bin/python3", "-I", ctx.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])[0]
+    rc_resume = ctx.env.operator(["/usr/bin/python3", "-I", ctx.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])[0]
     row = evaluate_disturbance(label, fp0, fingerprint(GUARD + "/TRIPPED"), ctx.paused(), pos_a, ctx.position(), inv0, ctx.public_inventory(), rc_resume,
                                ctx.active("daemon") and ctx.active("monitor"), trips0, jsonl_read(GUARD + "/trips.jsonl"), allow_new)
     rec.add_all([row])
@@ -119,21 +119,24 @@ def preservation_state(ctx):
     return fingerprint(GUARD + "/TRIPPED"), jsonl_read(GUARD + "/trips.jsonl"), ctx.public_inventory()
 
 
-def _gate_failure(ctx, rec):
-    """Failure injection with the REAL start gate and stop hook: the guard folder is made immutable (chattr +i: nothing can be created in it, not even by root), then a bounded OOM stops the daemon's unit.
+def _immutable_guard_scenario(ctx, rec):
+    """SCENARIO: an IMMUTABLE GUARD FOLDER. This is its own scenario and NOT proof of the candidate's behaviour on a full disk: `chattr +i` makes every create, rename and removal in the folder fail with EPERM at once,
+    while a full filesystem (ENOSPC) lets some writes succeed and others fail, and can leave a file half written. The full-disk case is covered only by the local sandbox test (tests/test_service_sandbox.py,
+    a real 48 KiB tmpfs); it is NOT exercised on the disposable machine.
+    Failure injection with the REAL start gate and stop hook: the guard folder is made immutable (chattr +i: nothing can be created in it, not even by root), then a bounded OOM stops the daemon's unit.
     Expected: the stop hook cannot record the incident (PAUSE, in the store, still works) and leaves the run marker; the start gate cannot latch and REFUSES (exit 1), so no new daemon runs. Then the folder is
     made writable again (always, in a finally): the next start must latch unaccounted_stop and start HELD. If the unit hit its start limit meanwhile it is reset the documented way (reset-failed, start).
     The folder is touched by the harness only through Env.immutable. The monitor's heartbeat is written in the same folder and may stall for the few seconds of the fault (it is far inside the 120 s stale limit)."""
     env, cfg = ctx.env, ctx.cfg
-    ctx.mark("V4.gate", phase="baseline")
+    ctx.mark("V4.immutable_guard", phase="baseline")
     ctx.ensure_baseline("vtest V4: baseline before the guard-folder fault")
     pre, mk0, trips0 = ctx.show("daemon"), ctx.run_marker(), ctx.trips()
     mx = ctx.limit_of("daemon")
     t0 = ctx.now()
     ok, why = env.immutable(GUARD, True)
-    ctx.mark("V4.gate", phase="fault_on", ok=ok, detail=why)
+    ctx.mark("V4.immutable_guard", phase="fault_on", ok=ok, detail=why)
     if not ok:
-        rec.check("V4.gate.fault_applied", "invalid", "could not make the guard folder unwritable (%s): the failure-injection case was NOT tested" % why, {"detail": why})
+        rec.check("V4.immutable_guard.fault_applied", "invalid", "could not make the guard folder unwritable (%s): the failure-injection case was NOT tested" % why, {"detail": why})
         return
     ld, window, refused, held_pos = None, [], False, (None, None)
     journal = ""
@@ -145,7 +148,7 @@ def _gate_failure(ctx, rec):
             return ('"gate": "refused"' in j or '"incident": "unrecorded"' in j) and j
         journal, _ = ctx.wait(refusal_seen, 1.5 * mx / cfg["overrun_rate"] + cfg["gate_wait_s"], every=1.0)
         journal = journal or ctx.journal("daemon", t0 - 2)
-        ctx.mark("V4.gate", phase="refusal_seen", seen=bool(journal))
+        ctx.mark("V4.immutable_guard", phase="refusal_seen", seen=bool(journal))
         pos_a, ta = ctx.position(), ctx.now()
         while ctx.now() - ta < cfg["gate_watch_s"]:
             sh = ctx.show("daemon")
@@ -159,11 +162,12 @@ def _gate_failure(ctx, rec):
         if ld is not None:
             ld.stop()
         ok2, why2 = env.immutable(GUARD, False)
-        ctx.mark("V4.gate", phase="fault_off", ok=ok2, detail=why2)
+        ctx.mark("V4.immutable_guard", phase="fault_off", ok=ok2, detail=why2)
     if not ok2:
         raise StageStop("the guard folder is STILL IMMUTABLE and could not be restored (%s): run `chattr -i %s` by hand" % (why2, GUARD))
     rows = evaluate_gate_refusal_rows(window, pre, mk0, marker_during, journal, held_pos, paused)
     rec.add_all(rows)
+    rec.check("V4.immutable_guard.scope", "info", "SCENARIO: immutable guard folder (every create/rename/unlink fails with EPERM). It is not evidence of equivalent behaviour on a full disk (ENOSPC), which only the local tmpfs test covers.", None, False)
     # ---- storage works again: the unit must come back, held
     came, _ = ctx.wait(lambda: ctx.active("daemon") and ctx.show("daemon").get("MainPID") not in (0, pre.get("MainPID")), 45, every=1.0)
     path = "by itself (systemd's own retry)"
@@ -184,7 +188,7 @@ def _gate_failure(ctx, rec):
     except ValueError:
         doc = None
     rec.add_all(LC.evaluate_gate_recovery(lat1, mk0, ctx.run_marker(), pre.get("MainPID"), post.get("MainPID"), doc, hold, env.boot_id(), path))
-    rec.add_all([("V4.gate.trips_since_the_fault", "info", "trips.jsonl lines added since the fault: %s" % [l.get("kind") for l in (LC.new_lines(trips0, ctx.trips()) or [])], {"new": LC.new_lines(trips0, ctx.trips())}, False)])
+    rec.add_all([("V4.immutable_guard.trips_since_the_fault", "info", "trips.jsonl lines added since the fault: %s" % [l.get("kind") for l in (LC.new_lines(trips0, ctx.trips()) or [])], {"new": LC.new_lines(trips0, ctx.trips())}, False)])
     rec.stop_if_failed()
     # ---- recovery the documented way
     ctx.wait(lambda: (ctx.heartbeat_age() or 999) < 20, 90)
@@ -192,7 +196,7 @@ def _gate_failure(ctx, rec):
     p0 = ctx.position()
     env.sleep(15)
     advances = E.moved(p0, ctx.position(), 5.0)
-    rec.check("V4.gate.recoverable_the_documented_way", "pass" if r1 == 0 and r2 == 0 and advances else "fail", "release rc %s, resume rc %s, clock advances afterwards: %s" % (r1, r2, advances), {"output": out})
+    rec.check("V4.immutable_guard.recoverable_the_documented_way", "pass" if r1 == 0 and r2 == 0 and advances else "fail", "release rc %s, resume rc %s, clock advances afterwards: %s" % (r1, r2, advances), {"output": out})
     rec.stop_if_failed()
 
 
@@ -238,12 +242,12 @@ def run(ctx):
     ctx.mark("V4.refusals")
     # ---- refusals
     py = "/usr/bin/python3"
-    rc_resume = env.run([py, "-I", ctx.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])[0]
-    rc_short = env.run([py, "-I", ctx.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", "test", "--evidence", GUARD + "/evidence"])[0]
+    rc_resume = env.operator([py, "-I", ctx.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])[0]
+    rc_short = env.operator([py, "-I", ctx.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", "test", "--evidence", GUARD + "/evidence"])[0]
     fps = [fingerprint(GUARD + "/TRIPPED")]
     env.sc("stop", m)
     env.sleep(cfg["stale_wait_s"])
-    rc_stale = env.run([py, "-I", ctx.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", "vtest: this must be refused because the heartbeat is stale", "--evidence", GUARD + "/evidence"])[0]
+    rc_stale = env.operator([py, "-I", ctx.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", "vtest: this must be refused because the heartbeat is stale", "--evidence", GUARD + "/evidence"])[0]
     fps.append(fingerprint(GUARD + "/TRIPPED"))
     env.sc("start", m)
     ctx.wait(lambda: (ctx.heartbeat_age() or 999) < 20, 90)
@@ -252,17 +256,17 @@ def run(ctx):
     ctx.mark("V4.release")
     # ---- the documented release
     before = guard_files(env)
-    r_rel = env.run([py, "-I", ctx.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", "vtest V4: releasing the latch the documented way, evidence kept", "--evidence", GUARD + "/evidence"])[0]
+    r_rel = env.operator([py, "-I", ctx.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", "vtest V4: releasing the latch the documented way, evidence kept", "--evidence", GUARD + "/evidence"])[0]
     env.sleep(5)
     held_back = ctx.paused()
     released = [json.loads(env.read(p)) for rel, p in sorted(guard_files(env).items()) if rel.startswith("evidence/released/")]
-    r_res = env.run([py, "-I", ctx.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])[0]
+    r_res = env.operator([py, "-I", ctx.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])[0]
     p0 = ctx.position()
     env.sleep(15)
     lat_after, _ = ctx.latch()
     rec.add_all(evaluate_release(r_rel, r_res, lat_after, released, before, guard_files(env), orig, E.moved(p0, ctx.position(), 5.0), held_back))
     rec.stop_if_failed()
-    _gate_failure(ctx, rec)
+    _immutable_guard_scenario(ctx, rec)
     ctx.mark("V4.second_trip")
     # ---- a second trip
     n_dirs = len([x for x in env.listdir(GUARD + "/evidence") if x.startswith("trip-")])
@@ -271,8 +275,36 @@ def run(ctx):
     kept = len([1 for rel in guard_files(env) if rel.startswith("evidence/released/")])
     ok = bool(latch2) and latch2.get("at") != orig.get("at") and n_dirs2 == n_dirs + 1 and kept >= 1
     rec.check("V4.second_trip", "pass" if ok else "fail", "second latch at %s (first at %s); trip evidence folders %d -> %d; released files kept: %d" % (latch2 and latch2.get("at"), orig.get("at"), n_dirs, n_dirs2, kept), {"latch2": latch2})
-    state = {"fp": fingerprint(GUARD + "/TRIPPED"), "trips": jsonl_read(GUARD + "/trips.jsonl"), "marker": ctx.run_marker(), "boot_id": env.boot_id(), "latch": (ctx.latch()[0])}
-    env.write(os.path.join(os.path.dirname(GUARD), "state", "v4_prereboot.json"), json.dumps(state, sort_keys=True))
+    env.write(PREREBOOT, json.dumps(reboot_state(ctx), sort_keys=True))
+
+
+PREREBOOT = os.path.join(os.path.dirname(GUARD), "state", "v4_prereboot.json")
+
+
+def reboot_state(ctx):
+    return {"fp": fingerprint(GUARD + "/TRIPPED"), "trips": jsonl_read(GUARD + "/trips.jsonl"), "marker": ctx.run_marker(), "boot_id": ctx.env.boot_id(), "latch": (ctx.latch()[0])}
+
+
+def capture_reboot_state(ctx):
+    """Record the state a reboot or hard reset will be judged against, from the machine as it is now, without repeating V4. Needed for the SECOND of the two reboot variants: after the first one the
+    old record describes a machine that no longer exists (another boot, another daemon invocation). Valid only for the state V4 leaves: a latch from the monitor, both services running, the daemon held,
+    the run marker open for the running daemon."""
+    rec = ctx.rec
+    ctx.mark("V4.capture_reboot_state")
+    latch, _ = ctx.latch()
+    marker = ctx.run_marker()
+    problems = []
+    if not (latch and latch.get("kind") == "memory_high"):
+        problems.append("no memory latch (it is what the reboot must not lose)")
+    if not (ctx.active("daemon") and ctx.active("monitor")):
+        problems.append("daemon and monitor are not both running")
+    if not ctx.paused():
+        problems.append("the daemon is not held")
+    if marker.get("state") != "open":
+        problems.append("the run marker is %s, not open for the running daemon" % marker.get("state"))
+    rec.check("V4.capture_reboot_state", "fail" if problems else "pass", "; ".join(problems) or "recorded: latch %s, marker for invocation %s, boot %s" % (latch.get("at"), marker.get("invocation_id"), ctx.env.boot_id()), None)
+    rec.stop_if_failed()
+    ctx.env.write(PREREBOOT, json.dumps(reboot_state(ctx), sort_keys=True))
 
 
 def run_after_reboot(ctx, mode="clean"):
@@ -281,7 +313,7 @@ def run_after_reboot(ctx, mode="clean"):
     Then: the latch survived, the daemon is held, the clock is stopped, and the start recorded nothing (clean) or exactly one unaccounted_stop line saying the host restarted (hard)."""
     rec, env = ctx.rec, ctx.env
     ctx.mark("V4.after_reboot", mode=mode)
-    pre = json.loads(env.read(os.path.join(os.path.dirname(GUARD), "state", "v4_prereboot.json")) or "{}")
+    pre = json.loads(env.read(PREREBOOT) or "{}")
     if not pre:
         rec.check("V4.after_reboot", "fail", "no pre-reboot fingerprint: run the full V4 first", None)
         return

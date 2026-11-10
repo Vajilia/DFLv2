@@ -14,12 +14,12 @@ import os
 import re
 import tarfile
 
-from common import (BASE, ETC, GUARD, MARKER, PORT, PREFIX, PUBLIC, ROOT_DIR, SRC_BASE, STATE, UNIT, UNIT_DIR, WEB_DIR, EVID, LOADDIR, Unsafe, allowed_path, git, read_pin, sha256_file)
+from common import (BASE, ETC, GUARD, MARKER, PORT, PREFIX, PROBE, PUBLIC, ROOT_DIR, SERVICE_USER, SRC_BASE, STATE, UNIT, UNIT_DIR, WEB_DIR, EVID, LOADDIR, Unsafe, allowed_path, git, harness_rev, read_pin, sha256_file)
 
 DAEMON_TEMPLATE = "deploy/supervisor/dfl-broadcast-daemon.service"
 MONITOR_TEMPLATE = "deploy/supervisor/dfl-broadcast-monitor.service"
 ENV_TEMPLATE = "deploy/supervisor/broadcast.env.template"
-INVARIANT_KEYS = ("MemoryMax", "OOMPolicy", "TasksMax", "Restart", "RestartSec", "RestartPreventExitStatus", "TimeoutStopSec", "StartLimitIntervalSec", "StartLimitBurst", "Nice", "UMask")
+INVARIANT_KEYS = ("MemoryMax", "OOMPolicy", "TasksMax", "Restart", "RestartSec", "RestartPreventExitStatus", "TimeoutStopSec", "StartLimitIntervalSec", "StartLimitBurst", "Nice", "UMask", "ProtectSystem", "ProtectHome", "NoNewPrivileges", "PrivateTmp")
 
 
 def tree_dir(pin):
@@ -179,10 +179,15 @@ def build_fixture(env, pin, slot=7200):
     return env.run(["/usr/bin/python3", "-c", code], timeout=300)
 
 
-def install(env, repo, pin=None, user=None):
-    """The whole install. Starts nothing. -> dict describing what was done (also written to STATE/install.json)."""
+def install(env, repo, pin=None, user=SERVICE_USER, apply=True):
+    """The whole install. Starts nothing. `user`: the dedicated unprivileged service user the units run as; it must already exist (the operator creates it: README, setup) and must not be root.
+    -> dict describing what was done (also written to STATE/install.json)."""
     pin = pin or read_pin(repo)
-    log = {"pin": pin, "steps": []}
+    log = {"pin": pin, "user": user, "harness_rev": harness_rev(), "steps": []}
+    if not user or user == "root":
+        raise Unsafe("the units must run as a dedicated unprivileged user, not root (default %s)" % SERVICE_USER)
+    if not env.user_exists(user):
+        raise Unsafe("the service user %r does not exist: create it first (README, setup). The harness never creates users." % user)
     if not env.exists(MARKER):
         raise Unsafe("%s is missing: the operator must declare the machine disposable first" % MARKER)
     for d in (BASE, GUARD, PUBLIC, LOADDIR, EVID, STATE, ETC, ROOT_DIR, WEB_DIR, SRC_BASE):
@@ -214,9 +219,14 @@ def install(env, repo, pin=None, user=None):
     if rc:
         raise Unsafe("fixture build failed: " + err[-300:])
     env.write(WEB_DIR + "/index.html", "<!doctype html><title>vtest</title>\n")
+    if apply:
+        import perms
+        layout_done = perms.apply_layout(user, {"BASE": BASE, "ROOT_DIR": ROOT_DIR, "WEB_DIR": WEB_DIR, "PUBLIC": PUBLIC, "GUARD": GUARD, "TREE": t.rstrip("/"), "EVID": EVID, "STATE": STATE, "LOADDIR": LOADDIR, "PROBE": PROBE}, allowed_path)
+        os.chmod(ETC + "/broadcast.env", 0o644)
+        log["steps"].append(("layout", True, "%d folders given their owners and modes (%s)" % (len(layout_done), user)))
     env.sc("daemon-reload")
     log["units"] = units
-    log["deviations"] = ["runs as %s (User=/Group= dropped)" % ("root" if not user else user), "no [Install] section: units are never enabled", "paths, host and cgroup name changed to the dfl-vtest layout",
+    log["deviations"] = ["runs as the dedicated user %s (User=/Group= set to it; the templates' dflv2)" % user, "the daemon and the monitor share that one user, as the templates do", "no [Install] section: units are never enabled", "paths, host and cgroup name changed to the dfl-vtest layout",
                          "FLOOR_BROADCAST_GB=%d (the template's 6 needs more free disk than a small disposable machine has)" % floor, "PUBLIC_CEILING_GB=2",
                          "a loopback site server unit is added (the monitor's URL checks need one)", "the fixture is generated (tests/test_season.py Rig, slot 7200), not a real season"]
     env.write(STATE + "/install.json", json.dumps(log, indent=1, default=str))

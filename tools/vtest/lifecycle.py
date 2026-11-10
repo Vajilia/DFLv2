@@ -114,7 +114,9 @@ def judge_victim(recorded, harness_victims, pre_main_pid):
 
 
 def evaluate_v2_lifecycle(prefix, latch, evidence_doc, trips_before, trips_after, marker_before, marker_after, daemon_start_wall, harness_victims, pre_main_pid, boot_id):
-    """The lifecycle checks of an OOM scenario (V2b, V2c). `prefix` names the scenario ('V2b'). Adds to, never replaces, the incident_record_and_hold row."""
+    """The lifecycle checks of an OOM scenario (V2b, V2c). `prefix` names the scenario ('V2b'). Adds to, never replaces, the incident_record_and_hold row.
+    The victim has two witnesses: the production incident record (written by the unprivileged service, which may say 'unknown') and the harness's own kernel-log collection (root, independent of the
+    service), which must identify it for the scenario to count; the record is then checked against it."""
     rows = []
     st, detail = judge_recorded_by_hook(latch)
     rows.append((prefix + ".recorded_by_the_stop_hook", st, detail, {"latch": latch}))
@@ -129,6 +131,10 @@ def evaluate_v2_lifecycle(prefix, latch, evidence_doc, trips_before, trips_after
                                      marker_view(marker_after) if not isinstance(marker_after, dict) else marker_after, boot_id, latch.get("at"))
     rows.append((prefix + ".run_marker_closed_and_reopened", "fail" if problems else "pass",
                  "the stop hook closed the old marker and the gate opened a new one after the latch" if not problems else "; ".join(problems), {"before": marker_before, "after": marker_after}))
+    rows.append((prefix + ".kernel_evidence_identifies_victim", "pass" if harness_victims else "not_run",
+                 ("the harness's own, independent collection of the kernel log names the victim(s): %s" % sorted(v.get("pid") for v in harness_victims)) if harness_victims else
+                 "INCOMPLETE: the harness could not identify the OOM victim from the kernel log it collects as root, so this scenario cannot say who was killed (the production incident record may say 'unknown'; the test's evidence may not)",
+                 {"victims": harness_victims}))
     if evidence_doc is None:
         rows.append((prefix + ".victim_recorded_explicitly", "fail", "no evidence.json of the oom_kill incident to read the victim from", None))
     else:
@@ -182,18 +188,18 @@ def evaluate_gate_refusal(window, pre_main_pid, marker_before, marker_after, jou
     journal shows the start gate refusing (the hook's `unrecorded` line and/or the gate's `refused` line). `window`: [{"t", "ActiveState", "MainPID"}] sampled during the fault."""
     rows = []
     ran = sorted({w.get("MainPID") for w in window if w.get("ActiveState") == "active" and w.get("MainPID") not in (0, None, pre_main_pid)})
-    rows.append(("V4.gate.no_daemon_while_storage_broken", "pass" if window and not ran else "fail" if ran else "invalid",
+    rows.append(("V4.immutable_guard.no_daemon_while_storage_broken", "pass" if window and not ran else "fail" if ran else "invalid",
                  "no new daemon became active during the %d samples taken while the guard folder was unwritable" % len(window) if window and not ran else
                  ("a NEW daemon ran while the incident could not be recorded: main pids %s" % ran) if ran else "no samples were taken", {"new_daemons": ran, "samples": len(window)}))
     pos_a, pos_b = held_pos
     moved = pos_a is not None and pos_b is not None and pos_b - pos_a > 1.5
-    rows.append(("V4.gate.held_while_storage_broken", "pass" if held_paused and not moved else "fail", "PAUSE file: %s; broadcast position %s -> %s" % (held_paused, pos_a, pos_b), {"pos": held_pos}))
+    rows.append(("V4.immutable_guard.held_while_storage_broken", "pass" if held_paused and not moved else "fail", "PAUSE file: %s; broadcast position %s -> %s" % (held_paused, pos_a, pos_b), {"pos": held_pos}))
     open_ = marker_after.get("state") == "open" and marker_after.get("invocation_id") == marker_before.get("invocation_id")
-    rows.append(("V4.gate.marker_left_open", "pass" if open_ else "fail", "the old run's marker is still there (the hook could not account for the stop): %s" % open_, {"before": marker_before, "after": marker_after}))
+    rows.append(("V4.immutable_guard.marker_left_open", "pass" if open_ else "fail", "the old run's marker is still there (the hook could not account for the stop): %s" % open_, {"before": marker_before, "after": marker_after}))
     j = journal or ""
     hook = '"incident": "unrecorded"' in j or '"incident":"unrecorded"' in j
     gate = '"gate": "refused"' in j or '"gate":"refused"' in j
-    rows.append(("V4.gate.refusal_is_in_the_journal", "pass" if hook or gate else "fail", "journal shows: stop hook unrecorded=%s, start gate refused=%s" % (hook, gate), {"journal_tail": j[-800:]}))
+    rows.append(("V4.immutable_guard.refusal_is_in_the_journal", "pass" if hook or gate else "fail", "journal shows: stop hook unrecorded=%s, start gate refused=%s" % (hook, gate), {"journal_tail": j[-800:]}))
     return rows
 
 
@@ -202,18 +208,18 @@ def evaluate_gate_recovery(latch, marker_before_fault, marker_after, pre_main_pi
     unchanged), a new marker. `hold`: {"paused", "pos_a", "pos_b", "dt", "sha_before", "sha_after"}. `path`: how the unit came back ('by itself' / 'after reset-failed and start')."""
     rows = []
     ok = bool(latch) and not latch.get("unreadable") and latch.get("kind") == "unaccounted_stop" and latch.get("source") == "systemd"
-    rows.append(("V4.gate.latched_when_storage_recovered", "pass" if ok else "fail",
+    rows.append(("V4.immutable_guard.latched_when_storage_recovered", "pass" if ok else "fail",
                  "latch kind=%s source=%s (expected unaccounted_stop / systemd); the unit came back %s" % ((latch or {}).get("kind"), (latch or {}).get("source"), path), {"latch": latch, "path": path}))
     prev = ((evidence_doc or {}).get("evidence") or {}).get("previous_run") or {}
     named = bool(prev) and prev.get("invocation_id") == marker_before_fault.get("invocation_id") and (evidence_doc["evidence"].get("same_boot") is True)
-    rows.append(("V4.gate.names_the_previous_run", "pass" if named else "fail",
+    rows.append(("V4.immutable_guard.names_the_previous_run", "pass" if named else "fail",
                  "the evidence names the run whose marker was left open (invocation %s) and says same boot: %s" % (marker_before_fault.get("invocation_id"), named), {"previous_run": prev, "same_boot": ((evidence_doc or {}).get("evidence") or {}).get("same_boot")}))
     held_ok = (hold.get("paused") and hold.get("pos_a") is not None and hold.get("pos_b") is not None and hold["pos_b"] - hold["pos_a"] <= 1.0
                and hold.get("sha_before") and hold.get("sha_before") == hold.get("sha_after") and (hold.get("dt") or 0) >= 10 and post_main_pid not in (None, 0, pre_main_pid))
-    rows.append(("V4.gate.started_held", "pass" if held_ok else "fail",
+    rows.append(("V4.immutable_guard.started_held", "pass" if held_ok else "fail",
                  "a new daemon (main pid %s -> %s) is paused, its clock stopped, the latch unchanged, for %.0f s" % (pre_main_pid, post_main_pid, hold.get("dt") or 0), {"hold": hold}))
     reopened = marker_after.get("state") == "open" and marker_after.get("invocation_id") not in (None, marker_before_fault.get("invocation_id"))
-    rows.append(("V4.gate.new_marker_open", "pass" if reopened else "fail", "a new marker is open for the new run: %s" % reopened, {"after": marker_after}))
+    rows.append(("V4.immutable_guard.new_marker_open", "pass" if reopened else "fail", "a new marker is open for the new run: %s" % reopened, {"after": marker_after}))
     return rows
 
 
