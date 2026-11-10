@@ -92,6 +92,27 @@ class Ctx:
     def paused(self):
         return self.env.exists(ROOT_DIR + "/store/PAUSE")
 
+    def run_marker(self):
+        """guard/RUN_OPEN as lifecycle.marker_view: the daemon's run marker (opened by the start gate, closed by the stop hook)."""
+        import lifecycle as LC
+        p = GUARD + "/RUN_OPEN"
+        if not self.env.exists(p):
+            return LC.marker_view(("absent", None))
+        try:
+            doc = json.loads(self.env.read(p) or "")
+        except ValueError:
+            return LC.marker_view(("unreadable", None))
+        return LC.marker_view(("open", doc if isinstance(doc, dict) else {}))
+
+    def trips(self):
+        return jsonl_read(GUARD + "/trips.jsonl")
+
+    def start_wall_time(self, k):
+        """When the unit's current run became active, on the wall clock (from systemd's monotonic timestamp), or None."""
+        import lifecycle as LC
+        us = self.show(k, ("ActiveEnterTimestampMonotonic",)).get("ActiveEnterTimestampMonotonic")
+        return LC.wall_time_of_monotonic_us(us if isinstance(us, int) else None, self.env.now(), self.env.monotonic())
+
     def broadcast_status(self):
         rc, out, _ = self.env.run([PYTHON, "-I", self.tree + "/tools/broadcast_run.py", "status", "--root", ROOT_DIR])
         try:

@@ -20,14 +20,14 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 | Stage | Question |
 |---|---|
 | V1 | Real cgroup-v2 cache growth: no false trip during a sustained healthy workload |
-| V2 | Sustained anonymous pressure trips as designed (V2a); an OOM: incident record and hold, reported victim, systemd's actual recovery (V2b); the same with the daemon as the OOM victim (V2c) |
-| V3 | Monitor killed, stopped, hung, or repeatedly OOM-killed: the daemon pauses itself safely |
-| V4 | An existing latch survives restarts and kill -9 of either service, and keeps the daemon paused; only the documented `release` clears it |
+| V2 | Sustained anonymous pressure trips as designed (V2a); an OOM: incident record and hold, reported victim, systemd's actual recovery (V2b); the same with the daemon as the OOM victim (V2c). Both also judge the lifecycle design: the stop hook (not the gate's fail-safe) wrote the latch, before the restart, as one incident line, with the run marker closed and reopened |
+| V3 | Monitor killed, stopped, hung, or repeatedly OOM-killed: the daemon pauses itself safely. V3e: negative control, a daemon `kill -9` / restart / stop+start that is not an OOM records nothing |
+| V4 | An existing latch survives restarts and kill -9 of either service, and keeps the daemon paused; only the documented `release` clears it. Failure injection: with the guard folder immutable an OOM must not let a new daemon run, and recovery must start the daemon held. Reboot: marker closed after a clean reboot, kept after a hard reset |
 
 ## Minimum resources
 
 * A disposable Linux machine or VM (not a host that runs anything real): 1 vCPU, 1 GiB RAM, swap **off**, 5 GiB free disk, kernel >= 5.4 (>= 5.19 for reclaim probes), systemd >= 243 as PID 1, **writable cgroup v2** with the memory controller, `python3`, `git`, root.
-* A container without its own systemd does not qualify. A cloud VM costs money: **needs the owner's explicit approval.** A local VM (any hypervisor) or a spare machine costs nothing.
+* A container without its own systemd does not qualify. The failure-injection case needs a filesystem that supports `chattr +i`. A cloud VM costs money: **needs the owner's explicit approval.** A local VM (any hypervisor) or a spare machine costs nothing.
 * Time: smoke run about 20 min; qualifying run about 3 h attended.
 
 ## Operator steps (all on the disposable machine)
@@ -36,9 +36,13 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 2. `git clone` the repository at the harness revision; `python3 tools/vtest/vtest.py pin-check` (code under test must equal the pin).
 3. `python3 tools/vtest/vtest.py preflight`: must say READY (read-only).
 4. `sudo python3 tools/vtest/vtest.py plan` to read exactly what will run; then `sudo python3 tools/vtest/vtest.py install` (renders `dfl-vtest-*` units from the pinned templates, prints each layout change, starts nothing).
-5. `sudo python3 tools/vtest/vtest.py run --smoke` first (non-qualifying shakedown), then `run` for the qualifying run. `--with-reboot` adds the V4 reboot phase; after the reboot run `--after-reboot`.
+5. `sudo python3 tools/vtest/vtest.py run --smoke` first (non-qualifying shakedown), then `run` for the qualifying run. `--with-reboot` adds the V4 reboot phase; after a **clean** reboot run `run --stages V4 --after-reboot` **before starting any unit** (the stage reads the run marker the reboot left, judges it, then starts the units itself; `start-units` first makes the marker rows `invalid`). For the **hard-reset** variant the operator cuts the power or resets the disposable machine instead of rebooting it, then runs `run --stages V4 --after-hard-reset`.
 6. `sudo python3 tools/vtest/vtest.py archive --run-id <run-id>`: collects the unit journals, kernel log and OOM lines, unit states and machine facts, writes `EVIDENCE_MANIFEST.json/.txt` (every required item with size and SHA-256, or `MISSING` / `NOT_PRODUCED` with the reason), makes one compressed archive in `/srv/dfl-vtest/export/`, reads it back and verifies it. Exit 3 prints `DO NOT CLEAN UP THE HOST`: the archive does not verify or required evidence is missing.
 7. Copy the archive off the machine by the approved private method and check its SHA-256 there. Review before publishing anything; evidence is private and never goes to GitHub. `teardown --include-evidence --yes` refuses until a verified archive of every run exists.
+
+## Failure injection (V4.gate)
+
+The one filesystem fault the harness injects is `chattr +i` on `/srv/dfl-vtest/guard` (refused for any other path), read back with `lsattr`, and removed in a `finally`; if it cannot be removed the stage stops and tells you the exact `chattr -i` command. The filesystem must support it (ext4, xfs; not tmpfs): if `chattr` fails the case is `invalid`, not a pass. While the folder is immutable the monitor may be unable to refresh its heartbeat for a few seconds (the daemon trips on silence only after 120 s).
 
 ## Privileges needed
 

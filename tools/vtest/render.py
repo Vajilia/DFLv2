@@ -86,6 +86,44 @@ def exec_flags_unchanged(template, rendered):
     return [flags(x) for x in ta] == [flags(x) for x in tb]
 
 
+def lifecycle_problems(template, rendered):
+    """The daemon unit's lifecycle design (OOM incident record, third candidate) must survive rendering untouched, and must be there at all: a pinned candidate whose daemon unit lacks the start gate or the stop
+    hook is not the design under test. -> list of problems (empty if fine). Checks, on the rendered text: ExecStartPre= runs `broadcast_run.py gate` (no '-' prefix: a failing gate must stop the start),
+    ExecStopPost= runs `broadcast_run.py incident` against the unit's own cgroup, OOMPolicy=stop, RequiresMountsFor= in [Unit]; and that the hook lines' flags equal the template's."""
+    problems = []
+    def section_lines(txt):
+        sec, out = None, []
+        for l in txt.splitlines():
+            m = re.match(r"\[(\w+)\]\s*$", l)
+            if m:
+                sec = m.group(1)
+            else:
+                out.append((sec, l))
+        return out
+    t, r = section_lines(template), section_lines(rendered)
+    for key, word in (("ExecStartPre", "gate"), ("ExecStopPost", "incident")):
+        tl = [l for _, l in t if l.startswith(key + "=")]
+        rl = [l for _, l in r if l.startswith(key + "=")]
+        if not tl:
+            problems.append("the pinned template has no %s= line: the candidate lacks its %s hook" % (key, "start gate" if key == "ExecStartPre" else "stop"))
+            continue
+        if [flags(x) for x in tl] != [flags(x) for x in rl]:
+            problems.append("%s= flags changed by rendering" % key)
+        if not any(re.search(r"broadcast_run\.py %s\b" % word, x) for x in rl):
+            problems.append("%s= does not run `broadcast_run.py %s`" % (key, word))
+    if any(l.startswith(("ExecStartPre=-", "ExecStopPost=-")) for _, l in r):
+        problems.append("a lifecycle hook has the '-' prefix (its failure would be ignored)")
+    if "OOMPolicy=stop" not in [l for _, l in r]:
+        problems.append("OOMPolicy=stop is missing from the rendered unit")
+    mounts = [sec for sec, l in r if l.startswith("RequiresMountsFor=")]
+    if mounts != ["Unit"]:
+        problems.append("RequiresMountsFor= must appear once, in [Unit] (found in %s)" % (mounts or "no section"))
+    cg = [l for _, l in r if l.startswith("ExecStopPost=")]
+    if cg and ("--cgroup /sys/fs/cgroup/system.slice/" + UNIT["daemon"]) not in cg[0]:
+        problems.append("ExecStopPost= does not name the harness daemon unit's own cgroup")
+    return problems
+
+
 def HARNESS_DIR():
     return os.path.dirname(os.path.abspath(__file__))
 
@@ -161,6 +199,10 @@ def install(env, repo, pin=None, user=None):
         bad = invariants(template, text)
         if bad or not exec_flags_unchanged(template, text):
             raise Unsafe("rendered %s unit differs from the template in what matters: %s" % (name, bad or "ExecStart flags"))
+        if name == "daemon":
+            lp = lifecycle_problems(template, text)
+            if lp:
+                raise Unsafe("the daemon unit does not carry the lifecycle design under test: %s" % "; ".join(lp))
         env.write("%s/%s" % (UNIT_DIR, UNIT[name]), text)
         units[name] = {"changes": changes, "diff": "\n".join(difflib.unified_diff(template.splitlines(), text.splitlines(), tpl, UNIT[name], lineterm=""))}
     env.write("%s/%s" % (UNIT_DIR, UNIT["site"]), site_unit(pin))

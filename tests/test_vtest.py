@@ -36,7 +36,7 @@ def rec(t, current, pinned, anon=30 * MB, mx=MX, events=None, stat=None, full60=
 
 class Pin(unittest.TestCase):
     def test_pin_is_the_approved_candidate(self):
-        self.assertEqual(C.read_pin(), 'bfa632b0e8961d9d576bdcded86abea90a3cc675')
+        self.assertEqual(C.read_pin(), 'ecf62ea6c709903ff6a6eb8d95426834803da8dc')
         self.assertEqual(subprocess.run(['git', '-C', str(ROOT), 'cat-file', '-t', C.read_pin()], capture_output=True, text=True).stdout.strip(), 'commit')
 
     def test_the_code_under_test_has_not_changed_since_the_pin(self):
@@ -217,7 +217,7 @@ class Safety(unittest.TestCase):
 
 
 class Render(unittest.TestCase):
-    PIN = 'bfa632b0e8961d9d576bdcded86abea90a3cc675'
+    PIN = 'ecf62ea6c709903ff6a6eb8d95426834803da8dc'
 
     def templates(self):
         return {n: (ROOT / p).read_text() for n, p in (('daemon', RN.DAEMON_TEMPLATE), ('monitor', RN.MONITOR_TEMPLATE))}
@@ -722,7 +722,7 @@ class V4Evaluator(unittest.TestCase):
     FP = {'sha256': 'a' * 64, 'size': 120, 'mtime': 1.0}
 
     def d(self, **over):
-        a = dict(step='daemon_restart', fp0=self.FP, fp1=self.FP, paused=True, pos_a=10.0, pos_b=10.1, inv0={'a': 1}, inv1={'a': 1}, resume_rc=3, units_active=True, trips0=[{'at': 1}], trips1=[{'at': 1}, {'at': 2}])
+        a = dict(step='daemon_restart', fp0=self.FP, fp1=self.FP, paused=True, pos_a=10.0, pos_b=10.1, inv0={'a': 1}, inv1={'a': 1}, resume_rc=3, units_active=True, trips0=[{'at': 1}], trips1=[{'at': 1}])
         a.update(over)
         return stage_v4.evaluate_disturbance(a['step'], a['fp0'], a['fp1'], a['paused'], a['pos_a'], a['pos_b'], a['inv0'], a['inv1'], a['resume_rc'], a['units_active'], a['trips0'], a['trips1'])[1]
 
@@ -730,8 +730,16 @@ class V4Evaluator(unittest.TestCase):
         self.assertEqual(self.d(), 'pass')
 
     def test_every_way_the_latch_can_be_lost_or_ignored_fails(self):
-        for over in (dict(fp1=None), dict(fp1=dict(self.FP, sha256='b' * 64)), dict(fp1=dict(self.FP, mtime=2.0)), dict(paused=False), dict(pos_b=40.0), dict(inv1={'a': 1, 'b': 2}), dict(resume_rc=0), dict(units_active=False), dict(trips1=[{'at': 9}])):
+        for over in (dict(fp1=None), dict(fp1=dict(self.FP, sha256='b' * 64)), dict(fp1=dict(self.FP, mtime=2.0)), dict(paused=False), dict(pos_b=40.0), dict(inv1={'a': 1, 'b': 2}), dict(resume_rc=0), dict(units_active=False), dict(trips1=[{'at': 9}]), dict(trips1=[{'at': 1}, {'at': 2, 'kind': 'unaccounted_stop'}]), dict(trips1=[{'at': 1}, {'at': 2, 'kind': 'oom_kill'}]), dict(trips1=[])):
             self.assertEqual(self.d(**over), 'fail', over)
+
+    def test_a_line_the_disturbance_may_legitimately_add_is_allowed_only_when_named(self):
+        new = [{'at': 1}, {'at': 2, 'kind': 'unaccounted_stop'}]
+        a = dict(step='after_hard_reset', fp0=self.FP, fp1=self.FP, paused=True, pos_a=10.0, pos_b=10.1, inv0={'a': 1}, inv1={'a': 1}, resume_rc=3, units_active=True, trips0=[{'at': 1}], trips1=new)
+        args = (a['step'], a['fp0'], a['fp1'], a['paused'], a['pos_a'], a['pos_b'], a['inv0'], a['inv1'], a['resume_rc'], a['units_active'], a['trips0'], a['trips1'])
+        self.assertEqual(stage_v4.evaluate_disturbance(*args, allow_new=('unaccounted_stop',))[1], 'pass')
+        self.assertEqual(stage_v4.evaluate_disturbance(*args)[1], 'fail')
+        self.assertEqual(stage_v4.evaluate_disturbance(*args, allow_new=('oom_kill',))[1], 'fail')
 
     def test_refusals(self):
         rows = {r[0]: r[1] for r in stage_v4.evaluate_refusals(3, 2, 4, self.FP, [self.FP, self.FP])}

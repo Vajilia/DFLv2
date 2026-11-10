@@ -5,18 +5,26 @@ The daemon trips itself (kind monitor_silent, source daemon) when the monitor's 
   V3b  stopped and left stopped: the daemon must trip and pause;
   V3c  hung (SIGSTOP; the process exists but makes no progress): same outcome as V3b;
   V3d  killed by the kernel for its own memory, repeatedly, until systemd's start limit leaves the unit failed: one OOM must not trip; the failed unit must.
+  V3e  the NEGATIVE CONTROL for the daemon's lifecycle hooks: a daemon stop that is not an OOM (kill -9, restart, stop then start) must record nothing (no latch, no incident line, no PAUSE; the clock goes on)
+       while the run marker is closed by the stop hook and reopened by the start gate. V3a-V3d also check that the monitor's failures left the daemon's own run untouched (same process, same marker) and
+       wrote no oom_kill / unaccounted_stop line.
 "Safely" means: a valid latch is written atomically, the broadcast clock stops, no public file changes afterwards, nothing is deleted, and the documented release + resume works.
 """
 import json
 
 import evaluate as E
+import lifecycle as LC
 from common import GUARD, GUARD_STALE_S, UNIT
 
 STAGE = "V3"
 PLAN = [("V3a.kill9", "systemctl kill --signal=SIGKILL the monitor; watch 150 s: restarted, heartbeat gap under the stale limit, no latch, clock still advancing"),
         ("V3b.stop", "systemctl stop the monitor and leave it; wait for the daemon's own trip; check the pause; start the monitor; release; resume"),
         ("V3c.hang", "SIGSTOP the monitor; same as V3b; SIGCONT afterwards; check the latch persisted"),
-        ("V3d.monitor_oom", "loader in the monitor's cgroup past its MemoryMax, repeatedly, until the start limit fails the unit; the daemon must trip; recover the documented way")]
+        ("V3d.monitor_oom", "loader in the monitor's cgroup past its MemoryMax, repeatedly, until the start limit fails the unit; the daemon must trip; recover the documented way"),
+        ("V3.monitor_failures_summary", "after V3a-V3d: the daemon's run (main pid, run marker) is untouched and no oom_kill / unaccounted_stop line was written"),
+        ("V3e.daemon_kill9", "negative control: kill -9 the daemon; no latch, no incident line, not paused, clock advances; run marker closed and reopened"),
+        ("V3e.daemon_restart", "negative control: systemctl restart the daemon; same checks"),
+        ("V3e.daemon_stop_start", "negative control: stop the daemon (the marker must be closed while it is stopped), start it; same checks")]
 DEFAULTS = {"qualifying": {"watch_s": 150, "trip_wait_s": 240, "oom_rate": 100e6, "oom_iterations": 7},
             "smoke": {"watch_s": 60, "trip_wait_s": 240, "oom_rate": 100e6, "oom_iterations": 7}}
 
@@ -51,6 +59,21 @@ def evaluate_v3d(iters, latch_before_last, final, latch, hb_final_mtime, paused,
     rows.append(("V3d.start_limit_left_the_unit_failed", "pass" if failed and len(iters) <= 6 else "fail", "after %d OOM kills the monitor unit is %s (StartLimitBurst=5 in 3600 s)" % (len(iters), final.get("ActiveState")), {"iterations": len(iters), "final": final}))
     rows += evaluate_silent("V3d", latch, hb_final_mtime, paused, pos_a, pos_b, inv_a, inv_b, recovery)
     return rows
+
+
+def _daemon_case(ctx, case, act):
+    """One non-OOM stop of the daemon, from a clean baseline (no latch). `act` does the stop and the start and returns the marker seen while stopped (or None). -> rows."""
+    env = ctx.env
+    ctx.ensure_baseline("vtest: baseline before V3e.%s" % case)
+    pre, mk0, trips0 = ctx.show("daemon"), ctx.run_marker(), ctx.trips()
+    ctx.mark("V3e.act", case=case, pid=pre.get("MainPID"))
+    mk_stopped = act()
+    ctx.wait(lambda: ctx.active("daemon") and ctx.show("daemon").get("MainPID") not in (0, pre.get("MainPID")), 90)
+    env.sleep(20)
+    p0 = ctx.position()
+    env.sleep(15)
+    latch, _ = ctx.latch()
+    return LC.evaluate_daemon_negative_control(case, True, latch, ctx.paused(), LC.new_lines(trips0, ctx.trips()), mk0, ctx.run_marker(), mk_stopped, E.moved(p0, ctx.position(), 5.0), env.boot_id())
 
 
 def _recover(ctx, why):
@@ -94,6 +117,7 @@ def run(ctx):
     cfg, rec, env = ctx.cfg, ctx.rec, ctx.env
     # ---- a: kill -9
     ctx.ensure_baseline()
+    daemon0, marker0, trips_v3 = ctx.show("daemon"), ctx.run_marker(), ctx.trips()
     pre, pos0, t0 = ctx.show("monitor"), ctx.position(), ctx.now()
     env.sc("kill", UNIT["monitor"], "--signal=SIGKILL", "--kill-whom=main")
     ctx.mark("V3a.kill9", pid=pre.get("MainPID"))
@@ -144,3 +168,28 @@ def run(ctx):
     paused, pos_b, inv_b = ctx.paused(), ctx.position(), ctx.public_inventory()
     recovery = _recover(ctx, "vtest V3d: the monitor was OOM-killed until systemd gave up; recovering the documented way")
     rec.add_all(evaluate_v3d(iters, None, final, latch, hb, paused, pos_a, pos_b, inv_a, inv_b, recovery))
+    rec.stop_if_failed()
+    ctx.mark("V3.monitor_failures_summary")
+    rec.add_all(LC.evaluate_monitor_failures_left_daemon_alone(LC.new_lines(trips_v3, ctx.trips()), daemon0, ctx.show("daemon"), marker0, ctx.run_marker()))
+    rec.stop_if_failed()
+    # ---- e: the negative control for the daemon's lifecycle hooks
+    def kill9():
+        env.sc("kill", UNIT["daemon"], "--signal=SIGKILL", "--kill-whom=main")
+
+    def restart():
+        env.sc("restart", UNIT["daemon"])
+
+    def stop_start():
+        env.sc("stop", UNIT["daemon"])
+        ctx.wait(lambda: not ctx.active("daemon"), 60)
+        mk = ctx.run_marker()
+        env.sc("start", UNIT["daemon"])
+        return mk
+    ctx.mark("V3e.daemon_kill9")
+    rec.add_all(_daemon_case(ctx, "daemon_kill9", kill9))
+    rec.stop_if_failed()
+    ctx.mark("V3e.daemon_restart")
+    rec.add_all(_daemon_case(ctx, "daemon_restart", restart))
+    rec.stop_if_failed()
+    ctx.mark("V3e.daemon_stop_start")
+    rec.add_all(_daemon_case(ctx, "daemon_stop_start", stop_start))

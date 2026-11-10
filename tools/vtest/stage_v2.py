@@ -11,11 +11,14 @@ V2a  plateau at 93 % of MemoryMax: the monitor must trip on its sustained rule, 
 V2b/V2c  growth past the limit: the kernel kills; the whole unit must stop, restart as configured, leave no survivor and no damaged public file. REQUIRED: a persistent incident record (the latch and
      its evidence) and a hold: after the restart the daemon stays paused, its clock does not advance, and the latch is unchanged. An OOM that leaves no latch FAILS the stage: a quick restart must
      not erase or bypass the protection. If that happens it is a defect of the candidate, to be fixed in a new, separately tested candidate; the harness does not fix it.
+     The agreed lifecycle design (see lifecycle.py) is judged too: the record was written by the unit's STOP HOOK (kind oom_kill, source systemd; an unaccounted_stop latch means only the start gate's fail-safe
+     caught it, which fails), before the restarted daemon became active, as exactly one incident line, with the run marker closed and reopened, and the victim recorded explicitly and not contradicting the kernel log.
 """
 import json
 import os
 
 import evaluate as E
+import lifecycle as LC
 from common import GUARD, MEM_FRAC, MEM_SUSTAIN_S, MON_EVERY_S, UNIT
 
 STAGE = "V2"
@@ -27,7 +30,7 @@ PLAN = [("V2a.baseline", "units up, no latch; idle samples of the daemon's cgrou
         ("V2b.reset", "clear the latch the documented way (release, resume); record pids, restarts, positions, public files"),
         ("V2b.overrun", "anonymous loader at 25 MB/s to 3 x MemoryMax in the daemon's cgroup"),
         ("V2b.timeline", "record the unit, the loader, the latch every second for up to 150 s after the kill"),
-        ("V2b.hold", "after the recovery, 15 s: the latch is unchanged, the daemon still paused, the clock stopped; read the kernel log for the OOM victim"),
+        ("V2b.hold", "after the recovery, 15 s: the latch is unchanged, the daemon still paused, the clock stopped; read the kernel log for the OOM victim; then the lifecycle rows (stop hook wrote the latch, before the restart, one incident line, run marker closed and reopened, victim explicit)"),
         ("V2b.evaluate", "judge V2b"),
         ("V2c.reset", "daemon-victim scenario: clear the latch the documented way; record pids, restarts, positions, public files"),
         ("V2c.prefer", "raise oom_score_adj to 1000 (raise only, never lower) of the processes already in the daemon's cgroup; read it back; the injected load is untouched"),
@@ -203,6 +206,7 @@ def _overrun(ctx, tag, m, prefer, factor):
     pre, mon_before = ctx.show("daemon"), ctx.show("monitor")
     inv_before, pos_before, t0 = ctx.public_inventory(), ctx.position(), ctx.now()
     daemon_pids = ctx.daemon_pids()
+    trips_before, marker_before = ctx.trips(), ctx.run_marker()
     evid_before = {d for d in env.listdir(GUARD + "/evidence")} if env.exists(GUARD + "/evidence") else set()
     adj_set = None
     if prefer:
@@ -246,10 +250,18 @@ def _overrun(ctx, tag, m, prefer, factor):
     new_evidence = sorted(d for d in (env.listdir(GUARD + "/evidence") if env.exists(GUARD + "/evidence") else []) if d not in evid_before and env.exists("%s/evidence/%s/evidence.json" % (GUARD, d)))
     incident = {"sha_before": sha0, "sha_after": sha1, "paused": ctx.paused(), "pos_a": pos_a, "pos_b": ctx.position(), "dt": ctx.now() - ta, "new_evidence": new_evidence}
     victims = E.parse_oom_victims(ctx.kernel_log(t0 - 2), UNIT["daemon"])
+    trips_after, marker_after, started_wall = ctx.trips(), ctx.run_marker(), ctx.start_wall_time("daemon")
+    oom_dirs = [d for d in new_evidence if d.endswith("-oom_kill")]
+    try:
+        evidence_doc = json.loads(env.read("%s/evidence/%s/evidence.json" % (GUARD, oom_dirs[-1]))) if oom_dirs else None
+    except ValueError:
+        evidence_doc = None
     ctx.mark(m["evaluate"])
     rows = evaluate_v2b(E.event_delta(recs, "oom_kill"), ctx.journal("daemon", t0 - 2), pre, post, tl, lat1, inv_before, ctx.public_inventory(), ctx.partial_files(), procs_new, mon_before, mon_after, old_alive,
                         int(mem_t) if mem_t.isdigit() else None, mx, pos_before, ctx.position(), ctx.now() - t0, cfg,
                         victims=victims, daemon_pids=daemon_pids, loader_pid=old_loader_pid, incident=incident, t0=t0)
+    if not any(r[0] == "V2b.incident_record_and_hold" and r[1] == "invalid" for r in rows):
+        rows += LC.evaluate_v2_lifecycle("V2b", lat1, evidence_doc, trips_before, trips_after, marker_before, marker_after, started_wall, victims, pre.get("MainPID"), env.boot_id())
     rows = rename_rows(rows, "V2b", tag)
     if prefer:
         rows += evaluate_v2c_extra(daemon_pids, adj_set, adj_after)

@@ -5,11 +5,11 @@
   vtest.py preflight [--json]             read-only: is this machine a usable, disposable environment? (changes nothing)
   vtest.py plan [V1..V4]                  print every step and the durations; executes nothing
   vtest.py install [--user U]             extract and verify the pinned tree, render the test units, build the generated fixture. Starts nothing
-  vtest.py run [--stages V1,V2,V3,V4] [--smoke] [--run-id ID] [--with-reboot] [--after-reboot] [--acknowledge-stop REASON]
+  vtest.py run [--stages V1,V2,V3,V4] [--smoke] [--run-id ID] [--with-reboot] [--after-reboot | --after-hard-reset] [--acknowledge-stop REASON]
                                           run stages in order; STOPS at the first stage that does not pass (units and evidence are left exactly as they are)
   vtest.py archive --run-id ID [--out F] host records + manifest of required evidence (MISSING is explicit) + ONE compressed archive, read back and verified; exit 3: do not clean up the host
   vtest.py status                         runs, results, any STOPPED marker
-  vtest.py start-units                    start site, daemon and monitor (after a reboot, for V4 --after-reboot)
+  vtest.py start-units                    start site, daemon and monitor (NOT before `run V4 --after-reboot`: that stage reads the run marker first, then starts them itself)
   vtest.py affected --recorded REV        which stages a change since REV invalidates (docs-only changes: none)
   vtest.py selftest                       plumbing check with plain processes on THIS machine, no systemd, no cgroup limits; proves nothing about the memory rule
   vtest.py teardown [--yes] [--include-evidence]   remove the harness's own things (a person's act; prints first; the evidence is kept unless asked, and is never removed without a verified archive)
@@ -201,8 +201,8 @@ def run_stages(a, env, pin, inst, rows, run_id, rdir, mode):
         print("== %s (%s)" % (name, mode))
         note = None
         try:
-            if name == "V4" and a.after_reboot:
-                mod.run_after_reboot(ctx)
+            if name == "V4" and (a.after_reboot or a.after_hard_reset):
+                mod.run_after_reboot(ctx, "hard" if a.after_hard_reset else "clean")
             else:
                 mod.run(ctx)
         except C.StageStop as e:
@@ -322,6 +322,7 @@ def main(argv=None):
     p.add_argument("--run-id")
     p.add_argument("--with-reboot", action="store_true")
     p.add_argument("--after-reboot", action="store_true")
+    p.add_argument("--after-hard-reset", action="store_true")
     p.add_argument("--acknowledge-stop")
     p.set_defaults(fn=cmd_run)
     p = sub.add_parser("archive")

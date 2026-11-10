@@ -164,6 +164,26 @@ class Env:
         except OSError as e:
             return False, e.errno
 
+    def monotonic(self):
+        return time.monotonic()
+
+    def boot_id(self):
+        return (self.read("/proc/sys/kernel/random/boot_id") or "").strip() or None
+
+    def immutable(self, path, on):
+        """The one fault the harness injects on the filesystem: the guard folder made unwritable with `chattr +i` / `-i` (no entry can be created, renamed or removed in it, even by root).
+        Only the harness's own guard folder; read back with lsattr. -> (ok, detail)."""
+        if path != GUARD:
+            raise Unsafe("refusing to change attributes of %s: only the guard folder %s may be made immutable" % (path, GUARD))
+        rc, out, err = self.run(["chattr", "+i" if on else "-i", path])
+        if rc:
+            return False, "chattr rc %s: %s" % (rc, (err or out).strip()[:200])
+        rc, out, err = self.run(["lsattr", "-d", path])
+        flags = (out or "").split()[0] if out and out.split() else ""
+        if rc or (("i" in flags) != bool(on)):
+            return False, "lsattr after the change says %r" % (flags or (err or "").strip()[:100])
+        return True, flags
+
     def sc(self, verb, *args, timeout=60):
         if verb in SC_WRITE:
             bad = [a for a in args if not (a.startswith(PREFIX) and a.endswith((".service", ".timer", ".scope")))]
