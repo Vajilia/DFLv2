@@ -27,6 +27,10 @@ NoNewPrivileges=true
 EnvironmentFile=/etc/dflv2/rehearsal.env
 # __COMMIT__ is the pinned checkout (/opt/dflv2-src/<commit>), filled in by install_rehearsal.sh; this file is a template, not installable as it is.
 ExecStart=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py run --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --deadline ${REHEARSAL_DEADLINE} --max-public-gb 3 --guard /srv/dflv2-rehearsal/monitor
+# An OOM kill of any process in this cgroup stops the whole unit (set explicitly: the default depends on the distribution); ExecStopPost= then records it as a latch BEFORE Restart= starts a
+# new daemon, so the restarted daemon starts held (docs/OOM_INCIDENT_RECORD.md). A stop that is not an OOM records nothing.
+OOMPolicy=stop
+ExecStopPost=/usr/bin/python3 -I /opt/dflv2-src/__COMMIT__/tools/broadcast_run.py incident --root /srv/dflv2-rehearsal/private --public /srv/dflv2-rehearsal/feed --guard /srv/dflv2-rehearsal/monitor --cgroup /sys/fs/cgroup/system.slice/dfl-rehearsal.service
 # SIGTERM: the daemon finishes the tick and exits; it leaves the folder as it is (the clock stops by itself within its lease, and a restart carries on from there).
 TimeoutStopSec=30
 Restart=on-failure

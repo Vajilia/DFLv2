@@ -246,20 +246,21 @@ class WhenRecordingFails(Incident):
         self.assertTrue(any(l.get('evidence_error') for l in lines), lines)
 
     def test_the_latch_is_made_durable_including_its_directory_entry(self):
-        """A host that loses power right after the incident must still have the latch: the file AND the guard folder's entry for it are flushed."""
+        """A host that loses power right after the incident must still have the latch: the file AND the guard folder's entry for it are flushed, the folder AFTER the file exists."""
         synced = []
         real = os.fsync
+        tripped = os.path.join(self.guard, 'TRIPPED')
 
         def spy(fd):
             try:
-                synced.append(os.readlink('/proc/self/fd/%d' % fd))
+                synced.append((os.readlink('/proc/self/fd/%d' % fd), os.path.exists(tripped)))
             except OSError:
-                synced.append('?')
+                synced.append(('?', False))
             return real(fd)
         self.events(1)
         with mock.patch.object(BR.os, 'fsync', spy):
             self.record()
-        self.assertIn(self.guard, synced, 'the guard folder itself must be fsynced after the latch is created: %s' % synced)
+        self.assertIn((self.guard, True), synced, 'the guard folder must be fsynced after TRIPPED was created: %s' % synced)
 
     def test_a_daemon_that_cannot_write_its_guard_folder_holds_the_broadcast(self):
         """If it cannot, an incident could not be recorded either: never run in that state."""

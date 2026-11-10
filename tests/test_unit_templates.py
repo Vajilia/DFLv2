@@ -128,10 +128,10 @@ class Templates(unittest.TestCase):
                 ns = got['ns']
                 self.assertEqual(ns.cmd, 'incident')
                 self.assertEqual(ns.cgroup, '/sys/fs/cgroup/system.slice/' + cgroup, 'the unit\'s own cgroup, which still exists while ExecStopPost runs')
-                run_line = [l for l in text.splitlines() if l.startswith('ExecStart=')][0]
-                self.assertIn('--guard', run_line)
-                self.assertEqual(ns.guard, '/g', 'the same guard folder the daemon obeys and the monitor writes')
-                self.assertEqual(ns.root, '/r' if 'supervisor' in str(path) else ns.root)
+                run = shlex.split([l for l in text.splitlines() if l.startswith('ExecStart=')][0].replace('__COMMIT__', 'x').replace('__ROOT__', '/r').replace('__PUBLIC__', '/p').replace('__GUARD__', '/g'))
+                self.assertEqual(ns.guard, run[run.index('--guard') + 1], 'the same guard folder the daemon obeys and the monitor writes')
+                self.assertEqual(ns.root, run[run.index('--root') + 1], 'the same private root')
+                self.assertEqual(ns.public, run[run.index('--public') + 1])
                 tout = int(re.search(r'(?m)^TimeoutStopSec=(\d+)$', text).group(1))
                 self.assertGreaterEqual(tout, 30, 'ExecStopPost shares the stop timeout: the recorder (retries, a 5 s log read) must fit')
 
