@@ -12,7 +12,7 @@ The kernel gives no exact "non-reclaimable footprint". The monitor's `pinned` is
 * kernel reclaim activity (`memory.events max`, `pgscan`, `pgsteal`) proving the cache was really being reclaimed;
 * reclaim probes (`memory.reclaim`, kernel 5.19+): memory the kernel gave back is a lower-bound evidence of reclaimable memory, never a truth value;
 * workload survival (no trip, no OOM, no restart, loader still reading);
-* broadcast behaviour measured directly, in two phases that never overlap (publication of the fixture's first window, then cache stress): the clock never stands still past its limit, the lease never lapses, every live segment is published before viewers need it, no publication error. Criteria and their rationale: `docs/MEMORY_MONITOR_VALIDATION_CRITERIA.md`. `broadcast_probe.py` samples the clock once a second from outside the daemon's cgroup;
+* broadcast behaviour measured directly, in two phases that never overlap (publication of the fixture's first window, then cache stress): the lease never lapses, every live segment is published before viewers need it (the viewing-coverage check), no publication error; clock stand-stills and tick age are reported and do not gate. Criteria and their rationale: `docs/MEMORY_MONITOR_VALIDATION_CRITERIA.md`. `broadcast_probe.py` samples the clock once a second from outside the daemon's cgroup;
 * pressure counters (PSI) are recorded as a diagnostic and gate nothing (they include the loader).
 
 ## Stages (the four requested checks)

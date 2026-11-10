@@ -2,6 +2,8 @@
 
 **Correction before any run (harness commit):** the first draft of B2 and of section 3 said a `downtime` entry means a lapsed lease. Reading `Clock.heartbeat` again while testing showed it records any stand-still past `clock_limit`; B2 above is the corrected wording. No run had been made under either wording.
 
+**Second correction before any run (harness commit after `5a279dc`):** the first draft made a clock stand-still (B1) a gate. It is now a diagnostic. Reasons, from the pinned tree and the earlier healthy runs: (1) after each tick the clock may run `DELAY_S` = 3 s ahead, so a tick gap up to 3 s moves nothing for viewers (B1 as drafted failed only when the wall time was more than 1 s past that 3 s limit, i.e. a tick older than about 4 s, so it never failed on a 1.5 s gap, but its wording "zero stalls above one second" invited the reading that it did); (2) beyond the horizon the design stands the clock still on purpose ("the broadcast stands still there ... Nothing is skipped or shown early", `docs/BROADCAST_INTEGRATION.md`; `coverage_wait`), which is the protection that keeps viewers from being run past what is published, not a failure of it; (3) the earlier healthy supervised run's longest daemon tick gap was 1.5 s (`docs/INTEGRATION_CANDIDATE_2026-11-07.md`, section on daemon tick gaps), far inside the horizon. What decides the stage is therefore loss of viewing coverage (B3), a lapsed lease (B2) and a publication error (B4). Stand-stills and tick lateness are recorded (section 7). The consequence is stated plainly: a freeze that is shorter than the lease and loses no coverage is reported and does not fail V1. The earlier wording is kept in this file's history, not rewritten.
+
 **Status.** Written and committed BEFORE the harness changes that implement it and before any further run. It supersedes the V1 pressure gate of `docs/MEMORY_MONITOR_VALIDATION_PLAN.md` (section 1, row V1: "pressure stays low"). Nothing below was chosen by looking at samples from an earlier run; every number is a constant of the pinned candidate (`bfa632b0e8961d9d576bdcded86abea90a3cc675`) or is marked as a sample-size or resolution choice.
 
 **The earlier result is not rewritten.** The first smoke run (`smoke1`, harness `24a805d`) failed V1 on a memory-pressure gate of 5% ("full" average over 60 s). That failure stays what it is: a recorded failure of that gate on that run. Its evidence is private to the owner and is not in this repository. A run made under this document is a new run with a new id; it does not replace, re-grade or "fix" `smoke1`.
@@ -15,8 +17,8 @@ The 5% figure was a bound the harness chose; it was not derived from broadcast b
 | Kind | Question | Decides pass/fail |
 |---|---|---|
 | **Monitor correctness (M)** | Does the monitor and its rule behave correctly (no false trip, no kill, estimates consistent with a known input, probes, breakdown)? | yes |
-| **Broadcast performance (B)** | Did the broadcast do what the design says while the machine was under that condition? | yes |
-| **Diagnostics (D)** | What did the kernel report? (memory pressure, reclaim counters) | no: recorded, never gating |
+| **Broadcast performance (B)** | Did viewers keep their coverage, did publication meet its deadlines, did the lease hold? | yes |
+| **Diagnostics (D)** | What did the kernel and the clock report? (memory pressure, reclaim counters, clock stand-stills, tick age) | no: recorded, never gating |
 
 A V1 result is `pass` only if every M and B check passes. A D row is recorded with status `info`.
 
@@ -34,7 +36,7 @@ All from the pinned tree. `vtest.py pin-check` compares the harness's copy of ea
 
 Consequences of the design that the criteria rest on:
 
-* **A late tick is invisible up to `DELAY_S`, and a stall beyond it.** After each tick the clock may advance only to `ready_until = position + DELAY_S` (`clock_limit`, `broadcast.py:76`). If the next tick is later than that, the clock stands still until it arrives. The viewer sees a freeze.
+* **A late tick is invisible up to `DELAY_S`; beyond it the clock stands still, by design.** After each tick the clock may advance only to `ready_until = position + DELAY_S` (`clock_limit`, `broadcast.py:76`). If the next tick is later than that, the clock stands still until it arrives. The viewer sees a freeze and misses nothing: the design prefers a freeze to running viewers past what is published.
 * **A segment is needed by viewers at position `start + n x SEG_S + DELAY_S`.** A viewer shows game time `position - start - DELAY_S`, and shows the plays that start at or before it. A segment published after that position has been reached is an underrun: the viewer has nothing to show for the next plays.
 * **A lapsed lease stops the clock; any stand-still is recorded.** `heartbeat` writes a `downtime` entry to `clock_log.jsonl` whenever the wall time is past `clock_limit`, whatever the cause (a tick later than `DELAY_S` is enough; the lease need not have lapsed), and a `publish_failure` entry after a failed publication.
 
@@ -48,9 +50,9 @@ Measured from the daemon's own files, once a second, outside the daemon's cgroup
 
 | Id | Criterion | Rationale |
 |---|---|---|
-| **B1 clock stall** | No sample at which the clock is running, not paused, and has stood still for more than one sampling interval (1 s) beyond its own limit: i.e. `now - clock_limit <= 1 s` at every sample. | A stall is what a late tick or a lapsed lease looks like to a viewer. 1 s is the resolution of the observation, not a tolerance on the design. |
-| **B2 lease** | `lease_until > now` at every sample, and no `publish_failure` entry in `clock_log.jsonl` during the phase. | A lapse stops the clock for every viewer. No other margin is claimed: the observed margin is reported (see D). `downtime` entries are reported alongside but are not a B2 criterion: they record any stand-still past the clock's limit, which B1 already judges. |
-| **B3 publication deadline** | Every live segment of every game on air is published no later than the wall time at which the clock reaches `start + n x SEG_S + DELAY_S` (plus the 1 s observation resolution); every game of the window ends with all its segments and state `final`. | This is the viewer's underrun condition, per segment, from file modification times and the clock's own position. Only applicable while games are on air (section 6, phase P); in the stress phase it is reported `not_run`, never silently passed. |
+| ~~B1 clock stall~~ | **Withdrawn as a gate (second correction above).** Now diagnostic D2 (section 7). | A stand-still is the design's own protection, not a loss of coverage. |
+| **B2 lease** | `lease_until > now` at every sample, and no `publish_failure` entry in `clock_log.jsonl` during the phase. | A lapse stops the clock for every viewer. No other margin is claimed: the observed margin is reported (see D). `downtime` entries are reported alongside but are not a B2 criterion: they record any stand-still past the clock's limit, which is reported as D2. |
+| **B3 publication deadline (the viewing-coverage check)** | Every live segment of every game on air is published no later than the wall time at which the clock reaches `start + n x SEG_S + DELAY_S` (plus the 1 s observation resolution); every game of the window ends with all its segments and state `final`. | This is the viewer's underrun condition, per segment, from file modification times and the clock's own position. Only applicable while games are on air (section 6, phase P); in the stress phase it is reported `not_run`, never silently passed. |
 | **B4 no publication error** | No `error` line from the daemon in its journal for the phase. | The daemon logs a publication failure as JSON on stderr (`broadcast_run.py`, PUBLISH FAILURE). |
 
 Each B check also records what it measured (worst gap, minimum lease margin, the latest segment lateness) in `result.json`. Those figures are reported to the owner; they are not thresholds.
@@ -59,8 +61,8 @@ Each B check also records what it measured (worst gap, minimum lease margin, the
 
 V1 now has two phases, run in this order on the same machine, never overlapping:
 
-* **Phase P, publication only.** No cache loader. The daemon publishes the fixture's first window: two games, 134 segments each (the fixture's games are 670.45 s long and kick off at position 200 s). Applies M `V1.no_trip` and B1-B4. This is the representative-activity phase: the daemon doing what it does in production, publishing live segments on its clock, with nothing else on the machine but the monitor and the loopback site server.
-* **Phase C, cache stress.** The existing clean-cache loader, unchanged, for `duration_s`. No live segment is being published (checked: `V1.separation` requires that no segment file was written during the phase and the clock stayed before the fixture's next window). Applies all M checks and B1, B2, B4.
+* **Phase P, publication only.** No cache loader. The daemon publishes the fixture's first window: two games, 134 segments each (the fixture's games are 670.45 s long and kick off at position 200 s). Applies M `V1.no_trip` and B2-B4. This is the representative-activity phase: the daemon doing what it does in production, publishing live segments on its clock, with nothing else on the machine but the monitor and the loopback site server.
+* **Phase C, cache stress.** The existing clean-cache loader, unchanged, for `duration_s`. No live segment is being published (checked: `V1.separation` requires that no segment file was written during the phase and the clock stayed before the fixture's next window). Applies all M checks and B2, B4.
 
 Why they are separate: in phase C the cgroup holds an unthrottled read loop that hits every page it touches; the measured effect is of that load on the daemon's tick, lease and the monitor's rule. Mixing it with publication in one run would make a failure unattributable. A combined phase is not in this revision; it is listed under section 8.
 
@@ -69,7 +71,8 @@ A tracked consequence: the earlier smoke run's whole V1 stage lasted 178 s, and 
 ## 7. Diagnostics (D), recorded and not gating
 
 * Cgroup memory pressure (`some` and `full`, `avg10`/`avg60` and the cumulative stall) for each phase, and what share of the 60 s average it had reached at the end (the average lags the load).
-* Reclaim counters, the loader's read rate, the lease margin distribution, the tick-age distribution.
+* Reclaim counters, the loader's read rate, the lease margin distribution.
+* **D2, clock stand-still and tick age** (`V1.publish.clock_stall`, `V1.cache.clock_stall`, status `info`): how many one-second samples had the clock standing past its publication limit, the worst excess, and the distribution of the age of the clock's last tick. Always reported, never gating. If the clock is not running at all in a phase (or `PAUSE` exists) the row is `invalid`, because that phase did not test the broadcast.
 * Host-wide pressure is not sampled (not needed for any B check); the cgroup pressure includes the loader and cannot be attributed to the daemon, and the report says so.
 
 Pressure becomes a gate only if a later run shows that it predicts a B failure and the owner decides so in writing.

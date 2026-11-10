@@ -7,8 +7,9 @@ Everything else in this module is pure: it judges those samples, the live-segmen
 (`dflsite.broadcast.position` / `clock_limit`), so the harness never keeps a second copy of the rule. Nothing here changes the code under test or the daemon's cgroup.
 
 What is measured, and the design fact each check rests on (all from the pinned tree):
-  * clock stall    after each tick the clock may run at most DELAY_S ahead (`ready_until = position + DELAY_S`); a later tick stops it. Observed as: the clock is running, not paused, and the
-                   wall time is more than one sampling interval past `clock_limit(state)`.
+  * clock stand-still (DIAGNOSTIC, not a gate)  after each tick the clock may run at most DELAY_S ahead (`ready_until = position + DELAY_S`); a later tick stops it, which is the design's
+                   protection against running viewers past what is published. Observed as: the clock is running, not paused, and the wall time is more than one sampling interval past
+                   `clock_limit(state)`. Tick age (file age of clock.json) is reported alongside. Neither decides pass or fail.
   * lease          the clock stops when `lease_until` passes (seen directly in the samples); a failed publication is logged by the daemon as `publish_failure`. The daemon's `downtime` entry records ANY
                    stand-still past `clock_limit`, whatever its cause, so it is counted under the stall check, not as a lease lapse.
   * publication    segment n of a game is needed by viewers when the clock reaches `start + n * SEG_S + DELAY_S`; its file must exist by then.
@@ -121,7 +122,7 @@ def wall_at(B, samples, P):
 
 
 def clock_rows(prefix, B, samples, clock_log, t0, t1):
-    """B1 (stall) and B2 (lease) for the samples of one phase. -> rows."""
+    """The clock stand-still diagnostic (never gates) and B2 (lease) for the samples of one phase. -> rows."""
     ss = [s for s in samples if t0 <= s["t"] <= t1]
     if not ss or not all(s.get("state") for s in ss):
         return [(prefix + ".clock_stall", "invalid", "the clock could not be read for the whole phase (%d samples)" % len(ss), None), (prefix + ".lease", "invalid", "no clock samples", None)]
@@ -137,8 +138,10 @@ def clock_rows(prefix, B, samples, clock_log, t0, t1):
         rows.append((prefix + ".clock_stall", "invalid", "the clock was not running (or PAUSE existed) at %d of %d samples: this phase did not test the broadcast under load" % (len(idle), len(ss)), {"idle_samples": len(idle)}))
     else:
         data = {"samples": len(ss), "stalled_samples": len(stalls), "worst_over_limit_s": max([o for _, o in stalls] or [0]), "last_tick_age_s": {"p50": pct(age, .5), "p99": pct(age, .99), "max": max(age or [0])}}
-        rows.append((prefix + ".clock_stall", "fail" if stalls else "pass", ("the clock stood still past its publication limit at %d of %d samples (worst %.2f s over)" % (len(stalls), len(ss), data["worst_over_limit_s"]))
-                     if stalls else "no stall in %d samples; the last tick was never older than %.2f s" % (len(ss), data["last_tick_age_s"]["max"]), data))
+        # Diagnostic, never a gate: the pinned design stands the clock still at the edge of what is published ("Nothing is skipped or shown early", docs/BROADCAST_INTEGRATION.md). Loss of
+        # viewing coverage is B3 (publication deadline); a lapsed lease is B2. Tick lateness (the tick age above) is reported the same way.
+        rows.append((prefix + ".clock_stall", "info", ("the clock stood still past its publication limit at %d of %d samples (worst %.2f s over); reported, not a gate" % (len(stalls), len(ss), data["worst_over_limit_s"]))
+                     if stalls else "no stand-still in %d samples; the last tick was never older than %.2f s" % (len(ss), data["last_tick_age_s"]["max"]), data, False))
     rows.append((prefix + ".lease", "fail" if (lapses or down) else "pass",
                  ("the lease lapsed at %d samples and %d publish_failure entries were logged" % (len(lapses), len(down))) if (lapses or down) else "the lease never lapsed and no publish failure was logged; smallest margin seen %.1f s" % min(margin or [0]),
                  {"lapsed_samples": len(lapses), "logged": down[:5], "logged_standstills": len(stands), "margin_min_s": min(margin or [0]), "margin_p50_s": pct(margin, .5)}))

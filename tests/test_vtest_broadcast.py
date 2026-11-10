@@ -89,7 +89,7 @@ class Healthy(unittest.TestCase):
         d = self.day()
         d.run()
         rows = d.rows()
-        self.assertEqual({k: v[1] for k, v in rows.items()}, {'V1.publish.window_reached': 'pass', 'V1.publish.no_trip': 'pass', 'V1.publish.clock_stall': 'pass', 'V1.publish.lease': 'pass',
+        self.assertEqual({k: v[1] for k, v in rows.items()}, {'V1.publish.window_reached': 'pass', 'V1.publish.no_trip': 'pass', 'V1.publish.clock_stall': 'info', 'V1.publish.lease': 'pass',
                                                               'V1.publish.deadline': 'pass', 'V1.publish.errors': 'pass'})
         data = rows['V1.publish.deadline'][3]
         self.assertEqual((data['segments_checked'], data['late_count'], data['missing_count']), (268, 0, 0), 'every segment of both games was judged against its own deadline')
@@ -99,7 +99,8 @@ class Healthy(unittest.TestCase):
         d = self.day()
         d.run(dead=(T0 + 400, T0 + 412))
         rows = d.rows()
-        self.assertEqual(rows['V1.publish.clock_stall'][1], 'fail')
+        self.assertEqual(rows['V1.publish.clock_stall'][1], 'info', 'a stand-still is reported, it does not decide the stage')
+        self.assertFalse(rows['V1.publish.clock_stall'][4])
         self.assertGreater(rows['V1.publish.clock_stall'][3]['stalled_samples'], 0)
         self.assertEqual(rows['V1.publish.lease'][1], 'pass', '12 s is far inside the lease')
         self.assertGreater(rows['V1.publish.lease'][3]['logged_standstills'], 0, 'the daemon logged the stand-still; it is reported, not a lease lapse')
@@ -117,7 +118,7 @@ class Healthy(unittest.TestCase):
         rows = d.rows()
         self.assertEqual(rows['V1.publish.lease'][1], 'fail')
         self.assertTrue(any(e.get('why') == 'downtime' for e in d.log()), 'the daemon recorded the gap itself')
-        self.assertEqual(rows['V1.publish.clock_stall'][1], 'fail')
+        self.assertEqual(rows['V1.publish.clock_stall'][1], 'info')
 
     def test_a_segment_published_after_viewers_need_it_fails_and_so_does_a_missing_one(self):
         d = self.day()
@@ -159,6 +160,17 @@ class Healthy(unittest.TestCase):
         blind = [dict(s, state=None) for s in d.samples]
         self.assertEqual(d.rows(samples=blind)['V1.publish.clock_stall'][1], 'invalid')
 
+    def test_healthy_tick_gaps_up_to_the_publication_horizon_are_not_even_a_stand_still(self):
+        d = self.day()
+        t, gap = T0, 0
+        while B.position(d.bc.clock.state(), t) < d.window['end_pos'] or t < T0 + 30:
+            gap = (gap + 1) % 4                                     # two ticks, then two skipped seconds: a 3 s gap between ticks, the whole of DELAY_S
+            d.second(t, tick=gap not in (2, 3))
+            t += 1
+        rows = d.rows()
+        self.assertEqual(rows['V1.publish.clock_stall'][3]['stalled_samples'], 0)
+        self.assertEqual({k: v[1] for k, v in rows.items() if k != 'V1.publish.clock_stall'}, {k: 'pass' for k in rows if k != 'V1.publish.clock_stall'})
+
     def test_error_lines_from_the_daemon_fail_and_plain_log_lines_do_not(self):
         ok = BP.error_row('V1.x', 'Nov 09 daemon started\n{"recovered": true, "at": 1}\n')
         bad = BP.error_row('V1.x', '{"error": "OSError", "detail": "No space left", "at": 5}\n')
@@ -186,18 +198,18 @@ class StressPhase(unittest.TestCase):
         for t in range(int(end), int(t1)):
             d.second(float(t))
         rows = {r[0]: r for r in stage_v1.judge_stress_phase(B, d.samples, d.log(), d.live(), d.window, t0, t1, 1000.0, '')}
-        self.assertEqual({k: v[1] for k, v in rows.items()}, {'V1.cache.clock_stall': 'pass', 'V1.cache.lease': 'pass', 'V1.separation': 'pass', 'V1.cache.deadline': 'not_run', 'V1.cache.errors': 'pass'})
+        self.assertEqual({k: v[1] for k, v in rows.items()}, {'V1.cache.clock_stall': 'info', 'V1.cache.lease': 'pass', 'V1.separation': 'pass', 'V1.cache.deadline': 'not_run', 'V1.cache.errors': 'pass'})
         self.assertFalse(rows['V1.cache.deadline'][4], 'a not_run row is explicit and never counted as a pass')
         overlapped = stage_v1.judge_stress_phase(B, d.samples, d.log(), d.live(), d.window, T0, t1, 1000.0, '')
         self.assertEqual({r[0]: r[1] for r in overlapped}['V1.separation'], 'invalid', 'segments were written inside this window: it no longer isolates the cache effect')
         past = stage_v1.judge_stress_phase(B, d.samples, d.log(), d.live(), d.window, t0, t1, 9000.0, '')
         self.assertEqual({r[0]: r[1] for r in past}['V1.separation'], 'invalid', 'the clock reached the next window')
 
-    def test_every_check_of_the_new_stage_is_either_required_or_marked_not_required(self):
+    def test_only_the_stand_still_diagnostic_is_not_required_in_the_publication_phase(self):
         d = Day(self.tmp.name)
         d.run()
         rows = stage_v1.judge_publish_phase(B, d.samples, d.log(), d.live(), d.window, T0, d.samples[-1]['t'], True, None, [], '')
-        self.assertTrue(all(len(r) == 4 for r in rows), 'every publication-phase row is required')
+        self.assertEqual([r[0] for r in rows if len(r) == 5 and not r[4]], ['V1.publish.clock_stall'])
 
 
 if __name__ == '__main__':
