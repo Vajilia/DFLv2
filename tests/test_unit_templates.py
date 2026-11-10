@@ -135,6 +135,30 @@ class Templates(unittest.TestCase):
                 tout = int(re.search(r'(?m)^TimeoutStopSec=(\d+)$', text).group(1))
                 self.assertGreaterEqual(tout, 30, 'ExecStopPost shares the stop timeout: the recorder (retries, a 5 s log read) must fit')
 
+    def test_the_daemon_cannot_start_over_an_unaccounted_stop(self):
+        """ExecStartPre= `gate` opens the run marker and turns a marker left by an unaccounted stop into a latch, or fails (the daemon then does not start). Without a "-" prefix, on purpose."""
+        for path in (DEPLOY / 'dfl-broadcast-daemon.service', ROOT / 'deploy' / 'rehearsal' / 'dfl-rehearsal.service'):
+            with self.subTest(unit=path.name):
+                text = path.read_text()
+                pre = [l for l in text.splitlines() if l.startswith('ExecStartPre=')]
+                self.assertEqual(len(pre), 1, pre)
+                self.assertFalse(pre[0][len('ExecStartPre='):].startswith(('-', '+')), 'a failing gate must stop the start, with no extra privileges')
+                sub = lambda l: shlex.split(l.replace('__COMMIT__', 'x').replace('__ROOT__', '/r').replace('__PUBLIC__', '/p').replace('__GUARD__', '/g'))
+                gate, run, stop = sub(pre[0].split('=', 1)[1]), sub([l for l in text.splitlines() if l.startswith('ExecStart=')][0].split('=', 1)[1]), sub([l for l in text.splitlines() if l.startswith('ExecStopPost=')][0].split('=', 1)[1])
+                self.assertIn('gate', gate)
+                for flag in ('--root', '--public', '--guard'):
+                    self.assertEqual(gate[gate.index(flag) + 1], run[run.index(flag) + 1], flag + ' must be the daemon\'s own')
+                    self.assertEqual(gate[gate.index(flag) + 1], stop[stop.index(flag) + 1], flag + ' must be the hook\'s own: the marker is opened and closed in one place')
+                self.assertLess(text.index('ExecStartPre='), text.index('ExecStart='))
+
+    def test_the_marker_is_closed_before_storage_goes_away_at_shutdown(self):
+        """A clean reboot must close the marker (ExecStopPost= runs at shutdown), or every reboot would hold the broadcast. The unit therefore depends on the mounts it writes to."""
+        text = (DEPLOY / 'dfl-broadcast-daemon.service').read_text()
+        m = re.search(r'(?m)^RequiresMountsFor=(.+)$', text)
+        self.assertIsNotNone(m, 'RequiresMountsFor= orders the unit before the unmount of what it writes to')
+        for need in ('__ROOT__', '__PUBLIC__', '__GUARD__'):
+            self.assertIn(need, m.group(1))
+
     def test_the_monitor_floor_is_below_the_builders_so_building_stops_first(self):
         m, s = parsed('dfl-broadcast-monitor'), parsed('dfl-supervisor')
         self.assertLess(m.min_free_gb, s.floor_gb)
