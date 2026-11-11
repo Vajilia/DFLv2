@@ -7,6 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # tests read named commits (the pinned vtest candidate, release trees); a one-commit checkout cannot satisfy them
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -15,7 +17,7 @@ jobs:
       - name: Unit and property tests
         run: python3 -I -m unittest discover -s tests -v
       - name: Specification hash and Season 1 tables
-        run: python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.54.md
+        run: python3 -I tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.61.md
       - name: 30-season run (placeholder resolver), every season validated
         run: python3 -I tools/run_seasons.py --seasons 30 --seed 1 --out runs/ci
       - name: Ledger soak (3 league years, 48 clubs; the 100-year soak is run by hand)

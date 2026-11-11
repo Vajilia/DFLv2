@@ -1,0 +1,98 @@
+"""CI configuration must refer only to files that exist, and to the specification edition that is actually in the repository.
+
+Found 2026-11-11: .github/workflows/ci.yml still named docs/spec/DFL_Design_Document_Ed8.54.md, an edition that is no longer in the
+repository, so the 'Specification hash' step could never pass. These tests fail on that and on any later drift of the same kind.
+"""
+import glob
+import os
+import re
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CI = os.path.join(ROOT, ".github", "workflows", "ci.yml")
+PATH_RE = re.compile(r"(?<![\w/.-])((?:tools|tests|docs|data|deploy|src|site)/[\w./-]+)")
+
+
+def ci_run_lines():
+    out = []
+    with open(CI, encoding="utf-8") as fh:
+        for line in fh:
+            m = re.match(r"\s*run:\s*(.*\S)\s*$", line)
+            if m:
+                out.append(m.group(1))
+    return out
+
+
+class CiReferences(unittest.TestCase):
+    def test_ci_file_exists_and_has_run_steps(self):
+        self.assertTrue(os.path.isfile(CI))
+        self.assertGreater(len(ci_run_lines()), 5)
+
+    def test_every_repository_path_in_a_run_step_exists(self):
+        missing = []
+        for line in ci_run_lines():
+            for p in PATH_RE.findall(line):
+                if p.endswith("/"):
+                    ok = os.path.isdir(os.path.join(ROOT, p))
+                else:
+                    ok = os.path.exists(os.path.join(ROOT, p))
+                # 'runs/ci' style output folders are not in the tree; only the listed source roots are checked
+                if not ok:
+                    missing.append((p, line))
+        self.assertEqual(missing, [], "CI names files that do not exist: %r" % (missing,))
+
+    def test_ci_uses_the_only_specification_edition_in_the_repository(self):
+        specs = sorted(glob.glob(os.path.join(ROOT, "docs", "spec", "DFL_Design_Document_Ed*.md")))
+        self.assertEqual(len(specs), 1, "expected exactly one specification edition in docs/spec, found %r" % (specs,))
+        rel = os.path.relpath(specs[0], ROOT)
+        docs = [m for line in ci_run_lines() for m in re.findall(r"--doc\s+(\S+)", line)]
+        self.assertTrue(docs, "CI no longer checks the specification hash")
+        for d in docs:
+            self.assertEqual(d, rel)
+
+    def test_readme_and_ci_name_the_same_edition(self):
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
+            readme = fh.read()
+        docs = {m for line in ci_run_lines() for m in re.findall(r"--doc\s+(\S+)", line)}
+        for d in docs:
+            self.assertIn(d, readme, "README does not mention the specification file CI validates")
+
+
+HISTORY_USE = re.compile(r"cat-file|ls-tree|merge-base|'show'|git archive|\"git\", \"-C\", ROOT, \"cat-file\"|git -C \{self\.repo\} archive")
+
+
+class CiHistory(unittest.TestCase):
+    def test_checkout_fetches_history_when_tests_read_commits(self):
+        """Found 2026-11-11: tests/test_vtest.py asserts that the pinned candidate commit exists in the repository, and other tests `git show` / `git archive` named commits.
+        actions/checkout fetches ONE commit by default, so on GitHub those tests could never pass. The checkout step must fetch the whole history."""
+        users = []
+        for f in sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py"))):
+            if f.endswith("test_ci_config.py"):
+                continue
+            with open(f, encoding="utf-8") as fh:
+                if HISTORY_USE.search(fh.read()):
+                    users.append(os.path.basename(f))
+        self.assertTrue(users, "no test reads git history any more: delete this test and the fetch-depth setting")
+        with open(CI, encoding="utf-8") as fh:
+            text = fh.read()
+        m = re.search(r"uses:\s*actions/checkout@\S+\s*\n(\s+with:\s*\n(?:\s+\S.*\n)+)?", text)
+        self.assertIsNotNone(m, "no checkout step")
+        self.assertIn("fetch-depth: 0", m.group(0), "checkout is shallow but these tests read commits: %s" % ", ".join(users))
+
+
+class CiImports(unittest.TestCase):
+    def test_no_test_imports_another_test_through_a_tests_package(self):
+        """CI runs `python3 -I -m unittest discover -s tests`: the tests folder is the top level, there is no `tests` package (and -I keeps the repository root off the path).
+        Found 2026-11-11: three tests in tests/test_vtest_v0.py did `from tests.test_vtest import FakeEnv` and ERRORED (ModuleNotFoundError) under CI's own command. tests/test_storage_inventory.py
+        used the same form but put the repository root on the path itself, so it worked; it is changed too, so that one rule covers every file."""
+        bad = []
+        for f in sorted(glob.glob(os.path.join(ROOT, "tests", "*.py"))):
+            with open(f, encoding="utf-8") as fh:
+                for n, line in enumerate(fh, 1):
+                    if re.match(r"\s*(from|import)\s+tests([.\s]|$)", line):
+                        bad.append("%s:%d: %s" % (os.path.basename(f), n, line.strip()))
+        self.assertEqual(bad, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

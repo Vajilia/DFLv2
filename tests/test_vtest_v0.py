@@ -491,7 +491,7 @@ class EnvAndInstall(unittest.TestCase):
 
     def test_install_refuses_root_and_a_missing_user(self):
         import render as RN
-        from tests.test_vtest import FakeEnv
+        from test_vtest import FakeEnv
         e = FakeEnv()
         with self.assertRaises(C.Unsafe):
             RN.install(e, str(ROOT), user='root')
@@ -501,7 +501,7 @@ class EnvAndInstall(unittest.TestCase):
 
     def test_run_refuses_an_install_without_a_user_or_from_another_harness_revision(self):
         import vtest
-        from tests.test_vtest import FakeEnv
+        from test_vtest import FakeEnv
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp)
         for inst, want in (({'pin': C.read_pin()}, 'unprivileged service user'), ({'pin': C.read_pin(), 'user': 'root', 'harness_rev': C.harness_rev()}, 'unprivileged service user'),
@@ -518,7 +518,7 @@ class EnvAndInstall(unittest.TestCase):
 
     def test_preflight_requires_strace_setpriv_and_the_service_user(self):
         import preflight as PF
-        from tests.test_vtest import FakeEnv
+        from test_vtest import FakeEnv
         e = FakeEnv()
         rows = {r[0]: r[1] for r in PF.preflight(e)}
         self.assertTrue(any('strace' in k for k in rows))

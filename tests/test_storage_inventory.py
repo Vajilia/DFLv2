@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 sys.path.insert(0, str(ROOT))
 from dflsite import broadcast as B, season as S
-from tests import test_multiseason as M
+import test_multiseason as M
 
 spec = importlib.util.spec_from_file_location('storage_inventory', str(ROOT / 'tools/storage_inventory.py'))
 INV = importlib.util.module_from_spec(spec)
