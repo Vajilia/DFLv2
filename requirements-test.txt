@@ -1,0 +1,4 @@
+# Needed by the TEST SUITE only (not by the league, the site or the engine). CI installs this file beside requirements.txt;
+# tests/test_ci_config.py fails if a test imports a third-party module at import time that no installed requirements file names.
+# psutil: tools/measure_combined.py (imported by tools/reveal_real.py and tools/boundary_real.py, which tests/test_reveal_real.py imports) reads process memory with it.
+psutil>=5.9

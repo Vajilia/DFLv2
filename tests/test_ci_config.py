@@ -3,9 +3,11 @@
 Found 2026-11-11: .github/workflows/ci.yml still named docs/spec/DFL_Design_Document_Ed8.54.md, an edition that is no longer in the
 repository, so the 'Specification hash' step could never pass. These tests fail on that and on any later drift of the same kind.
 """
+import ast
 import glob
 import os
 import re
+import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -92,6 +94,99 @@ class CiImports(unittest.TestCase):
                     if re.match(r"\s*(from|import)\s+tests([.\s]|$)", line):
                         bad.append("%s:%d: %s" % (os.path.basename(f), n, line.strip()))
         self.assertEqual(bad, [])
+
+
+def _guards_import_error(node):
+    """True for `try: import x / except ImportError: ...`: the module is optional there, and the tests that need it say they are skipped without it."""
+    for h in node.handlers:
+        names = [h.type] if not isinstance(h.type, ast.Tuple) else list(h.type.elts)
+        if any(isinstance(t, ast.Name) and t.id in ("ImportError", "ModuleNotFoundError", "Exception") for t in names):
+            return True
+    return False
+
+
+def _module_level_nodes(tree):
+    """Every node that runs when the module is imported and is not optional: not the inside of a function (an import there is optional by construction), not the body of a try that catches ImportError."""
+    stack = list(tree.body)
+    while stack:
+        n = stack.pop()
+        yield n
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(n, ast.Try) and _guards_import_error(n):
+            stack.extend(n.orelse + n.finalbody)
+            for h in n.handlers:
+                stack.extend(h.body)
+            continue
+        stack.extend(ast.iter_child_nodes(n))
+
+
+def _repository_modules():
+    """module name -> files, for every .py under src/, tools/ and tests/ (any depth: tools/vtest, src/dflsite ...); packages map to their __init__."""
+    mods = {}
+    for top in ("src", "tools", "tests"):
+        for dirpath, dirs, files in os.walk(os.path.join(ROOT, top)):
+            dirs[:] = [d for d in dirs if not d.startswith((".", "__pycache__"))]
+            for f in files:
+                if f.endswith(".py"):
+                    mods.setdefault(f[:-3], []).append(os.path.join(dirpath, f))
+            for d in dirs:
+                mods.setdefault(d, []).append(os.path.join(dirpath, d, "__init__.py"))
+    return mods
+
+
+def _third_party_top_level_imports(entry_files):
+    """Names imported when the entry files are imported and, transitively, when every repository module they import is: neither standard library nor repository code."""
+    local = _repository_modules()
+    seen, todo, found = set(), list(entry_files), {}
+    while todo:
+        f = todo.pop()
+        if f in seen or not os.path.isfile(f):
+            continue
+        seen.add(f)
+        with open(f, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read(), f)
+        for sub in _module_level_nodes(tree):
+            names = []
+            if isinstance(sub, ast.Import):
+                names = [a.name.split(".")[0] for a in sub.names]
+            elif isinstance(sub, ast.ImportFrom) and sub.level == 0 and sub.module:
+                names = [sub.module.split(".")[0]]
+            for n in names:
+                if n in sys.stdlib_module_names:
+                    continue
+                if n in local:
+                    todo.extend(local[n])
+                    continue
+                found.setdefault(n, set()).add(os.path.relpath(f, ROOT))
+    return found
+
+
+def _packages_ci_installs():
+    out = set()
+    for line in ci_run_lines():
+        if "pip install" not in line:
+            continue
+        for req in re.findall(r"-r\s+(\S+)", line):
+            with open(os.path.join(ROOT, req), encoding="utf-8") as fh:
+                for l in fh:
+                    l = l.split("#")[0].strip()
+                    if l:
+                        out.add(re.split(r"[<>=!~\[; ]", l, maxsplit=1)[0].lower())
+    return out
+
+
+class CiDependencies(unittest.TestCase):
+    def test_every_third_party_module_a_test_needs_at_import_time_is_installed_by_ci(self):
+        """Found 2026-11-11 on GitHub (run 43050999661): tests/test_reveal_real.py imports tools/reveal_real.py, which imports tools/measure_combined.py, which imports psutil at module level.
+        This machine had psutil; CI installed only numpy, so the module could not be imported and the whole test file errored. Every module-level third-party import reachable from a test file
+        must be named in a requirements file that the CI workflow installs."""
+        tests = sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
+        needed = _third_party_top_level_imports(tests)
+        installed = _packages_ci_installs()
+        self.assertIn("numpy", installed, "the CI install step was not found")
+        missing = {n: sorted(v)[:3] for n, v in needed.items() if n.lower() not in installed}
+        self.assertEqual(missing, {}, "CI does not install these packages, but tests import them at module level: %r" % (missing,))
 
 
 if __name__ == "__main__":

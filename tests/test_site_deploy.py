@@ -124,6 +124,12 @@ class Install(unittest.TestCase):
         write(os.path.join(self.bin, "getent"), '#!/bin/sh\n[ -f "%s/no_dns" ] && exit 2\n[ -f "%s/wrong_dns" ] && { echo "198.51.100.7 STREAM $2"; exit 0; }\necho "203.0.113.9 STREAM $2"\n' % (self.d, self.d), 0o755)
         write(os.path.join(self.bin, "ip"), '#!/bin/sh\necho "2: eth0    inet 203.0.113.9/24 brd 203.0.113.255 scope global eth0"\n', 0o755)
         write(os.path.join(self.bin, "curl"), '#!/bin/sh\nexit 22\n', 0o755)
+        # Changing a file's owner is refused to any user but root, and GitHub's runner is not root (found 2026-11-11, run 43050999661: eight of these tests failed there with
+        # "chown: changing ownership ...: Operation not permitted" and passed on a root shell). The stand-in records the call; the kernel's chown is not what is under test.
+        write(os.path.join(self.bin, "chown"), '#!/bin/sh\necho "chown $*" >> "%s"\nexit 0\n' % self.log, 0o755)
+        # `runuser -u USER -- CMD...` switches user, which only root may do; without root the script falls back to `su`, which asks for a password and waits forever (found while reproducing
+        # the CI failure as an unprivileged user). The stand-in records the call and runs CMD as the current user.
+        write(os.path.join(self.bin, "runuser"), '#!/bin/sh\necho "runuser $*" >> "%s"\n[ "$1" = "-u" ] && shift 2\n[ "$1" = "--" ] && shift\nexec "$@"\n' % self.log, 0o755)
         self.base = os.path.join(self.d, "srv")
         self.caddy_dir = os.path.join(self.d, "etc_caddy")
         self.roll = os.path.join(self.d, "rollback")
@@ -160,6 +166,7 @@ class Install(unittest.TestCase):
         rl = [i for i, c in enumerate(calls) if c == "systemctl reload caddy"]
         self.assertTrue(v and rl and v[-1] < rl[0], calls)                                  # validated, then reloaded
         self.assertFalse([c for c in calls if "restart" in c or "stop" in c], calls)       # never restarted or stopped
+        self.assertIn("chown -R root:root %s" % os.path.join(self.base, "feed"), calls, "the feed folder must be handed to the service user")
         self.assertTrue(os.path.islink(os.path.join(self.base, "repo")))
         self.assertTrue(os.path.islink(os.path.join(self.base, "site", "current")))
         got = publish.read_release(os.path.join(self.base, "feed"))
@@ -186,6 +193,8 @@ class Install(unittest.TestCase):
         if not made:
             self.skipTest("cannot create a throwaway user")
         self.addCleanup(lambda: subprocess.run(["userdel", user], capture_output=True))
+        for standin in ("chown", "runuser"):                                 # this test is about the real ownership change and the real user switch: use the system's tools
+            os.unlink(os.path.join(self.bin, standin))
         private = tempfile.mkdtemp(prefix="dflprivate")                      # mkdtemp makes it mode 700, as /root is
         try:
             pkg = os.path.join(private, "pkg")
