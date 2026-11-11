@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-11-11** by `docs/LAUNCH_ROADMAP_EVIDENCE.md` (one evidence table: implemented, locally tested, system-tested, deployed, remaining). This document is kept unchanged below as the historical record.
+
 # DFLv2 roadmap
 
 Written 2026-10-22, after Milestone 1. This is a plan, not a set of accepted decisions: each phase needs the owner's approval before it starts, and each "Needs from the owner" line is a decision only the owner can make. Update this file when a phase closes.

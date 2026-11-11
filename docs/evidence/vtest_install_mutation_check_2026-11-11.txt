@@ -1,0 +1,62 @@
+Each mutant re-introduces one installer failure into the harness code; tests/test_vtest_install.py must go red. Every file is restored with git checkout afterwards.
+=== MUTANT m0-control: a change that does nothing (tools/vtest/perms.py)
+Ran 9 tests in 9.939s
+OK
+=== MUTANT m1 installer path set lacks ETC (d24aafe) (tools/vtest/perms.py)
+ERROR: test_a_second_install_is_refused_names_teardown_and_changes_nothing (test_vtest_install.InstallEndToEnd.test_a_second_install_is_refused_names_teardown_and_changes_nothing)
+KeyError: 'ETC'
+ERROR: test_every_folder_the_v0_layout_check_judges_exists_afterwards (test_vtest_install.InstallEndToEnd.test_every_folder_the_v0_layout_check_judges_exists_afterwards)
+KeyError: 'ETC'
+ERROR: test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_removes_nothing (test_vtest_install.InstallEndToEnd.test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_remov
+KeyError: 'ETC'
+ERROR: test_the_environment_file_uses_only_keys_the_pinned_template_has (test_vtest_install.InstallEndToEnd.test_the_environment_file_uses_only_keys_the_pinned_template_has)
+KeyError: 'ETC'
+ERROR: test_the_installer_runs_to_the_end_and_records_what_it_did (test_vtest_install.InstallEndToEnd.test_the_installer_runs_to_the_end_and_records_what_it_did)
+Fails with KeyError 'ETC' if the installer's path set misses a key the ownership step reads (d24aafe).
+KeyError: 'ETC'
+ERROR: test_the_ownership_step_gave_the_service_user_exactly_its_three_folders (test_vtest_install.InstallEndToEnd.test_the_ownership_step_gave_the_service_user_exactly_its_three_folders)
+KeyError: 'ETC'
+ERROR: test_the_rendered_units_point_only_at_the_relocated_harness_territory (test_vtest_install.InstallEndToEnd.test_the_rendered_units_point_only_at_the_relocated_harness_territory)
+KeyError: 'ETC'
+Ran 9 tests in 0.036s
+FAILED (errors=7)
+=== MUTANT m2 installer never creates the probe folder (baca129) (tools/vtest/perms.py)
+FAIL: test_every_folder_the_v0_layout_check_judges_exists_afterwards (test_vtest_install.InstallEndToEnd.test_every_folder_the_v0_layout_check_judges_exists_afterwards)
+AssertionError: Lists differ: ['/tmp/tmps_dfn5_s/srv/dfl-vtest/probe'] != []
+FAIL: test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_removes_nothing (test_vtest_install.InstallEndToEnd.test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_remove
+AssertionError: False is not true : ['remove tree        /tmp/tmpbv83_bdk/opt/dfl-vtest-src', 'remove tree        /tmp/tmpbv83_bdk/etc/dfl-vtest', 'remove tree        /tmp/tmpbv83_bdk/srv/dfl-vtest/ro
+Ran 9 tests in 10.452s
+FAILED (failures=2)
+=== MUTANT m3 installer creates no folders at all (tools/vtest/render.py)
+ERROR: test_a_second_install_is_refused_names_teardown_and_changes_nothing (test_vtest_install.InstallEndToEnd.test_a_second_install_is_refused_names_teardown_and_changes_nothing)
+ERROR: test_every_folder_the_v0_layout_check_judges_exists_afterwards (test_vtest_install.InstallEndToEnd.test_every_folder_the_v0_layout_check_judges_exists_afterwards)
+ERROR: test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_removes_nothing (test_vtest_install.InstallEndToEnd.test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_remov
+ERROR: test_the_environment_file_uses_only_keys_the_pinned_template_has (test_vtest_install.InstallEndToEnd.test_the_environment_file_uses_only_keys_the_pinned_template_has)
+ERROR: test_the_installer_runs_to_the_end_and_records_what_it_did (test_vtest_install.InstallEndToEnd.test_the_installer_runs_to_the_end_and_records_what_it_did)
+Fails with KeyError 'ETC' if the installer's path set misses a key the ownership step reads (d24aafe).
+ERROR: test_the_ownership_step_gave_the_service_user_exactly_its_three_folders (test_vtest_install.InstallEndToEnd.test_the_ownership_step_gave_the_service_user_exactly_its_three_folders)
+ERROR: test_the_rendered_units_point_only_at_the_relocated_harness_territory (test_vtest_install.InstallEndToEnd.test_the_rendered_units_point_only_at_the_relocated_harness_territory)
+Ran 9 tests in 10.213s
+FAILED (errors=7)
+=== MUTANT m4 refusal no longer says what to do (baca129) (tools/vtest/render.py)
+FAIL: test_a_second_install_is_refused_names_teardown_and_changes_nothing (test_vtest_install.InstallEndToEnd.test_a_second_install_is_refused_names_teardown_and_changes_nothing)
+AssertionError: 'teardown' not found in "pinned tree not verified: ['/tmp/tmp6xhsdcgx/opt/dfl-vtest-src/ecf62ea6c709 already exists: refusing to overwrite a pinned tree']"
+Ran 9 tests in 10.970s
+FAILED (failures=1)
+=== MUTANT m5 installer starts a unit (tools/vtest/render.py)
+FAIL: test_the_installer_runs_to_the_end_and_records_what_it_did (test_vtest_install.InstallEndToEnd.test_the_installer_runs_to_the_end_and_records_what_it_did)
+Fails with KeyError 'ETC' if the installer's path set misses a key the ownership step reads (d24aafe).
+AssertionError: Items in the first set but not the second:
+Ran 9 tests in 11.581s
+FAILED (failures=1)
+=== MUTANT m6 a unit keeps a template placeholder path (tools/vtest/render.py)
+ERROR: test_a_second_install_is_refused_names_teardown_and_changes_nothing (test_vtest_install.InstallEndToEnd.test_a_second_install_is_refused_names_teardown_and_changes_nothing)
+ERROR: test_every_folder_the_v0_layout_check_judges_exists_afterwards (test_vtest_install.InstallEndToEnd.test_every_folder_the_v0_layout_check_judges_exists_afterwards)
+ERROR: test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_removes_nothing (test_vtest_install.InstallEndToEnd.test_teardown_dry_run_lists_the_probe_folder_keeps_the_evidence_and_remov
+ERROR: test_the_environment_file_uses_only_keys_the_pinned_template_has (test_vtest_install.InstallEndToEnd.test_the_environment_file_uses_only_keys_the_pinned_template_has)
+ERROR: test_the_installer_runs_to_the_end_and_records_what_it_did (test_vtest_install.InstallEndToEnd.test_the_installer_runs_to_the_end_and_records_what_it_did)
+Fails with KeyError 'ETC' if the installer's path set misses a key the ownership step reads (d24aafe).
+ERROR: test_the_ownership_step_gave_the_service_user_exactly_its_three_folders (test_vtest_install.InstallEndToEnd.test_the_ownership_step_gave_the_service_user_exactly_its_three_folders)
+ERROR: test_the_rendered_units_point_only_at_the_relocated_harness_territory (test_vtest_install.InstallEndToEnd.test_the_rendered_units_point_only_at_the_relocated_harness_territory)
+Ran 9 tests in 11.003s
+FAILED (errors=7)

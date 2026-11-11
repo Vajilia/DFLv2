@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-11-11** by `docs/LAUNCH_ROADMAP_EVIDENCE.md` (one evidence table: implemented, locally tested, system-tested, deployed, remaining). This document is kept unchanged below as the historical record.
+
 # Completion roadmap reconciled with the code (2026-11-06) and the next implementation itinerary
 
 Written from the repository (branches below) and the production and rehearsal records in `docs/COMBINED_RELEASE_PLAN.md`, `docs/BROADCAST_*.md`, `docs/STAGING_DEPLOYMENT_RECORD_20261031.md` and `docs/BROADCAST_REHEARSAL.md`, plus the state read on the Droplet on 2026-11-06 (read-only). **No percentages: a line is either true, with its evidence, or it is listed as open.** `PROJECT_COMPLETION_PLAN.md` (2026-10-29), `BETA_STATUS.md` and `docs/BUILD_STATUS.md` pre-date most of this and are partly superseded; where they disagree with this file, the code and the records cited here win. Nothing below was deployed, merged or started by this batch.

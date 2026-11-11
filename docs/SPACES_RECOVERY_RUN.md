@@ -4,7 +4,7 @@
 proves it restores. It reads production files and writes only to its own run folder and to new objects in the bucket. It never deletes, overwrites,
 or starts/stops a service. Nothing in this repository contains a credential or the bucket name (`export BUCKET=...`).
 
-Status: rehearsed locally on synthetic data against a fake S3 (`tools/recovery_run/rehearsal/`). **Not yet run against production or real Spaces.**
+Status: rehearsed locally on synthetic data against a fake S3 (`tools/recovery_run/rehearsal/`: 128 passed). **First real drill passed on 2026-11-11** on the production droplet against a real private Space (`docs/evidence/SPACES_RECOVERY_DRILL_2026-11-11.md`): same host only; host-loss recovery and restore-point replay are not proven, and the Space's ACLs were never read.
 
 ## What a run contains
 | Part | Tool (pinned) | Why |

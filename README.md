@@ -6,7 +6,11 @@ This repository is the **development home** for the Diamond Football League's re
 
 A persistent, female-only, 48-franchise football universe featuring autonomous management, players, an evidence-based spatial game engine, eight-year rotating division scheduling beds, exile/return mechanics, and a read-only narrative layer.
 
-## Current engineering status (2026-10-29)
+## Current engineering status
+
+The launch roadmap is one evidence table: `docs/LAUNCH_ROADMAP_EVIDENCE.md` (updated 2026-11-11). The section below is the 2026-10-29 snapshot and is kept for history.
+
+## Engineering status as of 2026-10-29
 
 The simulation core is built in this repository and tested; the website, live clock and release pipeline are not. See `PROJECT_COMPLETION_PLAN.md` for what is verified, provisional, missing and unresolved, and `docs/BUILD_STATUS.md` for the build record.
 
@@ -24,7 +28,7 @@ There is no source snapshot. DFLv2 was rebuilt from the specification, and the e
 ## Milestone 1 (league layer) — see `docs/BUILD_STATUS.md`
 
 ```
-python3 -I -m unittest discover -s tests          # 350+ tests (about 12 minutes)
+python3 -I -m unittest discover -s tests          # about 1,600 test methods; the full run takes hours on a small machine (see docs/LAUNCH_ROADMAP_EVIDENCE.md for what was run and what is skipped where)
 python3 -I tools/run_seasons.py --seasons 100     # multi-season run, validates every season's tables
 python3 tools/validate.py data/season1 --doc docs/spec/DFL_Design_Document_Ed8.61.md
 ```
