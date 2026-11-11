@@ -199,4 +199,100 @@ RC3=$(new); adv $RC3 check; CDN_ENABLED=1 CDN_BASE=$ORIGIN_BASES $X canary $RC3 
 [ $rc = 0 ] && grep -q "^enabled" "$WORK/run-$RC3/cdn.txt" && ok "CDN enabled + a working endpoint that denies anonymous reads: passes and is recorded as enabled" || no "CDN enabled working (exit $rc)"
 RC4=$(new); adv $RC4 check; ORIGIN_BASES="http://127.0.0.1:9/$BUCKET/" expect_fail "an unreachable ORIGIN endpoint still fails even with the CDN disabled" $RC4 canary
 
+echo "### P  real Spaces refuses ACL reads for a bucket-scoped key: tolerate ONLY that, and prove privacy the other ways"
+cat > "$RIG/s3-shim.sh" <<'EOS'
+#!/bin/bash
+# a client that behaves like real Spaces with a bucket-scoped key, or like various broken ones. SHIM_MODE is a comma list.
+REAL=__REAL__
+m=",${SHIM_MODE:-},"; has() { [[ "$m" == *",$1,"* ]]; }
+sub=""; for a in "$@"; do case "$a" in info|put|get|ls) sub=$a; break;; esac; done
+if has warn; then   # the config-parser warning that QUOTES a line, plus an error that happens to contain the real secret
+  echo "WARNING: Ignoring invalid line in '/root/.config/dfl-spaces/s3cfg': $SHIM_LEAK" >&2
+  echo "ERROR: something went wrong while using the secret $SHIM_SECRET and key $SHIM_KEY" >&2
+fi
+if has public; then args=(); for a in "$@"; do [ "$a" = "--acl-private" ] && a="--acl-public"; args+=("$a"); done; set -- "${args[@]}"; fi
+if [ "$sub" = put ] && has dropcanary && [[ "$*" == *"/canary/"* ]]; then exit 0; fi   # claims success, uploads nothing
+if [ "$sub" = get ] && has getbad && [[ "$*" == *"/sets/"* ]] && [ "${@: -1}" = "-" ]; then echo "not the bytes that were uploaded"; exit 0; fi
+if [ "$sub" = info ]; then
+  if has aclden; then   # metadata is shown, Policy is not available, then the ACL read is refused
+    out=$("$REAL" "$@" 2>/dev/null); rc=$?; [ $rc = 0 ] || exit $rc
+    printf '%s\n' "$out" | grep -v '^ *ACL:' | grep -v '^ *Policy:'
+    echo "   Policy:    Not available: GetPolicy permission is needed to read the policy"
+    echo "ERROR: Access to bucket '$BUCKET' was denied" >&2; echo "ERROR: S3 error: 403 (AccessDenied): Access Denied." >&2; exit 1
+  fi
+  has badsig   && { echo "ERROR: S3 error: 403 (SignatureDoesNotMatch): The request signature we calculated does not match the signature you provided." >&2; exit 1; }
+  has badkeyid && { echo "ERROR: S3 error: 403 (InvalidAccessKeyId): The Access Key Id you provided does not exist in our records." >&2; exit 1; }
+  has headden  && { echo "ERROR: Access to bucket '$BUCKET' was denied" >&2; echo "ERROR: S3 error: 403 (AccessDenied): Access Denied." >&2; exit 1; }
+  has neterr   && { echo "ERROR: [Errno 111] Connection refused" >&2; echo "ERROR: Connection failed" >&2; exit 1; }
+  if has other403 || has other500; then
+    out=$("$REAL" "$@" 2>/dev/null) || exit 1
+    printf '%s\n' "$out" | grep -v '^ *ACL:'
+    has other403 && echo "ERROR: S3 error: 403 (AllAccessDisabled): All access to this object has been disabled" >&2
+    has other500 && echo "ERROR: S3 error: 500 (InternalError): We encountered an internal error. Please try again." >&2
+    exit 1
+  fi
+fi
+exec "$REAL" "$@"
+EOS
+sed -i "s#__REAL__#$S3CMD#" "$RIG/s3-shim.sh"; chmod +x "$RIG/s3-shim.sh"
+SEC=$(sed -n 's/^secret_key = //p' "$S3CFG"); KEYID=$(sed -n 's/^access_key = //p' "$S3CFG")
+
+echo "--- P1 the tolerated case, end to end: only the ACL read is refused"
+SHIM_MODE=aclden S3CMD=$RIG/s3-shim.sh $X all > "$RIG/out-aclden.txt" 2>&1; rc=$?
+[ $rc = 0 ] && ok "a full run (check..drill) passes when ONLY the ACL read is refused with AccessDenied" || { no "full run with ACL reads refused (exit $rc)"; tail -15 "$RIG/out-aclden.txt"; }
+RP=$(ls -td "$WORK"/run-2* | head -1); IDP=$(basename "$RP" | sed 's/^run-//')
+grep -q "the ACL itself was NOT inspected" "$RP/log.txt" && grep -qF "ACL inspection unavailable; privacy verified by authenticated retrieval and anonymous probes." "$RP/log.txt" && ok "the log records: ACL inspection unavailable, exact wording" || no "log wording"
+! grep -q "ACL read: no public grant" "$RP/log.txt" && ok "the log never claims an ACL was read" || no "log claims an ACL was read"
+[ "$(grep -c '^unavailable ' "$RP/acl-inspection.txt")" = 5 ] && ok "all five objects (canary, set.tar, set.tar.sha256, UPLOAD-COMPLETE.json, DRILL-VERIFIED.json) are recorded as ACL-unavailable" || no "acl-inspection.txt: $(cat "$RP/acl-inspection.txt" | tr '\n' ' ')"
+s3 get "s3://$BUCKET/sets/$IDP/UPLOAD-COMPLETE.json" "$RIG/ft-uc2.json" --force >/dev/null 2>&1; s3 get "s3://$BUCKET/sets/$IDP/DRILL-VERIFIED.json" "$RIG/ft-dv2.json" --force >/dev/null 2>&1
+grep -qF "ACL inspection unavailable; privacy verified by authenticated retrieval and anonymous probes." "$RIG/ft-uc2.json" && grep -qF "ACL inspection unavailable; privacy verified by authenticated retrieval and anonymous probes." "$RIG/ft-dv2.json" && ok "both markers carry the exact sentence" || no "markers lack the sentence"
+! grep -qi "ACL has no public grant\|ACL verified\|ACL was verified" "$RIG/ft-uc2.json" "$RIG/ft-dv2.json" "$RP/log.txt" && ok "no marker or log line describes the ACL itself as verified" || no "something says the ACL was verified"
+grep -q 'equals the local\|content equals' "$RP/log.txt" && [ "$(grep -c 'authenticated retrieval OK, content equals the local file' "$RP/log.txt")" = 4 ] && ok "authenticated retrieval with matching content was checked on all four actual backup objects" || no "retrieval checks on backup objects"
+NB=$(echo $ORIGIN_BASES | wc -w); [ "$(grep -c 'anonymous denied (403)' "$RP/log.txt")" = $((5*NB)) ] && ok "anonymous denial was checked on every origin endpoint ($NB here; two in production) for all five objects" || no "anonymous probe count $(grep -c 'anonymous denied (403)' "$RP/log.txt"), expected $((5*NB))"
+$X status "$IDP" 2>&1 | grep -q 'STATE: DRILL-VERIFIED' && ok "status: DRILL-VERIFIED" || no "status"
+
+echo "--- P2 everything else about the ACL read still FAILS the stage"
+pfail() {  # pfail "desc" MODE [extra env words are in MODE] expected-text-in-FAILED
+  local r; r=$(new); adv $r check
+  SHIM_MODE=$2 S3CMD=$RIG/s3-shim.sh $X canary $r > "$OUT" 2>&1; local rc=$?
+  if [ $rc = 1 ] && grep -q "$3" "$WORK/run-$r/FAILED"; then ok "$1"; else no "$1 (exit $rc; FAILED: $(tr '\n' ' ' < "$WORK/run-$r/FAILED" 2>/dev/null | cut -c1-160))"; fi
+  if [ "${4:-}" != tolerated ]; then
+    { [ ! -e "$WORK/run-$r/acl-inspection.txt" ] || ! grep -q '^unavailable' "$WORK/run-$r/acl-inspection.txt"; } && ok "   ...and it was NOT recorded as a tolerated ACL refusal" || no "   ...was recorded as tolerated"
+  fi
+}
+pfail "bad credentials (403 SignatureDoesNotMatch): fails" badsig "cannot read the ACL"
+pfail "unknown access key (403 InvalidAccessKeyId): fails" badkeyid "cannot read the ACL"
+pfail "the metadata read itself refused (403 AccessDenied before any metadata): fails" headden "cannot read the ACL"
+pfail "network error: fails" neterr "cannot read the ACL"
+pfail "a different 403 after the metadata (AllAccessDisabled): fails" other403 "cannot read the ACL"
+pfail "a server error (500) after the metadata: fails" other500 "cannot read the ACL"
+pfail "missing object (the upload silently did not happen): fails" dropcanary "cannot read the ACL"
+pfail "ACL read refused AND the object is anonymously readable: fails on the anonymous probe" aclden,public "anonymous GET" tolerated
+RQ=$(new); adv $RQ check canary create verify package
+SHIM_MODE=aclden,getbad S3CMD=$RIG/s3-shim.sh $X upload "$RQ" > "$OUT" 2>&1; rc=$?
+{ [ $rc = 1 ] && grep -q "returned different bytes" "$WORK/run-$RQ/FAILED"; } && ok "ACL read refused AND authenticated retrieval returns other bytes: the upload stage fails" || no "different-bytes case (exit $rc)"
+! has_obj "sets/$RQ/UPLOAD-COMPLETE.json" && ok "...and no UPLOAD-COMPLETE.json was written" || no "UPLOAD-COMPLETE.json written despite different bytes"
+RR=$(new); adv $RR check canary create verify package
+SHIM_MODE=aclden,public S3CMD=$RIG/s3-shim.sh $X upload "$RR" > "$OUT" 2>&1; rc=$?
+{ [ $rc = 1 ] && grep -q "anonymous GET" "$WORK/run-$RR/FAILED"; } && ok "ACL read refused AND set.tar is anonymously readable: the upload stage fails on the anonymous probe" || no "public upload with unreadable ACL (exit $rc)"
+! has_obj "sets/$RR/UPLOAD-COMPLETE.json" && ok "...and no UPLOAD-COMPLETE.json was written" || no "UPLOAD-COMPLETE.json written for a public upload"
+RS=$(new); adv $RS check; S3CMD=$RIG/s3-public.sh expect_fail "a READABLE ACL with a public grant fails" $RS canary
+grep -q "public grant" "$WORK/run-$RS/FAILED" && ok "...and the failure names the public grant" || no "public grant message"
+
+echo "--- P3 credential text never reaches a log"
+LEAK="SYNTHLEAK$(head -c 40 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 33)"
+sed "s/^secret_key = .*/secret_key = /" "$S3CFG" > "$RIG/s3cfg-bad"; echo "$LEAK" >> "$RIG/s3cfg-bad"; chmod 600 "$RIG/s3cfg-bad"
+RT=$(new); S3CFG=$RIG/s3cfg-bad expect_fail "a credential file with the secret on a line of its own is refused at check, before any request" $RT check
+grep -q "malformed" "$WORK/run-$RT/FAILED" && ok "...and the failure says the file is malformed" || no "malformed message"
+! grep -rqF "$LEAK" "$WORK/run-$RT" "$OUT" && ok "...and the secret text appears nowhere in the run folder or the output" || no "SECRET TEXT LEAKED from a malformed file"
+! grep -rq "Ignoring invalid line" "$WORK/run-$RT" "$OUT" && ok "...and no raw s3cmd parser warning was logged" || no "raw parser warning logged"
+RU=$(new)
+SHIM_MODE=warn SHIM_LEAK=$LEAK SHIM_SECRET=$SEC SHIM_KEY=$KEYID S3CMD=$RIG/s3-shim.sh $X check "$RU" > "$OUT" 2>&1; rc=$?
+[ $rc = 0 ] && ok "a client that emits the parser warning and an error containing the real secret still lets check pass" || no "check with noisy client (exit $rc)"
+! grep -rqF "$LEAK" "$WORK/run-$RU" "$OUT" && ! grep -rqF "$SEC" "$WORK/run-$RU" "$OUT" && ok "neither the quoted line nor the real secret value reached the log or the output" || no "SECRET TEXT LEAKED through the noisy client"
+grep -q "never logged" "$WORK/run-$RU/log.txt" && grep -q "redacted" "$WORK/run-$RU/log.txt" && ok "the log shows the fixed replacement sentence and the redaction marker instead" || no "replacement text missing"
+sed "s/^access_key = .*/access_key = short/" "$S3CFG" > "$RIG/s3cfg-bad2"; chmod 600 "$RIG/s3cfg-bad2"
+RV=$(new); S3CFG=$RIG/s3cfg-bad2 expect_fail "an access key of the wrong shape is refused at check" $RV check
+! grep -rqF "$SEC" "$WORK" "$RIG"/out-aclden.txt "$OUT" 2>/dev/null && ok "after every test above, the rig's real (synthetic) secret appears in no run folder or captured output" || no "synthetic secret found in a log"
+
 echo; echo "RESULT: $pass passed, $bad failed"; [ $bad = 0 ]

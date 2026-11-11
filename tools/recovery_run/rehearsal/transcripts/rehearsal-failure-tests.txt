@@ -100,5 +100,48 @@ PASS  the disabled CDN endpoint was not probed
 PASS  CDN enabled + unreachable CDN endpoint: the stage fails (a probe that cannot connect proves nothing)
 PASS  CDN enabled + a working endpoint that denies anonymous reads: passes and is recorded as enabled
 PASS  an unreachable ORIGIN endpoint still fails even with the CDN disabled
+### P  real Spaces refuses ACL reads for a bucket-scoped key: tolerate ONLY that, and prove privacy the other ways
+--- P1 the tolerated case, end to end: only the ACL read is refused
+PASS  a full run (check..drill) passes when ONLY the ACL read is refused with AccessDenied
+PASS  the log records: ACL inspection unavailable, exact wording
+PASS  the log never claims an ACL was read
+PASS  all five objects (canary, set.tar, set.tar.sha256, UPLOAD-COMPLETE.json, DRILL-VERIFIED.json) are recorded as ACL-unavailable
+PASS  both markers carry the exact sentence
+PASS  no marker or log line describes the ACL itself as verified
+PASS  authenticated retrieval with matching content was checked on all four actual backup objects
+PASS  anonymous denial was checked on every origin endpoint (1 here; two in production) for all five objects
+PASS  status: DRILL-VERIFIED
+--- P2 everything else about the ACL read still FAILS the stage
+PASS  bad credentials (403 SignatureDoesNotMatch): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  unknown access key (403 InvalidAccessKeyId): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  the metadata read itself refused (403 AccessDenied before any metadata): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  network error: fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  a different 403 after the metadata (AllAccessDisabled): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  a server error (500) after the metadata: fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  missing object (the upload silently did not happen): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  ACL read refused AND the object is anonymously readable: fails on the anonymous probe
+PASS  ACL read refused AND authenticated retrieval returns other bytes: the upload stage fails
+PASS  ...and no UPLOAD-COMPLETE.json was written
+PASS  ACL read refused AND set.tar is anonymously readable: the upload stage fails on the anonymous probe
+PASS  ...and no UPLOAD-COMPLETE.json was written
+PASS  a READABLE ACL with a public grant fails
+PASS  ...and the failure names the public grant
+--- P3 credential text never reaches a log
+PASS  a credential file with the secret on a line of its own is refused at check, before any request
+PASS  ...and the failure says the file is malformed
+PASS  ...and the secret text appears nowhere in the run folder or the output
+PASS  ...and no raw s3cmd parser warning was logged
+PASS  a client that emits the parser warning and an error containing the real secret still lets check pass
+PASS  neither the quoted line nor the real secret value reached the log or the output
+PASS  the log shows the fixed replacement sentence and the redaction marker instead
+PASS  an access key of the wrong shape is refused at check
+PASS  after every test above, the rig's real (synthetic) secret appears in no run folder or captured output
 
-RESULT: 89 passed, 0 failed
+RESULT: 128 passed, 0 failed

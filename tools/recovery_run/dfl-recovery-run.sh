@@ -16,7 +16,8 @@
 # failed, a stage out of order or repeated). A refusal NEVER writes into the run or the bucket; it only prints why.
 #
 # What the markers in s3://$BUCKET/sets/<id>/ mean (see docs/SPACES_RECOVERY_RUN.md):
-#   UPLOAD-COMPLETE.json   the tar and its checksum were uploaded, sizes match, both were private (ACL and anonymous probes). NOT a recovery proof.
+#   UPLOAD-COMPLETE.json   the tar and its checksum were uploaded, sizes match, both were private (uploaded --acl-private, authenticated retrieval returned the same
+#                          bytes, anonymous GET denied; the ACL is also read when Spaces allows it, otherwise this is recorded). NOT a recovery proof.
 #   DRILL-VERIFIED.json    the set was downloaded, verified, restored and passed the restore test. Written last. Usable set = this file present
 #                          AND FAILED.json absent.
 #   FAILED.json            something failed after the upload began. A set with FAILED.json is not a verified set whatever else it contains.
@@ -124,7 +125,43 @@ EOF
 }
 trap 'fail "unexpected error (exit $?) at line $LINENO: $BASH_COMMAND"' ERR
 
-s3()   { "$S3CMD" -c "$S3CFG" "$@"; }
+# Every s3cmd call goes through s3x. s3cmd prints a warning that QUOTES a malformed line of its own config file ("Ignoring invalid line in ...: <the line>")
+# and that line can be the secret itself. s3x therefore holds s3cmd's stderr in memory, replaces any such warning with a fixed sentence, masks the access key
+# and secret values wherever they appear, and only then passes the text on (to the log, or to the file named by its first argument). s3cmd's stdout is not touched.
+s3x() {  # s3x ERRDEST args... : ERRDEST is a file for the cleaned stderr, or - for this script's stderr. Returns s3cmd's own exit status.
+  local dest=$1; shift
+  ${S3X_GUARD:-} python3 -I -c '
+import re, subprocess, sys
+dest, cfg, exe = sys.argv[1:4]
+vals = set()
+try:
+    for ln in open(cfg, encoding="utf-8", errors="replace"):
+        m = re.match(r"\s*(access_key|secret_key|access_token)\s*=\s*(\S+)\s*$", ln)
+        if m and len(m.group(2)) >= 8:
+            vals.add(m.group(2))
+except OSError:
+    pass
+try:
+    p = subprocess.Popen([exe, "-c", cfg] + sys.argv[4:], stderr=subprocess.PIPE)
+except OSError as e:
+    sys.stderr.write("cannot run s3cmd: %s\n" % e.strerror); sys.exit(127)
+err = p.communicate()[1].decode("utf-8", "replace")
+out = []
+for ln in err.splitlines(True):
+    if re.search(r"invalid line", ln, re.I):
+        ln = "WARNING: s3cmd reported a problem with a line of its config file; that line is never logged\n"
+    for v in vals:
+        ln = ln.replace(v, "[redacted]")
+    out.append(ln)
+txt = "".join(out)
+if dest == "-":
+    sys.stderr.write(txt); sys.stderr.flush()
+else:
+    open(dest, "w").write(txt)
+sys.exit(p.returncode if p.returncode >= 0 else 128 - p.returncode)
+' "$dest" "$S3CFG" "$S3CMD" "$@"
+}
+s3()   { s3x - "$@"; }
 jcheck() { python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if eval(sys.argv[2]) else 1)' "$1" "$2"; }
 need() { [ -e "$1" ] || fail "missing: $1"; }
 sizeof() { stat -c %s "$1"; }
@@ -158,20 +195,86 @@ snap_live() {  # size + mtime of the production files that must not change (side
 }
 anon_denied() {  # anon_denied URL TOKEN : unauthenticated GET must be 401/403 and must not return the token
   local url=$1 token=${2:-} code
-  code=$(curl -sS -m 30 -o "$RUN/anon.body" -w '%{http_code}' "$url") || fail "anonymous probe could not reach $url (a probe that cannot connect proves nothing)"
+  code=$(curl -sS -m 30 -r 0-65535 -o "$RUN/anon.body" -w '%{http_code}' "$url") || fail "anonymous probe could not reach $url (a probe that cannot connect proves nothing)"
   case "$code" in 401|403) ;; *) fail "anonymous GET $url returned $code (expected 401 or 403)";; esac
   if [ -n "$token" ] && grep -q -F "$token" "$RUN/anon.body"; then fail "anonymous GET $url RETURNED THE CANARY CONTENT"; fi
   say "   anonymous denied ($code): $url"
 }
-acl_private() {  # no grant to everybody on the object
-  local out; out=$(s3 info "s3://$1") || fail "cannot read the ACL of $1"
-  if printf '%s\n' "$out" | grep -i -E 'anon|AllUsers|http://acs.amazonaws.com/groups' >/dev/null; then fail "object $1 has a public grant: $out"; fi
-  say "   ACL has no public grant: $1"
+# ---- privacy of an uploaded object -------------------------------------------------------------------------------------------------------------------
+# What "private" rests on, per object: (1) it was uploaded with --acl-private; (2) the ACL is read when Spaces allows it, and a public grant fails the run;
+# (3) AUTHENTICATED retrieval returns exactly the local bytes (so the object exists and a later anonymous 403 is not just "no such key");
+# (4) an ANONYMOUS GET is denied (401/403) on every working origin endpoint.
+# A bucket-scoped Spaces key is NOT allowed to read ACLs (observed 2026-11-11: s3cmd info shows the object's metadata, then the ACL read returns 403 AccessDenied).
+# That single, specific refusal is tolerated, recorded as "ACL inspection unavailable", and never described as an ACL having been verified. Anything else
+# (bad credentials, a missing object, a network error, any other status, a metadata read that is itself refused) fails the stage.
+ACL_UNAVAILABLE_NOTE="ACL inspection unavailable; privacy verified by authenticated retrieval and anonymous probes."
+acl_note() { printf '%s %s\n' "$2" "$1" >> "$RUN/acl-inspection.txt"; }     # acl_note TARGET readable|unavailable
+acl_summary() {  # the sentence recorded in the markers: it never claims an ACL was verified when it could not be read
+  if [ -s "$RUN/acl-inspection.txt" ] && grep -q '^unavailable ' "$RUN/acl-inspection.txt"; then printf '%s' "$ACL_UNAVAILABLE_NOTE"
+  elif [ -s "$RUN/acl-inspection.txt" ]; then printf '%s' "ACL read on every checked object: no public grant; also verified by authenticated retrieval and anonymous probes."
+  else printf '%s' "no object checked yet"; fi
 }
-private_object() {  # private_object KEY : ACL has no public grant AND an anonymous GET is denied on every working endpoint
-  local key=$1 b
-  acl_private "$BUCKET/$key"
+acl_check() {  # acl_check BUCKET/KEY
+  local target=$1 out="" ef rc=0
+  ef="$RUN/acl-error-$(printf '%s' "$target" | tr -c 'A-Za-z0-9._-' '_').txt"
+  out=$(s3x "$ef" info "s3://$target") || rc=$?
+  if [ "$rc" = 0 ]; then
+    printf '%s\n' "$out" | grep -q '^ *ACL:' || fail "s3cmd did not show the ACL of $target, so it cannot be told whether it is private"
+    if printf '%s\n' "$out" | grep -i -E 'anon|AllUsers|http://acs.amazonaws.com/groups' >/dev/null; then fail "object $target has a public grant: $out"; fi
+    acl_note "$target" readable; say "   ACL read: no public grant: $target"; return 0
+  fi
+  if printf '%s\n' "$out" | grep -q '^ *File size:' && printf '%s\n' "$out" | grep -q 'MD5 sum:' && ! printf '%s\n' "$out" | grep -q '^ *ACL:' \
+     && [ "$(grep -c 'S3 error' "$ef")" = 1 ] && grep -q 'S3 error: 403 (AccessDenied)' "$ef"; then
+    acl_note "$target" unavailable
+    say "   the ACL read of $target was refused with 403 AccessDenied (its metadata read worked); the ACL itself was NOT inspected"
+    say "   $ACL_UNAVAILABLE_NOTE (the checks below must pass)"
+    return 0
+  fi
+  cat "$ef" >&2
+  fail "cannot read the ACL of $target, and this is not the one tolerated case (only the ACL read itself being refused with AccessDenied, after the metadata read worked)"
+}
+private_object() {  # private_object KEY LOCALFILE : see above; the authenticated copy must equal LOCALFILE byte for byte (streamed, nothing is written to disk)
+  local key=$1 lf=$2 b want got
+  acl_check "$BUCKET/$key"
+  want=$(sha256sum "$lf" | cut -d' ' -f1)
+  got=$(S3X_GUARD="$RUN_GUARD" s3 --no-progress get "s3://$BUCKET/$key" - | sha256sum | cut -d' ' -f1) || fail "authenticated retrieval of $key failed"
+  [ "$got" = "$want" ] || fail "authenticated retrieval of $key returned different bytes (SHA-256 $got, local $want)"
+  say "   authenticated retrieval OK, content equals the local file: $key"
   for b in $ANON_BASES; do anon_denied "$b$key" ""; done
+}
+validate_s3cfg() {  # the shape of the credential file; prints line numbers and kinds of problem, NEVER a value
+  local rc=0
+  python3 -I - "$S3CFG" <<'PY' || rc=$?
+import re, sys
+want = {"access_key", "secret_key", "host_base", "host_bucket", "use_https", "signature_v2"}
+seen, problems = {}, []
+lines = open(sys.argv[1], encoding="utf-8", errors="replace").read().splitlines()
+if not lines or lines[0].strip() != "[default]":
+    problems.append("the first line is not [default]")
+for n, ln in enumerate(lines[1:], 2):
+    if not ln.strip():
+        continue
+    m = re.fullmatch(r"([a-z_0-9]+) = (\S.*)", ln)
+    if not m:
+        problems.append("line %d is not in 'name = value' form" % n); continue
+    k, v = m.groups()
+    if k not in want:
+        problems.append("line %d has a name that is not expected here" % n); continue
+    if k in seen:
+        problems.append("line %d repeats a name already given" % n); continue
+    seen[k] = v
+for k in sorted(want - set(seen)):
+    problems.append("%s is missing" % k)
+a, s = seen.get("access_key", ""), seen.get("secret_key", "")
+if a and not re.fullmatch(r"[A-Z0-9]{20}", a):
+    problems.append("access_key is not 20 capital letters/digits (it has %d characters)" % len(a))
+if s and not (40 <= len(s) <= 64 and re.fullmatch(r"[A-Za-z0-9+/=_-]+", s)):
+    problems.append("secret_key does not look like a Spaces secret (it has %d characters)" % len(s))
+if problems:
+    print("credential file problems (values are never printed): " + "; ".join(problems)); sys.exit(1)
+print("credential file structure OK: access key %d characters, secret key %d characters (values not shown)" % (len(a), len(s)))
+PY
+  [ "$rc" = 0 ] || fail "the credential file $S3CFG is malformed (see above; its contents are never printed); re-enter it"
 }
 
 # ---- the existing recovery-set artifact: located, never assumed; full SHA-256 ------------------------------------------------------------------------
@@ -301,6 +404,7 @@ st_check() {
       case "$(dirname "$S3CFG")/" in "$root"/*) fail "$S3CFG is inside the web root $root";; esac
     done
   fi
+  validate_s3cfg
   s3 ls "s3://$BUCKET" >/dev/null || fail "cannot list s3://$BUCKET with the configured credential (outbound HTTPS blocked, wrong key, or wrong bucket)"
   snap_live > "$RUN/live-before.txt"
   finish
@@ -313,7 +417,7 @@ st_canary() {
   key="canary/canary-$RUN_ID.txt"
   printf '%s test token, not a secret\n' "$tok" > "$RUN/canary.txt"
   s3 --acl-private --no-guess-mime-type --no-progress put "$RUN/canary.txt" "s3://$BUCKET/$key" > "$RUN/canary-put.txt" || fail "canary upload failed"
-  acl_private "$BUCKET/$key"
+  acl_check "$BUCKET/$key"
   s3 --no-progress get "s3://$BUCKET/$key" "$RUN/canary-got.txt" > "$RUN/canary-get.txt" || fail "authenticated retrieval of the canary failed"
   cmp "$RUN/canary.txt" "$RUN/canary-got.txt" || fail "the canary came back with different content"
   grep -q -F "$tok" "$RUN/canary-got.txt" || fail "the canary token is missing from the authenticated copy"
@@ -464,14 +568,15 @@ st_upload() {
   local rsize; rsize=$(s3 ls "s3://$BUCKET/$P/set.tar" | awk -v u="s3://$BUCKET/$P/set.tar" '$4 == u {print $3}')   # exact name: a bare prefix also matches set.tar.sha256
   [ "$rsize" = "$(sizeof "$RUN/set.tar")" ] || fail "remote set.tar is $rsize bytes, local is $(sizeof "$RUN/set.tar")"
   # privacy of the two data objects is established BEFORE any marker says the upload is complete
-  private_object "$P/set.tar"
-  private_object "$P/set.tar.sha256"
+  private_object "$P/set.tar" "$RUN/set.tar"
+  private_object "$P/set.tar.sha256" "$RUN/set.tar.sha256"
   write_json "$RUN/UPLOAD-COMPLETE.json" kind upload-complete run "$RUN_ID" set_tar_bytes "$(sizeof "$RUN/set.tar")" set_tar_sha256 "$sha" \
-    checked "set.tar and set.tar.sha256 uploaded; remote size equals local size; ACL has no public grant; anonymous GET denied on: $ANON_BASES" \
+    checked "set.tar and set.tar.sha256 uploaded with --acl-private; remote size equals local size; authenticated retrieval returned exactly the local bytes; anonymous GET denied on: $ANON_BASES" \
+    privacy "$(acl_summary)" \
     cdn "$CDN_NOTE" time "$(date -u +%FT%TZ)" \
     meaning "UPLOAD finished and the two data objects are private. This is NOT proof that the set restores: that is DRILL-VERIFIED.json, written last. A prefix with FAILED.json is never a verified set."
   s3 --acl-private --no-guess-mime-type --no-progress $S3_PUT_OPTS put "$RUN/UPLOAD-COMPLETE.json" "s3://$BUCKET/$P/UPLOAD-COMPLETE.json" > "$RUN/upload-marker.txt" || fail "upload of UPLOAD-COMPLETE.json failed"
-  private_object "$P/UPLOAD-COMPLETE.json"
+  private_object "$P/UPLOAD-COMPLETE.json" "$RUN/UPLOAD-COMPLETE.json"
   echo "$P" > "$RUN/upload.prefix"
   finish
 }
@@ -517,11 +622,12 @@ st_drill() {
   replay=${REPLAY_FROM:+"yes, from restore point $REPLAY_FROM"}; replay=${replay:-"not run"}
   write_json "$RUN/DRILL-VERIFIED.json" kind drill-verified run "$RUN_ID" set_tar_sha256 "$(cut -d' ' -f1 "$D/set.tar.sha256")" league_head_event "$head" feed_release "$rel" \
     drill_host "the SAME host that made the set (this is a first drill, not a host-loss test)" independent_of_server_paths "$indep" restore_point_replay "$replay" cdn "$CDN_NOTE" \
+    privacy "$(acl_summary) Every object was uploaded with --acl-private, retrieved with the key and compared byte for byte, and denied to anonymous GET on: $ANON_BASES" \
     proven "downloaded set.tar matched its checksum; league set and feed verified; feed restored byte-identical to the captured backup; league recovery set passed its restore test (active league and archive, exact event-141 upgrade input, preserved equivalent, originating code, lineage)" \
     not_proven "recovery after losing this server; restore-point replay unless stated above" time "$(date -u +%FT%TZ)"
   cp "$RUN/DRILL-VERIFIED.json" "$D/DRILL-VERIFIED.json"
   s3 --acl-private --no-guess-mime-type --no-progress $S3_PUT_OPTS put "$RUN/DRILL-VERIFIED.json" "s3://$BUCKET/$P/DRILL-VERIFIED.json" > "$RUN/drill-marker.txt" || fail "upload of DRILL-VERIFIED.json failed"
-  private_object "$P/DRILL-VERIFIED.json"
+  private_object "$P/DRILL-VERIFIED.json" "$RUN/DRILL-VERIFIED.json"
   cat <<EOF
 
 =========================================================================================================================================
@@ -531,6 +637,7 @@ FIRST DRILL, SAME HOST. What this proves and what it does not.
  NOT PROVEN: recovery after losing this server (this drill ran on it); behaviour at a restore point replay$( [ -n "$REPLAY_FROM" ] && echo " (replayed from $REPLAY_FROM)" || echo " (not run)" );
           independence from the original server paths$( [ "$INDEPENDENT" = 1 ] && echo " (WAS tested: $HIDE_DIRS were hidden)" || echo " (NOT tested: INDEPENDENT=0)" ).
  CDN: $CDN_NOTE
+ PRIVACY: $(acl_summary)
  Markers in s3://$BUCKET/$P/ : UPLOAD-COMPLETE.json (upload only) and DRILL-VERIFIED.json (this drill passed). Neither FAILED.json nor any failure exists.
  Nothing was started, nothing production was written, nothing was deleted. Drill copies stay in $D until you decide.
 =========================================================================================================================================

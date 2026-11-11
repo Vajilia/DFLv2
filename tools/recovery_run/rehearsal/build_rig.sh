@@ -61,7 +61,7 @@ mkdir -p "$R/found/a/b/c"
 tar -cf "$R/found/a/b/c/dfl-recovery-set-20261103.tar" -C "$R" existing-set
 
 # synthetic credentials for the local fake S3 (random every time; they exist nowhere else)
-KEY="SYNTH$(head -c 12 /dev/urandom | base64 | tr -dc 'A-Z0-9' | head -c 15)"; SEC="synth$(head -c 30 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 32)"
+KEY="SYNTH$(head -c 60 /dev/urandom | base64 | tr -dc 'A-Z0-9' | head -c 15)"; SEC="synth$(head -c 60 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 38)"       # 43 characters, like a real Spaces secret
 cat > "$R/s3cfg" <<EOF
 [default]
 access_key = $KEY

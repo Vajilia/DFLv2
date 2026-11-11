@@ -1,26 +1,27 @@
-# happy path: INDEPENDENT=1 (hidden: $RIG/srv/dflv2 $RIG/opt/dflv2-src)  REPLAY_FROM=''  CDN_ENABLED=0  exporter looping the whole time
+# happy path: INDEPENDENT=1 (hidden: RIG/srv/dflv2 RIG/opt/dflv2-src)  REPLAY_FROM=''  CDN_ENABLED=0  exporter looping the whole time
 # synthetic data and credentials, local fake S3; nothing here is production
-10:30:21Z == stage check (run 20261111T103021Z-11366)
-10:30:21Z    CDN: disabled (the bucket's CDN setting is off): not probed, because a missing CDN hostname can fail DNS or TLS and that proves nothing about the object
-10:30:21Z    existing artifact located: $RIG/found/a/b/c/dfl-recovery-set-20261103.tar (29306880 bytes, full SHA-256 equals the recorded value)
-artifact member existing-set/RECOVERY_SET.json sha256 deb908eedc3dd7bc2a7c2819196eeeb93347347dc5f68f630a7297dcddfd07f4 | EXISTING_SET manifest sha256 deb908eedc3dd7bc2a7c2819196eeeb93347347dc5f68f630a7297dcddfd07f4
-10:30:21Z    the artifact's manifest is byte-identical to $RIG/existing-set/RECOVERY_SET.json
-10:30:21Z    independent-mode preflight OK: $RIG/srv/dflv2 $RIG/opt/dflv2-src can be hidden (inside a private namespace; the real folders are untouched)
-10:30:21Z    feed release: e00038-1d897beca1
-10:30:21Z    S (sources) = 73057797 bytes; peak need about 6 x S = 438346782 (measured 5.1-5.2 x); free on $RIG/work = 12617658368; must keep 1000000000 free afterwards
-10:30:22Z == stage check OK
-10:30:22Z == stage canary (run 20261111T103021Z-11366)
-10:30:22Z    ACL has no public grant: dfl-rehearsal/canary/canary-20261111T103021Z-11366.txt
-10:30:22Z    authenticated retrieval OK and content verified (the object exists and is readable with the key)
-10:30:22Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/canary/canary-20261111T103021Z-11366.txt
-10:30:22Z    CDN: disabled (the bucket's CDN setting is off): not probed, because a missing CDN hostname can fail DNS or TLS and that proves nothing about the object
-10:30:22Z    anonymous listing probe SKIPPED (ANON_LIST_URL empty)
-10:30:22Z == stage canary OK
-10:30:22Z == stage create (run 20261111T103021Z-11366)
-10:30:22Z    league recovery set (active pair + exact upgrade input + equivalent + code tree)
-10:30:23Z    public feed backup (--require-quiescent; the exporter may keep rewriting status.json)
-10:30:26Z == stage create OK
-10:30:26Z == stage verify (run 20261111T103021Z-11366)
+12:00:19Z == stage check (run 20261111T120019Z-12764)
+12:00:19Z    CDN: disabled (the bucket's CDN setting is off): not probed, because a missing CDN hostname can fail DNS or TLS and that proves nothing about the object
+12:00:19Z    existing artifact located: RIG/found/a/b/c/dfl-recovery-set-20261103.tar (29306880 bytes, full SHA-256 equals the recorded value)
+artifact member existing-set/RECOVERY_SET.json sha256 7ff4f21c96d366ce20a5ad3aa786cc89cf42820d95b95417b56f4dd570c8d19c | EXISTING_SET manifest sha256 7ff4f21c96d366ce20a5ad3aa786cc89cf42820d95b95417b56f4dd570c8d19c
+12:00:19Z    the artifact's manifest is byte-identical to RIG/existing-set/RECOVERY_SET.json
+12:00:19Z    independent-mode preflight OK: RIG/srv/dflv2 RIG/opt/dflv2-src can be hidden (inside a private namespace; the real folders are untouched)
+12:00:19Z    feed release: e00038-1d897beca1
+12:00:19Z    S (sources) = 73057797 bytes; peak need about 6 x S = 438346782 (measured 5.1-5.2 x); free on RIG/work = 10605772800; must keep 1000000000 free afterwards
+credential file structure OK: access key 20 characters, secret key 43 characters (values not shown)
+12:00:19Z == stage check OK
+12:00:19Z == stage canary (run 20261111T120019Z-12764)
+12:00:20Z    ACL read: no public grant: dfl-rehearsal/canary/canary-20261111T120019Z-12764.txt
+12:00:20Z    authenticated retrieval OK and content verified (the object exists and is readable with the key)
+12:00:20Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/canary/canary-20261111T120019Z-12764.txt
+12:00:20Z    CDN: disabled (the bucket's CDN setting is off): not probed, because a missing CDN hostname can fail DNS or TLS and that proves nothing about the object
+12:00:20Z    anonymous listing probe SKIPPED (ANON_LIST_URL empty)
+12:00:20Z == stage canary OK
+12:00:20Z == stage create (run 20261111T120019Z-12764)
+12:00:20Z    league recovery set (active pair + exact upgrade input + equivalent + code tree)
+12:00:21Z    public feed backup (--require-quiescent; the exporter may keep rewriting status.json)
+12:00:25Z == stage create OK
+12:00:25Z == stage verify (run 20261111T120019Z-12764)
 league head event 38 | feed release e00038-1d897beca1
 lineage names the exact original by SHA-256; continues event 26
   ok   exact upgrade input (original-141) SHA-256 identical
@@ -32,39 +33,44 @@ lineage names the exact original by SHA-256; continues event 26
   ok   lineage link identical
   ok   active head identical (same event and chain: the league did not move)
   ok   archive counts identical
-10:30:27Z    existing artifact re-hashed: still equals the recorded SHA-256 ($RIG/found/a/b/c/dfl-recovery-set-20261103.tar)
-10:30:27Z == stage verify OK
-10:30:27Z == stage package (run 20261111T103021Z-11366)
-10:30:27Z    set.tar 77086720 bytes, 2dea8bfa714c70aaba82d02b84f300d8c77b7057dac31ea841ca11954cff5100
-10:30:27Z == stage package OK
-10:30:27Z == stage upload (run 20261111T103021Z-11366)
-10:30:29Z    ACL has no public grant: dfl-rehearsal/sets/20261111T103021Z-11366/set.tar
-10:30:30Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T103021Z-11366/set.tar
-10:30:30Z    ACL has no public grant: dfl-rehearsal/sets/20261111T103021Z-11366/set.tar.sha256
-10:30:30Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T103021Z-11366/set.tar.sha256
-10:30:30Z    ACL has no public grant: dfl-rehearsal/sets/20261111T103021Z-11366/UPLOAD-COMPLETE.json
-10:30:30Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T103021Z-11366/UPLOAD-COMPLETE.json
-10:30:30Z == stage upload OK
-10:30:30Z == stage drill (run 20261111T103021Z-11366)
-10:30:30Z    downloading from Spaces into the isolated folder $RIG/work/run-20261111T103021Z-11366/drill
+12:00:26Z    existing artifact re-hashed: still equals the recorded SHA-256 (RIG/found/a/b/c/dfl-recovery-set-20261103.tar)
+12:00:26Z == stage verify OK
+12:00:26Z == stage package (run 20261111T120019Z-12764)
+12:00:27Z    set.tar 77086720 bytes, a2d57811cf673e3bcbbc74c29766ab87a0774fc2644211ff2ab4cb65b635ac74
+12:00:27Z == stage package OK
+12:00:27Z == stage upload (run 20261111T120019Z-12764)
+12:00:29Z    ACL read: no public grant: dfl-rehearsal/sets/20261111T120019Z-12764/set.tar
+12:00:29Z    authenticated retrieval OK, content equals the local file: sets/20261111T120019Z-12764/set.tar
+12:00:29Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T120019Z-12764/set.tar
+12:00:30Z    ACL read: no public grant: dfl-rehearsal/sets/20261111T120019Z-12764/set.tar.sha256
+12:00:30Z    authenticated retrieval OK, content equals the local file: sets/20261111T120019Z-12764/set.tar.sha256
+12:00:30Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T120019Z-12764/set.tar.sha256
+12:00:30Z    ACL read: no public grant: dfl-rehearsal/sets/20261111T120019Z-12764/UPLOAD-COMPLETE.json
+12:00:31Z    authenticated retrieval OK, content equals the local file: sets/20261111T120019Z-12764/UPLOAD-COMPLETE.json
+12:00:31Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T120019Z-12764/UPLOAD-COMPLETE.json
+12:00:31Z == stage upload OK
+12:00:31Z == stage drill (run 20261111T120019Z-12764)
+12:00:31Z    downloading from Spaces into the isolated folder RIG/work/run-20261111T120019Z-12764/drill
 set.tar: OK
-10:30:37Z    restored feed is byte-identical to the captured backup (before upload) and to the downloaded copy
-10:30:41Z    ACL has no public grant: dfl-rehearsal/sets/20261111T103021Z-11366/DRILL-VERIFIED.json
-10:30:41Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T103021Z-11366/DRILL-VERIFIED.json
+12:00:38Z    restored feed is byte-identical to the captured backup (before upload) and to the downloaded copy
+12:00:42Z    ACL read: no public grant: dfl-rehearsal/sets/20261111T120019Z-12764/DRILL-VERIFIED.json
+12:00:43Z    authenticated retrieval OK, content equals the local file: sets/20261111T120019Z-12764/DRILL-VERIFIED.json
+12:00:43Z    anonymous denied (403): http://127.0.0.1:5055/dfl-rehearsal/sets/20261111T120019Z-12764/DRILL-VERIFIED.json
 
 =========================================================================================================================================
 FIRST DRILL, SAME HOST. What this proves and what it does not.
  PROVEN : the set came back from Spaces byte for byte (SHA-256), verified, the feed restored identically to the captured backup, and the league
           recovery set restored and passed its restore test (active league + archive, the exact event-141 input, the originating code, the lineage).
  NOT PROVEN: recovery after losing this server (this drill ran on it); behaviour at a restore point replay (not run);
-          independence from the original server paths (WAS tested: $RIG/srv/dflv2 $RIG/opt/dflv2-src were hidden).
+          independence from the original server paths (WAS tested: RIG/srv/dflv2 RIG/opt/dflv2-src were hidden).
  CDN: disabled (the bucket's CDN setting is off): not probed, because a missing CDN hostname can fail DNS or TLS and that proves nothing about the object
- Markers in s3://dfl-rehearsal/sets/20261111T103021Z-11366/ : UPLOAD-COMPLETE.json (upload only) and DRILL-VERIFIED.json (this drill passed). Neither FAILED.json nor any failure exists.
- Nothing was started, nothing production was written, nothing was deleted. Drill copies stay in $RIG/work/run-20261111T103021Z-11366/drill until you decide.
+ PRIVACY: ACL read on every checked object: no public grant; also verified by authenticated retrieval and anonymous probes.
+ Markers in s3://dfl-rehearsal/sets/20261111T120019Z-12764/ : UPLOAD-COMPLETE.json (upload only) and DRILL-VERIFIED.json (this drill passed). Neither FAILED.json nor any failure exists.
+ Nothing was started, nothing production was written, nothing was deleted. Drill copies stay in RIG/work/run-20261111T120019Z-12764/drill until you decide.
 =========================================================================================================================================
-10:30:41Z == stage drill OK
-run 20261111T103021Z-11366 complete: $RIG/work/run-20261111T103021Z-11366
-# exit status: 0;  exporter runs while this ran: 29
+12:00:43Z == stage drill OK
+run 20261111T120019Z-12764 complete: RIG/work/run-20261111T120019Z-12764
+# exit status: 0;  exporter runs while this ran: 35
 # the restore test (final lines):
 #   PASS  the set verifies against its manifest
 #   PASS  the league's original server paths are not available on this machine
@@ -75,19 +81,19 @@ run 20261111T103021Z-11366 complete: $RIG/work/run-20261111T103021Z-11366
 #   PASS  the originating code is extracted from the original file and reproduces its fingerprint   "a8fc26342e9fce1e"
 #   PASS  the original file is sound: integrity, journal continuity and hash chain, snapshot checksums, recorded code
 #   PASS  the original file holds journal events 1..26   {"first": 1, "rows": 26}
-#   PASS  the NEW archive holds exactly what the original journal committed (the game history is preserved)   {"has_archive": true, "file": "$SCRATCH
+#   PASS  the NEW archive holds exactly what the original journal committed (the game history is preserved)   {"has_archive": true, "file": "SANDBOX
 #   PASS  the original file opens and recovers under its own code, to its recorded event and chain   {"events": 26, "chain": "1ca5fd2ece16fdcb948e4a3b3e5d376cb42add7e88482f5671728df80b637525", "finger
 #   PASS  original-equivalent/league-1.db holds the same recorded history as the original file (journal, restore-point checksums, code); byte-identical: False
-#   PASS  the active league continues the original's event and chain   {"active_lineage_source_file_sha256": "a404c8af6dc20086de5d90f7f9009501d2fa4a63e8d8c96db829142b4b71dfa4", "chain": "1ca5fd2ece16f
+#   PASS  the active league continues the original's event and chain   {"active_lineage_source_file_sha256": "98cfeb1aa533639bc856490d60deebcffbc2f106ed55cc64370604ab0dd5d3be", "chain": "1ca5fd2ece16f
 #   PASS  the active file's lineage names this exact original file by SHA-256
 #   {"ok": true, "steps": 14, "failed": []}
 # bucket contents of this run:
-#   2026-11-11 10:30         1198  s3://dfl-rehearsal/sets/20261111T103021Z-11366/DRILL-VERIFIED.json
-#   2026-11-11 10:30          748  s3://dfl-rehearsal/sets/20261111T103021Z-11366/UPLOAD-COMPLETE.json
-#   2026-11-11 10:30     77086720  s3://dfl-rehearsal/sets/20261111T103021Z-11366/set.tar
-#   2026-11-11 10:30           74  s3://dfl-rehearsal/sets/20261111T103021Z-11366/set.tar.sha256
+#   2026-11-11 12:00         1493  s3://dfl-rehearsal/sets/20261111T120019Z-12764/DRILL-VERIFIED.json
+#   2026-11-11 12:00          929  s3://dfl-rehearsal/sets/20261111T120019Z-12764/UPLOAD-COMPLETE.json
+#   2026-11-11 12:00     77086720  s3://dfl-rehearsal/sets/20261111T120019Z-12764/set.tar
+#   2026-11-11 12:00           74  s3://dfl-rehearsal/sets/20261111T120019Z-12764/set.tar.sha256
 # restored feed vs captured backup (diff of files):
 #   identical
 # restored feed vs the MOVING live feed (not what the script compares):
-#   Files $RIG/srv/dflv2/feed/.publish.lock and $RIG/work/run-20261111T103021Z-11366/drill/restored-feed/.publish.lock differ
-#   Files $RIG/srv/dflv2/feed/status.json and $RIG/work/run-20261111T103021Z-11366/drill/restored-feed/status.json differ
+#   Files RIG/srv/dflv2/feed/.publish.lock and RIG/work/run-20261111T120019Z-12764/drill/restored-feed/.publish.lock differ
+#   Files RIG/srv/dflv2/feed/status.json and RIG/work/run-20261111T120019Z-12764/drill/restored-feed/status.json differ

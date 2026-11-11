@@ -26,7 +26,8 @@ Status: rehearsed locally on synthetic data against a fake S3 (`tools/recovery_r
   on every working origin endpoint. No public object is ever made. A probe that cannot connect fails the stage.
 * **create / verify / package**: the set is built and verified, and its history is compared with the existing set (same upgrade input hash, same equivalent copy,
   same original head and restore points, same code fingerprints, same lineage, same active head). The artifact is re-hashed at `verify`.
-* **upload**: new unique prefix `sets/<run id>/`, never overwritten. ACL and anonymous probes on `set.tar` and `set.tar.sha256` pass **before** `UPLOAD-COMPLETE.json` is written.
+* **upload**: new unique prefix `sets/<run id>/`, never overwritten. Every object is uploaded with `--acl-private`; for `set.tar` and `set.tar.sha256` the privacy checks below pass **before**
+  `UPLOAD-COMPLETE.json` is written (and again for each marker): authenticated retrieval returns exactly the local bytes (streamed through SHA-256, nothing written to disk), and an anonymous GET is denied on every working origin endpoint.
 * **drill**: download, checksum, verify, restore the feed (compared with the **captured** backup, never with the moving live folder), restore-test the league set with the original
   server paths hidden (`INDEPENDENT=1`, default). Restore-point replay is off unless `REPLAY_FROM` is set (about 26 minutes on the droplet). `DRILL-VERIFIED.json` is uploaded last.
 
@@ -43,6 +44,20 @@ Status: rehearsed locally on synthetic data against a fake S3 (`tools/recovery_r
 * `STOP` (exit 1): a stage failed. The run is marked `FAILED` (the first failure is kept), the run is never continued; move it aside (`mv`, nothing is deleted) and start a new run.
 * `REFUSED` (exit 3): not allowed (another process holds the lock, the run already failed, out-of-order or repeated stage). A refusal changes **nothing**: no file in the run, no log line, no bucket object.
 * `status <run id>` and `locate` are read-only, take no lock and work on any run.
+
+## Privacy checks and the ACL (changed after the first production attempt, 2026-11-11)
+Per object (the canary and every backup object): (1) uploaded with `--acl-private`; (2) the ACL is read when Spaces allows it, and a public grant fails the run; (3) **authenticated retrieval** returns
+exactly the local bytes, so the object exists and a later 403 is not just "no such key"; (4) an **anonymous GET** is denied (401/403) on **every** working origin endpoint.
+
+A bucket-scoped Spaces key is **not allowed to read ACLs**: `s3cmd info` shows the object's metadata and then the ACL read returns `403 AccessDenied`. That one, specific refusal is tolerated:
+the object's metadata read must have worked, no ACL line may have been shown, and the only error must be `S3 error: 403 (AccessDenied)`. Anything else fails the stage: bad credentials
+(`SignatureDoesNotMatch`, `InvalidAccessKeyId`), a refused metadata read, a missing object, a network error, any other status. When the ACL could not be read the log and the markers say exactly
+*"ACL inspection unavailable; privacy verified by authenticated retrieval and anonymous probes."* and never describe the ACL itself as verified. Each run records the per-object outcome in `acl-inspection.txt`.
+
+## Credentials never reach a log
+`check` validates the shape of the credential file (names, an access key of 20 capitals/digits, a plausible secret length) and prints only line numbers and the kind of problem, never a value.
+Every `s3cmd` call runs through a wrapper that holds its stderr in memory, replaces s3cmd's "Ignoring invalid line in ...: <the line>" warning (which quotes the offending line, possibly the secret) with a fixed sentence,
+masks the access key and secret values wherever they appear, and only then passes the text on.
 
 ## CDN
 The bucket's CDN is **disabled**. A hostname that does not exist can fail DNS or TLS, which proves nothing about whether an object is private, so it is recorded as disabled and **not probed**.
@@ -68,7 +83,7 @@ tools/recovery_run/rehearsal/build_rig.sh RIG_DIR        # synthetic league/feed
 tools/recovery_run/rehearsal/run_rehearsal.sh RIG_DIR OUT_DIR   # needs s3cmd and moto_server in a venv (VENV, default /tmp/s3v)
 ```
 It runs the full procedure with `INDEPENDENT=1` while a loop rewrites `status.json`, then ~90 failure/regression checks: wrong upgrade input, flipped bytes, a missing feed file, unreachable Spaces, a swapped
-remote object, public objects, a lying ACL view, stage order, a second process racing a running stage, artifact hash/size/manifest mismatches (including a hash equal in first 8 and last 4 digits only), CDN on/off.
+remote object, public objects, a lying ACL view, the ACL-read-only refusal and every near miss (bad credentials, unknown key, refused metadata read, missing object, network error, other 403/500, public object with an unreadable ACL, different bytes), credential text in logs (malformed file, noisy client), stage order, a second process racing a running stage, artifact hash/size/manifest mismatches (including a hash equal in first 8 and last 4 digits only), CDN on/off.
 
 ## Not proven by the rehearsal
-Real Spaces behaviour (status codes, the ACL of a large multipart upload, anonymous listing denial), outbound access from the server, production-scale timing, host-loss recovery, restore-point replay.
+Real Spaces behaviour beyond what was observed on 2026-11-11 (the ACL-read refusal above), the ACL of a large multipart upload, anonymous listing denial, outbound access from the server, production-scale timing, host-loss recovery, restore-point replay.
