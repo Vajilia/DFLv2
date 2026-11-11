@@ -1,0 +1,11 @@
+OLD SCRIPT: competing 'upload' while the first process holds the lock:
+
+STOP: another run holds $RIG/work-old/.lock; wait for it
+
+This run (20261111T102840Z-10957) FAILED in stage "" and will not be continued. Nothing outside $RIG/work-old/run-20261111T102840Z-10957 and (for stages upload and canary) the new objects under
+FAILED file in the ACTIVE run after the competitor:
+stage=
+reason=another run holds $RIG/work-old/.lock; wait for it
+2026-11-11T10:28:50Z
+[1]+  Done                    S3CMD=$SP/rig2/s3-slow.sh $OLD upload $R > /dev/null 2>&1
+first process exit: 0; stages: canary.ok check.ok create.ok package.ok upload.ok verify.ok 

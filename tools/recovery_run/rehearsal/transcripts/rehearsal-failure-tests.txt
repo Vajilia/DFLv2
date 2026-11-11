@@ -1,0 +1,147 @@
+### F1 wrong 'original' file -> create must fail; verify/package/upload must not run
+PASS  create refuses an original whose SHA-256 is not the lineage's
+PASS  verify refuses to run after a failed create
+PASS  package refuses
+PASS  upload refuses
+PASS  run marked FAILED
+PASS  a failed run cannot be continued even by an earlier stage
+PASS  nothing uploaded for failed run
+PASS  the first failure record is preserved byte for byte when a failed run is poked again
+PASS  status reports FAILED
+### F2 tampered set between create and verify
+PASS  verify catches one flipped byte in the archive
+PASS  package refuses after failed verify
+PASS  upload refuses
+PASS  nothing uploaded
+### F3 feed with a missing referenced file -> feed backup create fails
+PASS  create refuses a feed whose index names a missing file
+PASS  evidence left as .partial inside the run folder
+PASS  verify refuses
+### F4 Spaces unreachable during upload
+PASS  upload stops when the endpoint is unreachable
+PASS  drill refuses without a finished upload
+PASS  no UPLOAD-COMPLETE.json for the failed upload
+### F5 object altered in the bucket after upload -> drill must catch it, and the failure must be recorded accurately
+PASS  after upload: UPLOAD-COMPLETE.json is present
+PASS  after upload: DRILL-VERIFIED.json is NOT present yet
+PASS  the old ambiguous COMPLETE.json no longer exists
+PASS  status says upload complete, drill not passed
+PASS  drill detects that the DOWNLOADED set.tar fails its checksum
+PASS  failure names the checksum
+PASS  the failure is recorded in the bucket prefix (FAILED.json)
+PASS  a failed drill leaves NO DRILL-VERIFIED.json
+PASS  FAILED.json says what failed and that the prefix is not a verified set
+### F6 public object / lying ACL must be caught by the canary stage
+PASS  canary stage fails when the object ends up public (ACL shows a public grant)
+PASS  canary stage fails on the ANONYMOUS probe even when the ACL view looks clean
+PASS  failure came from the anonymous probe
+### F7 stage order, repeats, and web root
+PASS  drill cannot run first
+PASS  upload cannot run first
+PASS  an out-of-order command does not mark the run FAILED
+PASS  a stage never runs twice
+PASS  check refuses a work folder inside a web root
+PASS  check refuses when production is not at the expected event
+PASS  check refuses when disk would be too tight
+PASS  check refuses to run without the existing recovery set
+PASS  check refuses a credential file that is not mode 600
+PASS  INDEPENDENT=1 preflight fails at check, not at the end of the run, when a path cannot be hidden
+PASS  check refuses an empty list of endpoints to probe
+PASS  check refuses to run without BUCKET (the bucket name is not in the repository)
+### F8 existing set records different history -> verify must fail
+PASS  history comparison fails when the existing set preserves different pieces
+PASS  failure names the history comparison
+### A  the existing artifact is LOCATED and compared by size and FULL SHA-256
+PASS  locate finds the artifact in a deep folder nobody told it about, by size and full hash
+PASS  check records the located path
+PASS  (test input: a checksum with the SAME first 8 and last 4 digits, different in the middle)
+PASS  an artifact whose hash matches only the prefix and suffix is rejected (full comparison)
+PASS  the notes say it has the right size but is not the recorded hash
+PASS  a file of the wrong size is not accepted
+PASS  same name, same size, one flipped byte: rejected
+PASS  ...and reported as the right size with another hash
+PASS  no artifact anywhere: check stops and does not assume a path
+PASS  an explicit wrong path is rejected
+PASS  a shortened checksum is refused (full 64 digits required)
+PASS  an artifact with the right hash but a different recovery set than EXISTING_SET is rejected
+PASS  ...and the failure says the manifests differ
+PASS  the artifact is re-hashed at verify: a copy altered after check is caught
+PASS  ...and the failure names the new hash
+### L  the lock: a competing process REFUSES and must not touch the active run
+PASS  status (read-only) works while a stage runs and says in progress
+PASS  a second process asking for the SAME stage is refused
+PASS  a second process asking for the NEXT stage is refused
+PASS  a second process asking for an EARLIER stage is refused
+PASS  the active run's files are byte-for-byte and timestamp-for-timestamp untouched by the competitors
+PASS  the active run's log was not touched
+PASS  no FAILED was written into the active run
+PASS  the original process finished its stage normally (exit 0)
+PASS  upload stage OK and the run is not failed
+### M  markers: upload-complete is not a drill proof; a verified drill (INDEPENDENT=1, replay off) writes the last marker
+PASS  after upload: UPLOAD-COMPLETE.json yes, DRILL-VERIFIED.json no
+PASS  status: UPLOAD-COMPLETE only
+PASS  drill passes with INDEPENDENT=1 and REPLAY_FROM unset
+PASS  after the drill: DRILL-VERIFIED.json yes, FAILED.json no, no ambiguous COMPLETE.json
+PASS  the restore test ran with the original server paths hidden (INDEPENDENT)
+PASS  restore-point replay was not run (off by default)
+PASS  DRILL-VERIFIED.json records: same host, independent=yes, replay not run, CDN disabled
+PASS  UPLOAD-COMPLETE.json says it is not proof of recovery
+PASS  status: DRILL-VERIFIED
+PASS  repeating the drill on a verified run is refused
+PASS  repeating check on a verified run is refused
+PASS  a verified run is unchanged by repeated commands (no FAILED appears)
+### M3 public upload is caught BEFORE any upload-complete marker
+PASS  upload fails when set.tar ends up public
+PASS  no UPLOAD-COMPLETE.json for a public upload
+### C  CDN is disabled for this bucket: recorded, not probed; probed only when enabled
+PASS  CDN disabled + a CDN endpoint that cannot connect: the canary stage still passes
+PASS  authenticated retrieval + anonymous denial on the origin, and CDN recorded as disabled
+PASS  the disabled CDN endpoint was not probed
+PASS  CDN enabled + unreachable CDN endpoint: the stage fails (a probe that cannot connect proves nothing)
+PASS  CDN enabled + a working endpoint that denies anonymous reads: passes and is recorded as enabled
+PASS  an unreachable ORIGIN endpoint still fails even with the CDN disabled
+### P  real Spaces refuses ACL reads for a bucket-scoped key: tolerate ONLY that, and prove privacy the other ways
+--- P1 the tolerated case, end to end: only the ACL read is refused
+PASS  a full run (check..drill) passes when ONLY the ACL read is refused with AccessDenied
+PASS  the log records: ACL inspection unavailable, exact wording
+PASS  the log never claims an ACL was read
+PASS  all five objects (canary, set.tar, set.tar.sha256, UPLOAD-COMPLETE.json, DRILL-VERIFIED.json) are recorded as ACL-unavailable
+PASS  both markers carry the exact sentence
+PASS  no marker or log line describes the ACL itself as verified
+PASS  authenticated retrieval with matching content was checked on all four actual backup objects
+PASS  anonymous denial was checked on every origin endpoint (1 here; two in production) for all five objects
+PASS  status: DRILL-VERIFIED
+--- P2 everything else about the ACL read still FAILS the stage
+PASS  bad credentials (403 SignatureDoesNotMatch): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  unknown access key (403 InvalidAccessKeyId): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  the metadata read itself refused (403 AccessDenied before any metadata): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  network error: fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  a different 403 after the metadata (AllAccessDisabled): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  a server error (500) after the metadata: fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  missing object (the upload silently did not happen): fails
+PASS     ...and it was NOT recorded as a tolerated ACL refusal
+PASS  ACL read refused AND the object is anonymously readable: fails on the anonymous probe
+PASS  ACL read refused AND authenticated retrieval returns other bytes: the upload stage fails
+PASS  ...and no UPLOAD-COMPLETE.json was written
+PASS  ACL read refused AND set.tar is anonymously readable: the upload stage fails on the anonymous probe
+PASS  ...and no UPLOAD-COMPLETE.json was written
+PASS  a READABLE ACL with a public grant fails
+PASS  ...and the failure names the public grant
+--- P3 credential text never reaches a log
+PASS  a credential file with the secret on a line of its own is refused at check, before any request
+PASS  ...and the failure says the file is malformed
+PASS  ...and the secret text appears nowhere in the run folder or the output
+PASS  ...and no raw s3cmd parser warning was logged
+PASS  a client that emits the parser warning and an error containing the real secret still lets check pass
+PASS  neither the quoted line nor the real secret value reached the log or the output
+PASS  the log shows the fixed replacement sentence and the redaction marker instead
+PASS  an access key of the wrong shape is refused at check
+PASS  after every test above, the rig's real (synthetic) secret appears in no run folder or captured output
+
+RESULT: 128 passed, 0 failed

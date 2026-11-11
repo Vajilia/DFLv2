@@ -1,0 +1,32 @@
+# Mutation check of the new tests: each variant breaks ONE safeguard of dfl-recovery-run.sh; the failure tests must then report FAIL lines. Real run, local fake S3.
+# m1 tolerates any ACL error; m2 removes credential scrubbing; m3 drops the content comparison on backup objects; m4 drops the anonymous probe on backup objects.
+=== MUTANT m1-tolerate-any-acl-error.sh
+FAIL  bad credentials (403 SignatureDoesNotMatch): fails (exit 0; FAILED: )
+FAIL     ...was recorded as tolerated
+FAIL  unknown access key (403 InvalidAccessKeyId): fails (exit 0; FAILED: )
+FAIL     ...was recorded as tolerated
+FAIL  the metadata read itself refused (403 AccessDenied before any metadata): fails (exit 0; FAILED: )
+FAIL     ...was recorded as tolerated
+FAIL  network error: fails (exit 0; FAILED: )
+FAIL     ...was recorded as tolerated
+FAIL  a different 403 after the metadata (AllAccessDisabled): fails (exit 0; FAILED: )
+FAIL     ...was recorded as tolerated
+FAIL  a server error (500) after the metadata: fails (exit 0; FAILED: )
+FAIL     ...was recorded as tolerated
+FAIL  missing object (the upload silently did not happen): fails (exit 1; FAILED: stage=canary reason=authenticated retrieval of the canary failed  )
+FAIL     ...was recorded as tolerated
+RESULT: 114 passed, 14 failed
+=== MUTANT m2-no-scrubbing.sh
+FAIL  SECRET TEXT LEAKED through the noisy client
+FAIL  replacement text missing
+FAIL  synthetic secret found in a log
+RESULT: 125 passed, 3 failed
+=== MUTANT m3-no-content-match.sh
+FAIL  different-bytes case (exit 0)
+FAIL  UPLOAD-COMPLETE.json written despite different bytes
+RESULT: 126 passed, 2 failed
+=== MUTANT m4-no-anon-probe-on-backup-objects.sh
+FAIL  anonymous probe count 1, expected 5
+FAIL  public upload with unreadable ACL (exit 0)
+FAIL  UPLOAD-COMPLETE.json written for a public upload
+RESULT: 125 passed, 3 failed
