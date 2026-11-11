@@ -53,6 +53,8 @@ log is therefore never empty and contains zero lines with a `"violation"` key.**
 | Monitor failure | an exception in the monitor; the site unreachable for 3 cycles in a row; the monitor cannot write its latch; the monitor dies or hangs | **trip** (the monitor writes the latch; if it cannot, the *daemon* trips itself when the heartbeat goes stale) |
 | Other | a missing due file, a stale temp file, wrong cache header, clock/status mismatch, release going backwards | logged as a violation (the run can no longer be `COMPLETE`) but the broadcast keeps running |
 
+> **Correction 2026-11-06 (found by the live drill, `docs/FRESH_REHEARSAL_2026-11-06.md`):** a stale `.tmp-` file is logged as `stale_tmp` (no trip) but, in the full pass, it is also a file the broadcast position does not allow, so it **also** raises `early_or_unknown_file`, which is spoiler-class and trips the broadcast. That was the behaviour of the installed monitor and is unchanged by the temp-file fix; the row above understated it.
+
 What a trip does, in order: (1) `monitor/evidence/trip-<time>-<kind>/` gets `evidence.json` (finding, position, store clock, public clock, status, pause flag) and
 `public_listing.txt.gz` (every public file with size and time); (2) `monitor/TRIPPED` is written (the first trip of a stoppage is kept; later ones only append to
 `trips.jsonl`); (3) the daemon, within one second, creates `PAUSE` and stays paused. The process stays up and `status.json` says paused, so viewers see a pause, not an error.
