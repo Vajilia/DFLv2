@@ -83,6 +83,10 @@ def inside(out):
 
     env = Machine()
     pin = C.read_pin(C.REPO)
+    # the gate `vtest.py install` runs first (cmd_install): the pin exists, is an ancestor of HEAD, the code under test is the pin's, the working tree is clean
+    gate_ok, gate_msgs = C.pin_check(C.REPO, pin)
+    add("gate.pin_check_accepts_the_pin", gate_ok, "; ".join(gate_msgs)[:200])
+    add("gate.harness_revision_is_a_commit", len(C.harness_rev(C.REPO)) == 40, "harness revision %s, candidate %s" % (C.harness_rev(C.REPO)[:12], pin[:12]))
     log = RN.install(env, C.REPO, pin=pin, user=C.SERVICE_USER)
     add("install.completes", True, "RN.install finished for pin %s as user %s" % (pin[:12], C.SERVICE_USER))
     add("install.starts_nothing", all(v in ("daemon-reload",) for v, *_ in env.systemctl_calls), "systemctl verbs used: %s" % sorted({v for v, *_ in env.systemctl_calls}))

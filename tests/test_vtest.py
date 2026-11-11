@@ -36,7 +36,7 @@ def rec(t, current, pinned, anon=30 * MB, mx=MX, events=None, stat=None, full60=
 
 class Pin(unittest.TestCase):
     def test_pin_is_the_approved_candidate(self):
-        self.assertEqual(C.read_pin(), 'ecf62ea6c709903ff6a6eb8d95426834803da8dc')
+        self.assertEqual(C.read_pin(), '205f891fc58eeed5330b36493523be1dc6792859')   # candidate 4; earlier pins: docs/CANDIDATE_HISTORY.md
         self.assertEqual(subprocess.run(['git', '-C', str(ROOT), 'cat-file', '-t', C.read_pin()], capture_output=True, text=True).stdout.strip(), 'commit')
 
     def test_the_code_under_test_has_not_changed_since_the_pin(self):
