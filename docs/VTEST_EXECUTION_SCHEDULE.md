@@ -1,6 +1,6 @@
-# Execution schedule: memory-rule validation of candidate 3
+# Execution schedule: memory-rule validation of candidate 4 (originally written for candidate 3)
 
-**Status: a schedule, not a result. Nothing has been provisioned or run.** Candidate `ecf62ea` and the harness revision named in the report are unvalidated. Nothing starts until the owner approves the machine and its cost.
+**Status: a schedule, not a result. Nothing has been provisioned or run.** The candidate is now candidate 4, `205f891` (see `docs/CANDIDATE_HISTORY.md`; candidate 3 was `ecf62ea`), and it and the harness revision named in the report are unvalidated. The decision sheet for the session (duration, export checkpoints, spending limit) is `docs/VTEST_SESSION_PROPOSAL_2026-11-11.md`. Nothing starts until the owner approves the machine and its cost.
 
 One disposable VM, one install, one harness revision, one pin. A qualifying result is the set of runs `q1`-`q5` below, all from the same install. Evidence is private: it is archived on the machine, copied off by the owner's approved private method, and **never pushed to GitHub**.
 

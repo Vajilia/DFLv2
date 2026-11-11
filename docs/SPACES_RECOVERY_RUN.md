@@ -66,7 +66,7 @@ Authenticated retrieval plus anonymous denial are required on the working origin
 ## Credential
 One Limited Access key, scoped to this bucket only, Read/Write/Delete (the smallest level DigitalOcean offers that can upload). That key **can delete or overwrite everything in the bucket**:
 bucket versioning helps recovery from overwrites and accidental deletes but does not stop a delete-capable credential from destroying history. Keep the key in a root-only 0600 file entered with hidden
-prompts, never in chat, GitHub, logs or a web root, and **revoke the first-drill key after the verified drill**. The script never issues delete or overwrite commands.
+prompts, never in chat, GitHub, logs or a web root, and **keep the working key** (owner's decision 2026-11-11: it is retained after the verified drill; a key that was printed into a log is revoked and replaced, as happened to the first one). The script never issues delete or overwrite commands.
 
 ## Production use (as root, one stage at a time)
 ```

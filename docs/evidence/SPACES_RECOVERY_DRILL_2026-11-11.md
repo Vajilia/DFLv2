@@ -27,6 +27,6 @@ Written after the run, from the run's own log and the bucket listing. **No crede
 2. A second attempt (`failed-20261111T114257Z-750711`) failed in the canary stage because the bucket-scoped key cannot read ACLs. Diagnosed with separate `s3cmd` calls; patched narrowly (commit `eb05ac9`) with the owner's approval; regression tests first.
 3. The script now validates the credential file's shape (prints line numbers and lengths only), scrubs s3cmd's output in memory, and never prints raw parser errors.
 
-## Open
-* The temporary upload key (`dfl-recovery-uploader`) must be revoked by the owner in the Spaces Access Keys page, and its credential file on the droplet removed. Until then the key is live. (Status at the time of writing: **not yet confirmed revoked**.)
-* The drill copies (about 13 GB) and the two failed-run folders remain on the droplet's disk.
+## Open (corrected 2026-11-11 on the owner's instruction)
+* **The working Spaces key is retained.** Nothing is revoked. This replaces the earlier text that said the temporary key must be revoked. The key can delete or overwrite everything in the bucket (the smallest level DigitalOcean offers that can upload), so it stays in a root-only 0600 file on the droplet, never in chat, GitHub, logs or a web root. Retaining it is the owner's decision; the exposure it leaves is recorded here, not hidden.
+* **Clean-up is inventory-only until the owner approves it.** The drill copies (about 13 GB) and the two failed-run folders remain on the droplet's disk, listed and untouched. Nothing is deleted or moved. The older of the two failed-run logs still contains one line of a key that was already revoked by the owner; it must not be copied anywhere.
