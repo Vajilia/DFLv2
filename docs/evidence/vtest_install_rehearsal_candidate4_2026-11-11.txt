@@ -1,0 +1,71 @@
+rehearsal layers and result: /tmp/claude-0/-home-claude/f5d4ecf5-f7fa-5083-8fd2-09964e743a21/scratchpad/launch/rehearsal-4
+PASS gate.pin_check_accepts_the_pin                       HEAD differs from the pin only in docs / harness / tests: the code under test is the pinned tree
+PASS gate.harness_revision_is_a_commit                    harness revision d77ffaffaae5, candidate 205f891fc58e
+PASS install.completes                                    RN.install finished for pin 205f891fc58e as user dfl-vtest
+PASS install.starts_nothing                               systemctl verbs used: ['daemon-reload']
+PASS install.record_written                               /srv/dfl-vtest/state/install.json names the pin
+PASS unit.daemon.installed                                /etc/systemd/system/dfl-vtest-daemon.service
+PASS unit.monitor.installed                               /etc/systemd/system/dfl-vtest-monitor.service
+PASS unit.site.installed                                  /etc/systemd/system/dfl-vtest-site.service
+PASS unit.daemon.no_placeholders                          no __X__ placeholder is left
+PASS unit.daemon.names_no_production_path                 production paths named: none
+PASS unit.daemon.srv_opt_etc_paths_are_the_harnesses      paths under /srv, /opt, /etc outside the harness folders: none
+PASS unit.daemon.script_exists:tools/broadcast_run.py     /opt/dfl-vtest-src/205f891fc58e/tools/broadcast_run.py
+PASS unit.monitor.no_placeholders                         no __X__ placeholder is left
+PASS unit.monitor.names_no_production_path                production paths named: none
+PASS unit.monitor.srv_opt_etc_paths_are_the_harnesses     paths under /srv, /opt, /etc outside the harness folders: none
+PASS unit.monitor.script_exists:tools/rehearsal_check.py  /opt/dfl-vtest-src/205f891fc58e/tools/rehearsal_check.py
+PASS unit.site.no_placeholders                            no __X__ placeholder is left
+PASS unit.site.names_no_production_path                   production paths named: none
+PASS unit.site.srv_opt_etc_paths_are_the_harnesses        paths under /srv, /opt, /etc outside the harness folders: none
+PASS unit.site.runs_this_checkouts_site_server            the loopback site unit runs the harness file /home/claude/dflv2-launch-L/tools/vtest/site_server.py (it is not part of the pinned tree)
+PASS env.keys_are_the_templates                           keys written ['FLOOR_BROADCAST_GB', 'FLOOR_BUILD_GB', 'PUBLIC_BASE_GB', 'PUBLIC_CEILING_GB', 'PUBLIC_GB_PER_SEASON']; not in the template: none
+PASS unit.daemon.environment_file_is_the_one_written      EnvironmentFile=/etc/dfl-vtest/broadcast.env
+PASS unit.monitor.environment_file_is_the_one_written     EnvironmentFile=/etc/dfl-vtest/broadcast.env
+PASS folder.exists:/srv/dfl-vtest                         created by the installer
+PASS folder.exists:/srv/dfl-vtest/root                    created by the installer
+PASS folder.exists:/srv/dfl-vtest/root/store              created by the installer
+PASS folder.exists:/srv/dfl-vtest/web                     created by the installer
+PASS folder.exists:/srv/dfl-vtest/web/feed                created by the installer
+PASS folder.exists:/srv/dfl-vtest/guard                   created by the installer
+PASS folder.exists:/opt/dfl-vtest-src/205f891fc58e        created by the installer
+PASS folder.exists:/etc/dfl-vtest/broadcast.env           created by the installer
+PASS folder.exists:/srv/dfl-vtest/evidence                created by the installer
+PASS folder.exists:/srv/dfl-vtest/state                   created by the installer
+PASS folder.exists:/srv/dfl-vtest/load                    created by the installer
+PASS folder.exists:/srv/dfl-vtest/probe                   created by the installer
+PASS retry.second_install_is_refused                      pinned tree not verified: ['/opt/dfl-vtest-src/205f891fc58e already exists: refusing to overwrite a pinned tree (teardown first)']
+PASS retry.second_install_changed_nothing                 pinned tree list and install record unchanged
+PASS retry.teardown_dry_run_lists_and_keeps               9 lines; the probe folder is listed for removal, the evidence folder is not, the dry run says so, nothing was removed
+PASS V0.user.unprivileged                                 uid 996 gid 995 (a dedicated system uid: not root, not nobody)
+PASS V0.user.no_login                                     login shell /usr/sbin/nologin
+PASS V0.user.no_extra_groups                              supplementary groups: none
+PASS V0.layout:/srv/dfl-vtest                             owner root mode 755
+PASS V0.layout:/srv/dfl-vtest/root                        owner root mode 755
+PASS V0.layout:/srv/dfl-vtest/root/store                  owner dfl-vtest mode 700
+PASS V0.layout:/srv/dfl-vtest/web                         owner root mode 755
+PASS V0.layout:/srv/dfl-vtest/web/feed                    owner dfl-vtest mode 755
+PASS V0.layout:/srv/dfl-vtest/guard                       owner dfl-vtest mode 700
+PASS V0.layout:/opt/dfl-vtest-src/205f891fc58e            owner root mode 755
+PASS V0.layout:/etc/dfl-vtest/broadcast.env               owner root mode 644
+PASS V0.layout:/srv/dfl-vtest/evidence                    owner root mode 755
+PASS V0.layout:/srv/dfl-vtest/state                       owner root mode 755
+PASS V0.layout:/srv/dfl-vtest/load                        owner root mode 755
+PASS V0.layout:/srv/dfl-vtest/probe                       owner root mode 755
+PASS V0.layout.code_read_only                             0 paths in the pinned tree are writable by group or other
+PASS V0.access.can_write:/srv/dfl-vtest/root/store        as the service user: ok
+PASS V0.access.can_write:/srv/dfl-vtest/web/feed          as the service user: ok
+PASS V0.access.can_write:/srv/dfl-vtest/guard             as the service user: ok
+PASS V0.access.cannot_write:/srv/dfl-vtest                as the service user: EACCES
+PASS V0.access.cannot_write:/srv/dfl-vtest/root           as the service user: EACCES
+PASS V0.access.cannot_write:/srv/dfl-vtest/web            as the service user: EACCES
+PASS V0.access.cannot_write:/opt/dfl-vtest-src/205f891fc58e as the service user: EACCES
+PASS V0.access.cannot_write:/etc/dfl-vtest                as the service user: EACCES
+PASS V0.access.cannot_write:/srv/dfl-vtest/evidence       as the service user: EACCES
+PASS V0.access.cannot_write:/srv/dfl-vtest/state          as the service user: EACCES
+PASS V0.access.cannot_write:/srv/dfl-vtest/load           as the service user: EACCES
+PASS V0.access.cannot_write:/srv/dfl-vtest/probe          as the service user: EACCES
+PASS V0.units.daemon                                      sandbox directives and lifecycle hooks as in the pinned template
+PASS V0.units.monitor                                     sandbox directives and lifecycle hooks as in the pinned template
+
+68 checks, 0 failed
