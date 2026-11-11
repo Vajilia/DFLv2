@@ -17,6 +17,11 @@ def layout_paths(tree):
     return {"BASE": BASE, "ROOT_DIR": ROOT_DIR, "WEB_DIR": WEB_DIR, "PUBLIC": PUBLIC, "GUARD": GUARD, "TREE": tree.rstrip("/"), "ETC": ETC, "EVID": EVID, "STATE": STATE, "LOADDIR": LOADDIR, "PROBE": PROBE}
 
 
+def install_dirs(paths):
+    """The folders the installer creates before it builds anything: every folder `layout` judges that is not built by something else (the pinned tree comes from extract, root/store from the fixture, the env file is written)."""
+    return [paths[k] for k in ("BASE", "ROOT_DIR", "WEB_DIR", "PUBLIC", "GUARD", "ETC", "EVID", "STATE", "LOADDIR", "PROBE")]
+
+
 def layout(paths):
     return [(paths["BASE"], "root", 0o755), (paths["ROOT_DIR"], "root", 0o755), (paths["ROOT_DIR"] + "/store", "svc", 0o700), (paths["WEB_DIR"], "root", 0o755), (paths["PUBLIC"], "svc", 0o755),
             (paths["GUARD"], "svc", 0o700), (paths["TREE"], "root", "noworld"), (paths["ETC"] + "/broadcast.env", "root", 0o644),

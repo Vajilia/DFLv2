@@ -31,7 +31,7 @@ The harness never creates users. `install` refuses root or a missing user, and `
 
 **Checkpoint X0:** `vtest.py archive --run-id smoke-1`; exit 0 required; copy off; compare SHA-256.
 
-If a stage stops: read its evidence, stop. Fix locally, new harness revision, re-install (see "If something fails").
+If a stage stops: read its evidence, stop. Fix locally, new harness revision, then `teardown --yes` and `install` again (see "If something fails").
 
 ## S2. Qualifying runs
 
@@ -78,7 +78,7 @@ Estimates come from `vtest.py plan`; real timings are recorded by the run.
 ## If something fails
 
 * A failing or incomplete stage **stops the run and leaves everything as it is**. Do not clean up. Archive what exists (X-point), then read the evidence.
-* A **harness** defect: fix the harness locally, commit, then `vtest.py affected --recorded <harness revision of the run that failed>` names the stages to repeat and why, by the behaviour the change can affect (for example a change to `perms.py` repeats V0 only; to `lifecycle.py`, V2-V4). Re-run `install` (it is tied to the harness revision), then repeat only those stages. A change to shared machinery repeats everything, and the output says so.
+* A **harness** defect: fix the harness locally, commit, then `vtest.py affected --recorded <harness revision of the run that failed>` names the stages to repeat and why, by the behaviour the change can affect (for example a change to `perms.py` repeats V0 only; to `lifecycle.py`, V2-V4). Run `teardown --yes` (it keeps the evidence folder; a plain second `install` is refused because the pinned tree already exists) and then `install` again (it is tied to the harness revision), then repeat only those stages. A change to shared machinery repeats everything, and the output says so.
 * A **candidate** defect: not fixed by the harness. It is a new candidate with a new pin; `affected` names the stages that new pin's changes reach (a change confined to the start gate and stop hook, `tools/broadcast_run.py`, repeats V0, V2, V3, V4, not V1). The memory-rule stage V1 stays valid for a change that cannot reach it.
 * Nothing is described as validated until the report lists every check with its status, including anything incomplete.
 

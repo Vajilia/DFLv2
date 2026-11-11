@@ -58,7 +58,7 @@ def run(ctx):
     user = inst.get("user")
     ctx.mark("V0.service_user", user=user)
     if not user:
-        rec.check("V0.service_user", "fail", "the machine was installed without a service user (the units run as root): install again with `vtest.py install` (default user %s)" % SERVICE_USER, {"install_user": user})
+        rec.check("V0.service_user", "fail", "the machine was installed without a service user (the units run as root): run `vtest.py teardown --yes` (keeps the evidence), then `vtest.py install` (default user %s)" % SERVICE_USER, {"install_user": user})
         raise StageStop("no service user")
     facts = user_facts(env, user)
     rec.add_all(P.judge_service_user(facts))

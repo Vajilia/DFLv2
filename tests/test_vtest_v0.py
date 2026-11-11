@@ -131,6 +131,27 @@ class ApplyLayout(unittest.TestCase):
         src = (VT / 'render.py').read_text()
         self.assertIn('perms.layout_paths(t)', src)
 
+    def test_the_installer_creates_every_folder_the_v0_layout_check_judges(self):
+        """Found by the local rehearsal of the real installer: V0 judged the probe folder before anything had created it, so V0 would have stopped on 'does not exist'."""
+        ps = P.layout_paths('/opt/dfl-vtest-src/abc')
+        built_elsewhere = {ps['TREE'], ps['ROOT_DIR'] + '/store', ps['ETC'] + '/broadcast.env'}
+        made = set(P.install_dirs(ps))
+        missing = [p for p, _, _ in P.layout(ps) if p not in built_elsewhere and p not in made]
+        self.assertEqual(missing, [])
+
+    def test_render_install_makes_its_folders_from_that_list(self):
+        self.assertIn('perms.install_dirs(', (VT / 'render.py').read_text())
+
+    def test_teardown_removes_the_probe_folder_too(self):
+        import render as RN
+
+        class FakeEnv:
+            def exists(self, p): return True
+            def sc(self, *a, **k): return 0, '', ''
+        lines = []
+        RN.teardown(FakeEnv(), include_evidence=False, yes=False, echo=lines.append)
+        self.assertTrue(any(l.split()[-1] == C.PROBE for l in lines if l.startswith('remove tree')), lines)
+
     def test_the_environment_file_is_roots_and_world_readable_not_writable(self):
         os.makedirs(self.paths['ETC'])
         Path(self.paths['ETC'], 'broadcast.env').write_text('X=1\n')

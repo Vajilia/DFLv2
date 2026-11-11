@@ -162,13 +162,13 @@ def cmd_run(a):
         return 1
     inst = json.loads(env.read(C.STATE + "/install.json") or "{}")
     if inst.get("pin") != pin:
-        print("REFUSING: not installed for pin %s (run `install`)" % pin[:12])
+        print("REFUSING: not installed for pin %s (run `teardown --yes` (keeps the evidence), then `install`)" % pin[:12])
         return 1
     if not inst.get("user") or inst.get("user") == "root":
-        print("REFUSING: the units were installed without a dedicated unprivileged service user (run `install`)")
+        print("REFUSING: the units were installed without a dedicated unprivileged service user (run `teardown --yes` (keeps the evidence), then `install`)")
         return 1
     if inst.get("harness_rev") != C.harness_rev():
-        print("REFUSING: installed by harness revision %s, this checkout is %s: the ownership and modes the install sets are part of the harness (run `install` again)" % ((inst.get("harness_rev") or "?")[:12], C.harness_rev()[:12]))
+        print("REFUSING: installed by harness revision %s, this checkout is %s: the ownership and modes the install sets are part of the harness (run `teardown --yes` (keeps the evidence), then `install`)" % ((inst.get("harness_rev") or "?")[:12], C.harness_rev()[:12]))
         return 1
     env.service_user = inst["user"]
     stops = run_dir_state(env)

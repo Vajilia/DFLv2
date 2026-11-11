@@ -190,7 +190,8 @@ def install(env, repo, pin=None, user=SERVICE_USER, apply=True):
         raise Unsafe("the service user %r does not exist: create it first (README, setup). The harness never creates users." % user)
     if not env.exists(MARKER):
         raise Unsafe("%s is missing: the operator must declare the machine disposable first" % MARKER)
-    for d in (BASE, GUARD, PUBLIC, LOADDIR, EVID, STATE, ETC, ROOT_DIR, WEB_DIR, SRC_BASE):
+    import perms
+    for d in perms.install_dirs(perms.layout_paths(tree_dir(pin))) + [SRC_BASE]:
         os.makedirs(d, exist_ok=True)
     ok, probs = extract_tree(env, repo, pin)
     log["steps"].append(("extract", ok, probs[:5]))
@@ -239,7 +240,7 @@ def teardown(env, include_evidence=False, yes=False, echo=print):
     names = [l.split()[0] for l in (lu or "").splitlines() if l.strip().startswith(PREFIX)]
     for n in names:
         todo.append(("stop+remove unit", n))
-    for p in (SRC_BASE, ETC, ROOT_DIR, WEB_DIR, GUARD, LOADDIR, STATE) + ((EVID,) if include_evidence else ()):
+    for p in (SRC_BASE, ETC, ROOT_DIR, WEB_DIR, GUARD, LOADDIR, STATE, PROBE) + ((EVID,) if include_evidence else ()):
         if env.exists(p):
             todo.append(("remove tree", p))
     for kind, what in todo:
