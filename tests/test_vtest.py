@@ -774,6 +774,33 @@ class V3Evaluator(unittest.TestCase):
         self.assertEqual(rows['V3d.one_oom_restarts_without_a_trip'], 'fail')
 
 
+class V4StartBudget(unittest.TestCase):
+    """Found 2026-11-12 (smoke-4): V4's disturbances ran on a start budget (3 per hour) that earlier restarts had used up."""
+    def test_every_disturbance_step_starts_with_a_reset_budget_for_both_units_and_says_so(self):
+        calls, rows = [], []
+        env = mock.Mock()
+        env.sc = lambda verb, *a, **k: calls.append((verb,) + a) or (0, 'NRestarts=1 ActiveState=active SubState=running Result=success', '')
+        ctx = mock.Mock(env=env)
+        rec = mock.Mock()
+        rec.check = lambda *a, **k: rows.append(a)
+        stage_v4._reset_start_budget(ctx, rec, 'daemon_kill9')
+        resets = [c for c in calls if c[0] == 'reset-failed']
+        self.assertEqual(sorted(c[1] for c in resets), ['dfl-vtest-daemon.service', 'dfl-vtest-monitor.service'])
+        self.assertEqual(rows[0][0], 'V4.start_budget.daemon_kill9')
+        self.assertEqual(rows[0][1], 'info')
+        self.assertIn('not what this step tests', rows[0][2])
+
+    def test_the_reset_runs_before_the_disturbance_in_each_step(self):
+        src = (VT / 'stage_v4.py').read_text()
+        loop = src[src.index('    for step in STEPS:'):]
+        self.assertLess(loop.index('_reset_start_budget(ctx, rec, step)'), loop.index('env.sc("restart", d)'))
+        self.assertLess(loop.index('_reset_start_budget(ctx, rec, step)'), loop.index('env.sc("kill", d'))
+
+    def test_the_harness_never_resets_the_budget_anywhere_it_judges_the_limit_itself(self):
+        """V3d judges the monitor's start limit; the reset must stay out of it."""
+        self.assertNotIn('_reset_start_budget', (VT / 'stage_v3.py').read_text())
+
+
 class V4Evaluator(unittest.TestCase):
     FP = {'sha256': 'a' * 64, 'size': 120, 'mtime': 1.0}
 

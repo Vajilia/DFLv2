@@ -115,6 +115,21 @@ def _held(ctx, label, fp0, trips0, inv0, rec, marker_before=None, daemon_restart
     return row
 
 
+def _reset_start_budget(ctx, rec, step):
+    """Each disturbance is judged on its own, with a full start budget.
+    Found 2026-11-12 (smoke-4): the daemon unit allows 3 starts in 3600 s (StartLimitBurst=3, StartLimitAction=none, by design: docs/OOM_INCIDENT_RECORD.md) and V4's own restarts, with those of V2 and V3
+    in the same hour, used the budget up, so systemd refused the restart after `kill -9` ("Start request repeated too quickly") and the step failed for a reason that is not what the step tests.
+    `systemctl reset-failed` clears the start-limit counters (it is also the documented recovery). What the limit does is NOT hidden: it is recorded here for every step, and the production risk
+    (a fourth start within an hour, including the automatic restart after a crash, fails and the unit stays failed until someone resets it) goes in the session report."""
+    env = ctx.env
+    before = {k: env.sc("show", UNIT[k], "-pNRestarts", "-pActiveState", "-pSubState", "-pResult")[1].split() for k in ("daemon", "monitor")}
+    for k in ("daemon", "monitor"):
+        env.sc("reset-failed", UNIT[k])
+    rec.check("V4.start_budget.%s" % step, "info",
+              "start-limit counters of the daemon (3 starts per 3600 s) and the monitor (5 per 3600 s) were reset before this disturbance, so this step is not judged on starts used by earlier steps or stages; "
+              "the limit itself is not what this step tests (V3d tests it for the monitor)", {"before": before}, False)
+
+
 def preservation_state(ctx):
     return fingerprint(GUARD + "/TRIPPED"), jsonl_read(GUARD + "/trips.jsonl"), ctx.public_inventory()
 
@@ -221,6 +236,7 @@ def run(ctx):
     orig = json.loads(env.read(GUARD + "/TRIPPED"))
     d, m = UNIT["daemon"], UNIT["monitor"]
     for step in STEPS:
+        _reset_start_budget(ctx, rec, step)
         marker_before = ctx.run_marker()
         if step == "daemon_restart":
             env.sc("restart", d)
