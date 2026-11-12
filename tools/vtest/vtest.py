@@ -12,6 +12,7 @@
   vtest.py start-units                    start site, daemon and monitor (NOT before `run V4 --after-reboot`: that stage reads the run marker first, then starts them itself)
   vtest.py affected --recorded REV        which stages a change since REV invalidates (docs-only changes: none)
   vtest.py selftest                       plumbing check with plain processes on THIS machine, no systemd, no cgroup limits; proves nothing about the memory rule
+  (install, run, archive, start-units and teardown take an exclusive no-wait lock: a second one is refused at once, exit 5)
   vtest.py teardown [--yes] [--include-evidence]   remove the harness's own things (a person's act; prints first; the evidence is kept unless asked, and is never removed without a verified archive)
 """
 import argparse
@@ -29,6 +30,25 @@ import preflight as PF                                                # noqa: E4
 import render as RN                                                   # noqa: E402
 
 STAGE_MODULES = {}
+
+
+def exclusive(fn):
+    """Hold the run lock for the whole command, or refuse at once with exit code 5 (see common.RunLock)."""
+    def wrapped(a):
+        label = " ".join(["vtest.py", fn.__name__[4:].replace("_", "-")] + [x for x in sys.argv[2:]])
+        try:
+            lock = C.RunLock(label)
+            lock.__enter__()
+        except C.Busy as e:
+            print("REFUSING: " + str(e))
+            return 5
+        try:
+            return fn(a)
+        finally:
+            lock.__exit__(None, None, None)
+    wrapped.__name__ = fn.__name__
+    wrapped.__doc__ = fn.__doc__
+    return wrapped
 
 
 def stage_module(name):
@@ -108,6 +128,7 @@ def cmd_plan(a):
     return 0
 
 
+@exclusive
 def cmd_install(a):
     ok, msgs = C.pin_check()
     if not ok:
@@ -148,6 +169,7 @@ class Tee:
         self.f.flush()
 
 
+@exclusive
 def cmd_run(a):
     env = C.Env()
     pin = C.read_pin()
@@ -236,6 +258,7 @@ def run_stages(a, env, pin, inst, rows, run_id, rdir, mode):
     return 0
 
 
+@exclusive
 def cmd_archive(a):
     """Collect the host records, list every required item (MISSING is explicit), make ONE compressed archive, read it back and verify it. Exit 3 means: do not clean up the host."""
     env = C.Env()
@@ -281,6 +304,7 @@ def cmd_status(a):
     return 0
 
 
+@exclusive
 def cmd_start_units(a):
     env = C.Env()
     for k in ("site", "daemon", "monitor"):
@@ -295,6 +319,7 @@ def cmd_affected(a):
     return 0
 
 
+@exclusive
 def cmd_teardown(a):
     env = C.Env()
     if a.include_evidence:

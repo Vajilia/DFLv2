@@ -49,6 +49,45 @@ class Unsafe(Exception):
     """A step tried to touch something outside the harness's own territory."""
 
 
+class Busy(Exception):
+    """Another harness command holds the run lock."""
+
+
+class RunLock:
+    """An exclusive, no-wait lock taken by every command that changes the machine or reads what a run is writing (install, run, teardown, start-units, archive).
+    Found 2026-11-11: two `run --run-id smoke-2` commands overlapped and overwrote one another's evidence. flock is released by the kernel when the holder exits or is killed, and the
+    descriptor is not inherited by child processes, so a stage's helpers cannot keep it alive. The file lives in BASE, which teardown never removes."""
+    def __init__(self, label):
+        self.label, self.fd = label, None
+
+    @staticmethod
+    def path():
+        return BASE + "/run.lock"
+
+    def __enter__(self):
+        import fcntl
+        os.makedirs(BASE, exist_ok=True)
+        fd = os.open(self.path(), os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            try:
+                holder = os.pread(fd, 400, 0).decode("utf-8", "replace").strip()
+            finally:
+                os.close(fd)
+            raise Busy("another vtest command holds the run lock (%s). This command does not wait: let that one finish, or look at `ps` for it. Nothing was changed." % (holder or "holder unknown"))
+        os.ftruncate(fd, 0)
+        os.pwrite(fd, ("pid %d: %s (since %s)" % (os.getpid(), self.label, time.strftime("%Y-%m-%dT%H:%M:%S%z"))).encode(), 0)
+        self.fd = fd
+        return self
+
+    def __exit__(self, *exc):
+        if self.fd is not None:
+            os.close(self.fd)                     # closing releases the flock
+            self.fd = None
+        return False
+
+
 class StageStop(Exception):
     """An acceptance check failed (or the stage cannot continue): stop, keep everything as it is."""
 
