@@ -144,6 +144,48 @@ def preservation_state(ctx):
     return fingerprint(GUARD + "/TRIPPED"), jsonl_read(GUARD + "/trips.jsonl"), ctx.public_inventory()
 
 
+MONITOR_PROPS = ("ActiveState", "SubState", "Result", "ExecMainStatus", "NRestarts")
+HEARTBEAT_FRESH_S = 20          # release refuses above 30 s (rehearsal_check.py); the harness wants a margin
+HEARTBEAT_WAIT_S = 90
+
+
+def evaluate_monitor_after_fault(mon, journal_tail=""):
+    """The monitor's state when recovery begins -> rows. Found in q3b (2026-11-12): during the guard-folder fault the monitor could not write its latch (EPERM) and exited 2 by design; the unit's
+    RestartPreventExitStatus=1 2 keeps it dead until a person starts it, and nothing alerts. That is the candidate's behaviour, recorded as a FINDING (review, not required: the criterion that
+    recovery works the documented way is judged separately and unchanged). A monitor that stayed up is recorded as such and makes no finding."""
+    if mon.get("ActiveState") == "active":
+        return [("V4.immutable_guard.monitor_survived_the_fault", "info", "the monitor was still active when recovery began (heartbeat judged next)", {"monitor": mon}, False)]
+    return [("V4.immutable_guard.finding.monitor_exited_during_the_fault", "review",
+             "FINDING: the monitor was not running when recovery began (ActiveState=%s, Result=%s, exit status %s, restarts %s). By design it exits 2 when it cannot write its latch, and the unit's "
+             "RestartPreventExitStatus=1 2 keeps it stopped until a person starts it; nothing alerted. The harness started it (documented recovery) before releasing." %
+             (mon.get("ActiveState"), mon.get("Result"), mon.get("ExecMainStatus"), mon.get("NRestarts")),
+             {"monitor": mon, "journal_tail": journal_tail[-800:]}, False)]
+
+
+def _bring_monitor_back_before_release(ctx, rec, since):
+    """Documented recovery, step 0: the monitor runs and its heartbeat is fresh. `release` is attempted only after a fresh heartbeat was SEEN; otherwise the check fails and the stage stops without
+    releasing (a release against a stale heartbeat is refused by the candidate with rc 4 and would only repeat q3b's symptom)."""
+    env = ctx.env
+    mon = ctx.show("monitor", MONITOR_PROPS)
+    tail = ""
+    try:
+        tail = ctx.journal("monitor", since - 2) or ""
+    except Exception:
+        pass
+    rec.add_all(evaluate_monitor_after_fault(mon, tail))
+    ctx.mark("V4.immutable_guard", phase="monitor_state", monitor=mon)
+    if mon.get("ActiveState") != "active":
+        env.sc("reset-failed", UNIT["monitor"])
+        ctx.start("monitor")
+    fresh, waited = ctx.wait(lambda: (ctx.heartbeat_age() or 999) < HEARTBEAT_FRESH_S, HEARTBEAT_WAIT_S)
+    ctx.mark("V4.immutable_guard", phase="heartbeat", fresh=bool(fresh), waited=round(waited, 1))
+    if not fresh:
+        rec.check("V4.immutable_guard.recoverable_the_documented_way", "fail",
+                  "the monitor's heartbeat was not fresh (under %d s) after %.0f s: release was NOT attempted, because the candidate refuses it with a stale heartbeat" % (HEARTBEAT_FRESH_S, waited),
+                  {"monitor": ctx.show("monitor", MONITOR_PROPS), "heartbeat_age": ctx.heartbeat_age()})
+        rec.stop_if_failed()
+
+
 def _immutable_guard_scenario(ctx, rec):
     """SCENARIO: an IMMUTABLE GUARD FOLDER. This is its own scenario and NOT proof of the candidate's behaviour on a full disk: `chattr +i` makes every create, rename and removal in the folder fail with EPERM at once,
     while a full filesystem (ENOSPC) lets some writes succeed and others fail, and can leave a file half written. The full-disk case is covered only by the local sandbox test (tests/test_service_sandbox.py,
@@ -215,8 +257,8 @@ def _immutable_guard_scenario(ctx, rec):
     rec.add_all(LC.evaluate_gate_recovery(lat1, mk0, ctx.run_marker(), pre.get("MainPID"), post.get("MainPID"), doc, hold, env.boot_id(), path))
     rec.add_all([("V4.immutable_guard.trips_since_the_fault", "info", "trips.jsonl lines added since the fault: %s" % [l.get("kind") for l in (LC.new_lines(trips0, ctx.trips()) or [])], {"new": LC.new_lines(trips0, ctx.trips())}, False)])
     rec.stop_if_failed()
-    # ---- recovery the documented way
-    ctx.wait(lambda: (ctx.heartbeat_age() or 999) < 20, 90)
+    # ---- recovery the documented way: the monitor first (it may have exited during the fault, by design), a FRESH heartbeat seen, only then release and resume
+    _bring_monitor_back_before_release(ctx, rec, t0)
     r1, r2, out = ctx.release_and_resume("vtest V4: the injected guard-folder fault was observed, releasing the unaccounted_stop latch the documented way")
     p0 = ctx.position()
     env.sleep(15)

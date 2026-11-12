@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -88,6 +89,102 @@ class RunLock:
         return False
 
 
+HELPER_SCRIPTS = ("sampler.py", "broadcast_probe.py", "loaders.py")
+
+
+def die_with_parent(expected_parent=None):
+    """Run in a helper's child process before it executes (Popen preexec_fn): ask the kernel to send SIGTERM when the process that started it dies, then check that the parent is still the one
+    that started it. Found 2026-11-11/12 (harness defect #4): a killed run left its sampler and probe running for 32 minutes, because cleanup code never runs after SIGKILL. The kernel does not need
+    the parent's cooperation. If the parent is already gone (the window before the signal is armed), exit now."""
+    import ctypes
+    ppid = os.getppid() if expected_parent is None else expected_parent
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(1, signal.SIGTERM, 0, 0, 0) != 0:          # PR_SET_PDEATHSIG = 1
+        os._exit(111)
+    if os.getppid() != ppid:
+        os._exit(112)
+
+
+def _cmdline(proc_root, pid):
+    try:
+        with open("%s/%s/cmdline" % (proc_root, pid), "rb") as f:
+            raw = f.read()
+    except OSError:
+        return None
+    return [x.decode("utf-8", "replace") for x in raw.split(b"\0") if x != b""]
+
+
+def _helper_script(argv, here):
+    """The helper script's name when argv is `<python> <here>/<script> ...`; None for anything else (an editor with the file open, `tail -f`, a program that merely has the same file name)."""
+    if len(argv) < 2 or not os.path.basename(argv[0]).startswith("python"):
+        return None
+    for name in HELPER_SCRIPTS:
+        if argv[1] == os.path.join(here, name):
+            return name
+    return None
+
+
+def find_helpers(proc_root="/proc", here=None):
+    """Processes running one of the harness's helper scripts (from this checkout's tools/vtest) -> [{"pid", "script", "cmdline"}], not counting this process. The caller holds the run lock, so any
+    helper found is an orphan: the command that started it is gone."""
+    here = here or HERE
+    out = []
+    try:
+        names = os.listdir(proc_root)
+    except OSError:
+        return out
+    for n in sorted(names, key=lambda x: (not x.isdigit(), int(x) if x.isdigit() else 0)):
+        if not n.isdigit() or int(n) == os.getpid():
+            continue
+        argv = _cmdline(proc_root, n)
+        script = _helper_script(argv, here) if argv else None
+        if script:
+            out.append({"pid": int(n), "script": script, "cmdline": " ".join(argv)})
+    return out
+
+
+def _process_gone(pid, proc_root="/proc"):
+    try:
+        with open("%s/%d/stat" % (proc_root, pid)) as f:
+            return f.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except (OSError, IndexError):
+        return True
+
+
+def stop_helpers(proc_root="/proc", here=None, kill=os.kill, grace=5.0):
+    """SIGTERM every helper, wait up to `grace` seconds, SIGKILL what is left. Before each signal the command line is read again and must still name a helper script: a pid reused by another
+    program in between is left alone. -> [{"pid", "script", "result"}] with result terminated / killed / skipped (changed) / gone."""
+    here = here or HERE
+    done = []
+    for h in find_helpers(proc_root=proc_root, here=here):
+        pid = h["pid"]
+
+        def still_helper():
+            argv = _cmdline(proc_root, pid)
+            return bool(argv) and _helper_script(argv, here) is not None
+
+        if not still_helper():
+            done.append({"pid": pid, "script": h["script"], "result": "skipped (the pid no longer runs a helper)"})
+            continue
+        try:
+            kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            done.append({"pid": pid, "script": h["script"], "result": "gone"})
+            continue
+        end = time.time() + grace
+        while time.time() < end and not _process_gone(pid, proc_root):
+            time.sleep(0.05)
+        result = "terminated"
+        if not _process_gone(pid, proc_root) and still_helper():
+            try:
+                kill(pid, signal.SIGKILL)
+                result = "killed"
+            except ProcessLookupError:
+                pass
+        done.append({"pid": pid, "script": h["script"], "result": result})
+    return done
+
+
 class StageStop(Exception):
     """An acceptance check failed (or the stage cannot continue): stop, keep everything as it is."""
 
@@ -163,6 +260,8 @@ class Env:
             return 124, "", "timeout after %ss: %s" % (timeout, " ".join(argv))
 
     def popen(self, argv, **kw):
+        """Every helper the harness starts dies with the process that started it (see die_with_parent)."""
+        kw.setdefault("preexec_fn", die_with_parent)
         return subprocess.Popen(argv, **kw)
 
     def write(self, path, text, mode=0o644):
@@ -417,6 +516,10 @@ class Recorder:
 
     def failed(self):
         return [c for c in self.checks if c["status"] in ("fail", "invalid")]
+
+    def findings(self):
+        """Rows that record something the candidate did that a person must read (status review on a row that is not required): they do not change the stage's verdict and are listed in SUMMARY.json."""
+        return [{"id": c["id"], "detail": c["detail"]} for c in self.checks if c["status"] == "review" and not c["required"]]
 
     def stop_if_failed(self):
         bad = self.failed()

@@ -169,8 +169,23 @@ class Tee:
         self.f.flush()
 
 
+def refuse_if_helpers(what):
+    """Under the run lock any helper process is an orphan (its command is gone) and may still be writing evidence. -> exit code 6 with the list, or None."""
+    found = C.find_helpers()
+    if not found:
+        return None
+    print("REFUSING to %s: %d helper process(es) from an earlier command are still running (they may still be writing evidence):" % (what, len(found)))
+    for h in found:
+        print("   pid %d  %s" % (h["pid"], h["cmdline"]))
+    print("Look at what they have written if it matters, then stop them with `vtest.py stop-helpers --yes` (a dry run without --yes lists them). Nothing was changed.")
+    return 6
+
+
 @exclusive
 def cmd_run(a):
+    refused = refuse_if_helpers("run")
+    if refused:
+        return refused
     env = C.Env()
     pin = C.read_pin()
     ok, msgs = C.pin_check(C.REPO, pin)
@@ -221,7 +236,7 @@ def run_stages(a, env, pin, inst, rows, run_id, rdir, mode):
     env.write(os.path.join(rdir, "run.json"), json.dumps(meta, indent=1))
     stages = [s.strip().upper() for s in a.stages.split(",")] if a.stages else list(C.STAGES)
     tree = RN.tree_dir(pin)
-    results = {}
+    results, findings = {}, {}
     for name in stages:
         mod = stage_module(name)
         sdir = os.path.join(rdir, name)
@@ -247,20 +262,27 @@ def run_stages(a, env, pin, inst, rows, run_id, rdir, mode):
             ctx.stop_procs()
         res = rec.finish(note)
         results[name] = res["overall"]
+        findings[name] = rec.findings()
         print("== %s: %s" % (name, res["overall"].upper()))
         if res["overall"] != "pass":
             env.write(os.path.join(rdir, "STOPPED.json"), json.dumps({"stage": name, "overall": res["overall"], "note": note, "failed": [c["id"] for c in rec.failed()], "at": time.time()}, indent=1))
             print("STOPPED at %s. Nothing was cleaned up: units, loaders' logs and evidence are as they were. See %s" % (name, sdir))
-            env.write(os.path.join(rdir, "SUMMARY.json"), json.dumps({"results": results, "stopped_at": name, "qualifying": mode == "qualifying"}, indent=1))
+            env.write(os.path.join(rdir, "SUMMARY.json"), json.dumps({"results": results, "findings": findings, "stopped_at": name, "qualifying": mode == "qualifying"}, indent=1))
             return 2
-    env.write(os.path.join(rdir, "SUMMARY.json"), json.dumps({"results": results, "stopped_at": None, "qualifying": mode == "qualifying", "pin": pin, "harness_rev": meta["harness_rev"]}, indent=1))
+    env.write(os.path.join(rdir, "SUMMARY.json"), json.dumps({"results": results, "findings": findings, "stopped_at": None, "qualifying": mode == "qualifying", "pin": pin, "harness_rev": meta["harness_rev"]}, indent=1))
     print("all requested stages passed: %s" % results)
+    for stage, fl in findings.items():
+        for f in fl:
+            print("FINDING (%s): %s: %s" % (stage, f["id"], f["detail"]))
     return 0
 
 
 @exclusive
 def cmd_archive(a):
     """Collect the host records, list every required item (MISSING is explicit), make ONE compressed archive, read it back and verify it. Exit 3 means: do not clean up the host."""
+    refused = refuse_if_helpers("archive")
+    if refused:
+        return refused
     env = C.Env()
     rdir = os.path.join(C.EVID, a.run_id)
     if not os.path.isdir(rdir):
@@ -330,7 +352,34 @@ def cmd_teardown(a):
         if problems and a.yes:
             print("refusing: --include-evidence needs a verified archive of every run (`vtest.py archive --run-id ID`)")
             return 4
+    found = C.find_helpers()
+    for h in found:
+        print("%-18s pid %d  %s" % ("stop helper", h["pid"], h["cmdline"]))
+    if found and a.yes:
+        for d in C.stop_helpers():
+            print("helper pid %d: %s" % (d["pid"], d["result"]))
     return RN.teardown(env, include_evidence=a.include_evidence, yes=a.yes)
+
+
+@exclusive
+def cmd_stop_helpers(a):
+    """Stop helper processes (sampler, broadcast probe, loaders) that a killed run left behind. Dry run without --yes."""
+    found = C.find_helpers()
+    if not found:
+        print("no helper processes are running")
+        return 0
+    for h in found:
+        print("pid %d  %s" % (h["pid"], h["cmdline"]))
+    if not a.yes:
+        print("dry run: nothing stopped. Re-run with --yes.")
+        return 0
+    for d in C.stop_helpers():
+        print("helper pid %d: %s" % (d["pid"], d["result"]))
+    left = C.find_helpers()
+    if left:
+        print("STILL RUNNING: %s" % ", ".join(str(h["pid"]) for h in left))
+        return 1
+    return 0
 
 
 def cmd_selftest(a):
@@ -371,6 +420,9 @@ def main(argv=None):
     p.add_argument("--current", default="HEAD")
     p.set_defaults(fn=cmd_affected)
     sub.add_parser("selftest").set_defaults(fn=cmd_selftest)
+    p = sub.add_parser("stop-helpers")
+    p.add_argument("--yes", action="store_true")
+    p.set_defaults(fn=cmd_stop_helpers)
     p = sub.add_parser("teardown")
     p.add_argument("--yes", action="store_true")
     p.add_argument("--include-evidence", action="store_true")
