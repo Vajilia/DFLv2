@@ -214,6 +214,49 @@ class Safety(unittest.TestCase):
         with self.assertRaises(C.Unsafe):
             e.sc('set-property', 'dfl-vtest-daemon.service', 'MemoryMax=1')
 
+    def test_kill_with_the_harness_own_options_on_a_vtest_unit_is_allowed(self):
+        """Found 2026-11-12 (smoke-3, V3): the guard took `--signal=SIGKILL` for a unit name and refused the harness's own call. Real systemctl was never run by the unit tests."""
+        e = C.Env()
+        seen = []
+        e.run = lambda argv, timeout=60, input=None: seen.append(argv) or (0, '', '')
+        for sig in ('SIGKILL', 'SIGSTOP', 'SIGCONT'):
+            e.sc('kill', 'dfl-vtest-monitor.service', '--signal=' + sig, '--kill-whom=main')
+        self.assertEqual(seen[0], ['systemctl', 'kill', 'dfl-vtest-monitor.service', '--signal=SIGKILL', '--kill-whom=main'])
+        self.assertEqual(len(seen), 3)
+
+    def test_options_never_widen_what_a_write_may_touch(self):
+        e = C.Env()
+        e.run = lambda *a, **k: self.fail('a refused call must not reach systemctl')
+        refused = (
+            ('kill', 'dfl-rehearsal.service', '--signal=SIGKILL', '--kill-whom=main'),     # not a vtest unit, with the options
+            ('kill', 'sshd.service', '--signal=SIGKILL'),
+            ('kill', '--signal=SIGKILL', '--kill-whom=main'),                              # options only: no unit named
+            ('kill', 'dfl-vtest-monitor.service', '--signal=SIGTERM'),                     # a signal the harness does not use
+            ('kill', 'dfl-vtest-monitor.service', '--kill-whom=all'),
+            ('kill', 'dfl-vtest-monitor.service', '-s', 'SIGKILL'),
+            ('kill', 'dfl-vtest-monitor.service', '--signal=SIGKILL', 'sshd.service'),     # one good unit does not cover a bad one
+            ('stop', 'dfl-vtest-daemon.service', '--force'),                               # options on any other write verb
+            ('stop', 'dfl-vtest-daemon.service', '--signal=SIGKILL'),
+            ('restart', 'dfl-vtest-daemon.service', '--now'),
+        )
+        for argv in refused:
+            with self.assertRaises(C.Unsafe, msg=argv):
+                e.sc(*argv)
+
+    def test_every_literal_write_call_in_the_stages_passes_the_guard(self):
+        """Static: each `sc("<write verb>", ...)` in the harness uses only options the guard allows (the unit tests do not run systemd, so this is the only way to see it before a real run)."""
+        import ast
+        n = 0
+        for f in VT.glob('*.py'):
+            for node in ast.walk(ast.parse(f.read_text())):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'sc' and node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value in C.SC_WRITE:
+                    n += 1
+                    for a in node.args[1:]:
+                        if isinstance(a, ast.Constant) and isinstance(a.value, str) and a.value.startswith('-'):
+                            self.assertEqual(node.args[0].value, 'kill', '%s: %s' % (f.name, a.value))
+                            self.assertIn(a.value, C.SC_KILL_OPTIONS, f.name)
+        self.assertGreater(n, 10)
+
     def test_cgroup_writes_are_two_files_under_vtest_units(self):
         e = C.Env()
         for bad in ('/sys/fs/cgroup/system.slice/dfl-broadcast-daemon.service/memory.reclaim', '/sys/fs/cgroup/system.slice/dfl-vtest-daemon.service/memory.max', '/sys/fs/cgroup/memory.reclaim',

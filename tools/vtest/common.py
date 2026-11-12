@@ -117,6 +117,7 @@ def allowed_path(path):
 
 
 SC_READ = {"show", "is-active", "is-enabled", "is-failed", "status", "list-units", "list-unit-files", "is-system-running", "--version", "daemon-reload", "cat"}
+SC_KILL_OPTIONS = {"--signal=SIGKILL", "--signal=SIGSTOP", "--signal=SIGCONT", "--kill-whom=main"}
 SC_WRITE = {"start", "stop", "restart", "kill", "reset-failed", "disable", "mask", "unmask", "enable"}
 CG_WRITE_FILES = ("cgroup.procs", "memory.reclaim")
 
@@ -253,9 +254,16 @@ class Env:
 
     def sc(self, verb, *args, timeout=60):
         if verb in SC_WRITE:
-            bad = [a for a in args if not (a.startswith(PREFIX) and a.endswith((".service", ".timer", ".scope")))]
-            if bad or not args:
+            # Found 2026-11-12 on the first real systemd run (smoke-3, V3): the guard took the options of `kill` for unit names and refused the harness's own call.
+            # Options are now told apart from names, and only the exact options the harness uses are allowed, and only on `kill`; every name must still be a dfl-vtest unit.
+            opts = [a for a in args if a.startswith("-")]
+            names = [a for a in args if not a.startswith("-")]
+            bad = [a for a in names if not (a.startswith(PREFIX) and a.endswith((".service", ".timer", ".scope")))]
+            if bad or not names:
                 raise Unsafe("systemctl %s on a unit that is not a dfl-vtest unit: %s" % (verb, bad or "(none named)"))
+            refused = [o for o in opts if not (verb == "kill" and o in SC_KILL_OPTIONS)]
+            if refused:
+                raise Unsafe("systemctl %s with an option the harness does not use: %s" % (verb, refused))
         elif verb not in SC_READ:
             raise Unsafe("systemctl %s is not allowed" % verb)
         return self.run(["systemctl", verb, *args], timeout=timeout)
