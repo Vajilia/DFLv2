@@ -203,6 +203,22 @@ class Process(unittest.TestCase):
                               ("NoNewPrivs:\t1", "NoNewPrivs:\t0", 'no_new_privileges'), ("Groups:\t", "Groups:\t4 24", 'no_supplementary_groups')):
             self.assertIn('V0.process.daemon.' + row, ids(self.rows(self.STATUS.replace(old, new)), 'fail'), new)
 
+    def test_the_service_users_own_primary_group_in_the_groups_line_is_not_a_supplementary_group(self):
+        """Found 2026-11-11 on the first real systemd run (smoke-1): systemd starts a unit with User= via initgroups, so the kernel's `Groups:` line for the daemon and the monitor was `988`,
+        the service user's own primary group. The check required an empty line and failed both processes; the user-level check already treated the primary group as not extra. The process
+        holds no group other than its own, which is what 'no supplementary groups' is for."""
+        self.assertEqual(ids(self.rows(self.STATUS.replace("Groups:\t", "Groups:\t996")), 'fail'), set())
+
+    def test_any_group_besides_the_primary_still_fails(self):
+        for groups in ("4", "4 24", "996 4", "4 996", "0", "996 0"):
+            rows = self.rows(self.STATUS.replace("Groups:\t", "Groups:\t" + groups))
+            self.assertIn('V0.process.daemon.no_supplementary_groups', ids(rows, 'fail'), groups)
+
+    def test_the_failure_names_only_the_extra_groups(self):
+        rows = self.rows(self.STATUS.replace("Groups:\t", "Groups:\t996 4 24"))
+        detail = [r for r in rows if r[0] == 'V0.process.daemon.no_supplementary_groups'][0][2]
+        self.assertIn("['4', '24']", detail)
+
 
 class Sandbox(unittest.TestCase):
     TPL = (ROOT / 'deploy/supervisor/dfl-broadcast-daemon.service').read_text()

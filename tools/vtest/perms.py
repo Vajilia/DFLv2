@@ -95,7 +95,10 @@ def judge_process(unit, status, uid, gid):
     rows.append(("V0.process.%s.uid" % unit, "pass" if p["uid"] and set(p["uid"]) == {uid} and p["gid"] and set(p["gid"]) == {gid} else "fail", "real/effective/saved/fs uid %s, gid %s (expected only %s / %s)" % (p["uid"], p["gid"], uid, gid), p))
     rows.append(("V0.process.%s.no_capabilities" % unit, "pass" if p["cap_eff"] == 0 else "fail", "effective capabilities %s" % (("%x" % p["cap_eff"]) if p["cap_eff"] is not None else "unknown"), None))
     rows.append(("V0.process.%s.no_new_privileges" % unit, "pass" if p["no_new_privs"] == 1 else "fail", "NoNewPrivs=%s" % p["no_new_privs"], None))
-    rows.append(("V0.process.%s.no_supplementary_groups" % unit, "pass" if not p["groups"] else "fail", "supplementary groups: %s" % (p["groups"] or "none"), None))
+    # systemd starts a unit with User= through initgroups, so the kernel's Groups: line always holds the service user's own primary group (found on the first real run, 2026-11-11).
+    # That is not a supplementary group; every other group still fails.
+    extra = [g for g in p["groups"] if g != str(gid)]
+    rows.append(("V0.process.%s.no_supplementary_groups" % unit, "pass" if not extra else "fail", "supplementary groups beyond the service user's own primary gid %s: %s" % (gid, extra or "none"), None))
     return rows
 
 
