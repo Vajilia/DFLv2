@@ -801,6 +801,40 @@ class V4StartBudget(unittest.TestCase):
         self.assertNotIn('_reset_start_budget', (VT / 'stage_v3.py').read_text())
 
 
+class V4ReleasedRecords(unittest.TestCase):
+    """Found 2026-11-12 (q3): V4 judged the oldest file in evidence/released/ (q2's V2b reset), not the record its own release made."""
+    ORIG = {'kind': 'memory_high', 'detail': 'd', 'source': 'monitor', 'at': 5.0}
+
+    def files(self, names):
+        return {'evidence/released/%s' % n: '/g/evidence/released/%s' % n for n in names}
+
+    def test_only_records_created_by_this_release_are_judged_even_when_older_ones_sort_first(self):
+        stale = {'kind': 'memory_high', 'detail': 'old', 'source': 'monitor', 'at': 1.0, 'released_reason': 'vtest: reset before the V2b OOM scenario'}
+        mine = dict(self.ORIG, released_reason='vtest V4: releasing the latch the documented way, evidence kept')
+        data = {'/g/evidence/released/20261112T101005Z-TRIPPED.json': json.dumps(stale), '/g/evidence/released/20261112T103608Z-TRIPPED.json': json.dumps(mine)}
+        before = self.files(['20261112T101005Z-TRIPPED.json'])
+        after = self.files(['20261112T101005Z-TRIPPED.json', '20261112T103608Z-TRIPPED.json'])
+        got = stage_v4.new_released_records(before, after, data.__getitem__)
+        self.assertEqual(got, [mine])
+        rows = {r[0]: r[1] for r in stage_v4.evaluate_release(0, 0, None, got, before, after, self.ORIG, True, True)}
+        self.assertEqual(rows['V4.release.latch_kept_in_evidence'], 'pass')
+
+    def test_the_old_selection_would_have_failed_this_run_and_a_wrong_new_record_still_fails(self):
+        stale = {'kind': 'memory_high', 'detail': 'old', 'source': 'monitor', 'at': 1.0, 'released_reason': 'x'}
+        rows = {r[0]: r[1] for r in stage_v4.evaluate_release(0, 0, None, [stale], {}, {}, self.ORIG, True, True)}
+        self.assertEqual(rows['V4.release.latch_kept_in_evidence'], 'fail')
+        no_reason = [dict(self.ORIG)]
+        rows = {r[0]: r[1] for r in stage_v4.evaluate_release(0, 0, None, no_reason, {}, {}, self.ORIG, True, True)}
+        self.assertEqual(rows['V4.release.latch_kept_in_evidence'], 'fail')
+
+    def test_a_release_that_wrote_no_new_record_fails(self):
+        before = self.files(['a-TRIPPED.json'])
+        got = stage_v4.new_released_records(before, dict(before), lambda p: '{}')
+        self.assertEqual(got, [])
+        rows = {r[0]: r[1] for r in stage_v4.evaluate_release(0, 0, None, got, before, before, self.ORIG, True, True)}
+        self.assertEqual(rows['V4.release.latch_kept_in_evidence'], 'fail')
+
+
 class V4Evaluator(unittest.TestCase):
     FP = {'sha256': 'a' * 64, 'size': 120, 'mtime': 1.0}
 

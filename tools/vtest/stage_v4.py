@@ -71,6 +71,16 @@ def evaluate_refusals(rc_resume, rc_short, rc_stale, fp0, fps):
     return rows
 
 
+def new_released_records(before_files, after_files, read):
+    """The records evidence/released/ gained since `before_files`, oldest first.
+
+    q3 (2026-11-12): V4 judged the oldest file in evidence/released/, a leftover
+    from q2's V2b reset, instead of the record its own release created. The
+    folder is never emptied between stages, so only files that were not there
+    before the release can be this release's evidence."""
+    return [json.loads(read(p)) for rel, p in sorted(after_files.items()) if rel.startswith("evidence/released/") and rel not in before_files]
+
+
 def evaluate_release(rc_release, rc_resume, latch_after, released, before_files, after_files, orig, advances, held_back):
     rows = []
     rows.append(("V4.release.accepted", "pass" if rc_release == 0 and latch_after is None else "fail", "release rc %s, latch present afterwards: %s" % (rc_release, latch_after is not None), None))
@@ -275,7 +285,7 @@ def run(ctx):
     r_rel = env.operator([py, "-I", ctx.tree + "/tools/rehearsal_check.py", "release", "--guard", GUARD, "--reason", "vtest V4: releasing the latch the documented way, evidence kept", "--evidence", GUARD + "/evidence"])[0]
     env.sleep(5)
     held_back = ctx.paused()
-    released = [json.loads(env.read(p)) for rel, p in sorted(guard_files(env).items()) if rel.startswith("evidence/released/")]
+    released = new_released_records(before, guard_files(env), env.read)
     r_res = env.operator([py, "-I", ctx.tree + "/tools/broadcast_run.py", "resume", "--root", ROOT_DIR, "--guard", GUARD])[0]
     p0 = ctx.position()
     env.sleep(15)
