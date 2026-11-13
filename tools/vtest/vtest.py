@@ -3,10 +3,11 @@
 
   vtest.py pin-check                      the code under test is the pinned commit; HEAD differs only in docs/harness/tests; the guard constants match the pinned tree
   vtest.py preflight [--json]             read-only: is this machine a usable, disposable environment? (changes nothing)
-  vtest.py plan [V0..V4]                  print every step and the durations; executes nothing
+  vtest.py plan [V0..V5]                  print every step and the durations; executes nothing
   vtest.py install [--user U]             extract and verify the pinned tree, render the test units (running as U, default dfl-vtest, which the operator creates first), build the generated fixture, set owners and modes. Starts nothing
-  vtest.py run [--stages V0,V1,V2,V3,V4] [--smoke] [--run-id ID] [--after-reboot | --after-hard-reset | --capture-reboot-state] [--acknowledge-stop REASON]
+  vtest.py run [--stages V0,V1,V2,V3,V4,V5] [--smoke] [--run-id ID] [--after-reboot | --after-hard-reset | --capture-reboot-state] [--acknowledge-stop REASON]
                                           run stages in order; STOPS at the first stage that does not pass (units and evidence are left exactly as they are)
+  vtest.py install-alerts                 install the alert package beside the candidate (drop-ins, alert unit, poll timer, tool); verified against alerts/RELEASE_MANIFEST.json; records exact revisions and the effective systemd settings. V5 needs it
   vtest.py archive --run-id ID [--out F] host records + manifest of required evidence (MISSING is explicit) + ONE compressed archive, read back and verified; exit 3: do not clean up the host
   vtest.py status                         runs, results, any STOPPED marker
   vtest.py start-units                    start site, daemon and monitor (NOT before `run V4 --after-reboot`: that stage reads the run marker first, then starts them itself)
@@ -109,7 +110,9 @@ def estimate(mod, mode):
             "V1": d.get("baseline_s", 0) + 900 + d.get("duration_s", 0) + 300,
             "V2": 2 * d.get("baseline_s", 0) + 600 + d.get("timeline_s", 0) + 300,
             "V3": d.get("watch_s", 0) + 2 * 330 + 700,
-            "V4": 6 * 150 + 400 + 2 * 400 + 200}[mod.STAGE]
+            "V4": 6 * 150 + 400 + 2 * 400 + 200,
+            # V5: baseline watch, then four drills each = detect limit + hold + restore + clearing (the exit-2 drill also builds memory pressure), upper bounds
+            "V5": d.get("baseline_watch_s", 0) + 4 * (d.get("detect_max_s", 0) + d.get("hold_s", 0) + 120 + d.get("clear_wait_s", 0)) + d.get("retry_wait_s", 0) + 300}[mod.STAGE]
 
 
 def cmd_plan(a):
@@ -140,6 +143,23 @@ def cmd_install(a):
         return 1
     log = RN.install(C.Env(), C.REPO, user=a.user or C.SERVICE_USER)
     print(json.dumps({"pin": log["pin"], "deviations": log["deviations"]}, indent=1))
+    return 0
+
+
+@exclusive
+def cmd_install_alerts(a):
+    """Install the alert package beside the candidate, verified against its release manifest; record exact revisions and the effective systemd settings."""
+    ok, msgs = C.pin_check()
+    if not ok:
+        print("pin-check failed: " + "; ".join(msgs))
+        return 1
+    import install_alerts as IA
+    try:
+        rec = IA.install_alerts(C.Env(), C.REPO)
+    except C.Unsafe as e:
+        print("REFUSING: %s" % e)
+        return 1
+    print(json.dumps({"git": rec["git"], "package_manifest_sha256": rec["package_manifest_sha256"], "tool_installed_sha256": rec["tool_installed_sha256"]}, indent=1))
     return 0
 
 
@@ -400,6 +420,7 @@ def main(argv=None):
     p = sub.add_parser("install")
     p.add_argument("--user")
     p.set_defaults(fn=cmd_install)
+    sub.add_parser("install-alerts").set_defaults(fn=cmd_install_alerts)
     p = sub.add_parser("run")
     p.add_argument("--stages")
     p.add_argument("--smoke", action="store_true")

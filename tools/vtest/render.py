@@ -14,7 +14,7 @@ import os
 import re
 import tarfile
 
-from common import (BASE, ETC, GUARD, MARKER, PORT, PREFIX, PROBE, PUBLIC, ROOT_DIR, SERVICE_USER, SRC_BASE, STATE, UNIT, UNIT_DIR, WEB_DIR, EVID, LOADDIR, Unsafe, allowed_path, git, harness_rev, read_pin, sha256_file)
+from common import (ALERT_BIN, ALERT_STATE, BASE, ETC, GUARD, MARKER, PORT, PREFIX, PROBE, PUBLIC, ROOT_DIR, SERVICE_USER, SRC_BASE, STATE, UNIT, UNIT_DIR, WEB_DIR, EVID, LOADDIR, Unsafe, allowed_path, git, harness_rev, read_pin, sha256_file)
 
 DAEMON_TEMPLATE = "deploy/supervisor/dfl-broadcast-daemon.service"
 MONITOR_TEMPLATE = "deploy/supervisor/dfl-broadcast-monitor.service"
@@ -240,7 +240,15 @@ def teardown(env, include_evidence=False, yes=False, echo=print):
     names = [l.split()[0] for l in (lu or "").splitlines() if l.strip().startswith(PREFIX)]
     for n in names:
         todo.append(("stop+remove unit", n))
-    for p in (SRC_BASE, ETC, ROOT_DIR, WEB_DIR, GUARD, LOADDIR, STATE, PROBE) + ((EVID,) if include_evidence else ()):
+    import glob
+    for p in sorted(glob.glob("%s/%s*" % (UNIT_DIR, PREFIX))):         # alert units and the drop-ins `list-unit-files` does not list
+        n = os.path.basename(p)
+        if os.path.isdir(p):
+            todo.append(("remove drop-in dir", p))
+        elif n not in names:
+            names.append(n)
+            todo.append(("stop+remove unit", n))
+    for p in (SRC_BASE, ETC, ALERT_BIN, ROOT_DIR, WEB_DIR, GUARD, LOADDIR, STATE, PROBE) + ((EVID, ALERT_STATE) if include_evidence else ()):
         if env.exists(p):
             todo.append(("remove tree", p))
     for kind, what in todo:
@@ -258,7 +266,7 @@ def teardown(env, include_evidence=False, yes=False, echo=print):
         if allowed_path(path) and os.path.exists(path):
             os.unlink(path)
     for kind, what in todo:
-        if kind == "remove tree":
+        if kind in ("remove tree", "remove drop-in dir"):
             if not allowed_path(what):
                 raise Unsafe(what)
             shutil.rmtree(what, ignore_errors=False)

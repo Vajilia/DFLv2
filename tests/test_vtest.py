@@ -50,10 +50,10 @@ class Pin(unittest.TestCase):
     def test_classification(self):
         ALL = set(C.STAGES)
         cases = {'docs/anything.md': ('docs', set()), 'tests/test_other.py': ('none', set()), 'tests/test_season.py': ('code', ALL), 'tests/fixtures/x.json': ('code', ALL),
-                 'tools/rehearsal_check.py': ('code', ALL), 'tools/broadcast_run.py': ('code', {'V0', 'V2', 'V3', 'V4'}), 'src/dflsite/season.py': ('code', ALL),
+                 'tools/rehearsal_check.py': ('code', ALL), 'tools/broadcast_run.py': ('code', {'V0', 'V2', 'V3', 'V4', 'V5'}), 'src/dflsite/season.py': ('code', ALL),
                  'deploy/supervisor/dfl-broadcast-daemon.service': ('code', ALL), 'tools/something_new.py': ('code', ALL),
                  'tools/vtest/stage_v0.py': ('harness', {'V0'}), 'tools/vtest/perms.py': ('harness', {'V0'}), 'tools/vtest/durability.py': ('harness', {'V0'}),
-                 'tools/vtest/stage_v2.py': ('harness', {'V2'}), 'tools/vtest/stage_v4.py': ('harness', {'V4'}), 'tools/vtest/lifecycle.py': ('harness', {'V2', 'V3', 'V4'}),
+                 'tools/vtest/stage_v2.py': ('harness', {'V2'}), 'tools/vtest/stage_v4.py': ('harness', {'V4'}), 'tools/vtest/lifecycle.py': ('harness', {'V2', 'V3', 'V4', 'V5'}),
                  'tools/vtest/loaders.py': ('harness', ALL), 'tools/vtest/sampler.py': ('harness', ALL), 'tools/vtest/PIN': ('harness', ALL), 'tools/vtest/common.py': ('harness', ALL),
                  'tools/vtest/vtest.py': ('none', set()), 'tools/vtest/preflight.py': ('none', set()), 'README.md': ('none', set())}
         for path, want in cases.items():
@@ -975,7 +975,7 @@ class PlanMatchesCode(unittest.TestCase):
             self.assertTrue(planned <= marks | {s for s in planned if s in src.split('def run', 1)[1]}, (mod.STAGE, planned - marks))
 
     def test_the_four_requested_checks_are_the_four_stages(self):
-        self.assertEqual(C.STAGES, ('V0', 'V1', 'V2', 'V3', 'V4'))
+        self.assertEqual(C.STAGES, ('V0', 'V1', 'V2', 'V3', 'V4', 'V5'))
         self.assertIn('service user', stage_v0.__doc__.lower())
         self.assertIn('cache', stage_v1.__doc__.lower())
         self.assertIn('anonymous', stage_v2.__doc__.lower())

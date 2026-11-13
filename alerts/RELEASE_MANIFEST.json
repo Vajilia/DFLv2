@@ -1,0 +1,29 @@
+{
+  "files": {
+    "alert.env.template": "7588bdd17a0ceef1cd0fc5dde3f36f6274524f10b42433e32a87da66b1bb1692",
+    "dfl_alert.py": "92fec58bc9ec5212c1caca5350e7ba1f5cc4f83b9bddb99323e136dacfa74dfa",
+    "release_config.py": "1d6f1a00e2983a2f0a8c97afc2de1ba705fbf1cd6237a3d141b31c3be1d7aae9",
+    "templates/alert-poll.service.in": "632f2c54351f629709d2bd95d3ec6f4cf88922433c77d812a2f63fd09c2a7088",
+    "templates/alert-poll.timer.in": "0d56e78b19f9fbe526c6862c1c7b49a72049dcc012ae8c829bf55ccd155a5330",
+    "templates/alert@.service.in": "818f7040f81c283662c5ac0100cbffec3028f74809a54d2df3a91211cc70d6e2",
+    "templates/protected-unit-dropin.conf.in": "b699cdf31fac070da0ec57c50d2f85f2b8f7146f2e9df5562dff2585e91a676c"
+  },
+  "note": "Release configuration of the alert package. Regenerate with: python3 alerts/release_config.py manifest --write",
+  "rendered": {
+    "production": {
+      "/etc/systemd/system/dfl-alert-poll.service": "9209fee7b3400c1b306bdddffa3d8ca46cc29bfadc74fef9a55aa91bbfb773b5",
+      "/etc/systemd/system/dfl-alert-poll.timer": "0d56e78b19f9fbe526c6862c1c7b49a72049dcc012ae8c829bf55ccd155a5330",
+      "/etc/systemd/system/dfl-alert@.service": "9ff623ce87061bff3f3ef84ffbc83835b3c799de26d1fbafd3a4ebb7f9166554",
+      "/etc/systemd/system/dfl-broadcast-daemon.service.d/50-dfl-alert.conf": "29e9dca3bd09d79a7282995e5d4520ce1b073bc837ca14f97cde0cc14a119939",
+      "/etc/systemd/system/dfl-broadcast-monitor.service.d/50-dfl-alert.conf": "29e9dca3bd09d79a7282995e5d4520ce1b073bc837ca14f97cde0cc14a119939"
+    },
+    "vtest": {
+      "/etc/systemd/system/dfl-vtest-alert-poll.service": "4fa4829e92e00bcd6a7099f268db8f9f73bb2b809348cb247f68c63259aaa9d4",
+      "/etc/systemd/system/dfl-vtest-alert-poll.timer": "0d56e78b19f9fbe526c6862c1c7b49a72049dcc012ae8c829bf55ccd155a5330",
+      "/etc/systemd/system/dfl-vtest-alert@.service": "1dc5a2b5f8409bd106cb675c660ac5f6ed1a2c42f5eff4a9958c55666306e1da",
+      "/etc/systemd/system/dfl-vtest-daemon.service.d/50-dfl-alert.conf": "03bc9be576ccdffe55baecec16191108065c4c1db11228e5878a472a218ae42d",
+      "/etc/systemd/system/dfl-vtest-monitor.service.d/50-dfl-alert.conf": "03bc9be576ccdffe55baecec16191108065c4c1db11228e5878a472a218ae42d"
+    }
+  },
+  "schema": 1
+}

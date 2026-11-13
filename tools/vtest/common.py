@@ -23,6 +23,10 @@ if TOOLS not in sys.path:
 BASE = "/srv/dfl-vtest"                       # fixtures, loaders' files, guard folder, public folder, evidence
 SRC_BASE = "/opt/dfl-vtest-src"               # the pinned tree, extracted from git
 ETC = "/etc/dfl-vtest"                        # the environment file
+ALERT_STATE = "/var/lib/dfl-vtest-alerts"      # the alert package's own folder on a validation machine (incident records, sink, lock); the alert unit's StateDirectory
+ALERT_BIN = "/opt/dfl-vtest-alert"             # where install-alerts puts dfl_alert.py
+ALERT_SINK = ALERT_STATE + "/sink.log"         # the harness's delivery channel: a file. No credential, nothing leaves the machine
+ALERT_MODE = ALERT_STATE + "/deliver.mode"     # "ok": the channel accepts; anything else (or missing): the hand-off fails (how V5 makes a delivery fail without touching the alert tool)
 MARKER = "/etc/dfl-vtest-disposable"          # the operator's declaration that this machine may be abused
 UNIT_DIR = "/etc/systemd/system"
 PREFIX = "dfl-vtest-"
@@ -34,7 +38,7 @@ EXPORT = BASE + "/export"                     # archives made by `vtest.py archi
 ROOT_DIR, WEB_DIR, PUBLIC, GUARD, EVID, LOADDIR, STATE = (BASE + "/root", BASE + "/web", BASE + "/web/feed", BASE + "/guard", BASE + "/evidence", BASE + "/load", BASE + "/state")
 
 STATUSES = ("pass", "fail", "invalid", "review", "not_run", "info")
-STAGES = ("V0", "V1", "V2", "V3", "V4")
+STAGES = ("V0", "V1", "V2", "V3", "V4", "V5")
 SERVICE_USER = "dfl-vtest"                    # the dedicated unprivileged user (and group of the same name) the daemon and monitor run as; created by the operator, never by the harness
 PROBE = BASE + "/probe"                       # scratch folders of the lifecycle probe (V0): the real gate and hook run there under strace, never over the live guard folder
 
@@ -207,7 +211,7 @@ def read_pin(repo=REPO):
 
 def allowed_path(path):
     p = os.path.realpath(path) if os.path.exists(path) else os.path.abspath(path)
-    for root in (BASE, SRC_BASE, ETC):
+    for root in (BASE, SRC_BASE, ETC, ALERT_STATE, ALERT_BIN):
         if p == root or p.startswith(root + "/"):
             return True
     return bool(re.match(re.escape(UNIT_DIR) + r"/" + re.escape(PREFIX) + r"[A-Za-z0-9@._-]*(\.d(/[A-Za-z0-9._-]+)?)?$", p))
@@ -376,21 +380,30 @@ def git(repo, *args):
 
 # Which paths are what. `docs` and `none` never invalidate a result; `stages` names the stages whose results a change to the path invalidates; code under test invalidates all.
 CODE_UNDER_TEST_DEFAULT = "any other path under src/, tools/ or deploy/ (the safe default: when unsure, repeat)"
-HARNESS_STAGE = {"stage_v0.py": {"V0"}, "stage_v1.py": {"V1"}, "stage_v2.py": {"V2"}, "stage_v3.py": {"V3"}, "stage_v4.py": {"V4"}}
+HARNESS_STAGE = {"stage_v0.py": {"V0"}, "stage_v1.py": {"V1"}, "stage_v2.py": {"V2"}, "stage_v3.py": {"V3"}, "stage_v4.py": {"V4"}, "stage_v5.py": {"V5"}}
 # Harness modules whose code is used by named stages only (their judgments), not by the machinery that runs every stage.
-HARNESS_JUDGES = {"lifecycle.py": {"V2", "V3", "V4"}, "perms.py": {"V0"}, "durability.py": {"V0"}}
+HARNESS_JUDGES = {"lifecycle.py": {"V2", "V3", "V4", "V5"}, "perms.py": {"V0"}, "durability.py": {"V0"},
+                  "install_alerts.py": {"V0", "V2", "V3", "V4", "V5"}}   # installs the release-configuration drop-ins: every stage run with them installed
 HARNESS_ALL = {"common.py", "render.py", "sampler.py", "loaders.py", "site_server.py", "evaluate.py", "scenarios.py", "PIN"}
-HARNESS_NONE = {"vtest.py", "preflight.py", "evidence.py", "README.md"}      # the driver and the go/no-go gate: they decide whether to run, they do not measure
+HARNESS_NONE = {"vtest.py", "preflight.py", "evidence.py", "export_evidence.py", "README.md"}      # the driver and the go/no-go gate: they decide whether to run, they do not measure
 
 # What each file of the code under test is read by. A stage is repeated when a changed file is one it depends on; a file nobody has analysed repeats everything (said, not hidden).
 # V0 (setup facts: users, permissions, applied sandbox, lifecycle probe) is cheap and follows every change to code that runs under the units.
 CODE_BEHAVIOUR = {
-    "tools/broadcast_run.py": ({"V0", "V2", "V3", "V4"}, "the daemon, its start gate, its stop hook and its own guard; the monitor's memory rule is not in this file (V1)"),
-    "tools/rehearsal_check.py": ({"V0", "V1", "V2", "V3", "V4"}, "the monitor: the memory rule (V1), its heartbeat and trips (V2, V3) and `release` (V4)"),
+    "tools/broadcast_run.py": ({"V0", "V2", "V3", "V4", "V5"}, "the daemon, its start gate, its stop hook and its own guard; the monitor's memory rule is not in this file (V1)"),
+    "tools/rehearsal_check.py": ({"V0", "V1", "V2", "V3", "V4", "V5"}, "the monitor: the memory rule (V1), its heartbeat and trips (V2, V3), `release` (V4) and its exit 2, which the alert drill kills (V5)"),
 }
 UNIT_LIFECYCLE = ("ExecStartPre", "ExecStopPost", "RequiresMountsFor", "OOMPolicy", "TimeoutStopSec", "Restart", "RestartSec", "RestartPreventExitStatus", "StartLimitIntervalSec", "StartLimitBurst")
 UNIT_RESOURCE = ("MemoryMax", "MemoryHigh", "MemorySwapMax", "TasksMax", "Nice")
 DAEMON_UNITS = ("deploy/supervisor/dfl-broadcast-daemon.service", "deploy/supervisor/dfl-broadcast-monitor.service")
+
+
+# The alert package (alerts/): not the candidate, but part of the release configuration installed beside it. Its drop-ins hang OnFailure= on the daemon and monitor, its poll timer runs on the host,
+# and its V5 drill kills the monitor and exhausts the daemon's budget, so a change to it is named by behaviour, not by directory.
+ALERT_PACKAGE_STAGES = {"V0", "V2", "V3", "V4", "V5"}
+ALERT_PACKAGE_WHY = ("alert package (release configuration): V0 records the drop-ins and effective settings; V2 (faults and kernel-OOM victim choice with its process present), V3 (start gate and trips) "
+                     "and V4 (immutable guard, release) run with the drop-ins installed; V5 is its own drill. V1 (the monitor's memory rule under load) is not named: the package neither reads nor "
+                     "changes that rule and is idle between one-minute polls; a change that raises its memory use or its poll cost must add V1")
 
 
 def unit_diff_stages(diff_text):
@@ -402,10 +415,10 @@ def unit_diff_stages(diff_text):
     for l in changed:
         key = l.split("=", 1)[0].strip()
         if key in UNIT_LIFECYCLE:
-            stages |= {"V0", "V2", "V3", "V4"}
+            stages |= {"V0", "V2", "V3", "V4", "V5"}
             why.append(key + " (lifecycle)")
         elif key in UNIT_RESOURCE:
-            stages |= {"V0", "V1", "V2", "V3", "V4"}
+            stages |= {"V0", "V1", "V2", "V3", "V4", "V5"}
             why.append(key + " (resource limit)")
         else:
             return set(STAGES), [key + " (not analysed: every stage)"]
@@ -430,6 +443,8 @@ def classify_why(path, diff=None):
         if name in HARNESS_NONE:
             return "none", set(), "the driver / go-no-go gate: decides whether to run, measures nothing"
         return "harness", set(STAGES), "shared harness machinery (runs every stage)"
+    if path.startswith("alerts/"):
+        return "release_config", set(ALERT_PACKAGE_STAGES), ALERT_PACKAGE_WHY
     if path == "tests/test_season.py" or path.startswith("tests/fixtures/"):
         return "code", set(STAGES), "the fixture generator: what the daemon runs on"
     if path.startswith("tests/"):
@@ -463,7 +478,8 @@ def affected(repo, recorded_rev, current="HEAD"):
         stages |= st
         if st:
             why[p] = [sorted(st), reason]
-    return {"changed": rows, "repeat": [s for s in STAGES if s in stages], "code_changed": any(k == "code" for _, k in rows), "why": why}
+    return {"changed": rows, "repeat": [s for s in STAGES if s in stages], "code_changed": any(k == "code" for _, k in rows),
+            "release_config_changed": any(k == "release_config" for _, k in rows), "why": why}
 
 
 def pin_check(repo=REPO, pin=None):

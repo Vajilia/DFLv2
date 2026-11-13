@@ -1,0 +1,21 @@
+[Unit]
+Description=DFL failure alert for %i
+# This unit has no failure hook of its own: an alert about the alert would loop. A failed hand-off shows as this unit's own failed state and in the incident record.
+
+[Service]
+Type=oneshot
+EnvironmentFile=-@ENV_FILE@
+Environment=DFL_ALERT_DIR=/var/lib/@STATE_NAME@
+Environment=DFL_ALERT_DAEMON_UNIT=@DAEMON_UNIT@
+Environment=DFL_ALERT_MONITOR_UNIT=@MONITOR_UNIT@
+ExecStart=/usr/bin/python3 @BIN_DIR@/dfl_alert.py event %i
+TimeoutStartSec=120
+StateDirectory=@STATE_NAME@
+StateDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

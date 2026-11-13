@@ -1,0 +1,10 @@
+[Unit]
+Description=DFL alert poll timer (every minute)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

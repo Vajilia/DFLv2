@@ -453,20 +453,20 @@ class RetestSelection(unittest.TestCase):
         return a['repeat'], a['code_changed']
 
     def test_the_marker_and_hook_code_leaves_the_memory_rule_stage_alone(self):
-        self.assertEqual(self.after({'tools/broadcast_run.py': 'b\n'}), (['V0', 'V2', 'V3', 'V4'], True))
+        self.assertEqual(self.after({'tools/broadcast_run.py': 'b\n'}), (['V0', 'V2', 'V3', 'V4', 'V5'], True))
 
     def test_the_monitor_code_repeats_everything_it_runs_in(self):
         self.assertEqual(self.after({'tools/rehearsal_check.py': 'b\n'}), (list(C.STAGES), True))
 
     def test_a_judgment_file_repeats_only_the_stages_that_use_it(self):
         self.assertEqual(self.after({'tools/vtest/perms.py': 'b\n'}), (['V0'], False))
-        self.assertEqual(self.after({'tools/vtest/lifecycle.py': 'b\n'}), (['V2', 'V3', 'V4'], False))
+        self.assertEqual(self.after({'tools/vtest/lifecycle.py': 'b\n'}), (['V2', 'V3', 'V4', 'V5'], False))
         self.assertEqual(self.after({'tools/vtest/stage_v3.py': 'b\n'}), (['V3'], False))
 
     def test_a_unit_comment_repeats_nothing_a_lifecycle_line_repeats_the_lifecycle_stages_a_limit_adds_the_memory_stage(self):
         u = 'deploy/supervisor/dfl-broadcast-daemon.service'
         self.assertEqual(self.after({u: '# other note\nOOMPolicy=stop\nMemoryMax=192M\nProtectSystem=strict\n'}), ([], True))
-        self.assertEqual(self.after({u: '# note\nOOMPolicy=kill\nMemoryMax=192M\nProtectSystem=strict\n'}), (['V0', 'V2', 'V3', 'V4'], True))
+        self.assertEqual(self.after({u: '# note\nOOMPolicy=kill\nMemoryMax=192M\nProtectSystem=strict\n'}), (['V0', 'V2', 'V3', 'V4', 'V5'], True))
         self.assertEqual(self.after({u: '# note\nOOMPolicy=stop\nMemoryMax=256M\nProtectSystem=strict\n'}), (list(C.STAGES), True))
 
     def test_an_unanalysed_unit_line_or_file_repeats_everything_and_says_so(self):
@@ -481,7 +481,7 @@ class RetestSelection(unittest.TestCase):
         Path(d, 'tools/broadcast_run.py').write_text('b\n')
         g('commit', '-qam', 'c')
         why = C.affected(d, base)['why']['tools/broadcast_run.py']
-        self.assertEqual(why[0], ['V0', 'V2', 'V3', 'V4'])
+        self.assertEqual(why[0], ['V0', 'V2', 'V3', 'V4', 'V5'])
         self.assertIn('monitor', why[1])
 
 

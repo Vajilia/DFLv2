@@ -1,0 +1,21 @@
+[Unit]
+Description=DFL alert poll (finds what the failure hook cannot: a unit that is simply not running, a stale heartbeat, a failed delivery to retry)
+# This unit has no failure hook of its own: an alert about the alert would loop.
+
+[Service]
+Type=oneshot
+EnvironmentFile=-@ENV_FILE@
+Environment=DFL_ALERT_DIR=/var/lib/@STATE_NAME@
+Environment=DFL_ALERT_DAEMON_UNIT=@DAEMON_UNIT@
+Environment=DFL_ALERT_MONITOR_UNIT=@MONITOR_UNIT@
+ExecStart=/usr/bin/python3 @BIN_DIR@/dfl_alert.py poll
+TimeoutStartSec=120
+StateDirectory=@STATE_NAME@
+StateDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

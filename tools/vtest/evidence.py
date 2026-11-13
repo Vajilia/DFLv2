@@ -27,7 +27,8 @@ STAGE_SAMPLES = {   # (file, when): "always" must exist; "later" must exist unle
     "V1": [("daemon_cgroup.jsonl", "always"), ("broadcast_probe.jsonl", "always"), ("segment_inventory_publish.json", "always"), ("journal_daemon_publish.txt", "always"),
            ("cache_loader.jsonl", "later"), ("segment_inventory_cache.json", "later"), ("journal_daemon_cache.txt", "later"), ("clock_log.jsonl", "later"), ("monitor_watch.log", "later"), ("monitor_trips.jsonl", "later")],
     "V2": [("v2a_cgroup.jsonl", "always"), ("v2a_anon.jsonl", "always"), ("v2b_cgroup.jsonl", "later"), ("v2b_anon.jsonl", "later"), ("v2c_cgroup.jsonl", "later"), ("v2c_anon.jsonl", "later")],
-    "V3": [], "V4": []}
+    "V3": [], "V4": [],
+    "V5": [("alerts_install.json", "always"), ("incidents.json", "always"), ("sink.log", "always"), ("alert_journal.txt", "always")]}
 OOM = re.compile(r"oom|out of memory|killed process", re.I)
 
 

@@ -1,0 +1,3 @@
+# Release configuration, NOT part of the candidate's unit file. It adds one directive and changes nothing else about the unit.
+[Unit]
+OnFailure=@PREFIX@alert@%n.service
