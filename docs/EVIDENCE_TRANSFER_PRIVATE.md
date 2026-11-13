@@ -1,6 +1,8 @@
 # Getting evidence off a disposable machine without transcribing it (2026-11-12)
 
-**Status: built and tested locally against a fake object store; never run against a real one.** Nothing was created at any provider, no credential exists, nothing was sent. The tool is `tools/vtest/export_evidence.py`; its tests are `tests/test_vtest_export_evidence.py` (26, including AWS's published signature vector).
+**Status (2026-11-12, late): the transfer is the FIRST GATE of the next session. No validation machine is created until the gate below has passed on the real service.** The tool is built and tested locally against a fake object store (`tools/vtest/export_evidence.py`; `tests/test_vtest_export_evidence.py`, 48 tests including AWS's published signature vector, and mutation-checked); it has **never run against the real service**, so a successful private round trip is the gate, not an assumption. Nothing has been created at the provider and no credential exists yet.
+
+**Decision of the owner, 2026-11-12:** if the round trip cannot be demonstrated, stop before provisioning. Console transcription is not the fallback.
 
 ## Why
 
@@ -21,14 +23,34 @@ One **private, evidence-only bucket** the owner creates, one **key limited to th
 
 **What the tool never does:** write, print or keep a credential (hidden prompts only; not read from the environment or any file; held in memory for one run); set an ACL; list, delete or overwrite anything; use anything but the standard library. Claude never sees the key.
 
-## What is assumed and not yet checked
+## The first gate: a harmless round trip, before any machine exists
 
-1. **That the provider's keys can be limited to one bucket.** If they cannot, do not use this tool with an account-wide key: the machine is disposable but the account is not. Fallback: send the small `SUMMARY`/`result.json` files through the console and keep the archives on the machine until a safe method exists. That would be a worse outcome and must be decided before the session, not during it.
+`export_evidence.py prove --bucket dfl-vtest-evidence-<tag> --region <region>` is a single file that needs nothing else (the owner's Chromebook can run it). It asks for the key at a hidden prompt, then:
+
+1. makes a **harmless test archive** (a note and random filler; nothing from any machine) and uploads it;
+2. reads it back (size and stored hash);
+3. **downloads it again with a signed request and compares the SHA-256**;
+4. confirms that an **anonymous** request for the object, for its hash file and for the **bucket listing** is refused;
+5. confirms the key is **limited**: a service-level bucket listing with the key must be refused (or show only this bucket). A key that sees other buckets fails the check; other bucket names are counted, never printed;
+6. prints the test archive's SHA-256 and which object to download.
+
+Then the owner **downloads that object through the provider's website on the Chromebook** and attaches it; Claude compares its SHA-256 with the printed one. Both halves are required: the tool's own download proves the key path, the website download proves the owner's path.
+
+The gate passes only if every line says PASS **and** the owner's website download matches. Anything else: stop before provisioning; fix locally with a test first; repeat the gate. The tool never deletes, so the test objects are removed by the owner in the web page.
+
+The production recovery key is never used or copied. The evidence bucket is separate from every production and backup bucket, and its name must start with `dfl-vtest-evidence-` (the tool refuses any other).
+
+**This workspace cannot run the gate:** its outbound policy refuses the provider's storage hosts (HTTP 403 at the proxy; not worked around), and a hidden prompt needs a terminal the owner can type or paste into. The gate therefore runs on the owner's own computer (or another terminal the owner controls), never in a place where Claude would see the key.
+
+## What was assumed, and what is now known
+
+1. **Provider keys limited to one bucket: confirmed in the provider's current documentation (2026-11-12).** Access keys can be "Limited access" (per-bucket, each bucket Read, or Read/Write/Delete) or "Full access" (all buckets, including listing them). The secret is shown **once**; a key is revoked by deleting it or by removing all its bucket permissions. Limited keys cannot be used on a bucket that has a bucket policy, so none is set. The documentation does not state which S3 operations each level allows, nor the default privacy of a new Space: the gate **tests** both (the delete permission that comes with Read/Write/Delete is why the key is for the evidence bucket only and is deleted after the session).
 2. That the control panel lets the owner download an object from a private Space (it is expected to; this is the owner's own authenticated page, not a public link).
 3. That the machine's console accepts typing or pasting into a hidden prompt well enough for a 20 and a 40 character key. If pasting fails, ten minutes of typing per copy point is the cost; the prompt count is already minimised (one per copy point, not per file).
 4. That the signature scheme the provider accepts is the standard one the tool implements (checked against AWS's own test vector, not against the provider).
 5. That an unsigned request to a private object gets 403 (a different answer, such as 404, is reported as "not confirmed" and fails the run: the owner then checks the bucket's privacy by hand).
 
-## A first, harmless real test
+## What the gate does not prove
 
-Before the session, on any machine, with a small throwaway file in the export folder and a throwaway bucket: run the tool once. If step 3 fails for a reason the fake store could not show, it fails there and not at the first real copy point. This needs the owner's bucket and key; it is not part of this batch.
+* That the key can be entered at the **validation machine's** console prompt (pasting may not work there). The setup step exports the setup record first for exactly that reason; if entry fails, stop and preserve evidence on the machine; do not transcribe archives.
+* That the machine's network can reach the provider (the standard rules allow outbound HTTPS from the validation machine; V0 records it).

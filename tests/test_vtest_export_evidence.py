@@ -118,20 +118,56 @@ class Fake(http.server.BaseHTTPRequestHandler):
             self.send_header(k, v)
         self.end_headers()
 
+    list_mode = 'deny'          # what the service-level listing answers to an authenticated key: deny | all | only_ours | error
+    public_list = False         # an anonymous bucket listing succeeds
+    corrupt_get = False
+
     def do_GET(self):
         self._record()
-        if 'authorization' not in self.headers and not Fake.public:
+        authed = 'authorization' in self.headers
+        bucket_root = self.path.rstrip('/') in ('/dfl-vtest-evidence-1', '')
+        if self.path == '/':                                    # service-level listing of buckets
+            if not authed or Fake.list_mode == 'deny':
+                self.send_response(403)
+                self.end_headers()
+            elif Fake.list_mode == 'error':
+                self.send_response(500)
+                self.end_headers()
+            else:
+                names = ['dfl-vtest-evidence-1'] + (['production-backups-zzz', 'other-bucket'] if Fake.list_mode == 'all' else [])
+                body = ('<ListAllMyBucketsResult><Buckets>' + ''.join('<Bucket><Name>%s</Name></Bucket>' % n for n in names) + '</Buckets></ListAllMyBucketsResult>').encode()
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            return
+        if bucket_root:
+            if authed or Fake.public_list or Fake.public:
+                self.send_response(200)
+            else:
+                self.send_response(403)
+            self.end_headers()
+            return
+        if not authed and not Fake.public:
             self.send_response(403)
             self.end_headers()
             return
         item = Fake.store.get(self.path)
-        self.send_response(200 if item else 404)
+        if not item:
+            self.send_response(404)
+            self.end_headers()
+            return
+        body = item[0][:-1] + bytes([item[0][-1] ^ 1]) if Fake.corrupt_get else item[0]
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
+        self.wfile.write(body)
 
 
 class Upload(unittest.TestCase):
     def setUp(self):
         Fake.store, Fake.public, Fake.seen = {}, False, []
+        Fake.list_mode, Fake.public_list, Fake.corrupt_get = 'deny', False, False
         self.srv = http.server.HTTPServer(('127.0.0.1', 0), Fake)
         self.port = self.srv.server_address[1]
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
@@ -235,6 +271,124 @@ class SeveralArchives(Upload):
             rc = X.upload_many([str(self.archive), str(second)], 'dfl-vtest-evidence-1', 'nyc3', export_dir=self.tmp.name,
                                endpoint='http://127.0.0.1:%d' % self.port, creds=lambda: (ACCESS, SECRET))
         self.assertNotEqual(rc, 0)
+
+
+class Prove(Upload):
+    """The first gate of the evidence transfer: the whole round trip, with a harmless archive, before any validation machine exists."""
+    def prove(self, bucket='dfl-vtest-evidence-1', creds=None):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = X.prove(bucket, 'nyc3', workdir=self.tmp.name, endpoint='http://127.0.0.1:%d' % self.port, creds=creds or (lambda: (ACCESS, SECRET)))
+        return rc, out.getvalue() + err.getvalue()
+
+    def stored_archive(self):
+        keys = [k for k in Fake.store if k.endswith('.tar.gz')]
+        self.assertEqual(len(keys), 1, keys)
+        return keys[0], Fake.store[keys[0]][0]
+
+    def test_a_private_bucket_and_a_scoped_key_pass_every_check_and_each_is_reported(self):
+        rc, text = self.prove()
+        self.assertEqual(rc, 0, text)
+        key, body = self.stored_archive()
+        self.assertIn(hashlib.sha256(body).hexdigest(), text)
+        for name in ('upload', 'read-back', 'authenticated download', 'anonymous object', 'anonymous listing', 'key scope'):
+            self.assertIn(name, text.lower(), name)
+        self.assertNotIn('FAIL', text)
+        self.assertIn(os.path.basename(key), text, 'the owner is told which object to download')
+
+    def test_the_archive_is_harmless_a_note_and_filler_and_nothing_from_the_machine(self):
+        import tarfile
+        self.prove()
+        _, body = self.stored_archive()
+        with tarfile.open(fileobj=io.BytesIO(body), mode='r:gz') as t:
+            names = sorted(t.getnames())
+        self.assertEqual(names, ['PROOF.txt', 'filler.bin'])
+        self.assertLess(len(body), 2 * 1024 * 1024)
+
+    def test_download_bytes_that_differ_are_a_failure(self):
+        Fake.corrupt_get = True
+        rc, text = self.prove()
+        self.assertNotEqual(rc, 0)
+        self.assertIn('FAIL', text)
+        self.assertIn('authenticated download', text.lower())
+
+    def test_a_publicly_readable_object_is_a_failure(self):
+        Fake.public = True
+        rc, text = self.prove()
+        self.assertNotEqual(rc, 0)
+
+    def test_a_publicly_listable_bucket_is_a_failure_even_if_the_object_is_private(self):
+        Fake.public_list = True
+        rc, text = self.prove()
+        self.assertNotEqual(rc, 0)
+        self.assertIn('listing', text.lower())
+
+    def test_a_key_that_can_see_other_buckets_is_not_scoped_and_is_a_failure(self):
+        Fake.list_mode = 'all'
+        rc, text = self.prove()
+        self.assertNotEqual(rc, 0)
+        self.assertIn('not limited', text.lower())
+        self.assertNotIn('production-backups-zzz', text, 'other bucket names are counted, never printed')
+        self.assertNotIn('other-bucket', text)
+
+    def test_a_listing_that_shows_only_the_evidence_bucket_passes(self):
+        Fake.list_mode = 'only_ours'
+        rc, text = self.prove()
+        self.assertEqual(rc, 0, text)
+
+    def test_an_inconclusive_scope_check_is_not_a_pass(self):
+        Fake.list_mode = 'error'
+        rc, text = self.prove()
+        self.assertNotEqual(rc, 0)
+        self.assertIn('not confirmed', text.lower())
+
+    def test_a_refused_bucket_sends_nothing(self):
+        rc, text = self.prove(bucket='dflv2-backups')
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(Fake.seen, [])
+
+    def test_no_credential_is_printed_or_written_or_sent_in_the_clear(self):
+        before = set(os.listdir(self.tmp.name))
+        rc, text = self.prove()
+        self.assertNotIn(SECRET, text)
+        self.assertNotIn(ACCESS, text)
+        after = set(os.listdir(self.tmp.name))
+        self.assertFalse([n for n in after - before if not n.startswith('transfer-proof-')], 'only the harmless test archive may appear in the work folder')
+        for r in Fake.seen:
+            self.assertNotIn(SECRET, repr(r))
+
+    def test_it_never_deletes_and_sets_no_acl_and_only_prove_reads_the_service_listing(self):
+        self.prove()
+        self.assertFalse([r for r in Fake.seen if r['method'] not in ('PUT', 'HEAD', 'GET')])
+        self.assertFalse([r for r in Fake.seen if 'x-amz-acl' in r['headers']])
+        self.assertTrue([r for r in Fake.seen if r['path'] == '/'], 'prove checks the key scope')
+
+    def test_a_plain_upload_never_reads_the_service_listing(self):
+        self.go()
+        self.assertFalse([r for r in Fake.seen if r['path'] == '/'])
+
+    def test_missing_credentials_send_nothing(self):
+        rc, text = self.prove(creds=lambda: ('', ''))
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(Fake.seen, [])
+
+
+class Standalone(unittest.TestCase):
+    def test_the_tool_runs_from_a_folder_that_holds_only_itself(self):
+        """The first gate runs on the owner's Chromebook, where the rest of the harness does not exist."""
+        import shutil
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            shutil.copy(ROOT / 'tools' / 'vtest' / 'export_evidence.py', d)
+            r = subprocess.run([sys.executable, '-I', str(Path(d, 'export_evidence.py')), 'prove', '--help'], capture_output=True, text=True, cwd=d, timeout=30)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn('--bucket', r.stdout)
+            r2 = subprocess.run([sys.executable, '-I', str(Path(d, 'export_evidence.py')), 'prove', '--bucket', 'dflv2-backups', '--region', 'nyc3'], capture_output=True, text=True, cwd=d, timeout=30, input='')
+            self.assertNotEqual(r2.returncode, 0)
+            self.assertIn('REFUSED', r2.stdout + r2.stderr)
+
+    def test_the_default_archive_folder_is_the_harness_folder_when_the_harness_exists(self):
+        self.assertEqual(os.path.realpath(X.default_export_dir()), os.path.realpath(C.EXPORT))
 
 
 class Classification(unittest.TestCase):

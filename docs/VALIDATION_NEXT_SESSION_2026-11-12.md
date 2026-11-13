@@ -1,4 +1,4 @@
-# Remaining validation: what changed, what repeats, and the proposed session (revised 2026-11-12, evening)
+# Remaining validation: what changed, what repeats, and the session (revised 2026-11-12, late evening: owner's decisions recorded)
 
 Nothing here provisions, deploys or changes a credential. Candidate 4 (`205f891`) is unchanged and production is untouched. The owner's decisions of 2026-11-12: **B** for the q3b question (the harness follows the documented recovery order and the monitor's exit stays visible as a finding; q3b itself stays **FAILED**), the milestone order in `docs/LAUNCH_ROADMAP_EVIDENCE.md` section 6, and, in the evening batch, to build the alert package and V5 locally with tests first.
 
@@ -68,17 +68,22 @@ Every new behaviour had a test that failed before it passed.
 | 6:50 | Verify every archive's SHA-256 with the receiver, the owner accepts or rejects, destroy only this machine and verify cleanup | 30 min |
 | **7:20** | End if nothing fails | |
 
-**Time-box proposal: 9 hours**, so a failed stage can be diagnosed and the cleanup is not rushed (qualifying runs must end an hour before the hard stop). **Spend limit: $2** (the machine class is well under a cent an hour at list price; the limit is a guard, not a forecast). Per-stage times are the harness's own estimates from `vtest.py plan` (V0 7, V1 61, V2 18, V3 25, V4 38, V5 56 minutes, qualifying) plus about 5 minutes per export; V5's figure is an upper bound built from its own time limits and has never been measured.
+**Time-box: 9 hours (decided)**, so a failed stage can be diagnosed and the cleanup is not rushed (qualifying runs must end an hour before the hard stop). **Spend limit: $2 (decided)** (the machine class is well under a cent an hour at list price; the limit is a guard, not a forecast). Per-stage times are the harness's own estimates from `vtest.py plan` (V0 7, V1 61, V2 18, V3 25, V4 38, V5 56 minutes, qualifying) plus about 5 minutes per export; V5's figure is an upper bound built from its own time limits and has never been measured.
 
 **Stop rules:** stop at the first stage that does not pass; a harness defect is fixed locally with a failing test first and the named stages repeated; a candidate defect is a new pin; an **invalid** check (for example, the monitor did not exit 2 in V5's exit-2 drill) is reported as not tested and is never counted as a pass. Do not weaken a criterion. Report each run separately. Keep every earlier failure (q3, q3b, smoke-4) recorded as it is.
 
 **Alternative:** two sessions (V0 to V4 and the reboot checks; then V5), which halves the day's length but doubles the setup and breaks "one install". Not recommended; the owner may choose it.
 
-## 5. Decisions needed from the owner before the session
+## 5. Decisions (owner, 2026-11-12, late evening) and what they change
 
-1. **The time-box and spend limit** (proposed: 9 hours, $2), and whether to repeat all of V0 to V5 (recommended) or to retain V0 to V3 with the consequences in section 2.
-2. **The evidence transfer** (`docs/EVIDENCE_TRANSFER_PRIVATE.md`): create the private evidence Space and a key limited to it; confirm the provider offers such keys. If it does not, say so before the session: the fallback is worse.
-3. **The delivery channel** (`docs/ALERT_DESIGN_2026-11-12.md`): not needed for the disposable machine (it uses a file channel), but needed before production.
+1. **Repeat V0 to V5** under **one recorded release configuration** (the pinned candidate, the alert package as hashed in `alerts/RELEASE_MANIFEST.json` including the drop-ins, one harness revision). **Earlier qualifying results remain valid historical evidence for the configurations they ran under; they do not establish validation of the new configuration.** (Section 0 and 2 used "informational history"; this is the owner's wording and it governs.)
+2. **Limits: nine hours maximum, $2 maximum, no automatic extension.** The **final hour is reserved** for verified export and cleanup: no test starts after hour 8. If failures consume the margin, stop and preserve the evidence; do not rush the remaining checks. Time-box and spend are recorded in the session record before the first provisioning step.
+3. **The evidence transfer is the first gate and a prerequisite.** Before the validation machine is created: (a) the provider's bucket-scoped permissions verified by Claude from the provider's current documentation (done 2026-11-12; see `docs/EVIDENCE_TRANSFER_PRIVATE.md`); (b) a separate private evidence bucket and a key limited to it, **never the production recovery key**, created by the owner, who enters any secret directly at hidden prompts; (c) the harmless round trip (`export_evidence.py prove`): upload, authenticated download, anonymous denial (object and listing), matching SHA-256, and the owner downloading the test archive through the provider's website on his Chromebook. **If that cannot be demonstrated, stop before provisioning. Console transcription is not a substitute.** The uploader has never run against the real service; the round trip is the first gate, not an assumption.
+4. **Alerts:** file delivery is sufficient for this isolated session and **does not validate production notification delivery**. Real delivery and an owner-friendly acknowledgement remain **explicit launch requirements** (`docs/ALERT_DESIGN_2026-11-12.md`). No further custom interface in this batch.
+5. **Schedule:** proceed only after local verification and the transfer gate. Record the exact candidate, harness and alert configuration. Export after each stage. Preserve failures; stop on candidate defects; no criterion is weakened.
+6. Production, the rehearsal, existing backups and production credentials stay untouched. The unrelated deletion of `preserve/memory-monitor-full-local-2026-11-08` is **not** a dependency of this session.
+
+**Revised clock (the first hour is now the gate, outside the nine):** the nine hours start when the validation machine is created. The proposal in section 4 (7 h 20 min if nothing fails, hour 8 as the last start time) fits with 1 h 40 min of margin for one diagnosed failure; a second failure stops the session.
 
 ## 6. Independent of the above
 
