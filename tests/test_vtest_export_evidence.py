@@ -373,6 +373,47 @@ class Prove(Upload):
         self.assertEqual(Fake.seen, [])
 
 
+class PastedCredentials(unittest.TestCase):
+    """A terminal may add bracketed-paste marker codes around pasted text. They must never become part of a key."""
+    def test_marker_codes_and_stray_control_characters_are_removed(self):
+        self.assertEqual(X.clean_credential('\x1b[200~DO00ABCDEF\x1b[201~'), ('DO00ABCDEF', 2))
+        self.assertEqual(X.clean_credential('  abc+/=\r\n'), ('abc+/=', 0))
+        self.assertEqual(X.clean_credential('ab\x07c\x00d'), ('abcd', 2))
+        self.assertEqual(X.clean_credential(''), ('', 0))
+
+    def test_prove_uses_the_cleaned_credentials_and_reports_lengths_only(self):
+        out = io.StringIO()
+        asked = []
+
+        class Quiet(Upload):
+            pass
+        srv = http.server.HTTPServer(('127.0.0.1', 0), Fake)
+        Fake.store, Fake.public, Fake.seen = {}, False, []
+        Fake.list_mode, Fake.public_list, Fake.corrupt_get = 'deny', False, False
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        with tempfile.TemporaryDirectory() as d, redirect_stdout(out):
+            rc = X.prove('dfl-vtest-evidence-1', 'nyc3', workdir=d, endpoint='http://127.0.0.1:%d' % srv.server_address[1],
+                         creds=lambda: ('\x1b[200~' + ACCESS + '\x1b[201~', '\x1b[200~' + SECRET + '\x1b[201~'))
+        text = out.getvalue()
+        self.assertEqual(rc, 0, text)
+        self.assertIn('id %d characters' % len(ACCESS), text)
+        self.assertIn('secret %d characters' % len(SECRET), text)
+        self.assertIn('removed 4 stray', text)
+        self.assertNotIn(SECRET, text)
+        self.assertNotIn(ACCESS, text)
+        for r in Fake.seen:
+            self.assertNotIn('200~', repr(r))
+            self.assertIn('Credential=' + ACCESS + '/', r['headers'].get('authorization', 'Credential=' + ACCESS + '/'))
+
+    def test_both_commands_clean_whatever_they_are_given_and_the_prompt_stays_hidden_input(self):
+        src = (ROOT / 'tools' / 'vtest' / 'export_evidence.py').read_text()
+        for fn in ('def prove', 'def upload_many'):
+            body = src.split(fn, 1)[1].split('\ndef ', 1)[0]
+            self.assertIn('_clean_pair', body, fn)
+        self.assertIn('getpass', src.split('def prompt_credentials', 1)[1].split('\ndef ', 1)[0])
+
+
 class Standalone(unittest.TestCase):
     def test_the_tool_runs_from_a_folder_that_holds_only_itself(self):
         """The first gate runs on the owner's Chromebook, where the rest of the harness does not exist."""

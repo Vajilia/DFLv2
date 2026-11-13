@@ -123,6 +123,36 @@ def prompt_credentials():
     return access, secret
 
 
+_PASTE_MARKER = re.compile(r"\x1b\[20[01]~")
+
+
+def clean_credential(raw):
+    """-> (the credential without terminal paste-marker codes, stray control characters or whitespace, how many such items were removed). Keys are plain printable characters."""
+    removed = [0]
+
+    def drop(_m):
+        removed[0] += 1
+        return ""
+    text = _PASTE_MARKER.sub(drop, raw or "")
+    kept = []
+    for ch in text:
+        if ch.isspace():
+            continue
+        if 32 < ord(ch) < 127:
+            kept.append(ch)
+        else:
+            removed[0] += 1
+    return "".join(kept), removed[0]
+
+
+def _clean_pair(creds, echo):
+    """-> (access, secret) cleaned; says how long each is and how many stray characters were removed (never the values)."""
+    access, a_removed = clean_credential(creds[0])
+    secret, s_removed = clean_credential(creds[1])
+    echo("credentials received: key id %d characters, secret %d characters (removed %d stray terminal character(s))" % (len(access), len(secret), a_removed + s_removed))
+    return access, secret
+
+
 def _url(bucket, region, key, endpoint):
     if endpoint:                                   # tests: a local server, path-style
         host = endpoint.split("://", 1)[1]
@@ -183,7 +213,7 @@ def upload_many(archives, bucket, region, export_dir=None, endpoint=None, creds=
     except Refused as e:
         echo("REFUSED: %s" % e)
         return 2
-    access, secret = (creds or prompt_credentials)()
+    access, secret = _clean_pair((creds or prompt_credentials)(), echo)
     if not access or not secret:
         echo("REFUSED: no credentials were given; nothing was sent. The owner creates a key limited to the evidence bucket and types it at the prompt (it is never read from a file or the environment).")
         return 2
@@ -250,7 +280,7 @@ def prove(bucket, region, workdir=None, endpoint=None, creds=None, echo=print):
     except Refused as e:
         echo("REFUSED: %s" % e)
         return 2
-    access, secret = (creds or prompt_credentials)()
+    access, secret = _clean_pair((creds or prompt_credentials)(), echo)
     if not access or not secret:
         echo("REFUSED: no credentials were given; nothing was sent. The owner creates a key limited to the evidence bucket and types or pastes it at the hidden prompt.")
         return 2
