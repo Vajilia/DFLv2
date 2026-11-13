@@ -118,6 +118,41 @@ class Rendering(unittest.TestCase):
         self.assertEqual(r.stdout.strip(), '', 'the code under test differs from the pin')
 
 
+class UnitCheckFiltering(unittest.TestCase):
+    """systemd-analyze verify also reports problems in the host's own unit files (the CI runner printed three about CPUAccounting= in xfs_scrub and
+    walinuxagent units). Those are not ours and must not fail the check; anything about our files, or any line that names no system file, must still fail it."""
+    HOST = ['/usr/lib/systemd/system/system-xfs_scrub.slice:15: Support for option CPUAccounting= has been removed and it is ignored',
+            '/usr/lib/systemd/system/xfs_scrub_all.service:26: Support for option CPUAccounting= has been removed and it is ignored',
+            '/usr/lib/systemd/system/walinuxagent.service:21: Support for option CPUAccounting= has been removed and it is ignored',
+            '/lib/systemd/system/other.service:3: Unknown key name x',
+            '/etc/systemd/system/local.service:2: Unknown section Foo']
+
+    def test_host_unit_complaints_are_dropped(self):
+        self.assertEqual(unit_problems('\n'.join(self.HOST) + '\n'), [])
+
+    def test_a_complaint_about_our_unit_is_kept(self):
+        ours = '/tmp/tmpabc/dfl-vtest-alert@.service:7: Unknown key name Foo in section Service, ignoring.'
+        self.assertEqual(unit_problems('\n'.join(self.HOST + [ours])), [ours])
+
+    def test_a_line_that_names_no_system_file_is_kept(self):
+        for line in ('dfl-vtest-alert@.service: Command /usr/bin/x is not executable: No such file or directory', 'Failed to load unit: boom', 'Unit dfl-x.timer not found.'):
+            self.assertEqual(unit_problems(line), [line])
+
+    def test_the_old_dfl_alert_allowance_still_applies(self):
+        self.assertEqual(unit_problems('/tmp/x/dfl-vtest-alert@.service: Command /opt/dfl_alert.py is not executable'), [])
+
+    def test_blank_lines_are_ignored(self):
+        self.assertEqual(unit_problems('\n   \n'), [])
+
+
+def unit_problems(output):
+    """The lines of `systemd-analyze verify` output that concern us (see UnitCheckFiltering)."""
+    return [l for l in output.splitlines() if l.strip() and 'dfl_alert.py' not in l and not HOST_UNIT_LINE.match(l)]
+
+
+HOST_UNIT_LINE = re.compile(r'^/(?:usr/lib|lib|etc|run)/systemd/\S+?:\d+: ')
+
+
 @unittest.skipUnless(shutil.which('systemd-analyze'), 'SKIPPED: systemd-analyze is not installed (the offline unit check is not made)')
 class OfflineUnitCheck(unittest.TestCase):
     def test_systemd_analyze_verify_accepts_the_three_units_for_both_name_sets(self):
@@ -132,7 +167,7 @@ class OfflineUnitCheck(unittest.TestCase):
                     (Path(d) / Path(path).name).write_text(text)
                     names.append(str(Path(d) / Path(path).name))
                 r = subprocess.run(['systemd-analyze', 'verify', '--man=no'] + names, capture_output=True, text=True, timeout=60)
-                bad = [l for l in (r.stdout + r.stderr).splitlines() if l.strip() and 'dfl_alert.py' not in l]
+                bad = unit_problems(r.stdout + r.stderr)
                 self.assertEqual(r.returncode, 0, (kind, r.stderr))
                 self.assertEqual(bad, [], kind)
 

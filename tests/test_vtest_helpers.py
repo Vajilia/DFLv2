@@ -181,6 +181,15 @@ class StoppingHelpers(unittest.TestCase):
 class CommandsMeetHelpers(unittest.TestCase):
     ORPHAN = [{'pid': 4242, 'script': 'sampler.py', 'cmdline': 'python3 /x/sampler.py'}]
 
+    def setUp(self):
+        # Every command takes the run lock, which lives in BASE. Without this the tests wrote to the real /srv/dfl-vtest: they passed as root on a
+        # workstation and failed with PermissionError on the CI runner (found 2026-11-13, CI run on 516f696), and as root they touched the real lock file.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patch = mock.patch.object(V.C, 'BASE', tmp.name)
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def run_cmd(self, argv, after=None):
         """after: what a second scan finds (None: the same orphan)."""
         ran = []
