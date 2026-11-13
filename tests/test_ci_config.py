@@ -122,9 +122,10 @@ def _module_level_nodes(tree):
 
 
 def _repository_modules():
-    """module name -> files, for every .py under src/, tools/ and tests/ (any depth: tools/vtest, src/dflsite ...); packages map to their __init__."""
+    """module name -> files, for every .py under src/, tools/, alerts/ and tests/ (any depth: tools/vtest, src/dflsite ...); packages map to their __init__.
+    alerts/ is first-party code (the alert package, 2026-11-12) that tests import by path; a third-party import inside it is still found, because its files are walked like any other."""
     mods = {}
-    for top in ("src", "tools", "tests"):
+    for top in ("src", "tools", "alerts", "tests"):
         for dirpath, dirs, files in os.walk(os.path.join(ROOT, top)):
             dirs[:] = [d for d in dirs if not d.startswith((".", "__pycache__"))]
             for f in files:
