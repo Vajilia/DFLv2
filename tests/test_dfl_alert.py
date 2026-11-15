@@ -14,6 +14,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -99,6 +100,77 @@ class Base(unittest.TestCase):
 
 
 class Detection(Base):
+    def test_manager_journal_read_is_boot_scoped_bounded_and_read_only(self):
+        row = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
+               'MESSAGE': 'Start request repeated too quickly.'}
+        with patch.object(A.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = 'bad json\n' + json.dumps(row) + '\n'
+            self.assertEqual(A._journal_rows(DAEMON), [row])
+        self.assertEqual(run.call_args.args[0],
+                         ['journalctl', '--boot=0', '--unit=' + DAEMON, '_PID=1',
+                          '--output=json', '--no-pager', '--quiet', '--lines=50'])
+        self.assertEqual(run.call_args.kwargs['timeout'], 20)
+
+    def test_signal_result_with_current_manager_refusal_is_start_limit(self):
+        self.sd.set(DAEMON, ActiveState='failed', Result='signal', ExecMainStatus=9,
+                    NRestarts=4, ExecMainExitTimestampMonotonic=2000000)
+        row = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
+               'MESSAGE': 'Start request repeated too quickly.'}
+        al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
+                       clock=self.clock, journal_reader=lambda unit: [row])
+        al.poll()
+        self.assertEqual([i['event'] for i in al.incidents()], ['daemon_start_limit_hit'])
+        al.poll()
+        self.assertEqual(len(self.sink.sent), 1, 'polls must not duplicate delivery')
+
+    def test_restart_count_alone_or_stale_foreign_journal_is_not_proof(self):
+        self.sd.set(DAEMON, ActiveState='failed', Result='signal', ExecMainStatus=9,
+                    NRestarts=400, ExecMainExitTimestampMonotonic=2000000)
+        valid = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
+                 'MESSAGE': 'Start request repeated too quickly.'}
+        for rows in ([], [dict(valid, __MONOTONIC_TIMESTAMP='1999999')],
+                     [dict(valid, UNIT=MONITOR)], [dict(valid, _PID='99')],
+                     [dict(valid, MESSAGE='some unrelated failure')],
+                     [dict(valid, __MONOTONIC_TIMESTAMP='invalid')]):
+            with self.subTest(rows=rows):
+                al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
+                               clock=self.clock, journal_reader=lambda unit: rows)
+                self.assertEqual(al._conditions('daemon', DAEMON, al._show(DAEMON), {})[0][0],
+                                 'daemon_failed')
+
+    def test_unreadable_journal_still_records_generic_failure(self):
+        self.sd.set(DAEMON, ActiveState='failed', Result='signal')
+        def unreadable(unit):
+            raise PermissionError('no journal access')
+        al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
+                       clock=self.clock, journal_reader=unreadable)
+        al.poll()
+        self.assertEqual([i['event'] for i in al.incidents()], ['daemon_failed'])
+
+    def test_event_hook_also_classifies_refusal_without_changing_a_latch(self):
+        self.sd.set(DAEMON, ActiveState='failed', Result='signal', ExecMainStatus=9,
+                    ExecMainExitTimestampMonotonic=2000000)
+        row = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
+               'MESSAGE': 'Start request repeated too quickly.'}
+        al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
+                       clock=self.clock, journal_reader=lambda unit: [row])
+        al.event(DAEMON)
+        inc, = al.incidents()
+        self.assertEqual(inc['event'], 'daemon_start_limit_hit')
+        self.assertEqual(inc['observed']['StartLimitEvidenceMonotonic'], '7000000')
+        self.assertTrue(all(c[:2] == ['systemctl', 'show'] or c == A._journal_argv(DAEMON)
+                            for c in inc['commands_run']))
+
+    def test_missing_exit_time_cannot_turn_historical_refusal_into_proof(self):
+        self.sd.set(DAEMON, ActiveState='failed', Result='signal')
+        def should_not_read(unit):
+            self.fail('no current process exit time to bound this search')
+        al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
+                       clock=self.clock, journal_reader=should_not_read)
+        al.poll()
+        self.assertEqual([i['event'] for i in al.incidents()], ['daemon_failed'])
+
     def test_nothing_is_raised_when_both_units_are_healthy(self):
         r = self.al.poll()
         self.assertEqual(r['raised'], [])
@@ -391,19 +463,20 @@ class NeverRecovers(Base):
             A.safe_write(self.cfg, os.path.join(self.dir, '..', 'guard', 'x'), '{}')
         A.safe_write(self.cfg, os.path.join(self.dir, 'incidents', 'ok.json'), '{}')
 
-    def test_subprocess_is_used_in_exactly_two_places_and_the_systemctl_one_is_show_only(self):
+    def test_process_launches_are_limited_to_reads_delivery_and_ping(self):
         src = (ROOT / 'alerts' / 'dfl_alert.py').read_text()
         tree = ast.parse(src)
-        allowed = {'_systemctl_show': 'systemctl-show', 'deliver_via_command': 'delivery', 'run_ping': 'ping'}
+        allowed = {'_systemctl_show', '_journal_rows', 'deliver_via_command', 'run_ping'}
         found = {}
         for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
             for node in ast.walk(fn):
-                if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == 'subprocess':
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name) and node.func.value.id == 'subprocess'):
                     found.setdefault(fn.name, 0)
                     found[fn.name] += 1
                 if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == 'os' and node.attr in ('system', 'popen', 'execv', 'execvp', 'spawnv'):
                     self.fail('os.%s used in %s' % (node.attr, fn.name))
-        self.assertEqual(set(found) - set(allowed), set(), 'subprocess used outside the three allowed functions')
+        self.assertEqual(set(found) - allowed, set(), 'subprocess launch outside allowed functions')
         show = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == '_systemctl_show'][0]
         consts = [c.value for c in ast.walk(show) if isinstance(c, ast.Constant) and isinstance(c.value, str)]
         self.assertIn('show', consts)
