@@ -14,8 +14,8 @@
 
 ## Constraints (unchanged, and now enforced by tests)
 
-1. **Works when the monitor is dead.** The alert path reads only systemd (`systemctl show`) and, optionally, the age of a heartbeat file (stat). It never asks the monitor, the daemon, the guard folder, the store or the public folder anything.
-2. **Never recovers.** The alert path never releases a latch, resumes publication, resets a failure, or starts, stops or restarts a unit. In `dfl_alert.py` the only `systemctl` verb is `show`; the only subprocess calls are `systemctl show`, the delivery command and the optional ping; every file write goes through one function that refuses a path outside the alert folder; and the unit that runs it is read-only everywhere else (`ProtectSystem=strict`, its own `StateDirectory`). Tests: `NeverRecovers` (a source scan, a runtime check that guard, store and public folders are byte-identical after every scenario, a refusal test for outside paths). V5 then checks it on a real machine: after the alert went out, the failed unit is **still failed**, with the same invocation, for a hold period.
+1. **Works when the monitor is dead.** The alert path reads systemd (`systemctl show` and bounded, current-boot manager journal records for failed daemons) and, optionally, the age of a heartbeat file (stat). It never asks the monitor, the daemon, the guard folder, the store or the public folder anything.
+2. **Never recovers.** The alert path never releases a latch, resumes publication, resets a failure, or starts, stops or restarts a unit. In `dfl_alert.py` the only `systemctl` verb is `show`; the only subprocess calls are read-only `systemctl show`, read-only `journalctl`, the delivery command and the optional ping; every file write goes through one function that refuses a path outside the alert folder; and the unit that runs it is read-only everywhere else (`ProtectSystem=strict`, its own `StateDirectory`). Tests: `NeverRecovers` (a source scan, a runtime check that guard, store and public folders are byte-identical after every scenario, a refusal test for outside paths). V5 then checks it on a real machine: after the alert went out, the failed unit is **still failed**, with the same invocation, for a hold period.
 3. **No secret in the repository.** The delivery command and its credential live in a root-only (0600) environment file on the host; `alerts/alert.env.template` has no values (a test enforces it).
 4. **Not part of the candidate.** The candidate's unit files, daemon and monitor stay byte-identical to the pin; the package adds files beside them (below).
 5. **Host death is out of reach of any on-host alert.** See "Off-host" below.
@@ -92,3 +92,15 @@ The public site is static files served by a web server. With the daemon failed, 
 * The delivery channel, as proposed above or otherwise, and who creates the account and holds the secret.
 * Who acknowledges, and how (see the gap above).
 * Whether the monitor's exit-2 behaviour should also change (for example a supervised restart that waits for storage to recover, never releasing a latch). That would be a candidate change; it is deliberately not proposed, because alerts remove the silence without altering what the candidate does.
+
+## Start-limit result retention (2026-11-15)
+
+The latest disposable-host smoke passed V0 and V4 but failed V5. During automatic restart exhaustion systemd logged its explicit start refusal while retaining the earlier `Result=signal`. The alert sent a generic critical daemon failure, not the required start-limit incident. This failed smoke is not regraded. Qualifying stages did not start.
+
+The alert now also checks the last 50 manager journal records for that unit in the current boot. It requires PID 1, the exact unit, the explicit refusal message, and a monotonic timestamp at or after the current main process's exit. Old refusals, another unit's logs, non-manager messages, and restart counts alone cannot classify the incident. Missing timestamps or unreadable journals leave the generic critical failure alert intact. No journal permissions are granted and no service is restarted.
+
+Regression tests first reproduced the incorrect generic classification. The release manifest changes; the candidate pin does not. This is a changed alert release configuration and still requires real-system validation, including journal visibility in the alert sandbox. Earlier evidence remains valid for its original configuration. The bounded journal query may miss a refusal pushed out by more than 50 later manager messages; it then falls back to the generic critical alert. The explicit message is matched to systemd's upstream v255 wording, not inferred from restart-count heuristics.
+
+Source inspected: https://github.com/systemd/systemd/blob/v255/src/core/unit.c (`unit_test_start_limit`). No production or credentials were changed.
+
+Local verification for this fix: 46 alert tests OK; 23 release-configuration tests OK; 400 harness tests OK with three privilege-dependent skips. Four in-memory mutants were caught (remove fallback, accept stale entries, accept non-manager entries, accept another unit). No full-repository run or new VM was performed. The journal fallback needs validation under the real service sandbox before this release is considered verified.

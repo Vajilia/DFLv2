@@ -2,8 +2,8 @@
 """dfl_alert: failure alerts for the broadcast daemon and its monitor (design: docs/ALERT_DESIGN_2026-11-12.md).
 
 What it does
-  * Reads systemd (`systemctl show`, nothing else) and raises an incident when the monitor has failed or stopped, when the daemon has failed or its start budget is exhausted
-    (Result=start-limit-hit), or (a warning) when the budget is nearly used. It never asks the monitor anything: it works when the monitor is dead.
+  * Reads systemd properties and, for failed daemons, the current boot's manager journal. A refused restart can retain Result=signal instead of start-limit-hit.
+    Raises an incident for failure or exhausted starts, or a warning when the budget is nearly used. Works when the monitor is dead.
   * Writes the incident to its own folder BEFORE trying to deliver it, retries failed deliveries with a growing back-off, and suppresses duplicates (one incident per signature while the
     condition lasts; one reminder per interval while nobody has acknowledged it).
   * Keeps two facts apart: `delivery` (the hand-off command exited 0: attempted_ok, or attempted_failed) and `notification_received` (set only by `ack`, which a person runs).
@@ -29,7 +29,27 @@ import time
 from dataclasses import dataclass, field
 
 BACK_OFF_S = (60, 120, 300, 600, 1800, 3600)
-SHOW_PROPS = ("LoadState", "ActiveState", "SubState", "Result", "ExecMainStatus", "NRestarts", "StartLimitBurst")
+SHOW_PROPS = ("LoadState", "ActiveState", "SubState", "Result", "ExecMainStatus", "NRestarts", "StartLimitBurst", "ExecMainExitTimestampMonotonic")
+
+
+def _journal_argv(unit):
+    return ["journalctl", "--boot=0", "--unit=" + unit, "_PID=1", "--output=json", "--no-pager", "--quiet", "--lines=50"]
+
+
+def _journal_rows(unit):
+    """Read a bounded set of this boot's manager records for exactly one unit."""
+    r = subprocess.run(_journal_argv(unit), capture_output=True, text=True, timeout=20)
+    if r.returncode:
+        return []
+    rows = []
+    for line in r.stdout.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
 
 
 class Unsafe(Exception):
@@ -68,7 +88,7 @@ class Config:
                    host=env.get("DFL_ALERT_HOST_LABEL", "") or socket.gethostname())
 
 
-# ------------------------------------------------------------------------------------------------------------------------------- the three places that start a process
+# ------------------------------------------------------------------------------------------------------------------------------- read-only journal and configured delivery
 def _systemctl_show(argv):
     """The default runner: `systemctl show ...` and nothing else (anything else is refused before a process starts)."""
     if argv[:2] != ["systemctl", "show"]:
@@ -133,12 +153,13 @@ MEANING = {
 
 
 class Alerter:
-    def __init__(self, cfg, runner=None, deliver=None, ping=None, clock=time.time):
+    def __init__(self, cfg, runner=None, deliver=None, ping=None, clock=time.time, journal_reader=None):
         self.cfg = cfg
         self.runner = runner or _systemctl_show
         self.deliver = deliver or deliver_via_command
         self.ping = ping or run_ping
         self.clock = clock
+        self.journal_reader = journal_reader or _journal_rows
         self._cmds = []
         self.inc_dir = os.path.join(cfg.alert_dir, "incidents")
 
@@ -207,7 +228,7 @@ class Alerter:
         if v.get("LoadState") == "not-found":
             return [("unit_missing", "critical", v)]
         if active == "failed":
-            if role == "daemon" and res == "start-limit-hit":
+            if role == "daemon" and (res == "start-limit-hit" or self._start_refused(unit, v)):
                 return [("daemon_start_limit_hit", "critical", v)]
             return [("%s_failed" % role, "critical", v)]
         if active in ("inactive", "deactivating"):
@@ -236,6 +257,27 @@ class Alerter:
                 if age is None or age > self.cfg.heartbeat_max_s:
                     found.append(("monitor_heartbeat_stale", "critical", detail))
         return found
+
+    def _start_refused(self, unit, observed):
+        # NRestarts is not a rate-limit counter. Require the manager's explicit
+        # refusal after this process exited, in the current boot. An old refusal
+        # from before a later process failure must not reclassify that failure.
+        try:
+            exited = int(observed.get("ExecMainExitTimestampMonotonic", "0"))
+            if exited <= 0:
+                return False
+            self._cmds.append(_journal_argv(unit))
+            rows = self.journal_reader(unit)
+            for row in rows:
+                if (row.get("UNIT") == unit and row.get("_PID") == "1"
+                        and row.get("MESSAGE") == "Start request repeated too quickly."
+                        and int(row.get("__MONOTONIC_TIMESTAMP", "0")) >= exited):
+                    observed["StartLimitEvidence"] = "current-boot manager journal"
+                    observed["StartLimitEvidenceMonotonic"] = row["__MONOTONIC_TIMESTAMP"]
+                    return True
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            pass  # No proof: still raise the generic critical failure.
+        return False
 
     # --------------------------------------------------------------------------------------------------------------------------------------- delivery
     def _message(self, inc, kind, n=0):
