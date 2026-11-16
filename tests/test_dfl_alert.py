@@ -102,7 +102,7 @@ class Base(unittest.TestCase):
 class Detection(Base):
     def test_manager_journal_read_is_boot_scoped_bounded_and_read_only(self):
         row = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
-               'MESSAGE': 'Start request repeated too quickly.'}
+               'MESSAGE': DAEMON + ': Start request repeated too quickly.'}
         with patch.object(A.subprocess, 'run') as run:
             run.return_value.returncode = 0
             run.return_value.stdout = 'bad json\n' + json.dumps(row) + '\n'
@@ -116,7 +116,7 @@ class Detection(Base):
         self.sd.set(DAEMON, ActiveState='failed', Result='signal', ExecMainStatus=9,
                     NRestarts=4, ExecMainExitTimestampMonotonic=2000000)
         row = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
-               'MESSAGE': 'Start request repeated too quickly.'}
+               'MESSAGE': DAEMON + ': Start request repeated too quickly.'}
         al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
                        clock=self.clock, journal_reader=lambda unit: [row])
         al.poll()
@@ -128,10 +128,12 @@ class Detection(Base):
         self.sd.set(DAEMON, ActiveState='failed', Result='signal', ExecMainStatus=9,
                     NRestarts=400, ExecMainExitTimestampMonotonic=2000000)
         valid = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
-                 'MESSAGE': 'Start request repeated too quickly.'}
+                 'MESSAGE': DAEMON + ': Start request repeated too quickly.'}
         for rows in ([], [dict(valid, __MONOTONIC_TIMESTAMP='1999999')],
                      [dict(valid, UNIT=MONITOR)], [dict(valid, _PID='99')],
                      [dict(valid, MESSAGE='some unrelated failure')],
+                     [dict(valid, MESSAGE=MONITOR + ': Start request repeated too quickly.')],
+                     [dict(valid, MESSAGE='Start request repeated too quickly.')],
                      [dict(valid, __MONOTONIC_TIMESTAMP='invalid')]):
             with self.subTest(rows=rows):
                 al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
@@ -152,7 +154,7 @@ class Detection(Base):
         self.sd.set(DAEMON, ActiveState='failed', Result='signal', ExecMainStatus=9,
                     ExecMainExitTimestampMonotonic=2000000)
         row = {'UNIT': DAEMON, '_PID': '1', '__MONOTONIC_TIMESTAMP': '7000000',
-               'MESSAGE': 'Start request repeated too quickly.'}
+               'MESSAGE': DAEMON + ': Start request repeated too quickly.'}
         al = A.Alerter(self.cfg, runner=self.sd, deliver=self.sink,
                        clock=self.clock, journal_reader=lambda unit: [row])
         al.event(DAEMON)

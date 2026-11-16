@@ -104,3 +104,8 @@ Regression tests first reproduced the incorrect generic classification. The rele
 Source inspected: https://github.com/systemd/systemd/blob/v255/src/core/unit.c (`unit_test_start_limit`). No production or credentials were changed.
 
 Local verification for this fix: 46 alert tests OK; 23 release-configuration tests OK; 400 harness tests OK with three privilege-dependent skips. Four in-memory mutants were caught (remove fallback, accept stale entries, accept non-manager entries, accept another unit). No full-repository run or new VM was performed. The journal fallback needs validation under the real service sandbox before this release is considered verified.
+
+
+### Manager journal message format correction
+
+The manager refusal message includes the unit name followed by a colon and a space. The parser requires that exact prefix as well as matching UNIT, PID 1, current boot and a fresh monotonic timestamp. The earlier synthetic fixture omitted the prefix and allowed a parser defect through. Regression tests use the actual message structure with synthetic names and reject foreign prefixes and unprefixed messages. No acceptance criterion or candidate code changed. Real-system validation remains required.

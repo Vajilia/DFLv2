@@ -1,7 +1,7 @@
 {
   "files": {
     "alert.env.template": "7588bdd17a0ceef1cd0fc5dde3f36f6274524f10b42433e32a87da66b1bb1692",
-    "dfl_alert.py": "a8fb7acbedb1e48dce7480c312e24797bb14df59c5423ca0edcc02efe226d047",
+    "dfl_alert.py": "a695b6201cf6973e035baa4bbd7c6660bee50e0a19d2847d1e79b9d9ce9f0f08",
     "release_config.py": "1d6f1a00e2983a2f0a8c97afc2de1ba705fbf1cd6237a3d141b31c3be1d7aae9",
     "templates/alert-poll.service.in": "632f2c54351f629709d2bd95d3ec6f4cf88922433c77d812a2f63fd09c2a7088",
     "templates/alert-poll.timer.in": "0d56e78b19f9fbe526c6862c1c7b49a72049dcc012ae8c829bf55ccd155a5330",

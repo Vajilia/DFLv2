@@ -270,7 +270,7 @@ class Alerter:
             rows = self.journal_reader(unit)
             for row in rows:
                 if (row.get("UNIT") == unit and row.get("_PID") == "1"
-                        and row.get("MESSAGE") == "Start request repeated too quickly."
+                        and row.get("MESSAGE") == unit + ": Start request repeated too quickly."
                         and int(row.get("__MONOTONIC_TIMESTAMP", "0")) >= exited):
                     observed["StartLimitEvidence"] = "current-boot manager journal"
                     observed["StartLimitEvidenceMonotonic"] = row["__MONOTONIC_TIMESTAMP"]
