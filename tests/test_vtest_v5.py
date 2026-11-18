@@ -155,6 +155,92 @@ class NeverRecovers(unittest.TestCase):
         self.assertEqual(rows['V5.s.alert_did_not_recover'][1], 'pass')
         self.assertEqual(rows['V5.s.pause_observed'][1], 'info')
 
+class IndependentSafetyTrip(unittest.TestCase):
+    """The daemon trips itself (kind monitor_silent, source daemon) once the monitor's heartbeat has been silent for GUARD_STALE_S: its own safety rule, not the alert path's.
+    A stopped monitor stays stopped for the hold, so that latch can legitimately appear during the hold. The judge accepts it only with PROOF of who wrote it, why and when;
+    anything else that changes the latch is still the alert path (or something unexplained) acting, and fails."""
+    SINCE, LAST_HB = 950.0, 947.0
+    DOWN = {'since': 950.0, 'last_heartbeat': 947.0, 'stale_s': 120.0}
+    REC = {'kind': 'monitor_silent', 'detail': 'no heartbeat from the monitor for 121 s', 'source': 'daemon', 'at': 1070.2}
+
+    def before(self, **over):
+        return {'unit': dict(UNIT_BEFORE), 'latch_sha': None, 'latch': None, 'trips': 0, 'trip_records': [], 'released': 1, 'paused': False, 'at': 1040.0, **over}
+
+    def after(self, rec=None, **over):
+        rec = dict(self.REC) if rec is None else rec
+        return {'unit': dict(UNIT_BEFORE), 'latch_sha': 'a' * 64, 'latch': rec, 'trips': 1, 'trip_records': [dict(rec)], 'released': 1, 'paused': True, 'at': 1100.0, **over}
+
+    def judge(self, after, before=None, down='default'):
+        down = self.DOWN if down == 'default' else down
+        rows = V5.evaluate_never_recovers('s', before or self.before(), after, 60, monitor_down=down)
+        return by_id(rows)
+
+    def test_the_daemons_own_stale_heartbeat_trip_during_the_hold_passes_and_is_recorded_with_its_proof(self):
+        rows = self.judge(self.after())
+        self.assertEqual(rows['V5.s.alert_did_not_recover'][1], 'pass', rows['V5.s.alert_did_not_recover'][2])
+        r = rows['V5.s.independent_safety_trip']
+        self.assertEqual(r[1], 'info')
+        self.assertFalse(r[4], 'recorded, not itself a required check')
+        self.assertIn('daemon', r[2])
+        self.assertIn('monitor_silent', r[2])
+        self.assertEqual(r[3]['latch']['at'], 1070.2)
+
+    def test_without_a_monitor_that_was_stopped_by_the_harness_the_same_latch_is_unproven_and_fails(self):
+        for down in (None, {}):
+            r = self.judge(self.after(), down=down)['V5.s.alert_did_not_recover']
+            self.assertEqual(r[1], 'fail', down)
+            self.assertIn('latch changed', r[2])
+
+    def test_each_failure_of_the_proof_fails(self):
+        base = dict(self.REC)
+        cases = {
+            'written by the alert path': self.after(dict(base, source='alert')),
+            'written by an operator': self.after(dict(base, source='operator')),
+            'no writer recorded': self.after({k: v for k, v in base.items() if k != 'source'}),
+            'an OOM latch': self.after(dict(base, kind='oom_kill', source='systemd')),
+            'an unaccounted-stop latch': self.after(dict(base, kind='unaccounted_stop')),
+            'a different reason for the daemon trip': self.after(dict(base, detail='the monitor wrote no new heartbeat in 300 s since this daemon started')),
+            'written before the hold began': self.after(dict(base, at=1039.0)),
+            'written after the hold ended': self.after(dict(base, at=1103.0)),
+            'written before the heartbeat could have been stale': self.after(dict(base, at=1060.0)),
+            'no time on the latch': self.after({k: v for k, v in base.items() if k != 'at'}),
+            'the latch could not be read': self.after({'unreadable': True}),
+            'no latch document at all': self.after(None, latch=None),
+            'no new line in trips.jsonl': self.after(trips=0, trip_records=[]),
+            'two new lines in trips.jsonl': self.after(trips=2, trip_records=[dict(base), dict(base, at=1071.0)]),
+            'the new trips line differs from the latch': self.after(trip_records=[dict(base, detail='other')]),
+            'no PAUSE with the latch': self.after(paused=False),
+        }
+        for label, after in cases.items():
+            r = self.judge(after)['V5.s.alert_did_not_recover']
+            self.assertEqual(r[1], 'fail', label)
+
+    def test_the_monitors_last_heartbeat_must_be_known(self):
+        self.assertEqual(self.judge(self.after(), down=dict(self.DOWN, last_heartbeat=None))['V5.s.alert_did_not_recover'][1], 'fail')
+
+    def test_a_proven_trip_does_not_excuse_a_recovery_action_made_at_the_same_time(self):
+        for label, after in (('release record added', self.after(released=2)),
+                             ('unit restarted', self.after(unit=dict(UNIT_BEFORE, ActiveState='active', InvocationID='new', Result='success'))),
+                             ('unit reset', self.after(unit=dict(UNIT_BEFORE, ActiveState='inactive', Result='success'))),
+                             ('earlier trips lost', self.after(trips=0, trip_records=[]))):
+            self.assertEqual(self.judge(after)['V5.s.alert_did_not_recover'][1], 'fail', label)
+
+    def test_an_existing_latch_that_is_altered_or_cleared_is_never_excused(self):
+        existing = dict(self.REC, at=900.0)
+        before = self.before(latch_sha='b' * 64, latch=existing, trips=1, trip_records=[existing], paused=True)
+        legit_looking = dict(self.REC)
+        replaced = self.after(legit_looking, trips=2, trip_records=[existing, legit_looking])
+        cleared = self.after(None, latch_sha=None, latch=None, trips=1, trip_records=[existing])
+        self.assertEqual(self.judge(replaced, before=before)['V5.s.alert_did_not_recover'][1], 'fail')
+        self.assertEqual(self.judge(cleared, before=before)['V5.s.alert_did_not_recover'][1], 'fail')
+        unchanged = dict(before, at=1100.0)
+        self.assertEqual(self.judge(unchanged, before=before)['V5.s.alert_did_not_recover'][1], 'pass')
+
+    def test_the_latch_vanishing_is_never_excused_even_with_a_stopped_monitor(self):
+        before = self.before(latch_sha='b' * 64, latch=dict(self.REC, at=900.0), trips=1, trip_records=[dict(self.REC, at=900.0)])
+        after = self.after(None, latch_sha=None, latch=None, trips=1, trip_records=[dict(self.REC, at=900.0)])
+        self.assertEqual(self.judge(after, before=before)['V5.s.alert_did_not_recover'][1], 'fail')
+
 
 class Retry(unittest.TestCase):
     def failed_then_ok(self, retry_ok=True, received=None, extra_sink=0):
@@ -253,8 +339,9 @@ class Plan(unittest.TestCase):
 
 class ScriptedAlertMachine:
     """A machine that follows the design: a stopped monitor is seen by the poll after ~2 minutes, the alert tool records it and hands it to the sink; nothing recovers by itself."""
-    def __init__(self, alert_detects=True, alert_recovers=False, delivery_ok=True, detect_after=130.0):
+    def __init__(self, alert_detects=True, alert_recovers=False, delivery_ok=True, detect_after=130.0, daemon_trips=False, rogue_latch=None):
         self.t = 1000.0
+        self.daemon_trips, self.rogue_latch = daemon_trips, rogue_latch
         self.alert_detects, self.alert_recovers, self.delivery_ok, self.detect_after = alert_detects, alert_recovers, delivery_ok, detect_after
         self.calls, self.files, self.monitor_stopped_at = [], {}, None
         self.monitor_up = True
@@ -264,11 +351,28 @@ class ScriptedAlertMachine:
     def now(self):
         return self.t
 
+    def _latch(self, rec):
+        import hashlib
+        text = json.dumps(rec, sort_keys=True) + '\n'
+        self.files[C.GUARD + '/TRIPPED'] = text
+        self.files[C.GUARD + '/trips.jsonl'] = self.files.get(C.GUARD + '/trips.jsonl', '') + text
+        self.files[C.ROOT_DIR + '/store/PAUSE'] = ''
+        self.latch_sha = hashlib.sha256(text.encode()).hexdigest()
+
     def sleep(self, s):
         self.t += s
+        hb = (self.monitor_stopped_at or 0) - 3.0                       # the stubbed heartbeat was 3 s old when the monitor was stopped
+        if self.daemon_trips and not self.monitor_up and self.monitor_stopped_at and C.GUARD + '/TRIPPED' not in self.files and self.t >= hb + 121.0:
+            self._latch({'kind': 'monitor_silent', 'detail': 'no heartbeat from the monitor for 121 s', 'source': 'daemon', 'at': hb + 121.0})
+        if self.rogue_latch and not self.monitor_up and self.incident_seen_at() is not None and self.t >= self.incident_seen_at() + 10 and C.GUARD + '/TRIPPED' not in self.files:
+            self._latch(dict(self.rogue_latch, at=self.rogue_latch.get('at', self.t)))
         if self.alert_recovers and not self.monitor_up and self.monitor_stopped_at and self.t - self.monitor_stopped_at > self.detect_after + 20:
             self.monitor_up = True
             self.log.append(('alert-restarted-monitor', self.t))
+
+    def incident_seen_at(self):
+        ts = [float(json.loads(v)['first_seen']) for k, v in self.files.items() if '/incidents/' in k]
+        return min(ts) if ts else None
 
     def monotonic(self):
         return self.t
@@ -382,6 +486,73 @@ class ScenarioGlue(unittest.TestCase):
         hold = V5.DEFAULTS['smoke']['hold_s']
         self.assertGreaterEqual(starts[0][0], incident_t + hold - 1, 'the harness must not recover before the alert had its chance to (wrongly) do so and the hold passed')
         self.assertGreater(starts[0][0], stop_t)
+
+    def wire_guard(self, ctx, m):
+        """Latch, trips and PAUSE as the scripted machine's files hold them (the stub context otherwise reports none)."""
+        import hashlib
+
+        def latch():
+            text = m.files.get(C.GUARD + '/TRIPPED')
+            return (None, None) if text is None else (json.loads(text), hashlib.sha256(text.encode()).hexdigest())
+        ctx.latch = latch
+        ctx.trips = lambda: [json.loads(l) for l in m.files.get(C.GUARD + '/trips.jsonl', '').splitlines() if l.strip()]
+        ctx.paused = lambda: (C.ROOT_DIR + '/store/PAUSE') in m.files
+
+    def test_the_observed_sequence_the_daemon_trips_itself_inside_the_hold_while_the_monitor_is_stopped_passes_with_its_proof(self):
+        """V5 on aef65af (VM620040862): 'the latch changed: None -> <hash>', PAUSE false -> true. A monitor stopped for longer than GUARD_STALE_S makes the daemon latch and pause by itself;
+        the alert was recorded ~70 s in and the 60 s hold spans that moment."""
+        for fail_delivery in (False, True):
+            m = ScriptedAlertMachine(detect_after=70.0, daemon_trips=True, delivery_ok=not fail_delivery)
+            ctx, rec = self.ctx(m)
+            self.wire_guard(ctx, m)
+            scn = 'delivery_failure' if fail_delivery else 'monitor_stopped'
+            try:
+                V5.scenario_monitor_stopped(ctx, rec, fail_delivery=fail_delivery)
+            except C.StageStop:
+                pass
+            by = {r[0]: r for r in rec.rows}
+            self.assertIn(C.GUARD + '/TRIPPED', m.files, 'the scripted daemon must have tripped inside the run')
+            self.assertEqual(by['V5.%s.alert_did_not_recover' % scn][1], 'pass', by['V5.%s.alert_did_not_recover' % scn][2])
+            self.assertEqual(by['V5.%s.independent_safety_trip' % scn][1], 'info')
+
+    def test_a_latch_written_during_the_hold_by_anything_but_the_daemons_own_rule_still_fails(self):
+        for label, rogue in (('the alert path', {'kind': 'monitor_silent', 'detail': 'no heartbeat from the monitor for 121 s', 'source': 'alert'}),
+                             ('an unexplained oom latch', {'kind': 'oom_kill', 'detail': 'x', 'source': 'systemd'}),
+                             ('a daemon-looking latch before the heartbeat could be stale', {'kind': 'monitor_silent', 'detail': 'no heartbeat from the monitor for 121 s', 'source': 'daemon', 'at': 1090.0})):
+            m = ScriptedAlertMachine(detect_after=70.0, rogue_latch=rogue)
+            ctx, rec = self.ctx(m)
+            self.wire_guard(ctx, m)
+            with self.assertRaises(C.StageStop, msg=label):
+                V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+            by = {r[0]: r for r in rec.rows}
+            self.assertEqual(by['V5.monitor_stopped.alert_did_not_recover'][1], 'fail', label)
+            self.assertNotIn('V5.monitor_stopped.independent_safety_trip', by, label)
+
+    def test_a_trip_inside_the_hold_does_not_excuse_an_alert_path_that_also_restarts_the_unit(self):
+        m = ScriptedAlertMachine(detect_after=70.0, daemon_trips=True, alert_recovers=True)
+        ctx, rec = self.ctx(m)
+        self.wire_guard(ctx, m)
+        with self.assertRaises(C.StageStop):
+            V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        self.assertEqual({r[0]: r for r in rec.rows}['V5.monitor_stopped.alert_did_not_recover'][1], 'fail')
+
+    def test_only_the_scenario_in_which_the_harness_stopped_the_monitor_offers_the_exemption(self):
+        seen = []
+        orig = V5.evaluate_never_recovers
+        V5.evaluate_never_recovers = lambda scn, b, a, h, monitor_down=None: (seen.append((scn, monitor_down)), orig(scn, b, a, h, monitor_down))[1]
+        try:
+            m = ScriptedAlertMachine(detect_after=70.0)
+            ctx, rec = self.ctx(m)
+            V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        finally:
+            V5.evaluate_never_recovers = orig
+        self.assertEqual(len(seen), 1)
+        down = seen[0][1]
+        self.assertEqual(down['stale_s'], C.GUARD_STALE_S)
+        self.assertAlmostEqual(down['last_heartbeat'], down['since'] - 3.0)
+        import inspect
+        for fn in (V5.scenario_daemon_start_limit, V5.scenario_monitor_exit2):
+            self.assertNotIn('monitor_down', inspect.getsource(fn), fn.__name__ + ': a failed daemon or an immutable guard folder is not explained by the stale-heartbeat rule')
 
     def test_no_alert_within_the_time_limit_fails_and_the_monitor_is_still_restored(self):
         m = ScriptedAlertMachine(alert_detects=False)

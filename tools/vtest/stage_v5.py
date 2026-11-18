@@ -117,20 +117,68 @@ def evaluate_detection(scn, events, new, sink, t_fault, max_s, alert_journal="",
     return rows
 
 
-def evaluate_never_recovers(scn, before, after, hold_s):
+TRIP_TOLERANCE_S = 2.0      # clock reads of the harness and of the daemon come from the same host; this only absorbs the sampling gap between a read and a write
+
+
+def independent_daemon_trip(before, after, monitor_down):
+    """Is the latch that appeared during the hold PROVEN to be the daemon's own stale-heartbeat trip? -> (True, proof text) or (False, why not).
+    The daemon trips itself (kind monitor_silent, source daemon) once the monitor's heartbeat has been silent for GUARD_STALE_S and pauses; with the monitor stopped for the hold that can happen
+    inside the hold. It is accepted only when ALL of these hold: the harness itself stopped the monitor (`monitor_down`, with the last heartbeat it saw); no latch existed before; the latch says
+    kind monitor_silent, source daemon, 'no heartbeat from the monitor for N s'; it was written inside the hold and not before the heartbeat could have been stale; trips.jsonl gained exactly one
+    line and it is the latch's own record; PAUSE exists. Anything else is unexplained and stays a failure."""
+    if not monitor_down or monitor_down.get("last_heartbeat") is None or monitor_down.get("stale_s") is None:
+        return False, "no proof: this scenario did not stop the monitor (or its last heartbeat is unknown), so the daemon's stale-heartbeat rule cannot explain a new latch"
+    if before.get("latch_sha") is not None:
+        return False, "an existing latch was changed or removed, which no independent safety action explains"
+    if after.get("latch_sha") is None:
+        return False, "no latch"
+    doc = after.get("latch")
+    if not isinstance(doc, dict) or doc.get("unreadable"):
+        return False, "the new latch could not be read, so its writer is unproven"
+    if doc.get("kind") != "monitor_silent" or doc.get("source") != "daemon":
+        return False, "the new latch is kind=%r source=%r, not the daemon's monitor_silent trip" % (doc.get("kind"), doc.get("source"))
+    if not str(doc.get("detail", "")).startswith("no heartbeat from the monitor for "):
+        return False, "the new latch's detail %r is not the daemon's stale-heartbeat message" % (doc.get("detail"),)
+    at, tol = doc.get("at"), TRIP_TOLERANCE_S
+    if not isinstance(at, (int, float)) or isinstance(at, bool):
+        return False, "the new latch has no time"
+    if before.get("at") is None or after.get("at") is None or not (before["at"] - tol <= at <= after["at"] + tol):
+        return False, "the new latch (at %s) was not written inside the hold (%s .. %s)" % (at, before.get("at"), after.get("at"))
+    earliest = monitor_down["last_heartbeat"] + monitor_down["stale_s"] - tol
+    if at < earliest:
+        return False, "the new latch (at %.1f) predates the moment the heartbeat could have been stale (%.1f): it is not the stale-heartbeat rule" % (at, earliest)
+    new = (after.get("trip_records") or [])[len(before.get("trip_records") or []):]
+    if (after.get("trip_records") or [])[:len(before.get("trip_records") or [])] != (before.get("trip_records") or []) or len(new) != 1 or new[0] != doc:
+        return False, "trips.jsonl did not gain exactly the one line that is the latch's own record (new lines: %s)" % (new,)
+    if not after.get("paused"):
+        return False, "the daemon did not pause with the latch, which its rule always does"
+    return True, ("the daemon's own safety rule: latch kind=%s source=%s written at %.1f, %.1f s after the monitor's last heartbeat (%.1f); the harness had stopped the monitor at %.1f; "
+                  "trips.jsonl gained exactly that one record; PAUSE exists" % (doc["kind"], doc["source"], at, at - monitor_down["last_heartbeat"], monitor_down["last_heartbeat"], monitor_down.get("since", float("nan"))))
+
+
+def evaluate_never_recovers(scn, before, after, hold_s, monitor_down=None):
+    """`monitor_down`: only for a scenario in which the HARNESS stopped the monitor: {"since", "last_heartbeat", "stale_s"}. It lets a latch that the daemon PROVABLY wrote itself (see
+    independent_daemon_trip) pass; it never excuses an existing latch changed or removed, a release record, or any change to the failed unit."""
     pre = "V5.%s." % scn
-    bad = []
+    bad, proof = [], None
     for k in ("ActiveState", "SubState", "Result", "InvocationID", "NRestarts", "MainPID"):
         if before["unit"].get(k) != after["unit"].get(k):
             bad.append("the failed unit's %s changed %r -> %r" % (k, before["unit"].get(k), after["unit"].get(k)))
     if before.get("latch_sha") != after.get("latch_sha"):
-        bad.append("the latch changed: %s -> %s" % (before.get("latch_sha"), after.get("latch_sha")))
+        ok, why = independent_daemon_trip(before, after, monitor_down)
+        if ok:
+            proof = why
+        else:
+            bad.append("the latch changed: %s -> %s (%s)" % (before.get("latch_sha"), after.get("latch_sha"), why))
     if after.get("released", 0) != before.get("released", 0):
         bad.append("the number of release records changed %s -> %s" % (before.get("released"), after.get("released")))
     if after.get("trips", 0) < before.get("trips", 0):
         bad.append("trips.jsonl lost lines (%s -> %s)" % (before.get("trips"), after.get("trips")))
     rows = [row(pre + "alert_did_not_recover", "fail" if bad else "pass",
-                "; ".join(bad) if bad else "for %d s after the alert went out the failed unit, the latch and the release records were unchanged: the alert path restarted, reset and released nothing" % hold_s, {"before": before, "after": after})]
+                "; ".join(bad) if bad else "for %d s after the alert went out the failed unit, the latch and the release records were unchanged%s: the alert path restarted, reset and released nothing" %
+                (hold_s, " except the daemon's own proven safety trip (see %sindependent_safety_trip)" % pre if proof else ""), {"before": before, "after": after})]
+    if proof:
+        rows.append(row(pre + "independent_safety_trip", "info", proof, {"latch": after.get("latch"), "monitor_down": monitor_down}, False))
     rows.append(row(pre + "pause_observed", "info", "PAUSE before: %s, after: %s (the daemon pauses itself when the monitor's heartbeat goes stale: its own rule, not the alert path's)" % (before.get("paused"), after.get("paused")), None, False))
     return rows
 
@@ -186,9 +234,10 @@ def snapshot(ctx, key):
     """The state that would show an alert path acting: the failed unit, the latch, the release records, the trips. Read-only."""
     env = ctx.env
     sh = ctx.show(key, UNIT_PROPS)
-    _, sha = ctx.latch()
+    doc, sha = ctx.latch()
     released = [n for n in env.listdir(GUARD + "/evidence/released")] if env.exists(GUARD + "/evidence/released") else []
-    return {"unit": {k: sh.get(k) for k in UNIT_PROPS}, "latch_sha": sha, "released": len(released), "trips": len(ctx.trips()), "paused": ctx.paused()}
+    trips = ctx.trips()
+    return {"unit": {k: sh.get(k) for k in UNIT_PROPS}, "latch_sha": sha, "latch": doc, "released": len(released), "trips": len(trips), "trip_records": trips, "paused": ctx.paused(), "at": ctx.now()}
 
 
 def alert_journal(ctx, since):
@@ -244,12 +293,12 @@ def _clears(ctx, rec, scn, match_events, wait_s):
               "the incident did not clear within %d s of the recovery" % wait_s, None)
 
 
-def _hold_and_judge(ctx, rec, scn, failed_key):
+def _hold_and_judge(ctx, rec, scn, failed_key, monitor_down=None):
     hold = ctx.cfg["hold_s"]
     before = snapshot(ctx, failed_key)
     ctx.env.sleep(hold)
     after = snapshot(ctx, failed_key)
-    rec.add_all(evaluate_never_recovers(scn, before, after, hold))
+    rec.add_all(evaluate_never_recovers(scn, before, after, hold, monitor_down))
     return before, after
 
 
@@ -263,6 +312,8 @@ def scenario_monitor_stopped(ctx, rec, fail_delivery=False):
     if fail_delivery:
         env.write(C.ALERT_MODE, "fail\n", 0o600)
     t0 = ctx.now()
+    hb_age = ctx.heartbeat_age()
+    monitor_down = {"since": t0, "last_heartbeat": None if hb_age is None else t0 - hb_age, "stale_s": C.GUARD_STALE_S}      # the daemon's own stale-heartbeat rule can fire during the hold
     mid_inc, new = None, []
     try:
         env.sc("stop", UNIT["monitor"])
@@ -279,7 +330,7 @@ def scenario_monitor_stopped(ctx, rec, fail_delivery=False):
         sink_new = read_sink(env)[len(sink0):]
         rec.add_all(evaluate_detection(scn, events, new, sink_new, t0, cfg["detect_max_s"], alert_journal(ctx, t0 - 2), expect_delivery=not fail_delivery))
         if got:
-            _hold_and_judge(ctx, rec, scn, "monitor")
+            _hold_and_judge(ctx, rec, scn, "monitor", monitor_down)
             if fail_delivery:
                 mid_inc = [i for i in read_incidents(env) if i["id"] == got[0]["id"]][0]
                 sink_mid = read_sink(env)[len(sink0):]
