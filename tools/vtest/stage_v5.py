@@ -10,6 +10,7 @@ Also recorded, not judged: that the website kept answering while the daemon was 
 import json
 import re
 
+import attribution as AT
 import common as C
 import install_alerts as IA
 from common import GUARD, UNIT, StageStop
@@ -22,7 +23,9 @@ PLAN = [("V5.installed", "the drop-ins, the poll timer and the release record ar
         ("V5.daemon_start_limit", "kill -9 the daemon until systemd refuses (start-limit-hit): the incident is recorded and delivered, the unit stays failed for the hold, the site keeps answering while the simulation is down"),
         ("V5.monitor_exit2", "the guard folder is immutable while the monitor must write a latch: if the monitor exits 2, the incident is recorded and delivered without it; if it does not exit, the check is INVALID, not passed"),
         ("V5.delivery_failure", "the channel is down when the monitor fails: the failure is recorded (attempted_failed), nothing reaches the sink, then the channel returns and the retry delivers once; still not received"),
-        ("V5.never_recovers", "in every scenario: the failed unit, the latch, the release records are unchanged for the hold after the alert; no `release`, `resume`, `reset-failed` or restart came from the alert path")]
+        ("V5.never_recovers", "in every scenario: the failed unit, the latch, the release records are unchanged for the hold after the alert; no `release`, `resume`, `reset-failed` or restart came from the alert path; the one allowed change is a latch the daemon PROVABLY wrote itself (its stale-heartbeat rule, kind monitor_silent) with the preserved evidence reproducing it"),
+        ("V5.alert_sandbox", "the alert units' effective sandbox (User, ProtectSystem, ReadWritePaths, ...) is preserved, and ProtectSystem=strict with no writable path covering the guard folder is verified"),
+        ("V5.attribution_preserved", "in every scenario, at the end of the hold and BEFORE any recovery: the latch file, trips.jsonl, PAUSE, the monitor's heartbeat time, the guard listing and timestamped alert, poll, daemon and monitor journals are saved; a gap fails the scenario and makes the archive incomplete")]
 DEFAULTS = {"qualifying": {"baseline_watch_s": 150, "detect_max_s": 300, "hold_s": 90, "clear_wait_s": 180, "retry_wait_s": 150, "poll_max_age_s": 150, "kill_wait_s": 45, "exit2_wait_s": 420, "overrun_rate": 5e6},
             "smoke": {"baseline_watch_s": 90, "detect_max_s": 300, "hold_s": 60, "clear_wait_s": 180, "retry_wait_s": 150, "poll_max_age_s": 150, "kill_wait_s": 45, "exit2_wait_s": 420, "overrun_rate": 5e6}}
 UNIT_PROPS = ("ActiveState", "SubState", "Result", "InvocationID", "NRestarts", "MainPID")
@@ -120,14 +123,18 @@ def evaluate_detection(scn, events, new, sink, t_fault, max_s, alert_journal="",
 TRIP_TOLERANCE_S = 2.0      # clock reads of the harness and of the daemon come from the same host; this only absorbs the sampling gap between a read and a write
 
 
-def independent_daemon_trip(before, after, monitor_down):
+def independent_daemon_trip(before, after, monitor_down, preserved=None):
     """Is the latch that appeared during the hold PROVEN to be the daemon's own stale-heartbeat trip? -> (True, proof text) or (False, why not).
     The daemon trips itself (kind monitor_silent, source daemon) once the monitor's heartbeat has been silent for GUARD_STALE_S and pauses; with the monitor stopped for the hold that can happen
     inside the hold. It is accepted only when ALL of these hold: the harness itself stopped the monitor (`monitor_down`, with the last heartbeat it saw); no latch existed before; the latch says
     kind monitor_silent, source daemon, 'no heartbeat from the monitor for N s'; it was written inside the hold and not before the heartbeat could have been stale; trips.jsonl gained exactly one
-    line and it is the latch's own record; PAUSE exists. Anything else is unexplained and stays a failure."""
+    line and it is the latch's own record; PAUSE exists; and the PRESERVED evidence (the latch file, trips.jsonl and the monitor's heartbeat time, captured at the end of the hold before any recovery)
+    exists, is complete and reproduces what the judge saw. Anything else is unexplained and stays a failure."""
     if not monitor_down or monitor_down.get("last_heartbeat") is None or monitor_down.get("stale_s") is None:
         return False, "no proof: this scenario did not stop the monitor (or its last heartbeat is unknown), so the daemon's stale-heartbeat rule cannot explain a new latch"
+    ok, why = AT.preserved_matches(after, preserved)
+    if not ok:
+        return False, "no proof: " + why
     if before.get("latch_sha") is not None:
         return False, "an existing latch was changed or removed, which no independent safety action explains"
     if after.get("latch_sha") is None:
@@ -144,7 +151,8 @@ def independent_daemon_trip(before, after, monitor_down):
         return False, "the new latch has no time"
     if before.get("at") is None or after.get("at") is None or not (before["at"] - tol <= at <= after["at"] + tol):
         return False, "the new latch (at %s) was not written inside the hold (%s .. %s)" % (at, before.get("at"), after.get("at"))
-    earliest = monitor_down["last_heartbeat"] + monitor_down["stale_s"] - tol
+    last_hb = preserved["heartbeat"]["mtime"]                      # the file's own time, read once the monitor was stopped: authoritative over the harness's reading
+    earliest = last_hb + monitor_down["stale_s"] - tol
     if at < earliest:
         return False, "the new latch (at %.1f) predates the moment the heartbeat could have been stale (%.1f): it is not the stale-heartbeat rule" % (at, earliest)
     new = (after.get("trip_records") or [])[len(before.get("trip_records") or []):]
@@ -153,10 +161,10 @@ def independent_daemon_trip(before, after, monitor_down):
     if not after.get("paused"):
         return False, "the daemon did not pause with the latch, which its rule always does"
     return True, ("the daemon's own safety rule: latch kind=%s source=%s written at %.1f, %.1f s after the monitor's last heartbeat (%.1f); the harness had stopped the monitor at %.1f; "
-                  "trips.jsonl gained exactly that one record; PAUSE exists" % (doc["kind"], doc["source"], at, at - monitor_down["last_heartbeat"], monitor_down["last_heartbeat"], monitor_down.get("since", float("nan"))))
+                  "trips.jsonl gained exactly that one record; PAUSE exists; the preserved latch file, trips.jsonl and heartbeat time reproduce this" % (doc["kind"], doc["source"], at, at - last_hb, last_hb, monitor_down.get("since", float("nan"))))
 
 
-def evaluate_never_recovers(scn, before, after, hold_s, monitor_down=None):
+def evaluate_never_recovers(scn, before, after, hold_s, monitor_down=None, preserved=None):
     """`monitor_down`: only for a scenario in which the HARNESS stopped the monitor: {"since", "last_heartbeat", "stale_s"}. It lets a latch that the daemon PROVABLY wrote itself (see
     independent_daemon_trip) pass; it never excuses an existing latch changed or removed, a release record, or any change to the failed unit."""
     pre = "V5.%s." % scn
@@ -165,7 +173,7 @@ def evaluate_never_recovers(scn, before, after, hold_s, monitor_down=None):
         if before["unit"].get(k) != after["unit"].get(k):
             bad.append("the failed unit's %s changed %r -> %r" % (k, before["unit"].get(k), after["unit"].get(k)))
     if before.get("latch_sha") != after.get("latch_sha"):
-        ok, why = independent_daemon_trip(before, after, monitor_down)
+        ok, why = independent_daemon_trip(before, after, monitor_down, preserved)
         if ok:
             proof = why
         else:
@@ -180,6 +188,28 @@ def evaluate_never_recovers(scn, before, after, hold_s, monitor_down=None):
     if proof:
         rows.append(row(pre + "independent_safety_trip", "info", proof, {"latch": after.get("latch"), "monitor_down": monitor_down}, False))
     rows.append(row(pre + "pause_observed", "info", "PAUSE before: %s, after: %s (the daemon pauses itself when the monitor's heartbeat goes stale: its own rule, not the alert path's)" % (before.get("paused"), after.get("paused")), None, False))
+    return rows
+
+
+def evaluate_attribution_capture(scn, cap):
+    """REQUIRED row: the evidence that attributes whatever changed in the guard folder during the hold was preserved, complete, before any recovery. A gap fails the scenario."""
+    problems = AT.attribution_problems(cap)
+    return [row("V5.%s.attribution_preserved" % scn, "fail" if problems else "pass",
+                ("the attribution evidence is INCOMPLETE, so nothing about the hold can be accepted: %s" % "; ".join(problems[:6])) if problems else
+                "the latch file (%s), trips.jsonl (%s), PAUSE (%s), the heartbeat time, the guard listing and timestamped alert, poll, daemon and monitor journals were captured at the end of the hold, before recovery" %
+                (cap["latch"]["state"], cap["trips"]["state"], cap["pause"]["state"]), {"problems": problems, "file": AT.SCENARIOS.get(scn)})]
+
+
+def evaluate_sandbox(doc, guard):
+    """REQUIRED rows: the alert units' effective sandbox was preserved, and it does not let them write the guard folder."""
+    problems = AT.sandbox_problems(doc)
+    rows = [row("V5.alert_sandbox.preserved", "fail" if problems else "pass", ("the alert units' effective properties are incomplete: %s" % "; ".join(problems[:6])) if problems else
+                "effective sandbox properties of the alert unit for each protected unit and of the poll unit were preserved (%s)" % AT.SANDBOX_FILE, {"problems": problems})]
+    if not problems:
+        bad = AT.sandbox_findings(doc, guard)
+        rows.append(row("V5.alert_sandbox.guard_not_writable", "fail" if bad else "pass", "; ".join(bad) if bad else
+                        "every alert unit has ProtectSystem=strict and no ReadWritePaths covering the guard folder: the alert path cannot write the latch even if the tool tried",
+                        {"users": {n: p.get("User") for n, p in doc["units"].items()}}))
     return rows
 
 
@@ -293,12 +323,88 @@ def _clears(ctx, rec, scn, match_events, wait_s):
               "the incident did not clear within %d s of the recovery" % wait_s, None)
 
 
-def _hold_and_judge(ctx, rec, scn, failed_key, monitor_down=None):
+def _journal(ctx, since, *units):
+    """A timestamped slice of the journal of the given units: {"state": present|empty|unreadable, "text"}."""
+    argv = ["journalctl", "--since", "@%d" % int(since), "--no-pager", "-o", "short-iso-precise"]
+    for u in units:
+        argv += ["-u", u]
+    rc, out, err = ctx.env.run(argv, timeout=60)
+    if rc != 0:
+        return {"state": AT.UNREADABLE, "detail": (err or "rc %s" % rc)[-200:]}
+    return {"state": AT.PRESENT, "text": out} if AT.journal_lines(out) else {"state": AT.EMPTY}
+
+
+def _file_state(env, path):
+    if not env.exists(path):
+        return {"state": AT.ABSENT}
+    text = env.read(path)
+    if text is None:
+        return {"state": AT.UNREADABLE}
+    return {"state": AT.PRESENT, "text": text, "sha256": AT.sha256_text(text), "mtime": env.mtime(path)}
+
+
+def capture_attribution(ctx, scn, t_fault, monitor_down=None):
+    """Everything that attributes a change in the guard folder, read once at the end of the hold and BEFORE any recovery step (the documented recovery releases and moves the latch). Read-only."""
+    env = ctx.env
+    now = ctx.now()
+    lat, trips = _file_state(env, GUARD + "/TRIPPED"), _file_state(env, GUARD + "/trips.jsonl")
+    trips["lines"] = len([l for l in trips.get("text", "").splitlines() if l.strip()]) if trips["state"] == AT.PRESENT else 0
+    hb_m = env.mtime(GUARD + "/heartbeat")
+    hb = {"state": AT.PRESENT if hb_m is not None else AT.UNREADABLE, "mtime": hb_m, "age": None if hb_m is None else now - hb_m}
+    try:
+        hb["watch_tail"] = ctx.watch_lines()[-5:]
+    except Exception:                                                   # a help, not a requirement: the heartbeat file's own time is the evidence
+        hb["watch_tail"] = []
+    rel = GUARD + "/evidence/released"
+    released = {"state": AT.PRESENT, "names": env.listdir(rel)} if env.exists(rel) else {"state": AT.ABSENT}
+    listing = [{"name": n, "mtime": env.mtime(GUARD + "/" + n)} for n in env.listdir(GUARD)]
+    since = (t_fault or now) - 5
+    return {"schema": AT.SCHEMA, "scenario": scn, "captured_at": now, "t_fault": t_fault, "monitor_down": monitor_down, "latch": lat, "trips": trips,
+            "pause": {"state": AT.PRESENT if ctx.paused() else AT.ABSENT}, "heartbeat": hb, "released": released, "guard_listing": listing,
+            "journals": {"alert": _journal(ctx, since, C.PREFIX + "alert@*"), "poll": _journal(ctx, since, C.PREFIX + "alert-poll.service"),
+                         "daemon": _journal(ctx, since, UNIT["daemon"]), "monitor": _journal(ctx, since, UNIT["monitor"])},
+            "units": {"daemon": {k: ctx.show("daemon", UNIT_PROPS).get(k) for k in UNIT_PROPS}, "monitor": {k: ctx.show("monitor", UNIT_PROPS).get(k) for k in UNIT_PROPS}}}
+
+
+def capture_sandbox(ctx):
+    """The alert units' EFFECTIVE sandbox as systemd reports it (a unit file can say one thing and a drop-in another)."""
+    units = {}
+    for name in (C.PREFIX + "alert@" + UNIT["daemon"] + ".service", C.PREFIX + "alert@" + UNIT["monitor"] + ".service", C.PREFIX + "alert-poll.service"):
+        rc, out, err = ctx.env.sc("show", name, *["-p" + p for p in AT.SANDBOX_PROPS])
+        props = {}
+        for l in (out or "").splitlines():
+            if "=" in l:
+                a, b = l.split("=", 1)
+                props[a] = b
+        units[name] = props if rc == 0 else {"error": (err or "rc %s" % rc)[-200:]}
+    return {"schema": AT.SCHEMA, "captured_at": ctx.now(), "guard": GUARD, "units": units}
+
+
+def sandbox_step(ctx, rec):
+    """Capture the alert units' effective sandbox, save it, and judge it (required rows)."""
+    try:
+        doc = capture_sandbox(ctx)
+    except Exception as e:
+        doc = {"schema": AT.SCHEMA, "error": "%s: %s" % (type(e).__name__, e)}
+    ctx.save(AT.SANDBOX_FILE, doc)
+    rec.add_all(evaluate_sandbox(doc, GUARD))
+    return doc
+
+
+def _hold_and_judge(ctx, rec, scn, failed_key, monitor_down=None, t_fault=None):
     hold = ctx.cfg["hold_s"]
+    ctx.mark("V5." + scn, phase="hold_start")                          # the evidence manifest requires this scenario's attribution file once this mark exists
     before = snapshot(ctx, failed_key)
     ctx.env.sleep(hold)
     after = snapshot(ctx, failed_key)
-    rec.add_all(evaluate_never_recovers(scn, before, after, hold, monitor_down))
+    try:
+        cap = capture_attribution(ctx, scn, t_fault, monitor_down)     # BEFORE the judge and before any recovery; saved at once, so a failing judge still leaves it
+    except Exception as e:                                              # a capture that cannot be made is a failed capture, never a silent one
+        cap = {"schema": AT.SCHEMA, "scenario": scn, "error": "%s: %s" % (type(e).__name__, e)}
+    ctx.save("attribution_%s.json" % scn, cap)
+    ctx.mark("V5." + scn, phase="attribution_captured")
+    rec.add_all(evaluate_attribution_capture(scn, cap))
+    rec.add_all(evaluate_never_recovers(scn, before, after, hold, monitor_down, cap))
     return before, after
 
 
@@ -331,7 +437,7 @@ def scenario_monitor_stopped(ctx, rec, fail_delivery=False):
         sink_new = read_sink(env)[len(sink0):]
         rec.add_all(evaluate_detection(scn, events, new, sink_new, t0, cfg["detect_max_s"], alert_journal(ctx, t0 - 2), expect_delivery=not fail_delivery))
         if got:
-            _hold_and_judge(ctx, rec, scn, "monitor", monitor_down)
+            _hold_and_judge(ctx, rec, scn, "monitor", monitor_down, t0)
             if fail_delivery:
                 mid_inc = [i for i in read_incidents(env) if i["id"] == got[0]["id"]][0]
                 sink_mid = read_sink(env)[len(sink0):]
@@ -403,7 +509,7 @@ def scenario_daemon_start_limit(ctx, rec):
             rec.check("V5.%s.budget_warning" % scn, "info", "the 'budget nearly used' warning was %s before the limit was hit (NRestarts is only a heuristic for budget use: recorded, not judged)" % ("raised" if warn else "NOT raised"), {"warnings": [w["id"] for w in warn]}, False)
             if got:
                 a = ctx.position()
-                _hold_and_judge(ctx, rec, scn, "daemon")
+                _hold_and_judge(ctx, rec, scn, "daemon", None, t_fault)
                 rec.add_all(evaluate_site_vs_simulation(_http_status(C.PORT), a, ctx.position(), ctx.active("daemon")))
     finally:
         env.sc("reset-failed", d)
@@ -462,7 +568,7 @@ def scenario_monitor_exit2(ctx, rec):
         new = _new_since(ctx, old)
         rec.add_all(evaluate_detection(scn, ("monitor_failed", "monitor_not_running"), new, read_sink(env)[len(sink0):], t0, cfg["detect_max_s"] + 120, alert_journal(ctx, t0 - 2)))
         if got:
-            _hold_and_judge(ctx, rec, scn, "monitor")
+            _hold_and_judge(ctx, rec, scn, "monitor", None, t0)
     finally:
         ok2, why2 = env.immutable(GUARD, False)
         ctx.mark("V5." + scn, phase="fault_off", ok=ok2, detail=why2)
@@ -483,6 +589,8 @@ def save_evidence(ctx):
         ctx.save("incidents.json", read_incidents(env))
         ctx.save("sink.log", read_sink(env))
         ctx.save("alert_journal.txt", alert_journal(ctx, 0) or "(empty)")
+        rc, out, err = env.run(["journalctl", "-u", C.PREFIX + "alert@*", "-u", C.PREFIX + "alert-poll.service", "--no-pager", "-o", "short-iso-precise"], timeout=120)
+        ctx.save(AT.JOURNAL_FILE, out if rc == 0 and AT.journal_lines(out) else "UNAVAILABLE: %s" % ((err or out or "rc %s" % rc).strip()[-200:] or "no entries"))
         ctx.save("alerts_install.json", env.read(IA.record_path()) or "UNAVAILABLE: no alert install record")
     except OSError:
         pass
@@ -501,6 +609,7 @@ def run(ctx):
         timer = dict(l.split("=", 1) for l in (so or "").splitlines() if "=" in l)
         rec.add_all(evaluate_installed(show["daemon"], show["monitor"], timer, C.PREFIX, bool(record.get("effective"))))
         rec.check("V5.installed.revisions", "info", "git: %s; package manifest sha256 %s; tool installed sha256 %s" % (record.get("git"), record.get("package_manifest_sha256"), record.get("tool_installed_sha256")), record.get("git"), False)
+        sandbox_step(ctx, rec)
         rec.stop_if_failed()
         ctx.ensure_baseline("vtest V5: start from a healthy baseline")
         ctx.mark("V5.baseline")

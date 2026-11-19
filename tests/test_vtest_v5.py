@@ -8,6 +8,7 @@ What V5 must judge (owner, 2026-11-12):
   * the evidence says which exact revisions and effective systemd settings were in force.
 """
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -19,6 +20,7 @@ import common as C            # noqa: E402
 import stage_v5 as V5         # noqa: E402
 import install_alerts as IA   # noqa: E402
 import release_config as RC   # noqa: E402
+import attribution as AT      # noqa: E402
 
 ALERT_UNIT = 'dfl-vtest-alert@%n.service'
 
@@ -155,11 +157,29 @@ class NeverRecovers(unittest.TestCase):
         self.assertEqual(rows['V5.s.alert_did_not_recover'][1], 'pass')
         self.assertEqual(rows['V5.s.pause_observed'][1], 'info')
 
+def preserved_for(after, hb_mtime=947.0, **over):
+    """The attribution capture the stage would have saved for this snapshot: complete and consistent unless `over` breaks it."""
+    lat = after.get('latch')
+    latch = {'state': 'present', 'text': json.dumps(lat, sort_keys=True) + '\n', 'mtime': 1070.2} if isinstance(lat, dict) and not lat.get('unreadable') else {'state': 'absent'}
+    if latch['state'] == 'present':
+        latch['sha256'] = AT.sha256_text(latch['text'])
+    recs = after.get('trip_records') or []
+    trips = {'state': 'present', 'text': ''.join(json.dumps(r, sort_keys=True) + '\n' for r in recs), 'lines': len(recs)} if recs else {'state': 'absent', 'lines': 0}
+    stamped = {'state': 'present', 'text': '2027-01-15T00:04:37.100000+00:00 host unit[1]: entry\n'}
+    doc = {'schema': 1, 'scenario': 's', 'captured_at': after.get('at', 1100.0), 't_fault': 950.0, 'monitor_down': None, 'latch': latch, 'trips': trips,
+           'pause': {'state': 'present' if after.get('paused') else 'absent'}, 'heartbeat': {'state': 'present', 'mtime': hb_mtime, 'age': 150.0, 'watch_tail': []},
+           'released': {'state': 'absent'}, 'guard_listing': [{'name': 'heartbeat', 'mtime': hb_mtime}],
+           'journals': {'alert': dict(stamped), 'poll': dict(stamped), 'daemon': {'state': 'empty'}, 'monitor': {'state': 'empty'}},
+           'units': {'daemon': {'ActiveState': 'active'}, 'monitor': {'ActiveState': 'inactive'}}}
+    doc.update(over)
+    return doc
+
+
 class IndependentSafetyTrip(unittest.TestCase):
     """The daemon trips itself (kind monitor_silent, source daemon) once the monitor's heartbeat has been silent for GUARD_STALE_S: its own safety rule, not the alert path's.
-    A stopped monitor stays stopped for the hold, so that latch can legitimately appear during the hold. The judge accepts it only with PROOF of who wrote it, why and when;
-    anything else that changes the latch is still the alert path (or something unexplained) acting, and fails."""
-    SINCE, LAST_HB = 950.0, 947.0
+    A stopped monitor stays stopped for the hold, so that latch can legitimately appear during the hold. The judge accepts it only with PROOF of who wrote it, why and when, and only when the
+    PRESERVED evidence (latch file, trips.jsonl, heartbeat time, captured before recovery) exists, is complete and reproduces the snapshot; anything else that changes the latch is still the alert
+    path (or something unexplained) acting, and fails."""
     DOWN = {'since': 950.0, 'last_heartbeat': 947.0, 'stale_s': 120.0}
     REC = {'kind': 'monitor_silent', 'detail': 'no heartbeat from the monitor for 121 s', 'source': 'daemon', 'at': 1070.2}
 
@@ -168,12 +188,17 @@ class IndependentSafetyTrip(unittest.TestCase):
 
     def after(self, rec=None, **over):
         rec = dict(self.REC) if rec is None else rec
-        return {'unit': dict(UNIT_BEFORE), 'latch_sha': 'a' * 64, 'latch': rec, 'trips': 1, 'trip_records': [dict(rec)], 'released': 1, 'paused': True, 'at': 1100.0, **over}
+        sha = AT.sha256_text(json.dumps(rec, sort_keys=True) + '\n') if isinstance(rec, dict) else 'a' * 64
+        return {'unit': dict(UNIT_BEFORE), 'latch_sha': sha, 'latch': rec, 'trips': 1, 'trip_records': [dict(rec)] if isinstance(rec, dict) else [], 'released': 1, 'paused': True, 'at': 1100.0, **over}
 
-    def judge(self, after, before=None, down='default'):
+    def judge(self, after, before=None, down='default', preserved='default'):
         down = self.DOWN if down == 'default' else down
-        rows = V5.evaluate_never_recovers('s', before or self.before(), after, 60, monitor_down=down)
+        preserved = preserved_for(after) if preserved == 'default' else preserved
+        rows = V5.evaluate_never_recovers('s', before or self.before(), after, 60, monitor_down=down, preserved=preserved)
         return by_id(rows)
+
+    def verdict(self, after, **kw):
+        return self.judge(after, **kw)['V5.s.alert_did_not_recover']
 
     def test_the_daemons_own_stale_heartbeat_trip_during_the_hold_passes_and_is_recorded_with_its_proof(self):
         rows = self.judge(self.after())
@@ -183,11 +208,12 @@ class IndependentSafetyTrip(unittest.TestCase):
         self.assertFalse(r[4], 'recorded, not itself a required check')
         self.assertIn('daemon', r[2])
         self.assertIn('monitor_silent', r[2])
+        self.assertIn('preserved', r[2])
         self.assertEqual(r[3]['latch']['at'], 1070.2)
 
     def test_without_a_monitor_that_was_stopped_by_the_harness_the_same_latch_is_unproven_and_fails(self):
         for down in (None, {}):
-            r = self.judge(self.after(), down=down)['V5.s.alert_did_not_recover']
+            r = self.verdict(self.after(), down=down)
             self.assertEqual(r[1], 'fail', down)
             self.assertIn('latch changed', r[2])
 
@@ -212,18 +238,17 @@ class IndependentSafetyTrip(unittest.TestCase):
             'no PAUSE with the latch': self.after(paused=False),
         }
         for label, after in cases.items():
-            r = self.judge(after)['V5.s.alert_did_not_recover']
-            self.assertEqual(r[1], 'fail', label)
+            self.assertEqual(self.verdict(after)[1], 'fail', label)
 
     def test_the_monitors_last_heartbeat_must_be_known(self):
-        self.assertEqual(self.judge(self.after(), down=dict(self.DOWN, last_heartbeat=None))['V5.s.alert_did_not_recover'][1], 'fail')
+        self.assertEqual(self.verdict(self.after(), down=dict(self.DOWN, last_heartbeat=None))[1], 'fail')
 
     def test_a_proven_trip_does_not_excuse_a_recovery_action_made_at_the_same_time(self):
         for label, after in (('release record added', self.after(released=2)),
                              ('unit restarted', self.after(unit=dict(UNIT_BEFORE, ActiveState='active', InvocationID='new', Result='success'))),
                              ('unit reset', self.after(unit=dict(UNIT_BEFORE, ActiveState='inactive', Result='success'))),
                              ('earlier trips lost', self.after(trips=0, trip_records=[]))):
-            self.assertEqual(self.judge(after)['V5.s.alert_did_not_recover'][1], 'fail', label)
+            self.assertEqual(self.verdict(after)[1], 'fail', label)
 
     def test_an_existing_latch_that_is_altered_or_cleared_is_never_excused(self):
         existing = dict(self.REC, at=900.0)
@@ -231,15 +256,111 @@ class IndependentSafetyTrip(unittest.TestCase):
         legit_looking = dict(self.REC)
         replaced = self.after(legit_looking, trips=2, trip_records=[existing, legit_looking])
         cleared = self.after(None, latch_sha=None, latch=None, trips=1, trip_records=[existing])
-        self.assertEqual(self.judge(replaced, before=before)['V5.s.alert_did_not_recover'][1], 'fail')
-        self.assertEqual(self.judge(cleared, before=before)['V5.s.alert_did_not_recover'][1], 'fail')
+        self.assertEqual(self.verdict(replaced, before=before)[1], 'fail')
+        self.assertEqual(self.verdict(cleared, before=before)[1], 'fail')
         unchanged = dict(before, at=1100.0)
-        self.assertEqual(self.judge(unchanged, before=before)['V5.s.alert_did_not_recover'][1], 'pass')
+        self.assertEqual(self.verdict(unchanged, before=before)[1], 'pass')
 
     def test_the_latch_vanishing_is_never_excused_even_with_a_stopped_monitor(self):
         before = self.before(latch_sha='b' * 64, latch=dict(self.REC, at=900.0), trips=1, trip_records=[dict(self.REC, at=900.0)])
         after = self.after(None, latch_sha=None, latch=None, trips=1, trip_records=[dict(self.REC, at=900.0)])
-        self.assertEqual(self.judge(after, before=before)['V5.s.alert_did_not_recover'][1], 'fail')
+        self.assertEqual(self.verdict(after, before=before)[1], 'fail')
+
+    # -- the preserved evidence is what makes the latch provable: without it, or when it disagrees, there is no pass
+    def test_a_latch_with_no_preserved_evidence_is_never_accepted(self):
+        r = self.verdict(self.after(), preserved=None)
+        self.assertEqual(r[1], 'fail')
+        self.assertIn('preserved', r[2])
+        self.assertNotIn('V5.s.independent_safety_trip', self.judge(self.after(), preserved=None))
+
+    def test_preserved_evidence_that_is_incomplete_or_disagrees_with_the_snapshot_never_passes(self):
+        after = self.after()
+        good = preserved_for(after)
+        broken = {
+            'latch file not preserved': dict(good, latch={'state': 'absent'}),
+            'latch file unreadable': dict(good, latch={'state': 'unreadable'}),
+            'latch file says something else': dict(good, latch=dict(good['latch'], text=json.dumps(dict(self.REC, source='alert'), sort_keys=True) + '\n', sha256=AT.sha256_text(json.dumps(dict(self.REC, source='alert'), sort_keys=True) + '\n'))),
+            'latch hash differs from the judged latch': dict(good, latch=dict(good['latch'], sha256='0' * 64)),
+            'trips.jsonl not preserved': dict(good, trips={'state': 'absent', 'lines': 0}),
+            'trips.jsonl unreadable': dict(good, trips={'state': 'unreadable'}),
+            'trips.jsonl holds other records': dict(good, trips={'state': 'present', 'text': json.dumps(dict(self.REC, at=5.0)) + '\n', 'lines': 1}),
+            'no PAUSE preserved': dict(good, pause={'state': 'absent'}),
+            'heartbeat time not preserved': dict(good, heartbeat={'state': 'unreadable', 'mtime': None, 'age': None}),
+            'poll journal empty': dict(good, journals=dict(good['journals'], poll={'state': 'empty'})),
+            'alert journal unreadable': dict(good, journals=dict(good['journals'], alert={'state': 'unreadable'})),
+            'journal not timestamped': dict(good, journals=dict(good['journals'], poll={'state': 'present', 'text': 'no stamp here\n'})),
+            'guard listing missing': dict(good, guard_listing=[]),
+            'the capture itself failed': {'schema': 1, 'scenario': 's', 'error': 'OSError: boom'},
+            'unknown schema': dict(good, schema=2),
+        }
+        for label, cap in broken.items():
+            r = self.verdict(after, preserved=cap)
+            self.assertEqual(r[1], 'fail', label)
+        self.assertEqual(self.verdict(after, preserved=good)[1], 'pass', 'the control: the complete capture passes')
+
+    def test_a_preserved_latch_file_that_is_not_byte_identical_to_the_judged_one_is_not_accepted(self):
+        """Same JSON, different bytes: the file the judge hashed is not the file that was preserved."""
+        after = self.after()
+        text = json.dumps(self.REC, indent=1, sort_keys=True) + '\n'
+        cap = preserved_for(after)
+        cap['latch'] = dict(cap['latch'], text=text, sha256=AT.sha256_text(text))
+        self.assertEqual(self.verdict(after, preserved=cap)[1], 'fail')
+
+    def test_a_snapshot_latch_that_differs_from_what_the_preserved_file_says_is_not_accepted(self):
+        """The preserved file hashes to the judged hash, and the snapshot's trips line and the preserved trips agree with the snapshot's latch, but the judge's parsed latch (what it checked kind,
+        source and time on) is not what the preserved latch file says: only the comparison of the two catches it."""
+        legit = self.after()
+        forged_doc = dict(self.REC, detail='no heartbeat from the monitor for 130 s')
+        forged = self.after(forged_doc)
+        forged['latch_sha'] = legit['latch_sha']                          # claims the preserved file's hash
+        cap = preserved_for(legit)                                        # the preserved latch file is the original
+        cap['trips'] = {'state': 'present', 'text': json.dumps(forged_doc, sort_keys=True) + '\n', 'lines': 1}
+        self.assertEqual(self.verdict(forged, preserved=cap)[1], 'fail')
+        self.assertEqual(self.verdict(legit, preserved=preserved_for(legit))[1], 'pass', 'the control')
+
+    def test_the_preserved_heartbeat_time_decides_when_the_trip_could_first_have_been_legitimate(self):
+        """The harness's own reading says 947; the file's preserved time says 1000: the stale limit is then 1118 and a latch at 1070 is too early."""
+        after = self.after()
+        self.assertEqual(self.verdict(after, preserved=preserved_for(after, hb_mtime=1000.0))[1], 'fail')
+        self.assertEqual(self.verdict(after, preserved=preserved_for(after, hb_mtime=947.0))[1], 'pass')
+
+
+class AttributionCapture(unittest.TestCase):
+    """The stage's own rows: the capture must be complete or the scenario fails (required), whatever else passed."""
+    def test_a_complete_capture_passes_and_each_gap_fails_the_required_row(self):
+        after = IndependentSafetyTrip().after()
+        good = preserved_for(after)
+        self.assertEqual(status(V5.evaluate_attribution_capture('s', good), 'V5.s.attribution_preserved'), 'pass')
+        for label, cap in (('no latch state', dict(good, latch={})), ('no heartbeat', dict(good, heartbeat={'state': 'absent'})), ('no journals', dict(good, journals={})),
+                           ('poll journal empty', dict(good, journals=dict(good['journals'], poll={'state': 'empty'}))), ('error', {'schema': 1, 'error': 'x'})):
+            rows = V5.evaluate_attribution_capture('s', cap)
+            self.assertEqual(status(rows, 'V5.s.attribution_preserved'), 'fail', label)
+            self.assertTrue(by_id(rows)['V5.s.attribution_preserved'][4], 'required')
+
+
+class SandboxRows(unittest.TestCase):
+    def doc(self, **over):
+        props = {k: '' for k in AT.SANDBOX_PROPS}
+        props.update({'ProtectSystem': 'strict', 'User': '', 'StateDirectory': 'dfl-vtest-alerts', 'ReadWritePaths': ''})
+        props.update(over)
+        return {'schema': 1, 'captured_at': 1.0, 'guard': C.GUARD, 'units': {'a@d.service': dict(props), 'a@m.service': dict(props), 'poll.service': dict(props)}}
+
+    def test_the_designed_sandbox_passes(self):
+        rows = V5.evaluate_sandbox(self.doc(), C.GUARD)
+        self.assertEqual({r[1] for r in rows}, {'pass'})
+
+    def test_a_sandbox_that_could_write_the_guard_folder_or_is_not_recorded_fails(self):
+        for label, doc in (('not strict', self.doc(ProtectSystem='full')), ('guard writable', self.doc(ReadWritePaths=C.GUARD)), ('parent writable', self.doc(ReadWritePaths=C.BASE)),
+                           ('everything writable', self.doc(ReadWritePaths='/')), ('child of guard writable', self.doc(ReadWritePaths=C.GUARD + '/evidence'))):
+            rows = by_id(V5.evaluate_sandbox(doc, C.GUARD))
+            self.assertEqual(rows['V5.alert_sandbox.guard_not_writable'][1], 'fail', label)
+        short = self.doc()
+        del short['units']['poll.service']
+        self.assertEqual(V5.evaluate_sandbox(short, C.GUARD)[0][1], 'fail')
+        missing_prop = self.doc()
+        del missing_prop['units']['a@d.service']['ReadWritePaths']
+        self.assertEqual(V5.evaluate_sandbox(missing_prop, C.GUARD)[0][1], 'fail')
+        self.assertEqual(V5.evaluate_sandbox({'schema': 1, 'units': {}}, C.GUARD)[0][1], 'fail')
 
 
 class Retry(unittest.TestCase):
@@ -342,8 +463,10 @@ class ScriptedAlertMachine:
     def __init__(self, alert_detects=True, alert_recovers=False, delivery_ok=True, detect_after=130.0, daemon_trips=False, rogue_latch=None):
         self.t = 1000.0
         self.daemon_trips, self.rogue_latch = daemon_trips, rogue_latch
+        self.journal_fails, self.final_hb = False, None
+        self.files = {C.GUARD + '/heartbeat': '', C.GUARD + '/watch.log': ''}
         self.alert_detects, self.alert_recovers, self.delivery_ok, self.detect_after = alert_detects, alert_recovers, delivery_ok, detect_after
-        self.calls, self.files, self.monitor_stopped_at = [], {}, None
+        self.calls, self.monitor_stopped_at = [], None
         self.monitor_up = True
         self.hold_started = None
         self.log = []
@@ -396,7 +519,16 @@ class ScriptedAlertMachine:
         self.files[p] = text
 
     def exists(self, p):
-        return p in self.files
+        return p in self.files or any(k.startswith(p.rstrip('/') + '/') for k in self.files)
+
+    def mtime(self, p):
+        if p == C.GUARD + '/heartbeat':
+            if self.monitor_up or not self.monitor_stopped_at:
+                return self.t - 3.0
+            return self.final_hb if self.final_hb is not None else self.monitor_stopped_at - 3.0
+        if p == C.GUARD + '/TRIPPED' and p in self.files:
+            return json.loads(self.files[p])['at']
+        return 1000.0 if self.exists(p) else None
 
     def listdir(self, p):
         pre = p.rstrip('/') + '/'
@@ -404,6 +536,11 @@ class ScriptedAlertMachine:
 
     def run(self, argv, timeout=60, input=None):
         self.calls.append((self.t, 'run', tuple(argv)))
+        if argv and argv[0] == 'journalctl':
+            if self.journal_fails:
+                return 1, '', 'Failed to read journal'
+            units = [argv[i + 1] for i, a in enumerate(argv) if a == '-u']
+            return 0, ''.join('2027-01-15T00:00:%02d.000000+00:00 host %s[1]: entry\n' % (i, u) for i, u in enumerate(units)), ''
         if argv[:2] == ['/bin/sh', '-c'] and ' ack ' in argv[2]:
             iid = argv[2].split(' ack ')[1].split()[0]
             for k, v in list(self.files.items()):
@@ -539,7 +676,7 @@ class ScenarioGlue(unittest.TestCase):
     def test_only_the_scenario_in_which_the_harness_stopped_the_monitor_offers_the_exemption(self):
         seen = []
         orig = V5.evaluate_never_recovers
-        V5.evaluate_never_recovers = lambda scn, b, a, h, monitor_down=None: (seen.append((scn, monitor_down)), orig(scn, b, a, h, monitor_down))[1]
+        V5.evaluate_never_recovers = lambda scn, b, a, h, monitor_down=None, preserved=None: (seen.append((scn, monitor_down)), orig(scn, b, a, h, monitor_down, preserved))[1]
         try:
             m = ScriptedAlertMachine(detect_after=70.0)
             ctx, rec = self.ctx(m)
@@ -571,12 +708,123 @@ class ScenarioGlue(unittest.TestCase):
         ctx.heartbeat_age = lambda: 3.0 if m.monitor_up else m.t - m.final_hb
         seen = []
         orig = V5.evaluate_never_recovers
-        V5.evaluate_never_recovers = lambda scn, b, a, h, monitor_down=None: (seen.append(monitor_down), orig(scn, b, a, h, monitor_down))[1]
+        V5.evaluate_never_recovers = lambda scn, b, a, h, monitor_down=None, preserved=None: (seen.append(monitor_down), orig(scn, b, a, h, monitor_down, preserved))[1]
         try:
             V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
         finally:
             V5.evaluate_never_recovers = orig
         self.assertAlmostEqual(seen[0]['last_heartbeat'], m.final_hb)
+
+    # -- preserved evidence: saved before recovery, and no pass without it
+    def attribution(self, ctx, scn='monitor_stopped'):
+        with open(os.path.join(ctx.dir, 'attribution_%s.json' % scn)) as f:
+            return json.load(f)
+
+    def test_the_attribution_evidence_is_saved_at_the_end_of_the_hold_before_any_recovery_step(self):
+        m = ScriptedAlertMachine(detect_after=70.0, daemon_trips=True)
+        ctx, rec = self.ctx(m)
+        self.wire_guard(ctx, m)
+        V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        cap = self.attribution(ctx)
+        self.assertEqual(AT.attribution_problems(cap), [])
+        self.assertEqual(cap['latch']['state'], 'present')
+        self.assertEqual(cap['latch']['text'], m.files[C.GUARD + '/TRIPPED'])
+        self.assertEqual(cap['trips']['text'], m.files[C.GUARD + '/trips.jsonl'])
+        self.assertEqual(json.loads(cap['latch']['text'])['source'], 'daemon')
+        self.assertEqual(cap['pause']['state'], 'present')
+        starts = [c for c in m.calls if c[1] == 'start' and C.UNIT['monitor'] in c[2]]
+        self.assertLessEqual(cap['captured_at'], starts[0][0], 'captured no later than the harness starting the monitor again (the documented recovery); the timeline order below is the strict check')
+        self.assertTrue(any('2027-01-15T' in (cap['journals'][k].get('text') or '') for k in ('alert', 'poll')), 'timestamped journals')
+        with open(os.path.join(ctx.dir, 'timeline.jsonl')) as f:
+            marks = [json.loads(l) for l in f]
+        phases = [x['phase'] for x in marks if x.get('event') == 'V5.monitor_stopped' and 'phase' in x]
+        self.assertLess(phases.index('hold_start'), phases.index('attribution_captured'))
+        self.assertLess(phases.index('attribution_captured'), phases.index('monitor_restored_by_harness'))
+
+    def test_the_evidence_is_kept_even_when_the_judge_then_fails(self):
+        m = ScriptedAlertMachine(detect_after=70.0, daemon_trips=True, alert_recovers=True)
+        ctx, rec = self.ctx(m)
+        self.wire_guard(ctx, m)
+        with self.assertRaises(C.StageStop):
+            V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        self.assertEqual(AT.attribution_problems(self.attribution(ctx)), [])
+
+    def test_a_scenario_that_would_otherwise_pass_fails_when_the_journals_cannot_be_read(self):
+        m = ScriptedAlertMachine(detect_after=70.0)
+        m.journal_fails = True
+        ctx, rec = self.ctx(m)
+        with self.assertRaises(C.StageStop):
+            V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        by = {r[0]: r for r in rec.rows}
+        self.assertEqual(by['V5.monitor_stopped.attribution_preserved'][1], 'fail')
+        self.assertTrue(by['V5.monitor_stopped.attribution_preserved'][4])
+        self.assertTrue(AT.attribution_problems(self.attribution(ctx)))
+
+    def test_a_trip_inside_the_hold_is_not_accepted_when_the_evidence_cannot_be_captured(self):
+        m = ScriptedAlertMachine(detect_after=70.0, daemon_trips=True)
+        m.journal_fails = True
+        ctx, rec = self.ctx(m)
+        self.wire_guard(ctx, m)
+        with self.assertRaises(C.StageStop):
+            V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        by = {r[0]: r for r in rec.rows}
+        self.assertEqual(by['V5.monitor_stopped.alert_did_not_recover'][1], 'fail')
+        self.assertNotIn('V5.monitor_stopped.independent_safety_trip', by)
+
+    def test_a_capture_that_raises_is_a_failed_capture_not_a_skipped_one(self):
+        m = ScriptedAlertMachine(detect_after=70.0)
+        m.mtime = lambda p: (_ for _ in ()).throw(OSError('boom'))
+        ctx, rec = self.ctx(m)
+        with self.assertRaises(C.StageStop):
+            V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        cap = self.attribution(ctx)
+        self.assertIn('boom', cap['error'])
+        self.assertEqual({r[0]: r for r in rec.rows}['V5.monitor_stopped.attribution_preserved'][1], 'fail')
+
+    def test_every_hold_scenario_marks_its_hold_so_the_manifest_can_require_its_file(self):
+        import inspect
+        for fn in (V5.scenario_monitor_stopped, V5.scenario_daemon_start_limit, V5.scenario_monitor_exit2):
+            self.assertIn('_hold_and_judge', inspect.getsource(fn), fn.__name__)
+        self.assertEqual(set(AT.SCENARIOS), {'monitor_stopped', 'daemon_start_limit', 'monitor_exit2', 'delivery_failure'})
+
+    def test_the_sandbox_step_saves_the_record_and_judges_it_and_is_part_of_the_stage(self):
+        m = ScriptedAlertMachine()
+        ctx, rec = self.ctx(m)
+        ok = ''.join('%s=%s\n' % (k, 'strict' if k == 'ProtectSystem' else '') for k in AT.SANDBOX_PROPS)
+        m.sc = lambda verb, *a, timeout=60: (0, ok, '')
+        V5.sandbox_step(ctx, rec)
+        rec.stop_if_failed()
+        self.assertTrue(os.path.isfile(os.path.join(ctx.dir, AT.SANDBOX_FILE)))
+        ids = {r[0]: r[1] for r in rec.rows}
+        self.assertEqual((ids['V5.alert_sandbox.preserved'], ids['V5.alert_sandbox.guard_not_writable']), ('pass', 'pass'))
+        m.sc = lambda verb, *a, timeout=60: (0, ok.replace('ProtectSystem=strict', 'ProtectSystem=no'), '')
+        ctx2, rec2 = self.ctx(m)
+        V5.sandbox_step(ctx2, rec2)
+        with self.assertRaises(C.StageStop):
+            rec2.stop_if_failed()
+        m.sc = lambda verb, *a, timeout=60: (_ for _ in ()).throw(OSError('boom'))
+        ctx3, rec3 = self.ctx(m)
+        V5.sandbox_step(ctx3, rec3)
+        with self.assertRaises(C.StageStop):
+            rec3.stop_if_failed()
+        import inspect
+        src = inspect.getsource(V5.run)
+        self.assertLess(src.index('sandbox_step('), src.index('scenario_monitor_stopped('), 'the sandbox is preserved and judged before any drill runs')
+
+    def test_the_alert_units_effective_sandbox_is_captured_for_each_protected_unit_and_the_poll(self):
+        m = ScriptedAlertMachine()
+        asked = []
+
+        def sc(verb, *a, timeout=60):
+            asked.append(a[0])
+            return 0, ''.join('%s=%s\n' % (k, 'strict' if k == 'ProtectSystem' else 'x') for k in AT.SANDBOX_PROPS), ''
+        m.sc = sc
+        ctx, rec = self.ctx(m)
+        doc = V5.capture_sandbox(ctx)
+        self.assertEqual(AT.sandbox_problems(doc), [])
+        self.assertEqual(sorted(asked), sorted([C.PREFIX + 'alert@' + C.UNIT['daemon'] + '.service', C.PREFIX + 'alert@' + C.UNIT['monitor'] + '.service', C.PREFIX + 'alert-poll.service']))
+        m.sc = lambda verb, *a, timeout=60: (1, '', 'Unit not found')
+        self.assertTrue(AT.sandbox_problems(V5.capture_sandbox(ctx)))
 
     def test_no_alert_within_the_time_limit_fails_and_the_monitor_is_still_restored(self):
         m = ScriptedAlertMachine(alert_detects=False)

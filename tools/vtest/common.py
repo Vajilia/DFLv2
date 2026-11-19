@@ -241,6 +241,13 @@ class Env:
         except OSError:
             return []
 
+    def mtime(self, path):
+        """The file's modification time (epoch seconds), or None."""
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return None
+
     def euid(self):
         return os.geteuid()
 
@@ -382,7 +389,7 @@ def git(repo, *args):
 CODE_UNDER_TEST_DEFAULT = "any other path under src/, tools/ or deploy/ (the safe default: when unsure, repeat)"
 HARNESS_STAGE = {"stage_v0.py": {"V0"}, "stage_v1.py": {"V1"}, "stage_v2.py": {"V2"}, "stage_v3.py": {"V3"}, "stage_v4.py": {"V4"}, "stage_v5.py": {"V5"}}
 # Harness modules whose code is used by named stages only (their judgments), not by the machinery that runs every stage.
-HARNESS_JUDGES = {"lifecycle.py": {"V2", "V3", "V4", "V5"}, "perms.py": {"V0"}, "durability.py": {"V0"},
+HARNESS_JUDGES = {"lifecycle.py": {"V2", "V3", "V4", "V5"}, "perms.py": {"V0"}, "durability.py": {"V0"}, "attribution.py": {"V5"},
                   "install_alerts.py": {"V0", "V2", "V3", "V4", "V5"}}   # installs the release-configuration drop-ins: every stage run with them installed
 HARNESS_ALL = {"common.py", "render.py", "sampler.py", "loaders.py", "site_server.py", "evaluate.py", "scenarios.py", "PIN"}
 HARNESS_NONE = {"vtest.py", "preflight.py", "evidence.py", "export_evidence.py", "README.md"}      # the driver and the go/no-go gate: they decide whether to run, they do not measure

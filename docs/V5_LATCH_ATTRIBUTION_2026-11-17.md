@@ -63,3 +63,27 @@ Tests: `tests/test_vtest_v5.py` (`IndependentSafetyTrip`, and the scenario-level
 
 * On the next real run: the latch's recorded `source` and `at`, and the matching `trips.jsonl` line, preserved in the evidence this time (the judge now requires them).
 * Preserved/released evidence for the latch of the failed run if it exists (stage recovery may already have moved `TRIPPED`).
+
+## Evidence preserved from now on (harness change, same record)
+
+The first failure could be explained only from the daemon's journal because the latch file, the trips line, the heartbeat time, timestamped alert and poll journals and the alert units' effective
+sandbox were not kept, and recovery had already moved the latch. V5 now preserves them automatically, before any recovery step, and the archive is incomplete without them:
+
+* `V5/attribution_<scenario>.json` for each hold (monitor stopped, daemon start limit, monitor exit 2, delivery failure), captured at the end of the hold and saved before the judge runs and before any
+  recovery: the raw latch file and its hash and time, the raw `trips.jsonl`, whether PAUSE exists, the monitor's heartbeat file time and age (and the watch log's tail), the guard folder listing and the
+  released-evidence listing, timestamped (`-o short-iso-precise`) journals of the alert units, the poll unit, the daemon and the monitor since just before the fault, and the two units' state.
+* `V5/alert_sandbox.json`, captured once before the drills: the effective `User`, `ProtectSystem`, `ReadWritePaths`, `ReadOnlyPaths`, `InaccessiblePaths`, `StateDirectory` and related properties of the alert
+  unit for each protected unit and of the poll unit. Two new required rows judge it: it must be recorded in full, and every unit must have `ProtectSystem=strict` with no writable path covering the guard folder.
+* `V5/alert_journal_timestamped.txt`: the whole run's alert and poll journal with precise timestamps (the earlier `alert_journal.txt` has none and omits the poll).
+
+How a gap cannot become a pass:
+
+* Each scenario has a REQUIRED row `attribution_preserved`; a missing, unreadable or hollow capture (for example the poll journal empty, no heartbeat time, the latch file not read, the capture itself raising)
+  fails the scenario and stops the stage. The capture is saved before the judge, so a failing judge still leaves it.
+* A latch that appears during a hold is accepted as the daemon's own only if the preserved evidence is complete AND reproduces the snapshot: the preserved latch file must hash to the judged latch and say the
+  same, the preserved `trips.jsonl` must be the records the judge counted, PAUSE must be preserved, and the preserved heartbeat file time (not the harness's own reading) fixes the earliest legitimate moment.
+* The evidence manifest requires all of the above. A scenario whose hold began (its timeline mark) owes its file even if the stage stopped there; a scenario never reached is `NOT_PRODUCED`; a V5 that
+  passed must have all four. A file that exists but is hollow (the same rules as above, applied to the content) is reported MISSING with the reason, so `vtest.py archive` exits 3 and cleanup is blocked.
+
+Tests: `tests/test_vtest_v5.py` (judge, capture, sandbox rows, scenario-level reproduction and the missing-evidence cases), `tests/test_vtest_evidence.py` (`V5AttributionEvidence`), and the retest-scope
+classification of the new harness module in `tests/test_alert_release_config.py`. Mutating each rule makes at least one test fail.

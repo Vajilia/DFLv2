@@ -14,6 +14,7 @@ import re
 import tarfile
 import time
 
+import attribution as AT
 from common import EVID, STATE, UNIT, sha256_file
 
 PRESENT, MISSING, NOT_PRODUCED = "present", "MISSING", "NOT_PRODUCED"
@@ -28,7 +29,12 @@ STAGE_SAMPLES = {   # (file, when): "always" must exist; "later" must exist unle
            ("cache_loader.jsonl", "later"), ("segment_inventory_cache.json", "later"), ("journal_daemon_cache.txt", "later"), ("clock_log.jsonl", "later"), ("monitor_watch.log", "later"), ("monitor_trips.jsonl", "later")],
     "V2": [("v2a_cgroup.jsonl", "always"), ("v2a_anon.jsonl", "always"), ("v2b_cgroup.jsonl", "later"), ("v2b_anon.jsonl", "later"), ("v2c_cgroup.jsonl", "later"), ("v2c_anon.jsonl", "later")],
     "V3": [], "V4": [],
-    "V5": [("alerts_install.json", "always"), ("incidents.json", "always"), ("sink.log", "always"), ("alert_journal.txt", "always")]}
+    "V5": [("alerts_install.json", "always"), ("incidents.json", "always"), ("sink.log", "always"), ("alert_journal.txt", "always"),
+           (AT.SANDBOX_FILE, "always"), (AT.JOURNAL_FILE, "always")]}
+# V5 attribution evidence, one file per scenario that reached its hold (the stage writes a `hold_start` mark first): required once that mark exists; otherwise like a later sample.
+V5_ATTRIBUTION = {"V5/" + fname: "V5.%s" % scn for scn, fname in AT.SCENARIOS.items()}
+CONTENT_CHECKS = {"V5/" + AT.SANDBOX_FILE: ("json", AT.sandbox_problems), "V5/" + AT.JOURNAL_FILE: ("text", AT.timestamped_problems)}
+CONTENT_CHECKS.update({rel: ("json", AT.attribution_problems) for rel in V5_ATTRIBUTION})
 OOM = re.compile(r"oom|out of memory|killed process", re.I)
 
 
@@ -111,6 +117,39 @@ def item(rdir, rel, why, when="always", stopped=False):
     return {"path": rel, "what": why, "status": MISSING, "reason": "the file does not exist"}
 
 
+def content_gap(rdir, rel):
+    """The reasons a PRESENT file does not hold what the evidence rules require of its content (an empty list when it does, or when no content rule applies): a capture that exists but is hollow is not evidence."""
+    rule = CONTENT_CHECKS.get(rel)
+    if not rule:
+        return []
+    kind, fn = rule
+    try:
+        text = open(os.path.join(rdir, rel)).read()
+    except (OSError, UnicodeDecodeError):
+        return ["the file cannot be read"]
+    if kind == "text":
+        return fn(text, rel)
+    try:
+        return fn(json.loads(text))
+    except ValueError:
+        return ["the file is not valid JSON"]
+
+
+def stage_marks(rdir, st):
+    """The (event, phase) pairs the stage's timeline recorded."""
+    out = set()
+    try:
+        for line in open(os.path.join(rdir, st, "timeline.jsonl")):
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            out.add((d.get("event"), d.get("phase")))
+    except OSError:
+        pass
+    return out
+
+
 def build_manifest(rdir, run_id):
     """-> dict. `complete` is True when no item is MISSING (NOT_PRODUCED is listed but does not count: the stage stopped, as designed)."""
     items = [item(rdir, rel, why) for rel, why in RUN_FILES]
@@ -131,6 +170,18 @@ def build_manifest(rdir, run_id):
             items.append(item(rdir, "%s/%s" % (st, n), "stage %s: %s" % (st, {"result.json": "its checks and result", "MANIFEST.sha256": "the hashes of its evidence files", "timeline.jsonl": "its step marks"}[n])))
         for n, when in STAGE_SAMPLES.get(st, []):
             items.append(item(rdir, "%s/%s" % (st, n), "stage %s sample or record" % st, when, stopped))
+        if st == "V5":
+            marks = stage_marks(rdir, st)
+            for rel, event in sorted(V5_ATTRIBUTION.items()):
+                items.append(item(rdir, rel, "V5 attribution evidence for %s, captured at the end of its hold before any recovery" % event.split(".", 1)[1],
+                                  "always" if (event, "hold_start") in marks else "later", stopped))
+    for it in items:                                                      # a file that exists but does not hold what the evidence rules require is MISSING, with the reasons
+        if it["status"] == PRESENT:
+            gap = content_gap(rdir, it["path"])
+            if gap:
+                it.update({"status": MISSING, "reason": "present but incomplete: " + "; ".join(gap[:4])})
+                it.pop("size", None)
+                it.pop("sha256", None)
     listed = {i["path"] for i in items}
     extra = []
     for d, _, names in sorted(os.walk(rdir)):

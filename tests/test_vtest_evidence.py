@@ -14,6 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'tools' / 'vtest'), str(ROOT / 'tools'), str(ROOT / 'src')]
 import common as C      # noqa: E402
+import attribution as AT   # noqa: E402
 import evidence as EV   # noqa: E402
 import vtest as VT      # noqa: E402
 
@@ -48,6 +49,43 @@ def populate(rdir, skip=(), stopped=False):
         p = os.path.join(rdir, rel)
         os.makedirs(os.path.dirname(p), exist_ok=True)
         body = {'run.json': '{"started": 1000.0}', 'result.json': json.dumps({'overall': 'fail' if stopped else 'pass'}), 'SUMMARY.json': '{"results": {"V1": "pass"}}'}.get(rel.split('/')[-1], 'data of %s\n' % rel)
+        open(p, 'w').write(body)
+
+
+STAMPED = '2027-01-15T00:04:37.100000+00:00 host unit[1]: entry\n'
+
+
+def valid_attribution(scn):
+    return {'schema': 1, 'scenario': scn, 'captured_at': 1100.0, 't_fault': 950.0, 'monitor_down': None, 'latch': {'state': 'absent'}, 'trips': {'state': 'absent', 'lines': 0}, 'pause': {'state': 'absent'},
+            'heartbeat': {'state': 'present', 'mtime': 1090.0, 'age': 10.0, 'watch_tail': []}, 'released': {'state': 'absent'}, 'guard_listing': [{'name': 'heartbeat', 'mtime': 1090.0}],
+            'journals': {'alert': {'state': 'present', 'text': STAMPED}, 'poll': {'state': 'present', 'text': STAMPED}, 'daemon': {'state': 'empty'}, 'monitor': {'state': 'empty'}},
+            'units': {'daemon': {'ActiveState': 'active'}, 'monitor': {'ActiveState': 'active'}}}
+
+
+def valid_sandbox():
+    props = {k: '' for k in AT.SANDBOX_PROPS}
+    props['ProtectSystem'] = 'strict'
+    return {'schema': 1, 'captured_at': 1.0, 'guard': '/g', 'units': {'a@d': dict(props), 'a@m': dict(props), 'poll': dict(props)}}
+
+
+def populate_v5(rdir, skip=(), overall='pass', hold_marks=tuple(AT.SCENARIOS), override=None):
+    """A run folder as the harness leaves it for V5. `hold_marks`: the scenarios whose hold began (the timeline says so); `override`: {relative path: text} replaces a file's content."""
+    override = override or {}
+    base = ['run.json', 'SUMMARY.json', 'command_output.txt']
+    v5 = ['result.json', 'MANIFEST.sha256', 'timeline.jsonl'] + [n for n, _ in EV.STAGE_SAMPLES['V5']] + [AT.SCENARIOS[s] for s in hold_marks]
+    for rel in base + ['V5/' + n for n in v5]:
+        if rel in skip:
+            continue
+        name = rel.split('/')[-1]
+        body = {'run.json': '{"started": 1000.0}', 'SUMMARY.json': '{"results": {"V5": "%s"}}' % overall, 'result.json': json.dumps({'overall': overall}),
+                AT.SANDBOX_FILE: json.dumps(valid_sandbox()), AT.JOURNAL_FILE: STAMPED,
+                'timeline.jsonl': ''.join(json.dumps({'event': 'V5.' + s, 'phase': 'hold_start', 't': 1.0}) + '\n' for s in hold_marks)}.get(name)
+        for scn, fname in AT.SCENARIOS.items():
+            if name == fname:
+                body = json.dumps(valid_attribution(scn))
+        body = override.get(rel, body if body is not None else 'data of %s\n' % rel)
+        p = os.path.join(rdir, rel)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
         open(p, 'w').write(body)
 
 
@@ -241,3 +279,110 @@ class Plan(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class V5AttributionEvidence(Evidence):
+    """The preserved attribution evidence is part of archive completeness: a gap leaves the archive INCOMPLETE and blocks cleanup, whatever the stage said."""
+    ATTR = ['V5/' + AT.SCENARIOS[s] for s in AT.SCENARIOS]
+
+    def missing(self):
+        return set(self.v5_missing(EV.build_manifest(self.rdir, RID)))
+
+    @staticmethod
+    def v5_missing(m):
+        """The host records are written by `vtest.py archive`; these tests build the manifest directly and judge only the V5 items."""
+        return [x for x in m['missing'] if x.startswith('V5/')]
+
+    def test_a_complete_v5_run_is_archived_and_lists_every_new_item(self):
+        populate_v5(self.rdir)
+        rc, text = self.archive()
+        self.assertEqual(rc, 0, text)
+        paths = {i['path']: i['status'] for i in self.manifest()['required']}
+        for want in self.ATTR + ['V5/alert_sandbox.json', 'V5/alert_journal_timestamped.txt']:
+            self.assertEqual(paths.get(want), 'present', want)
+
+    def test_each_missing_new_item_makes_the_archive_incomplete_and_blocks_cleanup(self):
+        for rel in self.ATTR + ['V5/alert_sandbox.json', 'V5/alert_journal_timestamped.txt']:
+            with self.subTest(rel):
+                os.system('rm -rf %s' % self.rdir)
+                os.makedirs(self.rdir)
+                populate_v5(self.rdir, skip=(rel,))
+                rc, text = self.archive()
+                self.assertEqual(rc, 3, rel)
+                self.assertIn('DO NOT CLEAN UP THE HOST', text)
+                self.assertEqual(self.manifest()['missing'], [rel])
+
+    def test_a_file_that_exists_but_is_hollow_is_missing_with_the_reason(self):
+        good = valid_attribution('monitor_stopped')
+        hollow = {
+            'no poll journal': dict(good, journals=dict(good['journals'], poll={'state': 'empty'})),
+            'alert journal unreadable': dict(good, journals=dict(good['journals'], alert={'state': 'unreadable'})),
+            'journal without timestamps': dict(good, journals=dict(good['journals'], poll={'state': 'present', 'text': 'plain\n'})),
+            'latch not read': dict(good, latch={'state': 'unreadable'}),
+            'latch text lost': dict(good, latch={'state': 'present', 'text': '', 'sha256': AT.sha256_text(''), 'mtime': 1.0}),
+            'trips not read': dict(good, trips={'state': 'unreadable'}),
+            'no heartbeat time': dict(good, heartbeat={'state': 'unreadable'}),
+            'capture failed': {'schema': 1, 'scenario': 'monitor_stopped', 'error': 'OSError: x'},
+            'not an object': [],
+        }
+        for label, doc in hollow.items():
+            with self.subTest(label):
+                os.system('rm -rf %s' % self.rdir)
+                os.makedirs(self.rdir)
+                populate_v5(self.rdir, override={'V5/attribution_monitor_stopped.json': json.dumps(doc)})
+                m = EV.build_manifest(self.rdir, RID)
+                self.assertEqual(self.v5_missing(m), ['V5/attribution_monitor_stopped.json'], label)
+                reason = [i for i in m['required'] if i['path'] == 'V5/attribution_monitor_stopped.json'][0]['reason']
+                self.assertIn('present but incomplete', reason)
+                self.assertFalse(m['complete'])
+        os.system('rm -rf %s' % self.rdir)
+        os.makedirs(self.rdir)
+        populate_v5(self.rdir, override={'V5/attribution_monitor_stopped.json': 'not json'})
+        self.assertEqual(self.v5_missing(EV.build_manifest(self.rdir, RID)), ['V5/attribution_monitor_stopped.json'])
+
+    def test_a_hollow_sandbox_record_or_journal_is_missing(self):
+        bad_sandbox = valid_sandbox()
+        del bad_sandbox['units']['poll']
+        short_props = valid_sandbox()
+        del short_props['units']['a@d']['ReadWritePaths']
+        for label, rel, text in (('sandbox with two units', 'V5/alert_sandbox.json', json.dumps(bad_sandbox)), ('sandbox without ReadWritePaths', 'V5/alert_sandbox.json', json.dumps(short_props)),
+                                 ('sandbox not JSON', 'V5/alert_sandbox.json', 'x'), ('journal unavailable', 'V5/alert_journal_timestamped.txt', 'UNAVAILABLE: no entries'),
+                                 ('journal without timestamps', 'V5/alert_journal_timestamped.txt', 'Starting x\nFinished x\n'), ('journal empty', 'V5/alert_journal_timestamped.txt', '-- No entries --\n')):
+            with self.subTest(label):
+                os.system('rm -rf %s' % self.rdir)
+                os.makedirs(self.rdir)
+                populate_v5(self.rdir, override={rel: text})
+                self.assertEqual(self.v5_missing(EV.build_manifest(self.rdir, RID)), [rel], label)
+
+    def test_a_scenario_that_began_its_hold_must_leave_its_file_even_when_the_stage_stopped_there(self):
+        populate_v5(self.rdir, overall='fail', hold_marks=('monitor_stopped', 'daemon_start_limit'), skip=('V5/attribution_daemon_start_limit.json',))
+        m = EV.build_manifest(self.rdir, RID)
+        self.assertEqual(self.v5_missing(m), ['V5/attribution_daemon_start_limit.json'], 'the hold began, so the capture is owed: not NOT_PRODUCED')
+        self.assertEqual(set(m['not_produced']), {'V5/attribution_monitor_exit2.json', 'V5/attribution_delivery_failure.json'})
+
+    def test_scenarios_the_stage_never_reached_are_not_produced_not_missing(self):
+        populate_v5(self.rdir, overall='fail', hold_marks=('monitor_stopped',))
+        m = EV.build_manifest(self.rdir, RID)
+        self.assertEqual(self.v5_missing(m), [])
+        self.assertEqual(set(m['not_produced']), {'V5/attribution_daemon_start_limit.json', 'V5/attribution_monitor_exit2.json', 'V5/attribution_delivery_failure.json'})
+        self.assertEqual(self.v5_missing(m), [])
+
+    def test_a_passing_stage_cannot_skip_a_scenario_or_its_evidence(self):
+        populate_v5(self.rdir, overall='pass', hold_marks=('monitor_stopped', 'daemon_start_limit', 'monitor_exit2'))
+        m = EV.build_manifest(self.rdir, RID)
+        self.assertEqual(self.v5_missing(m), ['V5/attribution_delivery_failure.json'], 'a V5 that passed must have captured every scenario')
+        self.assertFalse(m['complete'])
+
+    def test_a_timeline_mark_without_its_file_cannot_hide_behind_a_later_stop(self):
+        populate_v5(self.rdir, overall='fail', hold_marks=('delivery_failure',), skip=('V5/attribution_delivery_failure.json',))
+        self.assertIn('V5/attribution_delivery_failure.json', self.missing())
+
+    def test_the_attribution_files_are_inside_the_archive_and_verified(self):
+        populate_v5(self.rdir)
+        rc, text = self.archive()
+        self.assertEqual(rc, 0, text)
+        import tarfile
+        with tarfile.open(os.path.join(self.base, 'export', 'evidence-%s.tar.gz' % RID)) as tf:
+            names = set(tf.getnames())
+        for rel in self.ATTR + ['V5/alert_sandbox.json', 'V5/alert_journal_timestamped.txt']:
+            self.assertIn('evidence/%s/%s' % (RID, rel), names)

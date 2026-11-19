@@ -225,6 +225,7 @@ class Classification(unittest.TestCase):
     def test_v5_exists_and_has_its_own_stage_file_classification(self):
         self.assertEqual(C.STAGES, ('V0', 'V1', 'V2', 'V3', 'V4', 'V5'))
         self.assertEqual(C.classify_why('tools/vtest/stage_v5.py')[:2], ('harness', {'V5'}))
+        self.assertEqual(C.classify_why('tools/vtest/attribution.py')[:2], ('harness', {'V5'}), 'the V5 attribution rules are used by V5 only')
         self.assertEqual(C.classify_why('tools/vtest/export_evidence.py')[0], 'none')
 
     def test_a_package_change_does_not_turn_the_pin_gate_red(self):
