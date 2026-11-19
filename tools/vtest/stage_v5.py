@@ -312,11 +312,12 @@ def scenario_monitor_stopped(ctx, rec, fail_delivery=False):
     if fail_delivery:
         env.write(C.ALERT_MODE, "fail\n", 0o600)
     t0 = ctx.now()
-    hb_age = ctx.heartbeat_age()
-    monitor_down = {"since": t0, "last_heartbeat": None if hb_age is None else t0 - hb_age, "stale_s": C.GUARD_STALE_S}      # the daemon's own stale-heartbeat rule can fire during the hold
+    monitor_down = {"since": t0, "last_heartbeat": None, "stale_s": C.GUARD_STALE_S}      # the daemon's own stale-heartbeat rule can fire during the hold
     mid_inc, new = None, []
     try:
         env.sc("stop", UNIT["monitor"])
+        hb_age = ctx.heartbeat_age()                      # read AFTER the stop returned: the monitor keeps refreshing it until it exits (9 s on the real host), so this is its final heartbeat
+        monitor_down["last_heartbeat"] = None if hb_age is None else ctx.now() - hb_age
         ctx.mark("V5." + scn, phase="fault_injected")
         events = ("monitor_not_running", "monitor_failed")
 

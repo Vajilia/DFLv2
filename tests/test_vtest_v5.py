@@ -465,7 +465,7 @@ class ScenarioGlue(unittest.TestCase):
         ctx.latch = lambda: (None, None)
         ctx.trips = lambda: []
         ctx.paused = lambda: False
-        ctx.heartbeat_age = lambda: 3.0 if m.monitor_up else 900.0
+        ctx.heartbeat_age = lambda: 3.0 if m.monitor_up else m.t - (m.monitor_stopped_at - 3.0)         # the monitor's last heartbeat was 3 s before it was stopped
         ctx.ensure_baseline = lambda reason='': None
         ctx.release_and_resume = lambda why: (0, 0, '')
         ctx.journal = lambda k, since: ''
@@ -499,7 +499,7 @@ class ScenarioGlue(unittest.TestCase):
         ctx.paused = lambda: (C.ROOT_DIR + '/store/PAUSE') in m.files
 
     def test_the_observed_sequence_the_daemon_trips_itself_inside_the_hold_while_the_monitor_is_stopped_passes_with_its_proof(self):
-        """V5 on aef65af (VM620040862): 'the latch changed: None -> <hash>', PAUSE false -> true. A monitor stopped for longer than GUARD_STALE_S makes the daemon latch and pause by itself;
+        """V5 on aef65af (real-host smoke): 'the latch changed: None -> <hash>', PAUSE false -> true. A monitor stopped for longer than GUARD_STALE_S makes the daemon latch and pause by itself;
         the alert was recorded ~70 s in and the 60 s hold spans that moment."""
         for fail_delivery in (False, True):
             m = ScriptedAlertMachine(detect_after=70.0, daemon_trips=True, delivery_ok=not fail_delivery)
@@ -550,9 +550,33 @@ class ScenarioGlue(unittest.TestCase):
         down = seen[0][1]
         self.assertEqual(down['stale_s'], C.GUARD_STALE_S)
         self.assertAlmostEqual(down['last_heartbeat'], down['since'] - 3.0)
+        self.assertIsNotNone(down['last_heartbeat'])
         import inspect
         for fn in (V5.scenario_daemon_start_limit, V5.scenario_monitor_exit2):
             self.assertNotIn('monitor_down', inspect.getsource(fn), fn.__name__ + ': a failed daemon or an immutable guard folder is not explained by the stale-heartbeat rule')
+
+    def test_the_last_heartbeat_is_read_after_the_stop_returns_because_the_monitor_keeps_refreshing_it_until_it_exits(self):
+        """On the real host the stop took 9 s; a heartbeat read before it would put the earliest legitimate trip too early."""
+        m = ScriptedAlertMachine(detect_after=70.0)
+        ctx, rec = self.ctx(m)
+        orig_sc = m.sc
+
+        def sc(verb, *a, timeout=60):
+            r = orig_sc(verb, *a, timeout=timeout)
+            if verb == 'stop' and C.UNIT['monitor'] in a:
+                m.t += 9.0                                                   # the stop takes 9 s; the last heartbeat is written 5 s into it
+                m.final_hb = m.monitor_stopped_at + 5.0
+            return r
+        m.sc = sc
+        ctx.heartbeat_age = lambda: 3.0 if m.monitor_up else m.t - m.final_hb
+        seen = []
+        orig = V5.evaluate_never_recovers
+        V5.evaluate_never_recovers = lambda scn, b, a, h, monitor_down=None: (seen.append(monitor_down), orig(scn, b, a, h, monitor_down))[1]
+        try:
+            V5.scenario_monitor_stopped(ctx, rec, fail_delivery=False)
+        finally:
+            V5.evaluate_never_recovers = orig
+        self.assertAlmostEqual(seen[0]['last_heartbeat'], m.final_hb)
 
     def test_no_alert_within_the_time_limit_fails_and_the_monitor_is_still_restored(self):
         m = ScriptedAlertMachine(alert_detects=False)

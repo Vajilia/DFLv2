@@ -8,9 +8,27 @@ The real-host smoke on harness revision `aef65af` (runtime candidate `205f891`, 
 
 The same log showed PAUSE going from absent to present. Everything else in that scenario passed (the failure was recorded, nothing reached the sink while the channel was down, the retry delivered once, nothing was claimed received). The whole of V5 stays **FAILED** for that run; that verdict is not edited by this document.
 
-## Status of the diagnosis: inferred from code, NOT yet confirmed from the saved evidence
+## Status of the diagnosis: supported by the preserved evidence, with two named gaps
 
-The saved evidence archive was not read when this change was written. What follows comes from the pinned source and from the failure text only. The evidence must still be read (section "To confirm").
+The preserved private evidence of the failed run was read on 2026-11-18 (archive integrity and its V5 manifest were verified; the archive itself is kept private and is not described further here). Times below are seconds relative to the moment the harness began stopping the monitor in the failed scenario ("T").
+
+**What the evidence shows**
+
+* The daemon's own journal contains the daemon's one-time trip notice (printed from the latch file's contents by `Guard.step`): kind `monitor_silent`, detail "no heartbeat from the monitor for 120 s", paused. It appears about T+124 s.
+* The monitor's journal shows the stop requested at T and completed at T+9 s, and no later start until the harness's documented recovery. The latch therefore appeared about 120 s after the monitor's last possible heartbeat, as the stale-heartbeat rule predicts, while the monitor was stopped.
+* That moment lies inside the 60 s hold (the alert was recorded about T+79 s; the 60 s hold ran from shortly after that to about T+139 s). In the earlier monitor-stopped scenario of the same run the alert was recorded within about 5 s and the hold ended about 65 s after T, so no latch could appear: the outcome depended on poll timing, as described below.
+* Failing check's snapshots: latch absent -> present, PAUSE absent -> present, trips lines 13 -> 14 (exactly one added), release records 3 -> 3, and the failed unit's state, result, invocation, restarts and PID unchanged.
+* Every command the alert tool recorded across all 11 incidents of the run is `systemctl show` or `journalctl --boot=0`; none is anything else. The installed alert units run with `ProtectSystem=strict` and a state folder of their own only; the guard folder is not inside it.
+* The string "no heartbeat from the monitor for N s" is produced in exactly one place in the source, the daemon's `Guard.step`, in the same call that records source `daemon`.
+
+**Gaps (not shown by the preserved evidence)**
+
+* The latch file itself (its `source` and `at` fields) and the content of the new `trips.jsonl` line were not preserved; only the count change is. The latch's kind and detail are known only through the daemon's journal notice. The judge therefore requires source, time and the matching trips line on the next real run, and a latch that does not meet them will fail honestly.
+* The alert units' journal in the preserved evidence carries no timestamps and omits the poll service, and the install record does not list `ReadWritePaths=`. The no-write conclusion rests on the recorded commands, the sandbox properties above and the source, not on a per-run audit of the hold window.
+
+This is attribution evidence, not a proof that the alert path could not have acted. The original verdict (V5 FAILED on `aef65af`) is unchanged.
+
+The reasoning from the pinned source:
 
 What the source says:
 
@@ -41,7 +59,7 @@ Tests: `tests/test_vtest_v5.py` (`IndependentSafetyTrip`, and the scenario-level
 * It does not turn the failed run into a pass and does not combine revisions. The next real-system V5 must run on the new harness revision and, to qualify, as part of the complete current-configuration sequence.
 * It does not test the real daemon's self-trip with the real alert package. Only a real-host run does that.
 
-## To confirm (needs the private evidence)
+## Still to confirm
 
-* From the archive: the latch's recorded kind, source and time; the `trips.jsonl` lines; the timeline of the recording and of the hold; the daemon and monitor journals. If any of these contradicts the inference above (for example the source is not `daemon`, or the time falls outside the stale window), this change is wrong and the finding is about the candidate or the alert path, not the harness.
-* Preserved/released evidence for the latch (stage recovery may already have moved `TRIPPED`).
+* On the next real run: the latch's recorded `source` and `at`, and the matching `trips.jsonl` line, preserved in the evidence this time (the judge now requires them).
+* Preserved/released evidence for the latch of the failed run if it exists (stage recovery may already have moved `TRIPPED`).
