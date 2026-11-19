@@ -93,8 +93,18 @@ def evaluate_baseline(incidents, poll, now, watch_s, max_age_s=150):
     return rows
 
 
-def evaluate_detection(scn, events, new, sink, t_fault, max_s, alert_journal="", expect_delivery=True):
-    """`new`: the incidents that appeared since the fault was injected. -> rows."""
+def hook_ran(journal, unit):
+    """Did the failure hook start the alert instance for `unit` (it has journal entries in the window)? True / False, or None when the alert journal was not read: unknown is not "no"."""
+    if not isinstance(journal, dict) or journal.get("state") not in (AT.PRESENT, AT.EMPTY):
+        return None
+    inst = (journal.get("instances") or {}).get(AT.alert_instance_for(unit))
+    if not isinstance(inst, dict) or inst.get("state") not in (AT.PRESENT, AT.EMPTY):
+        return None
+    return inst["state"] == AT.PRESENT
+
+
+def evaluate_detection(scn, events, new, sink, t_fault, max_s, alert_journal=None, expect_delivery=True):
+    """`new`: the incidents that appeared since the fault was injected. `alert_journal`: the result of collect_alert_journal (or None). -> rows."""
     pre = "V5.%s." % scn
     match = [i for i in new if i.get("event") in events and (i.get("first_seen") or 0) >= t_fault - 5]
     rows = []
@@ -114,9 +124,16 @@ def evaluate_detection(scn, events, new, sink, t_fault, max_s, alert_journal="",
                         {"messages": n_msgs, "state": first["delivery"]["state"]}))
     rec_ok = all(i.get("notification_received") is None for i in match)
     rows.append(row(pre + "not_claimed_received", "pass" if rec_ok else "fail", "no incident claims to be received before anyone acknowledged it: %s" % rec_ok, None))
-    hook = bool(alert_journal) and "failure alert" in alert_journal and first["unit"] in alert_journal
-    rows.append(row(pre + "detection_path", "info", ("the failure hook ran the alert unit for %s (the incident may also have been seen by the poll)" % first["unit"]) if hook else
-                    "poll only: the alert unit was not started by the failure hook for %s in the journal; the poll found it. Whether the hook fires in this case is recorded, not judged" % first["unit"], {"journal_has_hook": hook}, False))
+    hook = hook_ran(alert_journal, first["unit"])
+    if hook is None:
+        why = ((alert_journal or {}).get("detail") if isinstance(alert_journal, dict) else None) or "no journal record"
+        msg = "undetermined: the alert units' journal could not be read (%s), so whether the failure hook ran is not known; the incident was recorded either way" % str(why)[:160]
+    elif hook:
+        msg = "the failure hook ran the alert unit for %s (the incident may also have been seen by the poll)" % first["unit"]
+    else:
+        msg = ("poll only: the journal was read (the unit index listed, the alert instance for %s queried by exact name, exit 0) and it has no entry for it in the window; the poll found the incident. "
+               "Whether the hook fires in this case is recorded, not judged" % first["unit"])
+    rows.append(row(pre + "detection_path", "info", msg, {"journal_has_hook": hook}, False))
     return rows
 
 
@@ -270,11 +287,6 @@ def snapshot(ctx, key):
     return {"unit": {k: sh.get(k) for k in UNIT_PROPS}, "latch_sha": sha, "latch": doc, "released": len(released), "trips": len(trips), "trip_records": trips, "paused": ctx.paused(), "at": ctx.now()}
 
 
-def alert_journal(ctx, since):
-    rc, out, _ = ctx.env.run(["journalctl", "-u", "%salert@*" % C.PREFIX, "--since", "@%d" % int(since), "--no-pager", "-o", "cat"], timeout=60)
-    return out or ""
-
-
 def _new_since(ctx, old_ids):
     return [i for i in read_incidents(ctx.env) if i["id"] not in old_ids]
 
@@ -324,14 +336,59 @@ def _clears(ctx, rec, scn, match_events, wait_s):
 
 
 def _journal(ctx, since, *units):
-    """A timestamped slice of the journal of the given units: {"state": present|empty|unreadable, "text"}."""
+    """A timestamped slice of the journal of the given units, queried by EXACT name: {"state": present|empty|unreadable, "text", "query": {argv, rc, stderr}}. Exit 0 with no entry is a successful empty
+    query ("-- No entries --"); any other exit is unreadable, never empty. A unit name given here must not be a glob (see collect_alert_journal)."""
     argv = ["journalctl", "--since", "@%d" % int(since), "--no-pager", "-o", "short-iso-precise"]
     for u in units:
         argv += ["-u", u]
     rc, out, err = ctx.env.run(argv, timeout=60)
+    q = {"argv": argv, "rc": rc, "stderr": (err or "")[-200:]}
     if rc != 0:
-        return {"state": AT.UNREADABLE, "detail": (err or "rc %s" % rc)[-200:]}
-    return {"state": AT.PRESENT, "text": out} if AT.journal_lines(out) else {"state": AT.EMPTY}
+        return {"state": AT.UNREADABLE, "detail": (err or "rc %s" % rc)[-200:], "query": q}
+    return {"state": AT.PRESENT, "text": out, "query": q} if AT.journal_lines(out) else {"state": AT.EMPTY, "query": q}
+
+
+def collect_alert_journal(ctx, since):
+    """The journal of the alert units since `since`, without a wildcard. A glob unit filter (`-u 'dfl-vtest-alert@*'`) makes journalctl exit 1 ("Failed to add filter for units: No data available") when
+    the journal holds no unit of that name, which is exactly the case when the monitor was stopped cleanly: the failure hook never ran and only the poll saw it (real VM, 2026-11-19). So: list the unit
+    names the journal's own index holds (the fields journalctl itself searches for a glob: journal-wide, not limited by the window, still there after an instance has finished), keep those that are alert
+    instances, add the two failure-hook instances that can exist, and query each by EXACT name. Returns {"state": present|empty|unreadable, "text", "detail", "instances": {name: _journal result},
+    "enumeration": {"fields": {field: {argv, rc, names}}, "listed": [...]}, "expected": [...]}. 'empty' means every query succeeded and none had an entry; any failure is 'unreadable'."""
+    expected = AT.expected_alert_instances()
+    fields, held, failed = {}, set(), []
+    for f in AT.UNIT_FIELDS:
+        argv = ["journalctl", "-F", f, "--no-pager"]
+        rc, out, err = ctx.env.run(argv, timeout=60)
+        if rc != 0:
+            fields[f] = {"argv": argv, "rc": rc, "stderr": (err or "")[-200:]}
+            failed.append("field %s: %s" % (f, (err or "rc %s" % rc).strip()[-120:]))
+        else:
+            names = sorted({l.strip() for l in (out or "").splitlines() if l.strip()})
+            fields[f] = {"argv": argv, "rc": rc, "names": names}
+            held.update(names)
+    res = {"enumeration": {"fields": fields}, "expected": expected, "instances": {}}
+    if failed:
+        res.update(state=AT.UNREADABLE, detail="the journal's unit index could not be listed (%s)" % "; ".join(failed))
+        return res
+    if AT.POLL_UNIT not in held:
+        res.update(state=AT.UNREADABLE, detail="the journal's unit index does not list the poll unit %s, which runs every minute: the index was not read" % AT.POLL_UNIT)
+        return res
+    listed = AT.alert_instance_names(held)
+    res["enumeration"]["listed"] = listed
+    bad = []
+    for name in sorted(set(listed) | set(expected)):
+        res["instances"][name] = _journal(ctx, since, name)
+        if res["instances"][name]["state"] == AT.UNREADABLE:
+            bad.append("%s: %s" % (name, res["instances"][name].get("detail", "").strip()[-100:]))
+    if bad:
+        res.update(state=AT.UNREADABLE, detail="alert instance journal(s) could not be read (%s)" % "; ".join(bad))
+        return res
+    parts = ["-- instance %s --\n%s" % (n, i["text"]) for n, i in sorted(res["instances"].items()) if i["state"] == AT.PRESENT]
+    if parts:
+        res.update(state=AT.PRESENT, text="".join(parts))
+    else:
+        res.update(state=AT.EMPTY)
+    return res
 
 
 def _file_state(env, path):
@@ -361,7 +418,7 @@ def capture_attribution(ctx, scn, t_fault, monitor_down=None):
     since = (t_fault or now) - 5
     return {"schema": AT.SCHEMA, "scenario": scn, "captured_at": now, "t_fault": t_fault, "monitor_down": monitor_down, "latch": lat, "trips": trips,
             "pause": {"state": AT.PRESENT if ctx.paused() else AT.ABSENT}, "heartbeat": hb, "released": released, "guard_listing": listing,
-            "journals": {"alert": _journal(ctx, since, C.PREFIX + "alert@*"), "poll": _journal(ctx, since, C.PREFIX + "alert-poll.service"),
+            "journals": {"alert": collect_alert_journal(ctx, since), "poll": _journal(ctx, since, C.PREFIX + "alert-poll.service"),
                          "daemon": _journal(ctx, since, UNIT["daemon"]), "monitor": _journal(ctx, since, UNIT["monitor"])},
             "units": {"daemon": {k: ctx.show("daemon", UNIT_PROPS).get(k) for k in UNIT_PROPS}, "monitor": {k: ctx.show("monitor", UNIT_PROPS).get(k) for k in UNIT_PROPS}}}
 
@@ -435,7 +492,7 @@ def scenario_monitor_stopped(ctx, rec, fail_delivery=False):
             _wait_attempted(ctx, got[0]["id"])
         new = _new_since(ctx, old)
         sink_new = read_sink(env)[len(sink0):]
-        rec.add_all(evaluate_detection(scn, events, new, sink_new, t0, cfg["detect_max_s"], alert_journal(ctx, t0 - 2), expect_delivery=not fail_delivery))
+        rec.add_all(evaluate_detection(scn, events, new, sink_new, t0, cfg["detect_max_s"], collect_alert_journal(ctx, t0 - 2), expect_delivery=not fail_delivery))
         if got:
             _hold_and_judge(ctx, rec, scn, "monitor", monitor_down, t0)
             if fail_delivery:
@@ -504,7 +561,7 @@ def scenario_daemon_start_limit(ctx, rec):
             if got:
                 _wait_attempted(ctx, got[0]["id"])
             new = _new_since(ctx, old)
-            rec.add_all(evaluate_detection(scn, ("daemon_start_limit_hit",), new, read_sink(env)[len(sink0):], t_fault, cfg["detect_max_s"], alert_journal(ctx, t0 - 2)))
+            rec.add_all(evaluate_detection(scn, ("daemon_start_limit_hit",), new, read_sink(env)[len(sink0):], t_fault, cfg["detect_max_s"], collect_alert_journal(ctx, t0 - 2)))
             warn = [i for i in new if i.get("event") == "daemon_budget_low"]
             rec.check("V5.%s.budget_warning" % scn, "info", "the 'budget nearly used' warning was %s before the limit was hit (NRestarts is only a heuristic for budget use: recorded, not judged)" % ("raised" if warn else "NOT raised"), {"warnings": [w["id"] for w in warn]}, False)
             if got:
@@ -566,7 +623,7 @@ def scenario_monitor_exit2(ctx, rec):
         if got:
             _wait_attempted(ctx, got[0]["id"])
         new = _new_since(ctx, old)
-        rec.add_all(evaluate_detection(scn, ("monitor_failed", "monitor_not_running"), new, read_sink(env)[len(sink0):], t0, cfg["detect_max_s"] + 120, alert_journal(ctx, t0 - 2)))
+        rec.add_all(evaluate_detection(scn, ("monitor_failed", "monitor_not_running"), new, read_sink(env)[len(sink0):], t0, cfg["detect_max_s"] + 120, collect_alert_journal(ctx, t0 - 2)))
         if got:
             _hold_and_judge(ctx, rec, scn, "monitor", None, t0)
     finally:
@@ -583,14 +640,40 @@ def scenario_monitor_exit2(ctx, rec):
     rec.stop_if_failed()
 
 
+def save_alert_journals(ctx):
+    """The whole run's alert and poll journals: alert_journal.txt (the instances), alert_journal_timestamped.txt (instances and poll in time order, ISO timestamps) and alert_journal_status.json (what was
+    queried and how each query ended). A failed query is written as UNAVAILABLE with its reason, never as an empty file; a successful empty collection says what was queried."""
+    env = ctx.env
+    res = collect_alert_journal(ctx, 0)
+    poll = _journal(ctx, 0, AT.POLL_UNIT)
+    units = [AT.POLL_UNIT] + sorted(set(res.get("instances", {})) | set(AT.expected_alert_instances()))
+    argv = ["journalctl", "--no-pager", "-o", "short-iso-precise"]
+    for u in units:
+        argv += ["-u", u]
+    rc, out, err = env.run(argv, timeout=120)
+    comb = {"argv": argv, "rc": rc, "units": units, "stderr": (err or "")[-200:]}
+    if res["state"] == AT.PRESENT:
+        legacy = res["text"]
+    elif res["state"] == AT.EMPTY:
+        legacy = ("(no entries: the failure hook never started an alert instance; %d instance name(s) were queried by exact name, every query succeeded: %s)\n" %
+                  (len(res["instances"]), ", ".join(sorted(res["instances"]))))
+    else:
+        legacy = "UNAVAILABLE: %s\n" % res.get("detail", "unreadable")
+    ctx.save("alert_journal.txt", legacy)
+    if rc == 0 and AT.journal_lines(out):
+        stamped = out
+    else:
+        stamped = "UNAVAILABLE: %s" % ((err or out or "rc %s" % rc).strip()[-200:] or "no entries")
+    ctx.save(AT.JOURNAL_FILE, stamped)
+    ctx.save(AT.JOURNAL_STATUS_FILE, {"schema": AT.SCHEMA, "alert": res, "poll": poll, "combined": comb})
+
+
 def save_evidence(ctx):
     env = ctx.env
     try:
         ctx.save("incidents.json", read_incidents(env))
         ctx.save("sink.log", read_sink(env))
-        ctx.save("alert_journal.txt", alert_journal(ctx, 0) or "(empty)")
-        rc, out, err = env.run(["journalctl", "-u", C.PREFIX + "alert@*", "-u", C.PREFIX + "alert-poll.service", "--no-pager", "-o", "short-iso-precise"], timeout=120)
-        ctx.save(AT.JOURNAL_FILE, out if rc == 0 and AT.journal_lines(out) else "UNAVAILABLE: %s" % ((err or out or "rc %s" % rc).strip()[-200:] or "no entries"))
+        save_alert_journals(ctx)
         ctx.save("alerts_install.json", env.read(IA.record_path()) or "UNAVAILABLE: no alert install record")
     except OSError:
         pass

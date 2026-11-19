@@ -53,12 +53,13 @@ def populate(rdir, skip=(), stopped=False):
 
 
 STAMPED = '2027-01-15T00:04:37.100000+00:00 host unit[1]: entry\n'
+from journal_model import good_alert_journal, good_query, good_status   # noqa: E402
 
 
 def valid_attribution(scn):
     return {'schema': 1, 'scenario': scn, 'captured_at': 1100.0, 't_fault': 950.0, 'monitor_down': None, 'latch': {'state': 'absent'}, 'trips': {'state': 'absent', 'lines': 0}, 'pause': {'state': 'absent'},
             'heartbeat': {'state': 'present', 'mtime': 1090.0, 'age': 10.0, 'watch_tail': []}, 'released': {'state': 'absent'}, 'guard_listing': [{'name': 'heartbeat', 'mtime': 1090.0}],
-            'journals': {'alert': {'state': 'present', 'text': STAMPED}, 'poll': {'state': 'present', 'text': STAMPED}, 'daemon': {'state': 'empty'}, 'monitor': {'state': 'empty'}},
+            'journals': {'alert': good_alert_journal(), 'poll': good_query(), 'daemon': dict(good_query(), state='empty', text=''), 'monitor': dict(good_query(), state='empty', text='')},
             'units': {'daemon': {'ActiveState': 'active'}, 'monitor': {'ActiveState': 'active'}}}
 
 
@@ -78,7 +79,7 @@ def populate_v5(rdir, skip=(), overall='pass', hold_marks=tuple(AT.SCENARIOS), o
             continue
         name = rel.split('/')[-1]
         body = {'run.json': '{"started": 1000.0}', 'SUMMARY.json': '{"results": {"V5": "%s"}}' % overall, 'result.json': json.dumps({'overall': overall}),
-                AT.SANDBOX_FILE: json.dumps(valid_sandbox()), AT.JOURNAL_FILE: STAMPED,
+                AT.SANDBOX_FILE: json.dumps(valid_sandbox()), AT.JOURNAL_FILE: STAMPED, AT.JOURNAL_STATUS_FILE: json.dumps(good_status()),
                 'timeline.jsonl': ''.join(json.dumps({'event': 'V5.' + s, 'phase': 'hold_start', 't': 1.0}) + '\n' for s in hold_marks)}.get(name)
         for scn, fname in AT.SCENARIOS.items():
             if name == fname:
@@ -298,11 +299,11 @@ class V5AttributionEvidence(Evidence):
         rc, text = self.archive()
         self.assertEqual(rc, 0, text)
         paths = {i['path']: i['status'] for i in self.manifest()['required']}
-        for want in self.ATTR + ['V5/alert_sandbox.json', 'V5/alert_journal_timestamped.txt']:
+        for want in self.ATTR + ['V5/alert_sandbox.json', 'V5/alert_journal_timestamped.txt', 'V5/alert_journal_status.json']:
             self.assertEqual(paths.get(want), 'present', want)
 
     def test_each_missing_new_item_makes_the_archive_incomplete_and_blocks_cleanup(self):
-        for rel in self.ATTR + ['V5/alert_sandbox.json', 'V5/alert_journal_timestamped.txt']:
+        for rel in self.ATTR + ['V5/alert_sandbox.json', 'V5/alert_journal_timestamped.txt', 'V5/alert_journal_status.json']:
             with self.subTest(rel):
                 os.system('rm -rf %s' % self.rdir)
                 os.makedirs(self.rdir)
@@ -317,6 +318,9 @@ class V5AttributionEvidence(Evidence):
         hollow = {
             'no poll journal': dict(good, journals=dict(good['journals'], poll={'state': 'empty'})),
             'alert journal unreadable': dict(good, journals=dict(good['journals'], alert={'state': 'unreadable'})),
+            'the real failure: a glob filter matched nothing': dict(good, journals=dict(good['journals'], alert={'state': 'unreadable', 'detail': 'Failed to add filter for units: No data available\n'})),
+            'alert journal empty without proof of the queries': dict(good, journals=dict(good['journals'], alert={'state': 'empty'})),
+            'poll journal without its query status': dict(good, journals=dict(good['journals'], poll={k: v for k, v in good['journals']['poll'].items() if k != 'query'})),
             'journal without timestamps': dict(good, journals=dict(good['journals'], poll={'state': 'present', 'text': 'plain\n'})),
             'latch not read': dict(good, latch={'state': 'unreadable'}),
             'latch text lost': dict(good, latch={'state': 'present', 'text': '', 'sha256': AT.sha256_text(''), 'mtime': 1.0}),
@@ -347,7 +351,14 @@ class V5AttributionEvidence(Evidence):
         del short_props['units']['a@d']['ReadWritePaths']
         for label, rel, text in (('sandbox with two units', 'V5/alert_sandbox.json', json.dumps(bad_sandbox)), ('sandbox without ReadWritePaths', 'V5/alert_sandbox.json', json.dumps(short_props)),
                                  ('sandbox not JSON', 'V5/alert_sandbox.json', 'x'), ('journal unavailable', 'V5/alert_journal_timestamped.txt', 'UNAVAILABLE: no entries'),
-                                 ('journal without timestamps', 'V5/alert_journal_timestamped.txt', 'Starting x\nFinished x\n'), ('journal empty', 'V5/alert_journal_timestamped.txt', '-- No entries --\n')):
+                                 ('journal without timestamps', 'V5/alert_journal_timestamped.txt', 'Starting x\nFinished x\n'), ('journal empty', 'V5/alert_journal_timestamped.txt', '-- No entries --\n'),
+                                 ('whole-run alert journal unavailable', 'V5/alert_journal.txt', 'UNAVAILABLE: Failed to add filter for units: No data available\n'),
+                                 ('whole-run alert journal the bare old placeholder', 'V5/alert_journal.txt', '(empty)'),
+                                 ('journal status not JSON', 'V5/alert_journal_status.json', 'x'),
+                                 ('journal status with a failed enumeration', 'V5/alert_journal_status.json', json.dumps(dict(good_status(), alert=dict(good_status()['alert'], state='unreadable', detail='boom')))),
+                                 ('journal status with a failed combined query', 'V5/alert_journal_status.json', json.dumps(dict(good_status(), combined=dict(good_status()['combined'], rc=1)))),
+                                 ('journal status without the poll', 'V5/alert_journal_status.json', json.dumps(dict(good_status(), poll={'state': 'empty', 'query': good_query()['query']}))),
+                                 ('journal status for another schema', 'V5/alert_journal_status.json', json.dumps(dict(good_status(), schema=2)))):
             with self.subTest(label):
                 os.system('rm -rf %s' % self.rdir)
                 os.makedirs(self.rdir)

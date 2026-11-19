@@ -10,6 +10,7 @@ What V5 must judge (owner, 2026-11-12):
 import json
 import os
 import sys
+import types
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import stage_v5 as V5         # noqa: E402
 import install_alerts as IA   # noqa: E402
 import release_config as RC   # noqa: E402
 import attribution as AT      # noqa: E402
+from journal_model import FakeJournal, good_alert_journal, good_query   # noqa: E402
 
 ALERT_UNIT = 'dfl-vtest-alert@%n.service'
 
@@ -122,11 +124,13 @@ class Detection(unittest.TestCase):
         self.assertEqual(status(self.rows([i]), 'V5.monitor_stopped.not_claimed_received'), 'fail')
 
     def test_the_detection_path_is_reported_not_judged(self):
-        rows = by_id(self.rows([incident(first=1100.0)], journal='Starting DFL failure alert for %s...' % C.UNIT['monitor']))
+        hooked = FakeJournal().add(C.PREFIX + 'alert-poll.service', 'poll ran', at=1020.0).add(C.PREFIX + 'alert@%s.service' % C.UNIT['monitor'], 'Starting DFL failure alert', at=1100.0)
+        rows = by_id(self.rows([incident(first=1100.0)], journal=V5.collect_alert_journal(types.SimpleNamespace(env=hooked), 998.0)))
         self.assertEqual(rows['V5.monitor_stopped.detection_path'][1], 'info')
         self.assertIn('failure hook', rows['V5.monitor_stopped.detection_path'][2])
-        rows = by_id(self.rows([incident(first=1100.0)], journal=''))
-        self.assertIn('poll', rows['V5.monitor_stopped.detection_path'][2])
+        polled = FakeJournal().add(C.PREFIX + 'alert-poll.service', 'poll ran', at=1020.0)
+        rows = by_id(self.rows([incident(first=1100.0)], journal=V5.collect_alert_journal(types.SimpleNamespace(env=polled), 998.0)))
+        self.assertIn('poll only', rows['V5.monitor_stopped.detection_path'][2])
         self.assertFalse(rows['V5.monitor_stopped.detection_path'][4])
 
 
@@ -165,11 +169,10 @@ def preserved_for(after, hb_mtime=947.0, **over):
         latch['sha256'] = AT.sha256_text(latch['text'])
     recs = after.get('trip_records') or []
     trips = {'state': 'present', 'text': ''.join(json.dumps(r, sort_keys=True) + '\n' for r in recs), 'lines': len(recs)} if recs else {'state': 'absent', 'lines': 0}
-    stamped = {'state': 'present', 'text': '2027-01-15T00:04:37.100000+00:00 host unit[1]: entry\n'}
     doc = {'schema': 1, 'scenario': 's', 'captured_at': after.get('at', 1100.0), 't_fault': 950.0, 'monitor_down': None, 'latch': latch, 'trips': trips,
            'pause': {'state': 'present' if after.get('paused') else 'absent'}, 'heartbeat': {'state': 'present', 'mtime': hb_mtime, 'age': 150.0, 'watch_tail': []},
            'released': {'state': 'absent'}, 'guard_listing': [{'name': 'heartbeat', 'mtime': hb_mtime}],
-           'journals': {'alert': dict(stamped), 'poll': dict(stamped), 'daemon': {'state': 'empty'}, 'monitor': {'state': 'empty'}},
+           'journals': {'alert': good_alert_journal(), 'poll': good_query((C.PREFIX + 'alert-poll.service',)), 'daemon': dict(good_query((C.UNIT['daemon'],)), state='empty', text=''), 'monitor': dict(good_query((C.UNIT['monitor'],)), state='empty', text='')},
            'units': {'daemon': {'ActiveState': 'active'}, 'monitor': {'ActiveState': 'inactive'}}}
     doc.update(over)
     return doc
@@ -288,7 +291,7 @@ class IndependentSafetyTrip(unittest.TestCase):
             'heartbeat time not preserved': dict(good, heartbeat={'state': 'unreadable', 'mtime': None, 'age': None}),
             'poll journal empty': dict(good, journals=dict(good['journals'], poll={'state': 'empty'})),
             'alert journal unreadable': dict(good, journals=dict(good['journals'], alert={'state': 'unreadable'})),
-            'journal not timestamped': dict(good, journals=dict(good['journals'], poll={'state': 'present', 'text': 'no stamp here\n'})),
+            'journal not timestamped': dict(good, journals=dict(good['journals'], poll=dict(good_query(), text='no stamp here\n'))),
             'guard listing missing': dict(good, guard_listing=[]),
             'the capture itself failed': {'schema': 1, 'scenario': 's', 'error': 'OSError: boom'},
             'unknown schema': dict(good, schema=2),
@@ -463,7 +466,9 @@ class ScriptedAlertMachine:
     def __init__(self, alert_detects=True, alert_recovers=False, delivery_ok=True, detect_after=130.0, daemon_trips=False, rogue_latch=None):
         self.t = 1000.0
         self.daemon_trips, self.rogue_latch = daemon_trips, rogue_latch
-        self.journal_fails, self.final_hb = False, None
+        self.final_hb = None
+        self.journal = FakeJournal()                                    # journalctl as it really behaves (tests/journal_model.py): the poll runs every minute, hook instances only when a unit FAILS
+        self._next_poll = 1020.0
         self.files = {C.GUARD + '/heartbeat': '', C.GUARD + '/watch.log': ''}
         self.alert_detects, self.alert_recovers, self.delivery_ok, self.detect_after = alert_detects, alert_recovers, delivery_ok, detect_after
         self.calls, self.monitor_stopped_at = [], None
@@ -482,8 +487,19 @@ class ScriptedAlertMachine:
         self.files[C.ROOT_DIR + '/store/PAUSE'] = ''
         self.latch_sha = hashlib.sha256(text.encode()).hexdigest()
 
+    @property
+    def journal_fails(self):
+        return bool(self.journal.fail_all)
+
+    @journal_fails.setter
+    def journal_fails(self, on):
+        self.journal.fail_all = (1, 'Failed to read journal') if on else None
+
     def sleep(self, s):
         self.t += s
+        while self._next_poll <= self.t:
+            self.journal.add(C.PREFIX + 'alert-poll.service', 'poll ran', at=self._next_poll)
+            self._next_poll += 60.0
         hb = (self.monitor_stopped_at or 0) - 3.0                       # the stubbed heartbeat was 3 s old when the monitor was stopped
         if self.daemon_trips and not self.monitor_up and self.monitor_stopped_at and C.GUARD + '/TRIPPED' not in self.files and self.t >= hb + 121.0:
             self._latch({'kind': 'monitor_silent', 'detail': 'no heartbeat from the monitor for 121 s', 'source': 'daemon', 'at': hb + 121.0})
@@ -537,10 +553,7 @@ class ScriptedAlertMachine:
     def run(self, argv, timeout=60, input=None):
         self.calls.append((self.t, 'run', tuple(argv)))
         if argv and argv[0] == 'journalctl':
-            if self.journal_fails:
-                return 1, '', 'Failed to read journal'
-            units = [argv[i + 1] for i, a in enumerate(argv) if a == '-u']
-            return 0, ''.join('2027-01-15T00:00:%02d.000000+00:00 host %s[1]: entry\n' % (i, u) for i, u in enumerate(units)), ''
+            return self.journal.run(argv)
         if argv[:2] == ['/bin/sh', '-c'] and ' ack ' in argv[2]:
             iid = argv[2].split(' ack ')[1].split()[0]
             for k, v in list(self.files.items()):
@@ -734,7 +747,7 @@ class ScenarioGlue(unittest.TestCase):
         self.assertEqual(cap['pause']['state'], 'present')
         starts = [c for c in m.calls if c[1] == 'start' and C.UNIT['monitor'] in c[2]]
         self.assertLessEqual(cap['captured_at'], starts[0][0], 'captured no later than the harness starting the monitor again (the documented recovery); the timeline order below is the strict check')
-        self.assertTrue(any('2027-01-15T' in (cap['journals'][k].get('text') or '') for k in ('alert', 'poll')), 'timestamped journals')
+        self.assertEqual(AT.timestamped_problems(cap['journals']['poll'].get('text')), [], 'timestamped poll journal')
         with open(os.path.join(ctx.dir, 'timeline.jsonl')) as f:
             marks = [json.loads(l) for l in f]
         phases = [x['phase'] for x in marks if x.get('event') == 'V5.monitor_stopped' and 'phase' in x]

@@ -11,12 +11,19 @@ import hashlib
 import json
 import re
 
+import common as C
+
 SCHEMA = 1
 PRESENT, ABSENT, UNREADABLE, EMPTY = "present", "absent", "unreadable", "empty"
 # The scenarios that hold after an alert, the timeline event that says the hold began, and the file that must then exist.
 SCENARIOS = {"monitor_stopped": "attribution_monitor_stopped.json", "daemon_start_limit": "attribution_daemon_start_limit.json",
              "monitor_exit2": "attribution_monitor_exit2.json", "delivery_failure": "attribution_delivery_failure.json"}
-SANDBOX_FILE, JOURNAL_FILE = "alert_sandbox.json", "alert_journal_timestamped.txt"
+SANDBOX_FILE, JOURNAL_FILE, JOURNAL_STATUS_FILE = "alert_sandbox.json", "alert_journal_timestamped.txt", "alert_journal_status.json"
+# The journal fields journalctl itself searches when it expands a unit glob. The collector never sends a glob (a glob that matches no held unit name makes journalctl exit 1: "Failed to add filter for
+# units: No data available", seen on the validation VM 2026-11-19); it lists the names these fields hold and queries each one by exact name.
+UNIT_FIELDS = ("_SYSTEMD_UNIT", "OBJECT_SYSTEMD_UNIT", "COREDUMP_UNIT", "UNIT")
+POLL_UNIT = C.PREFIX + "alert-poll.service"
+ALERT_INSTANCE_PREFIX = C.PREFIX + "alert@"
 SANDBOX_PROPS = ("Id", "FragmentPath", "DropInPaths", "User", "Group", "DynamicUser", "ProtectSystem", "ProtectHome", "ReadWritePaths", "ReadOnlyPaths", "InaccessiblePaths", "NoNewPrivileges",
                  "PrivateTmp", "StateDirectory", "CapabilityBoundingSet", "RestrictAddressFamilies", "ExecStart")
 ISO_LINE = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
@@ -48,6 +55,104 @@ def timestamped_problems(text, label="journal"):
     if len(bad) == len(lines):
         return ["%s has no timestamped lines (wrong output format?)" % label]
     return []
+
+
+def alert_instance_for(unit):
+    """The alert unit systemd starts for a failed `unit` (OnFailure=dfl-vtest-alert@<unit>): the instance string is the unit's own name, so the full name ends in .service.service."""
+    return ALERT_INSTANCE_PREFIX + unit + ".service"
+
+
+def expected_alert_instances():
+    """The two failure-hook instances that can exist; they are always queried by exact name, whether or not the journal has ever mentioned them."""
+    return [alert_instance_for(C.UNIT[k]) for k in ("daemon", "monitor")]
+
+
+def alert_instance_names(names):
+    return sorted({n for n in names if n.startswith(ALERT_INSTANCE_PREFIX) and n.endswith(".service") and not re.search(r"\s|[*?\[]", n)})
+
+
+def _query_ok(q):
+    return isinstance(q, dict) and q.get("rc") == 0 and isinstance(q.get("argv"), list) and bool(q["argv"])
+
+
+def alert_journal_problems(doc):
+    """-> reasons the alert journal record cannot be accepted ([] = complete). 'empty' is accepted only as the PROVEN result of successful queries: the journal's unit index was listed (every field, exit
+    0, and it holds the poll unit, which runs every minute), every alert instance the index lists and both failure-hook instances were queried by exact name with exit 0, and none had an entry in the window.
+    A failed or missing query, an instance listed but not queried, or a state that disagrees with the instances' own never passes."""
+    if not isinstance(doc, dict):
+        return ["the alert journal was not read (no record)"]
+    st = doc.get("state")
+    if st not in (PRESENT, EMPTY):
+        return ["the alert journal was not read (state %r)%s" % (st, ": " + str(doc["detail"])[:160] if doc.get("detail") else "")]
+    p = []
+    fields = (doc.get("enumeration") or {}).get("fields")
+    held = set()
+    if not isinstance(fields, dict):
+        p.append("the alert journal record has no listing of the journal's unit index (what the glob-free collection is built on)")
+        fields = {}
+    for f in UNIT_FIELDS:
+        e = fields.get(f)
+        if not isinstance(e, dict) or e.get("rc") != 0 or not isinstance(e.get("names"), list):
+            p.append("the journal's unit index (field %s) was not listed successfully" % f)
+        else:
+            held.update(n for n in e["names"] if isinstance(n, str))
+    if not p and POLL_UNIT not in held:
+        p.append("the journal's unit index does not list %s, which runs every minute: the index was not read" % POLL_UNIT)
+    if not p and sorted((doc["enumeration"].get("listed") or [])) != alert_instance_names(held):
+        p.append("the listed alert instances do not match what the journal's unit index holds")
+    insts = doc.get("instances")
+    if not isinstance(insts, dict) or not insts:
+        return p + ["the alert journal record has no per-instance queries"]
+    need = set(expected_alert_instances()) | set(alert_instance_names(held))
+    for name in sorted(need):
+        if name not in insts:
+            p.append("alert instance %s was not queried" % name)
+    any_present = False
+    for name, inst in sorted(insts.items()):
+        if not isinstance(inst, dict) or inst.get("state") not in (PRESENT, EMPTY):
+            p.append("alert instance %s: not read (state %r)" % (name, (inst or {}).get("state") if isinstance(inst, dict) else None))
+            continue
+        if not _query_ok(inst.get("query")):
+            p.append("alert instance %s: the query's status (exit 0) is not recorded" % name)
+        if inst["state"] == PRESENT:
+            any_present = True
+            p += timestamped_problems(inst.get("text"), "alert instance %s's journal" % name)
+    if st == PRESENT and not any_present:
+        p.append("the alert journal says it has entries but no instance does")
+    if st == EMPTY and any_present:
+        p.append("the alert journal says it is empty but an instance has entries")
+    if st == PRESENT:
+        p += timestamped_problems(doc.get("text"), "the alert journal")
+    return p
+
+
+def legacy_journal_problems(text, label="the alert journal"):
+    """alert_journal.txt: a failed capture says UNAVAILABLE; a bare '(empty)' (the old placeholder, which hid a failed query) proves nothing."""
+    if not isinstance(text, str) or not text.strip():
+        return ["%s is missing or empty" % label]
+    if text.startswith("UNAVAILABLE:"):
+        return ["%s could not be read on the machine: %s" % (label, text[len("UNAVAILABLE:"):].strip()[:160])]
+    if text.strip() == "(empty)":
+        return ["%s is the bare '(empty)' placeholder, which does not say whether the query succeeded" % label]
+    return []
+
+
+def journal_status_problems(doc):
+    """-> reasons the whole-run journal status record (alert_journal_status.json) is incomplete: the alert journal's proof, the poll query and the combined timestamped query all succeeded."""
+    if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
+        return ["the journal status record is missing or has an unknown schema"]
+    p = ["whole-run alert journal: " + x for x in alert_journal_problems(doc.get("alert"))]
+    poll = doc.get("poll")
+    if not isinstance(poll, dict) or poll.get("state") != PRESENT or not _query_ok(poll.get("query")):
+        p.append("whole-run poll journal: not read successfully or without entries")
+    comb = doc.get("combined")
+    if not isinstance(comb, dict) or comb.get("rc") != 0 or not isinstance(comb.get("units"), list) or POLL_UNIT not in comb["units"]:
+        p.append("whole-run timestamped query: did not succeed or did not name the poll unit")
+    else:
+        miss = [n for n in expected_alert_instances() if n not in comb["units"]]
+        if miss:
+            p.append("whole-run timestamped query: did not name %s" % ", ".join(miss))
+    return p
 
 
 def attribution_problems(doc):
@@ -85,14 +190,15 @@ def attribution_problems(doc):
     if not isinstance(doc.get("guard_listing"), list) or not doc["guard_listing"]:
         p.append("the guard folder listing was not captured")
     jr = doc.get("journals") or {}
-    for k in KEY_JOURNALS:
-        st = (jr.get(k) or {}).get("state")
-        if st not in (PRESENT, EMPTY):
-            p.append("the %s journal was not read (state %r)" % (k, st))
-    for k in ("alert", "poll"):
+    p += alert_journal_problems(jr.get("alert"))
+    for k in ("poll", "daemon", "monitor"):
         j = jr.get(k) or {}
-        if j.get("state") == PRESENT:
-            p += timestamped_problems(j.get("text"), "the %s journal" % k)
+        if j.get("state") not in (PRESENT, EMPTY):
+            p.append("the %s journal was not read (state %r)" % (k, j.get("state")))
+        elif not _query_ok(j.get("query")):
+            p.append("the %s journal's query status (exit 0) is not recorded" % k)
+        if j.get("state") == PRESENT and k == "poll":
+            p += timestamped_problems(j.get("text"), "the poll journal")
     if (jr.get("poll") or {}).get("state") != PRESENT:
         p.append("the poll journal is empty: the poll timer runs every minute, so a hold of a minute or more must contain a run")
     for k in ("daemon", "monitor"):

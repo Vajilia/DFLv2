@@ -74,7 +74,8 @@ sandbox were not kept, and recovery had already moved the latch. V5 now preserve
   released-evidence listing, timestamped (`-o short-iso-precise`) journals of the alert units, the poll unit, the daemon and the monitor since just before the fault, and the two units' state.
 * `V5/alert_sandbox.json`, captured once before the drills: the effective `User`, `ProtectSystem`, `ReadWritePaths`, `ReadOnlyPaths`, `InaccessiblePaths`, `StateDirectory` and related properties of the alert
   unit for each protected unit and of the poll unit. Two new required rows judge it: it must be recorded in full, and every unit must have `ProtectSystem=strict` with no writable path covering the guard folder.
-* `V5/alert_journal_timestamped.txt`: the whole run's alert and poll journal with precise timestamps (the earlier `alert_journal.txt` has none and omits the poll).
+* `V5/alert_journal_timestamped.txt`: the whole run's alert and poll journal with precise timestamps (the earlier `alert_journal.txt` has none and omits the poll). How these journals are collected was
+  corrected on 2026-11-19, see the last section; `V5/alert_journal_status.json` now records each query's status.
 
 How a gap cannot become a pass:
 
@@ -87,3 +88,59 @@ How a gap cannot become a pass:
 
 Tests: `tests/test_vtest_v5.py` (judge, capture, sandbox rows, scenario-level reproduction and the missing-evidence cases), `tests/test_vtest_evidence.py` (`V5AttributionEvidence`), and the retest-scope
 classification of the new harness module in `tests/test_alert_release_config.py`. Mutating each rule makes at least one test fail.
+
+## The alert-journal collection failure (2026-11-19, harness `aaddb43`)
+
+**What failed.** The first real V5-only smoke on the revision that added the attribution capture (runtime candidate unchanged) stopped in its first scenario at
+`V5.monitor_stopped.attribution_preserved`: "the alert journal was not read (state 'unreadable')", with the command's own message `Failed to add filter for units: No data available`. The run exited 2, the archive
+exited 3 (incomplete evidence) and the host was kept until both archives were copied off and verified. **This run stays FAILED.** It is not a pass, a partial pass or evidence about the candidate. In that
+scenario every other row passed (installed, baseline, incident recorded about a minute after the stop, delivered once, not claimed received, nothing recovered, clean recovery); the other three hold scenarios
+were never reached. No latch had appeared when the capture was taken (the monitor's last heartbeat was then about 120 s old, just at the daemon's stale limit), so this run says nothing new about the
+daemon's own trip.
+
+**Demonstrated cause.** The collector read the alert units' journal with a wildcard unit filter (`journalctl -u '<prefix>alert@*'`). Reproduced with the same journalctl version as the VM (systemd 255.4) against
+a private journald:
+
+| query on a journal that holds the poll unit's entries but no alert instance | exit | output |
+|---|---|---|
+| `-u 'pattern@*'` alone | 1 | `Failed to add filter for units: No data available` |
+| `-u 'pattern@*'` plus any exact `-u` (even a unit that never existed) | 0 | normal |
+| exact `-u NAME` with no entries | 0 | `-- No entries --` |
+| `-u 'pattern@*'` once a matching unit name is in the journal | 0 | normal |
+
+A glob is expanded against the unit names the journal itself holds (the fields `_SYSTEMD_UNIT`, `OBJECT_SYSTEMD_UNIT`, `COREDUMP_UNIT`, `UNIT`; journal-wide, unaffected by `--since`, and still present after an
+instance has finished); if every `-u` given is a glob and none matches, the command fails. In the failed run the monitor had been stopped cleanly. A clean stop is not a unit failure, so `OnFailure=` never started
+an alert instance (the full boot journal of the host has no alert instance at all) and the poll found the incident, so nothing existed for the glob to match. This also explains why the earlier real smoke runs
+(where a monitor was made to fail and the hook did run) read the same query without trouble, and why the whole-run timestamped query of the failed run worked: it named the poll unit as well. The only thing missing
+was a unit name for the glob to match; nothing was wrong with the host, the alert package or the candidate.
+
+A second defect: the helper turned any error into an empty string. The detection-path row ("poll only: the hook did not start the alert unit") was therefore decided from an unreadable query. For this run the
+statement happens to be true (the full boot journal confirms it) but the harness had no evidence for it.
+
+**Correction (harness only).** The collector (`collect_alert_journal`, `tools/vtest/stage_v5.py`) never sends a wildcard. It lists the unit names the journal's own index holds (`journalctl -F` on the four fields
+above), keeps the alert instances, adds the two failure-hook instances that can exist, and queries each by exact name. Each query's argv, exit status and stderr are kept next to its text, and the text keeps
+ISO timestamps and the unit's name. Rules (`attribution.alert_journal_problems`), applied by the stage, by the manifest and by the new whole-run status file:
+
+* `empty` is accepted only as the proved result of successful queries: all four index listings exited 0, the index holds the poll unit (it runs every minute; `-F` also exits 0, empty, for a field that does
+  not exist, so an index without the poll proves nothing), every alert instance the index lists and both hook instances were queried by exact name with exit 0, and none had an entry in the window.
+* Any failed listing or query, an instance listed but not queried, a state that disagrees with the instances, or a missing query status is a failure of the scenario row (required), an incomplete archive and no
+  basis for accepting a latch. The poll, daemon and monitor journals must also record an exit-0 query.
+* An instance that finished before the capture is found: the index is journal-wide and not limited by the window or by whether the unit still exists.
+* The detection-path row says "poll only" only when the journal was read; an unreadable journal is "undetermined".
+* `alert_journal.txt` says `UNAVAILABLE: <reason>` for a failed query (never the old `(empty)` placeholder), and says what was queried when the collection was successfully empty.
+  `alert_journal_status.json` (new, required, content-checked) records the whole-run queries and their status.
+
+The failed run's own capture is judged incomplete under these rules (the alert journal unreadable; the other journals carry no query status): the archive of that run could not become complete under the corrected harness.
+
+**Verification done.** Failing regression tests first (the scripted machine's journal now behaves like the real command, so the old collector reproduces the exact message at scenario level), then the fix:
+`tests/test_vtest_v5_journal.py` (new) plus the extended V5 and evidence suites; mutating each rule of the collector, the validators and the manifest wiring makes a test fail (one equivalent mutant survives:
+the manifest already treats any `UNAVAILABLE:` file as missing). The collector was also run against real journalctl and a private journald, for a poll-only journal, a journal with indexed instances, and a
+journal that lacks the poll unit.
+
+**Limitations.** The private journald could not attribute messages to units by cgroup, so unit entries were seeded through the plain `UNIT=` field: the exit statuses, the index listing and the glob-free
+behavior are real, but an instance's entry text being matched by an exact `-u` filter, and the `-F` listing of a long-lived real journal, are confirmed only by the earlier real runs and the source, not by this
+reproduction. The alert path's inability to write the latch still rests on the recorded commands, the sandbox properties and the source, and the daemon's own stale-heartbeat trip has still not been preserved
+and attributed on a real host. The 2026-11-17 failure stays unexplained by direct evidence beyond what is written above.
+
+**Smallest justified real-system retest.** One V5-only smoke on the corrected revision, whose job is to produce the missing evidence: it must reach and judge all four hold scenarios, and a complete archive. A
+qualifying run is a separate, later decision.

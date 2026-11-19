@@ -30,10 +30,11 @@ STAGE_SAMPLES = {   # (file, when): "always" must exist; "later" must exist unle
     "V2": [("v2a_cgroup.jsonl", "always"), ("v2a_anon.jsonl", "always"), ("v2b_cgroup.jsonl", "later"), ("v2b_anon.jsonl", "later"), ("v2c_cgroup.jsonl", "later"), ("v2c_anon.jsonl", "later")],
     "V3": [], "V4": [],
     "V5": [("alerts_install.json", "always"), ("incidents.json", "always"), ("sink.log", "always"), ("alert_journal.txt", "always"),
-           (AT.SANDBOX_FILE, "always"), (AT.JOURNAL_FILE, "always")]}
+           (AT.SANDBOX_FILE, "always"), (AT.JOURNAL_FILE, "always"), (AT.JOURNAL_STATUS_FILE, "always")]}
 # V5 attribution evidence, one file per scenario that reached its hold (the stage writes a `hold_start` mark first): required once that mark exists; otherwise like a later sample.
 V5_ATTRIBUTION = {"V5/" + fname: "V5.%s" % scn for scn, fname in AT.SCENARIOS.items()}
-CONTENT_CHECKS = {"V5/" + AT.SANDBOX_FILE: ("json", AT.sandbox_problems), "V5/" + AT.JOURNAL_FILE: ("text", AT.timestamped_problems)}
+CONTENT_CHECKS = {"V5/alert_journal.txt": ("text", AT.legacy_journal_problems), "V5/" + AT.SANDBOX_FILE: ("json", AT.sandbox_problems), "V5/" + AT.JOURNAL_FILE: ("text", AT.timestamped_problems),
+                  "V5/" + AT.JOURNAL_STATUS_FILE: ("json", AT.journal_status_problems)}
 CONTENT_CHECKS.update({rel: ("json", AT.attribution_problems) for rel in V5_ATTRIBUTION})
 OOM = re.compile(r"oom|out of memory|killed process", re.I)
 
