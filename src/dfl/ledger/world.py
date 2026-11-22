@@ -574,7 +574,7 @@ class World:
         order = [c for c in self.priority if c in L.clubs] + [c for c in order if c not in self.priority]
         for cid in order:
             self.fix_minimums(cid)
-            budget_floor = self.L.cap - R.RESERVE - F(90)
+            budget_floor = L.cap_of(cid) - R.RESERVE - F(90)
             for _ in range(40):
                 if (not L.room(cid, "roster") or L.cap_number(cid) >= budget_floor and cid not in self.reckless
                         or len(L.clubs[cid].roster) + len(L.clubs[cid].ps) >= R.PRESEASON_CEILING - 9):    # leave room for 7 picks + 2 comps
@@ -592,7 +592,7 @@ class World:
                         break
                 if p is None:
                     continue
-                if cid not in self.reckless and L.cap_number(cid) + v > L.cap - R.RESERVE:
+                if cid not in self.reckless and L.cap_number(cid) + v > L.cap_of(cid) - R.RESERVE:
                     continue
                 self.try_sign(cid, p, value=v)
             self.fill_squad(cid)
@@ -633,7 +633,7 @@ class World:
             if done >= N["upgrade_max"] or not L.room(cid, "roster"):
                 break
             v = self.negotiate(cid, best)
-            if v is None or (cid not in self.reckless and L.cap_number(cid) + v > L.cap - R.RESERVE):
+            if v is None or (cid not in self.reckless and L.cap_number(cid) + v > L.cap_of(cid) - R.RESERVE):
                 continue
             done += self.try_sign(cid, best, value=v)
         self.stats["upgrades"] = self.stats.get("upgrades", 0) + done
@@ -863,5 +863,5 @@ class World:
             c._cmap = None
             for y, v in L.committed(cid).items():
                 if y > L.year or (strict_current and y == L.year):
-                    assert v <= L.limit(y), f"{cid} {y}: committed {v} > {L.limit(y)}"
+                    assert v <= L.limit(y, cid), f"{cid} {y}: committed {v} > {L.limit(y, cid)}"
             assert len(c.roster) <= R.ROSTER_MAX and len(c.ps) <= R.PS_MAX

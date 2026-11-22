@@ -583,7 +583,7 @@ def roster_file(u, cid, abbr, team, year):
     players.sort(key=lambda r: (("roster", "practice squad", "injured reserve").index(r["slot"]), r["pos"], r["name"], r["id"]))
     leaders = [{"role": role, "name": c.identity.name, "age": c.age(L.year)} for role, c in sorted(w.leaders.get(cid, {}).items()) if c is not None]
     return {"abbr": abbr[cid], "full_name": f'{team["team_city"]} {team["team_name"]}', "year": year,
-            "cap": {"used": round(float(L.cap_number(cid)), 2), "limit": round(float(L.cap), 2)}, "leaders": leaders, "players": players}
+            "cap": {"used": round(float(L.cap_number(cid)), 2), "limit": round(float(L.cap_of(cid)), 2)}, "leaders": leaders, "players": players}
 
 
 def venues_file(u):

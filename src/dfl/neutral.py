@@ -579,4 +579,5 @@ def runner_manifest(r):
             "snapshot_every": m.get("snapshot_every"), "keep": m.get("keep"), "universe_args": m.get("universe_args"),
             "tables": m.get("tables"), "lineage": m.get("lineage", []), "created_with": m.get("created_with"), "rule_version": rule,
             "archive": m.get("archive"), "league_id": m.get("league_id"), "archive_chain": _archive_chain_of(r),
-            "digest_algorithm": DIGEST_VERSION, "deep_digest": deep_digest(r.u), "digest_parts": digest_parts(r.u), "rng_states": rng_states(r.u)}
+            "digest_algorithm": DIGEST_VERSION, "deep_digest": deep_digest(r.u), "digest_parts": digest_parts(r.u), "rng_states": rng_states(r.u),
+            **({"cap_config": m["cap_config"]} if m.get("cap_config") else {})}

@@ -19,6 +19,9 @@ POOL_YEARS_MAX = 4                          # Ed 8.12: unsigned this many consec
 WAIVER_STANDINGS_AFTER_WEEKS = 4            # section 12: waiver priority is last season's draft order until four league weeks finish, then the standings
 TRADE_LAST_PAID_WEEK = 9                    # trades close the Friday before numbered week 9, which is calendar (paid) week 10
 
+# Per-club cap multiplier option (docs/SACRAMENTO_CAP_ADVANTAGE_2026-11-22.md): 1 for every club unless a league's configuration says otherwise.
+CAP_MULTIPLIER_MIN, CAP_MULTIPLIER_MAX = F(1), F(3, 2)
+
 # Largest committed (owed-regardless) money a club may carry in any one year:
 VIABILITY_MAX_COMMITTED = CAP - REQUIRED_PLACES * MIN_SALARY - RESERVE      # 735
 assert VIABILITY_MAX_COMMITTED == 735

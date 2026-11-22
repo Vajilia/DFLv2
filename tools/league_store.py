@@ -2,7 +2,8 @@
 """Command line for the durable league file (src/dfl/persist.py). Every command prints one JSON object; the exit status is 0 unless
 the file is damaged or the command failed.
 
-  league_store.py init   FILE [--seed N] [--snapshot-every N] [--play-level | --placeholder]
+  league_store.py init   FILE [--seed N] [--snapshot-every N] [--play-level | --placeholder] [--cap-multiplier ABBR=VALUE ...] [--test-league]
+  league_store.py configure-cap FILE [ABBR=VALUE ...]   the offseason step: replace the cap multipliers (none given = clear them); only between league years
   league_store.py run    FILE (--events N | --years N) [--deep]
   league_store.py status FILE
   league_store.py verify FILE [--deep]
@@ -29,6 +30,19 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from dfl import archive, persist  # noqa: E402
+from dfl.ledger.ledger import Rejected  # noqa: E402
+
+TEST_SEEDS = range(7770000, 7772000)       # reserved for disposable test leagues (docs/SACRAMENTO_CAP_ADVANTAGE_2026-11-22.md): never for a league anyone watches
+
+
+def _pairs(items):
+    out = {}
+    for it in items:
+        abbr, sep, val = it.partition("=")
+        if not sep or not abbr or not val:
+            raise Rejected(f"expected ABBR=VALUE (for example SAC=1.15), got {it!r}")
+        out[abbr] = val
+    return out
 
 
 def out(**kw):
@@ -45,6 +59,9 @@ def main(argv=None):
     p.add_argument("--keep", type=int, default=3)
     p.add_argument("--no-archive", action="store_true", help="do not keep the permanent game and trace archive")
     p.add_argument("--archive-file")
+    p.add_argument("--cap-multiplier", action="append", default=[], metavar="ABBR=VALUE",
+                   help="a club's salary-cap multiplier from the start, by canonical abbreviation (SAC=1.15); 1.00 to 1.50; default 1 for every club")
+    p.add_argument("--test-league", action="store_true", help="required for the seeds reserved for disposable test leagues; they are refused otherwise")
     g = p.add_mutually_exclusive_group()
     g.add_argument("--play-level", action="store_true", help="play games with the fast play-level engine instead of the 22-player default")
     g.add_argument("--placeholder", action="store_true", help="no game engine at all (structure only; fastest)")
@@ -58,6 +75,9 @@ def main(argv=None):
     p.add_argument("--die-inside", type=int)
     p.add_argument("--repair-archive", action="store_true", help="rebuild archive events the league committed but the archive lacks, by replay")
     p.add_argument("--allow-archive-ahead", action="store_true", help="accept an archive further ahead than one interrupted commit")
+    p = sub.add_parser("configure-cap")
+    p.add_argument("file")
+    p.add_argument("multipliers", nargs="*", metavar="ABBR=VALUE")
     sub.add_parser("status").add_argument("file")
     p = sub.add_parser("verify")
     p.add_argument("file")
@@ -101,6 +121,11 @@ def main(argv=None):
     try:
         if a.cmd == "init":
             kw = {"engine": False} if a.placeholder else {"spatial": not a.play_level}
+            if a.seed in TEST_SEEDS and not a.test_league:
+                out(error="ReservedSeed", message=f"seed {a.seed} is reserved for disposable test leagues; use another seed (or --test-league for a test league)")
+                return 1
+            if a.cap_multiplier:
+                kw["cap_multipliers"] = _pairs(a.cap_multiplier)
             r = persist.Runner.create(a.file, os.path.join(ROOT, "data", "season1"), seed=a.seed, snapshot_every=a.snapshot_every,
                                       keep=a.keep, archive=not a.no_archive, archive_path=a.archive_file, **kw)
             out(created=a.file, events=r.seq)
@@ -127,6 +152,12 @@ def main(argv=None):
             if a.deep:
                 res["deep"] = persist.deep_digest(r.u)
             out(**res)
+        elif a.cmd == "configure-cap":
+            r = persist.Runner.open(a.file)
+            try:
+                out(**r.configure_cap_multipliers(_pairs(a.multipliers)))
+            finally:
+                r.close()
         elif a.cmd == "status":
             st = persist.status(a.file)
             if st["archive"]:
@@ -173,7 +204,7 @@ def main(argv=None):
         elif a.cmd == "restore-all":
             r = persist.restore_set(a.dir, a.dest)
             out(restored=a.dest, events=r.seq)
-    except (persist.PersistError, archive.ArchiveError) as e:         # ArchiveInconsistent is a PersistError
+    except (persist.PersistError, archive.ArchiveError, Rejected) as e:         # ArchiveInconsistent is a PersistError; Rejected: a refused option
         out(error=type(e).__name__, message=str(e))
         return 1
     return 0

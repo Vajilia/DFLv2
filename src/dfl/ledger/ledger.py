@@ -23,6 +23,7 @@ Principles (Design Document 8.52, sections 11, 12, 17)
 import copy
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from fractions import Fraction as F
 
@@ -38,6 +39,31 @@ class LedgerError(Exception):
 
 class Rejected(LedgerError):
     """A transaction broke a rule and was rolled back."""
+
+
+def parse_multiplier(value, cid="the club"):
+    """An exact cap multiplier from a decimal string ("1.15"), an int or a Fraction. Floats (inexact), booleans, text that is not a plain
+    decimal, and values outside R.CAP_MULTIPLIER_MIN..R.CAP_MULTIPLIER_MAX are refused with the reason."""
+    if isinstance(value, bool) or isinstance(value, float) or not isinstance(value, (str, int, F)):
+        raise Rejected(f"cap multiplier for {cid} must be a decimal string such as \"1.15\" (got {type(value).__name__}"
+                       + ("; floats are inexact" if isinstance(value, float) else "") + ")")
+    if isinstance(value, str):
+        t = value.strip()
+        if not re.fullmatch(r"\d+(\.\d{1,4})?", t):
+            raise Rejected(f"cap multiplier for {cid} is not a plain decimal with at most four places: {value!r}")
+        value = F(t)
+    value = F(value)
+    if not R.CAP_MULTIPLIER_MIN <= value <= R.CAP_MULTIPLIER_MAX:
+        raise Rejected(f"cap multiplier for {cid} must be between {float(R.CAP_MULTIPLIER_MIN):g} and {float(R.CAP_MULTIPLIER_MAX):g}, not {float(value):g}")
+    return value
+
+
+def multiplier_text(value, who="the club"):
+    """The canonical decimal text of a multiplier (what is written to a league file's metadata): "1.15", "1.5", "1"."""
+    v = parse_multiplier(value, who)
+    t = f"{v.numerator * 10 ** 4 // v.denominator:05d}"
+    whole, frac = t[:-4], t[-4:].rstrip("0")
+    return str(int(whole)) + ("." + frac if frac else "")
 
 
 @dataclass
@@ -90,6 +116,8 @@ class Club:
 class Ledger:
     trading = False                    # class default: a ledger without a recorded window (an old saved state) trades only where neutral.ADAPTERS says
     options_closed = None              # the league year whose option deadline has passed (close_options); None before the first
+    cap_multipliers = None             # {club id: Fraction} for the clubs whose cap differs from `cap` (docs/SACRAMENTO_CAP_ADVANTAGE_2026-11-22.md). A class default, not an
+                                       # instance attribute, until one is set: a league without the option keeps exactly the state, and digest, it always had
 
     def __init__(self, cids, year=2000, cap=None):
         self.cap = R.CAP if cap is None else cap        # this league's salary cap: owned by the league (parity profiles set it), never read from a module global
@@ -157,8 +185,43 @@ class Ledger:
             hits = sorted(hits, reverse=True)[:R.CAP_COUNTED_BEFORE_CUT]
         return sum(hits, F(0)) + c.dead.get(year, F(0))
 
+    def cap_of(self, cid):
+        """The salary cap that applies to this club: the league's `cap`, times the club's multiplier if the league gives it one."""
+        m = self.cap_multipliers
+        return self.cap if not m or cid not in m else self.cap * m[cid]
+
+    def set_cap_multipliers(self, multipliers):
+        """Replace the per-club cap multipliers ({club id: value}; a club not named has 1). Refuses, naming the problem, rather than guess:
+        an unknown club, a value that is not exact (a decimal string, an int or a Fraction), a value outside MULTIPLIER_MIN..MULTIPLIER_MAX, a change
+        while a season is being played, and a decrease below what the club already has committed. A value of exactly 1 is not stored, and with
+        nothing stored the attribute is removed, so a league reset to 1 for everyone is the same state as one that never had the option."""
+        if self.phase not in ("offseason", "post"):
+            raise Rejected(f"cap multipliers are fixed for the season: refused in phase {self.phase!r}; they change only between league years")
+        new = {}
+        for cid in sorted(multipliers):
+            if cid not in self.clubs:
+                raise Rejected(f"cap multiplier for unknown club {cid!r}")
+            new[cid] = parse_multiplier(multipliers[cid], cid)
+        new = {c: v for c, v in new.items() if v != 1}
+        old = self.cap_multipliers
+        self.cap_multipliers = new or None
+        try:
+            for cid in self.clubs:
+                if self.cap_of(cid) < (self.cap * old[cid] if old and cid in old else self.cap):
+                    if self.cap_number(cid) > self.cap_of(cid) or self.viability_margin(cid) < 0:
+                        raise Rejected(f"cap multiplier for {cid} would put the club over its new cap of {self.cap_of(cid)}: its commitments are "
+                                       f"{self.cap_number(cid)} now; reduce them first")
+        except Rejected:
+            self.cap_multipliers = old
+            if old is None:
+                self.__dict__.pop("cap_multipliers", None)
+            raise
+        if not new:
+            self.__dict__.pop("cap_multipliers", None)
+        return dict(new)
+
     def overage(self, cid):
-        return max(F(0), self.cap_number(cid) - self.cap)
+        return max(F(0), self.cap_number(cid) - self.cap_of(cid))
 
 
     def committed(self, cid):
@@ -183,21 +246,21 @@ class Ledger:
         c._cmap, c._cmap_week = m, key
         return m
 
-    def limit(self, year):
-        """Largest committed money the invariant allows in `year`."""
+    def limit(self, year, cid=None):
+        """Largest committed money the invariant allows in `year` (for this club's cap, or the league's base cap when no club is named)."""
         repl = R.REQUIRED_PLACES * R.MIN_SALARY
         if year == self.year:
             repl = repl * F(R.PAID_WEEKS - self.week, R.PAID_WEEKS)
-        return self.cap - R.RESERVE - repl
+        return (self.cap if cid is None else self.cap_of(cid)) - R.RESERVE - repl
 
     def viability_margin(self, cid):
         m = self.committed(cid)
-        years = set(m) | {self.year}
-        return min(self.limit(y) - m.get(y, F(0)) for y in years)
+        ys = set(m) | {self.year}
+        return min(self.limit(y, cid) - m.get(y, F(0)) for y in ys)
 
     def _viable(self, cid, before):
         after = self.committed(cid)
-        return all(v <= self.limit(y) or v <= before.get(y, F(0)) for y, v in after.items())
+        return all(v <= self.limit(y, cid) or v <= before.get(y, F(0)) for y, v in after.items())
 
     # ---------- transaction wrapper (reserve / commit)
     def _txn(self, cids, pids, fn, label, capcheck=True):
@@ -215,7 +278,7 @@ class Ledger:
                     raise Rejected(f"{label}: breaks the viability invariant for {c}")
                 if capcheck:
                     now = self.cap_number(c)
-                    if now > self.cap and now > cap_before[c]:
+                    if now > self.cap_of(c) and now > cap_before[c]:
                         raise Rejected(f"{label}: breaks the cap for {c}")
             return out
         except Exception:

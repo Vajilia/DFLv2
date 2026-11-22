@@ -15,6 +15,7 @@ import random
 from . import calendar as C
 from . import draft, league, parity, standings
 from .ledger import analytics, bowl, coaching, governance, honours
+from .ledger.ledger import Rejected
 from .ledger import rules as R
 from .ledger.world import World
 from .engine.ledger_engine import LedgerEngine
@@ -22,7 +23,7 @@ from .resolver import PlaceholderResolver
 
 
 class Universe:
-    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight", spatial=True, archive=False):
+    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight", spatial=True, archive=False, cap_multipliers=None):
         self.tpl = league.Template(tables)
         self.clubs = sorted(t["team_city"] for t in self.tpl.teams)
         self.profile = profile
@@ -31,6 +32,8 @@ class Universe:
         priority = self.clubs[-settings["priority_clubs"]:] if settings["priority_clubs"] else ()
         self.world = World(self.clubs, seed=seed, reckless=self.clubs[:reckless], year=league.FOUNDING_YEAR, engine_injuries=engine,
                            priority=priority, cap=settings["cap"])
+        if cap_multipliers:                               # the personal-league option: {"SAC": "1.15"}; nothing is stored here, the multipliers live in the ledger
+            self.world.L.set_cap_multipliers(self.club_ids(cap_multipliers))
         self.state = self.tpl.initial_state()
         self.resolver = LedgerEngine(self.world, spatial=spatial) if engine else PlaceholderResolver()
         self.rng = random.Random(f"{seed}|league")
@@ -46,6 +49,25 @@ class Universe:
         self.archive_buffer = [] if archive else None     # records for the permanent archive (archive.py), drained after every event
         if archive:
             self.resolver.archive = self.archive_buffer   # the ledger engine adds each game's record here
+
+    # ------------------------------------------------------------------ cap multipliers (docs/SACRAMENTO_CAP_ADVANTAGE_2026-11-22.md)
+    def club_ids(self, by_abbr):
+        """{canonical abbreviation: value} -> {club id: value}. The abbreviation must match a team's `abbr` exactly (no names, no substrings)."""
+        ids = {t["abbr"]: t["team_city"] for t in self.tpl.teams}
+        out = {}
+        for abbr, v in by_abbr.items():
+            if abbr not in ids:
+                raise Rejected(f"unknown club abbreviation {abbr!r}: use the canonical upper-case abbreviation from the team table (for example 'SAC')")
+            out[ids[abbr]] = v
+        return out
+
+    def configure_cap_multipliers(self, by_abbr):
+        """The offseason configuration step: replace this league's per-club cap multipliers (the complete set; a club not named has 1).
+        Allowed only between league years (the year has closed and the next has not opened), so it is fixed for every season and takes
+        effect when the next year opens. Returns the multipliers now in force, by club id. Durable use goes through Runner.configure_cap_multipliers."""
+        if self.cursor is not None:
+            raise Rejected("cap multipliers are fixed for the season: they change only between league years, before the next year opens")
+        return self.world.L.set_cap_multipliers(self.club_ids(by_abbr))
 
     # ------------------------------------------------------------------ the year
     def play_year(self):

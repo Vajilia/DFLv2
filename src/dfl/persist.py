@@ -60,6 +60,7 @@ import zlib
 
 from . import neutral
 from .neutral import deep_digest          # re-exported: the exhaustive state digest
+from .ledger.ledger import multiplier_text
 from .year import Universe
 
 FORMAT_VERSION = 4                      # the save schema this code writes
@@ -487,6 +488,8 @@ class Runner:
     def create(cls, path, tables, seed=1, snapshot_every=1, keep=3, crash_hook=None, archive=True, archive_path=None, **universe_args):
         if os.path.exists(path) and os.path.getsize(path):
             raise PersistError(f"{path} already exists")
+        if universe_args.get("cap_multipliers"):          # recorded in the file's metadata as canonical decimal text (exact, and JSON can hold it)
+            universe_args = dict(universe_args, cap_multipliers={k: multiplier_text(v, k) for k, v in universe_args["cap_multipliers"].items()})
         u = Universe(tables, seed=seed, archive=archive, **universe_args)
         meta = {"seed": seed, "snapshot_every": snapshot_every, "keep": keep, "universe_args": universe_args, "tables": _tables_ref(tables),
                 "archive": None, "league_id": uuid.uuid4().hex}
@@ -572,6 +575,7 @@ class Runner:
             arch = A.Archive.open(_resolve_archive(path, meta["archive"]["file"]))
         r = cls(path, db, u, seq, None, meta, crash_hook, arch)
         r.allow_archive_ahead = allow_archive_ahead
+        r._reapply_cap_config()
         r._replay(head, repair_archive)
         r.chain = chain
         if heal and r.seq != seq:
@@ -604,6 +608,39 @@ class Runner:
                 if pb:
                     self.archive.confirm_batch(seq, pb, repair=repair_archive)
             self.seq = seq
+            self._reapply_cap_config()
+
+    def _reapply_cap_config(self):
+        """Offseason configuration steps recorded in the file's metadata are state the journal does not hold (they happen between events).
+        Wherever replay stands at the event after which a step was taken, apply it again: setting the same multipliers is idempotent, so a snapshot
+        that already holds the step is unchanged and an older one reaches the same state."""
+        for rec in self.meta.get("cap_config", ()):
+            if rec["after_seq"] == self.seq:
+                self.u.configure_cap_multipliers(rec["multipliers"])
+
+    def configure_cap_multipliers(self, by_abbr):
+        """The durable offseason configuration step (docs/SACRAMENTO_CAP_ADVANTAGE_2026-11-22.md): replace the league's per-club cap multipliers
+        ({"SAC": "1.15"}; the complete set), only between league years. Takes effect when the next year opens. The step is recorded in the
+        file's metadata (one write) and re-applied on every recovery at the event after which it was taken; no snapshot is rewritten, so every
+        snapshot still matches the journal's digest. Returns the record."""
+        self.u.configure_cap_multipliers(by_abbr)         # refuses (changing nothing) in-season, or on an invalid setting
+        ids = {t["team_city"]: t["abbr"] for t in self.u.tpl.teams}
+        now = {ids[c]: multiplier_text(v) for c, v in (self.u.L.cap_multipliers or {}).items()}
+        rec = {"after_seq": self.seq, "effective_year": self.u.L.year + (1 if self.u.season else 0), "multipliers": dict(sorted(now.items()))}
+        cfg = list(self.meta.get("cap_config", ())) + [rec]
+        try:
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                self.db.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", ("cap_config", json.dumps(cfg, sort_keys=True)))
+                self.db.execute("COMMIT")
+            except BaseException:
+                self.db.execute("ROLLBACK")
+                raise
+        except BaseException:
+            self._reload()                                # the file is unchanged; so is the league in memory afterwards
+            raise
+        self.meta["cap_config"] = cfg
+        return rec
 
     def _write_snapshot(self, seq, checkpoint=None):
         raw, sha = dumps(self.u)
@@ -757,6 +794,8 @@ class Runner:
             "state_document_sha256": neutral.state_digest(raw), "state_digest": m["deep_digest"],
             "code_changed": code_changed, "state_changed": state_changed, "adapted_attributes": adapted}]
         meta = {k: m[k] for k in ("seed", "snapshot_every", "keep", "universe_args", "tables", "league_id")}
+        if m.get("cap_config"):
+            meta["cap_config"] = m["cap_config"]
         meta["archive"] = None
         if m.get("archive"):
             from . import archive as A
@@ -783,7 +822,9 @@ def status(path, db=None):
         last = db.execute("SELECT year, n_fired, key FROM journal ORDER BY seq DESC LIMIT 1").fetchone()
         return {"league_id": meta.get("league_id"), "events": head, "last": last, "chain": chain, "snapshots": snaps, "bytes": os.path.getsize(path),
                 "format": meta.get("format"), "base": meta.get("base"), "lineage": len(meta.get("lineage", [])),
-                "fingerprint": meta.get("fingerprint"), "archive": meta.get("archive")}
+                "fingerprint": meta.get("fingerprint"), "archive": meta.get("archive"),
+                **({"cap_multipliers": meta["universe_args"]["cap_multipliers"]} if meta.get("universe_args", {}).get("cap_multipliers") else {}),
+                **({"cap_config": meta["cap_config"]} if meta.get("cap_config") else {})}
     finally:
         if own:
             db.close()
