@@ -1,4 +1,6 @@
 # The code under test. The harness refuses to run unless the unit files, the daemon and the monitor it installs are byte-for-byte this commit's
 # (it extracts them with `git archive`, then compares every file's git blob hash). Changing this line is a new candidate and needs the owner's approval.
-# Candidate 4 approved by the owner 2026-11-11 (11:19 PST, "Choose A"): the integrated launch-candidate code. History of earlier pins: docs/CANDIDATE_HISTORY.md (none is deleted or rewritten).
-candidate=205f891fc58eeed5330b36493523be1dc6792859
+# Candidate 4 approved by the owner 2026-11-11 (11:19 PST, "Choose A"): the integrated launch-candidate code.
+# Candidate 5 (this pin) prepared on the owner's instruction of 2026-11-22 08:17 PST (candidate 4 plus the two confirmed baseline engine fixes). Not yet run.
+# History of earlier pins: docs/CANDIDATE_HISTORY.md (none is deleted or rewritten).
+candidate=512dd1eedc62d013f184377b81b198f53224e7ee
