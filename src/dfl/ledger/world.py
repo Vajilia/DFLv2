@@ -180,8 +180,9 @@ class World:
         f = self.creator.founding(L.year, sorted(L.clubs))
         for cid in sorted(L.clubs):
             d = f["clubs"][cid]
-            for card in d["roster"]:
-                L.sign(cid, self.register(card).pid, rookie_contract(L.year, self.rng.randint(1, 7)), "roster")
+            for i, card in enumerate(d["roster"]):
+                after = len(d["roster"]) - 1 - i + len(d["ps"])                 # signings still to come for this club
+                L.sign(cid, self.register(card).pid, self._founding_contract(cid, self.rng.randint(1, 7), after), "roster")
             for card in d["ps"]:
                 L.sign(cid, self.register(card).pid, rookie_contract(L.year, 7), "ps")
             lead = {c.identity.role: c for c in d["leaders"] if c.identity.role != "coach"}
@@ -191,6 +192,19 @@ class World:
         for card in f["pool"]:
             self.register(card, seasons=max(0, min(4, card.age(L.year) - 22)))
         self.top_up_pool()
+
+    def _founding_contract(self, cid, rnd, after):
+        """The rookie contract of a founding signing: the scale of the round that was drawn, unless the club could then no longer sign the `after`
+        signings still to come, each at least the league minimum (the lowest rookie scale), within the cap; then the first round at or after the
+        one drawn that leaves it room. The draw itself is unchanged, so a club that fits is exactly what it always was; only a club that could
+        not be founded legally is touched (an all-rookie club must be cap-legal, as every other signing is)."""
+        L = self.L
+        held = L.cap_number(cid)
+        for r in range(rnd, 8):
+            k = rookie_contract(L.year, r)
+            if held + k.cap_hit(L.year) + after * R.MIN_SALARY <= L.cap:
+                return k
+        return rookie_contract(L.year, 7)
 
     def top_up_pool(self, floor=8):
         """Pools hold at least 8 medically available unsigned players per position (section 13)."""
@@ -575,15 +589,20 @@ class World:
         for cid in order:
             self.fix_minimums(cid)
             budget_floor = self.L.cap - R.RESERVE - F(90)
-            for _ in range(40):
+            empty, passes = set(), 0               # positions with no suitable free agent this period; passes made (the 40 limit counts signings tried, not empty draws)
+            while passes < 40:
                 if (not L.room(cid, "roster") or L.cap_number(cid) >= budget_floor and cid not in self.reckless
                         or len(L.clubs[cid].roster) + len(L.clubs[cid].ps) >= R.PRESEASON_CEILING - 9):    # leave room for 7 picks + 2 comps
                     break
-                needy = [pos for _, pos in self.need(cid)] or list(TEMPLATE)
+                needy = [pos for pos in ([pos for _, pos in self.need(cid)] or list(TEMPLATE)) if pos not in empty]
+                if not needy:
+                    break                          # every position the club could draw has nobody suitable: the period ends
                 pos = rng.choice(needy)
                 pool = [p for p in self.fas(pos, cid) if self.view(cid, p) > 60]
                 if not pool:
-                    break
+                    empty.add(pos)                 # one position without a candidate does not end the club's whole period: draw another
+                    continue
+                passes += 1
                 p, v = None, None
                 for q in pool:
                     v = self.negotiate(cid, q)

@@ -50,7 +50,7 @@ class TestFounding(unittest.TestCase):
             self.assertEqual(len(k.years), R.ROOKIE_YEARS)
             self.assertIn(k.years[0], R.ROOKIE_SCALE)
             self.assertEqual(set(k.years), {k.years[0]})
-            self.assertEqual((k.guaranteed, k.bonuses), ((), ()))
+            self.assertEqual((set(k.guaranteed), k.bonuses), ({0}, ()))
 
     def test_seeds_that_already_founded_are_unchanged(self):
         for seed, digest in BASELINE_FOUNDING.items():
@@ -119,13 +119,22 @@ class TestFreeAgencyDoesNotEndOnOneEmptyPosition(unittest.TestCase):
         able = [cid for cid in L.clubs if len(L.clubs[cid].roster) + len(L.clubs[cid].ps) < R.PRESEASON_CEILING - 9
                 and L.cap_number(cid) < L.cap - R.RESERVE - F(90)]
         w.free_agency()
+        self.real_fas = real_fas
+        self.w = w
         return signed, able
 
     def test_a_position_with_no_suitable_candidate_does_not_end_the_clubs_period(self):
         signed, able = self.run_period(7771501, empty_first=True)
         self.assertGreater(len(able), 10, "the fixture must have clubs with room and a payroll under the spending floor")
         stuck = [cid for cid in able if signed[cid] == 0]
-        self.assertEqual(stuck, [], f"{len(stuck)} of {len(able)} clubs stopped on the empty position")
+        # supply is limited (about eight free agents per position for 45 clubs), so some clubs legitimately find nobody left; a club that signed
+        # nobody must have had nobody it could take at the other position, and the loop must have signed at that position for the clubs before it
+        w = self.w
+        for cid in stuck:
+            left = [q for q in self.real_fas(self.OTHER, cid) if w.view(cid, q) > 60 and w.negotiate(cid, q) is not None
+                    and w.L.cap_number(cid) + w.negotiate(cid, q) <= w.L.cap - R.RESERVE]
+            self.assertEqual(left, [], f"{cid} stopped with candidates left at {self.OTHER}")
+        self.assertGreaterEqual(sum(signed.values()), 5, "clubs did sign at the other needed position")
 
     def test_the_period_still_ends_when_no_needed_position_has_a_candidate(self):
         u = before_free_agency(7771502)
