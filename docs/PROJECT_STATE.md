@@ -8,8 +8,8 @@ This is the one document that says where the project stands. Other documents are
 |---|---|
 | Authorized | 2026-11-22 01:06 PST (09:06:56Z), by the owner's Milestone 1 instruction |
 | Allowance | 12 hours of active agent work, CI waiting excluded |
-| Used at last update (2026-11-22 09:11Z) | about 0.1 h (wall-clock since the start; no VM time) |
-| Remaining | about 11.9 h. Milestone 1 stops here by instruction; Milestone 2 is not authorized |
+| Used at last update (2026-11-22 09:20Z) | about 0.3 h (wall-clock since the start; no VM time) |
+| Remaining | about 11.7 h. Milestone 1 stops here by instruction; Milestone 2 is not authorized |
 
 ## Revisions and release configuration
 
@@ -44,69 +44,90 @@ Not proven: that the candidate with the alert package passes V4 and V5 on a real
 
 ## The one blocker
 
-No paid validation machine is authorized now (the earlier one-session authorization was used). The plan below is complete; the only missing input is the authorization in "The single request".
+The purchase of the validation machine is made by the provisioning session (ChatGPT, through its DigitalOcean connection), not by this session. Everything else is prepared. The limits below were corrected by the owner on 2026-11-22 01:17 PST.
 
-## Validation plan (from the real CLI and runbook)
+## Validation plan (re-read against the actual CLI, preflight and stage code on 2026-11-22)
 
-Settings: 1 vCPU, 1 GiB, swap off, at least 5 GiB free disk, ext4 or xfs, kernel 5.19 or later, systemd 243 or later, Ubuntu 24.04. One new machine, used for nothing else. Production is never a target.
+**Machine.** One new disposable machine, 1 vCPU, 1 GiB, Ubuntu 24.04, ext4, swap off, at least 5 GiB free disk (preflight: root, marker file, no production paths or units, systemd 243 or later as PID 1, cgroup v2 read-write with the memory controller, swap off, kernel 5.4 or later (5.19 for the reclaim probes), `/usr/bin/python3` 3.8 or later, `setpriv` and `strace` (hard), `chattr` and `lsattr` (V4 needs them), user `dfl-vtest`). Packages: `git python3 strace util-linux e2fsprogs`. Nothing else is installed. The repository is public; the machine clones `https://github.com/Vajilia/DFLv2`.
 
-**S0 setup (about 35 min).** `touch /etc/dfl-vtest-disposable`; install `git python3 strace util-linux e2fsprogs`; create user `dfl-vtest`; clone and check out the harness revision `5a97dad`; then `vtest.py pin-check` (must pass), `preflight` (must say READY), `plan`, `install`, `install-alerts`. The harness starts no unit.
+**Clock (settled).** All times count from the provider's `created_at` for the machine (T0). All testing stops at **T0+8 h**. Verified export and destruction finish by **T0+9 h**. Before each stage or run, start it only if `now + estimate x 1.25` is at or before T0+8 h (estimates below). If a stage is still running at T0+8 h, stop the runner (`stop-helpers`), archive what exists, mark that stage INCOMPLETE (no verdict) and go to export. No extension, no replacement machine.
 
-**Phase A: narrow V5 smoke (non-qualifying).** `vtest.py run --stages V5 --smoke --run-id v5-smoke-1` (about 0.9 h). Then `archive --run-id v5-smoke-1` (exit 0 required), export to the private evidence bucket, verify SHA-256 off the machine. Pass means the stage passes with `complete: true` in the manifest and all of these present: `V5/attribution_{monitor_stopped,daemon_start_limit,monitor_exit2,delivery_failure}.json`, `V5/alert_sandbox.json`, `V5/alert_journal_timestamped.txt`, `V5/alert_journal_status.json`, `V5/alert_journal.txt`. Stop on any failure: export, destroy, report.
+**Evidence route (settled): private SSH/SCP to the Chromebook; no Spaces key.** The machine holds no credential. The Chromebook (or ChatGPT's Desktop Commander session on it) pulls each archive over SSH as root with `scp root@<vm>:/srv/dfl-vtest/export/evidence-<run>.tar.gz <dir>/` and computes `sha256sum` itself. The check is against the digest `vtest.py archive` printed on the machine (taken from a separate `sha256sum` on the machine) and the digest in `/srv/dfl-vtest/state/archive-<run>.json`. The Chromebook then reads `EVIDENCE_MANIFEST.json` out of the archive and requires `"complete": true`. An archive counts as exported only after both checks. Only if SSH/SCP proves unavailable does the Spaces tool (`tools/vtest/export_evidence.py`, bucket-scoped key, hidden prompt) become the fallback. Archives stay private; nothing is committed.
 
-**Phase B: qualifying set, only if Phase A passes and the window permits** (one install, one harness revision):
+**Run ids** use the prefix `m1-` so they cannot be confused with the historical `q3b`, `smoke-5` and similar. The reboot stages do not depend on a particular id.
 
-| Run | Command | About |
+**S0 setup (about 35 min).**
+```
+sudo touch /etc/dfl-vtest-disposable
+sudo apt-get install -y git python3 strace util-linux e2fsprogs
+sudo useradd --system --user-group --no-create-home --shell /usr/sbin/nologin dfl-vtest
+git clone https://github.com/Vajilia/DFLv2 && cd DFLv2
+git checkout 5a97dad140c7ea4f3c9007c623ef2553a5a31691
+python3 tools/vtest/vtest.py pin-check            # must pass
+sudo python3 tools/vtest/vtest.py preflight       # must end READY
+sudo python3 tools/vtest/vtest.py plan
+sudo python3 tools/vtest/vtest.py install         # starts nothing
+sudo python3 tools/vtest/vtest.py install-alerts  # checks alerts/RELEASE_MANIFEST.json before writing; records effective settings
+```
+(`fa6ad15` is a docs-only successor of `5a97dad` and is equally valid; `5a97dad` is the named harness revision.) Read `STATE/alerts_install.json` and the effective settings before running anything.
+
+**Phase A: narrow V5 smoke (non-qualifying).** `sudo python3 tools/vtest/vtest.py run --stages V5 --smoke --run-id m1-v5-smoke` (about 0.9 h), then `archive --run-id m1-v5-smoke` (exit 0 required), export and verify. Pass means the stage passes, the manifest says `complete: true`, and these exist in the archive: `V5/attribution_{monitor_stopped,daemon_start_limit,monitor_exit2,delivery_failure}.json`, `V5/alert_sandbox.json`, `V5/alert_journal_timestamped.txt`, `V5/alert_journal_status.json`, `V5/alert_journal.txt`. Any failure, missing item or exit other than 0: export, destroy, stop for review.
+
+**Phase B: only if Phase A passed and the next stage fits before T0+8 h.** Order matters: the reboot checks must follow `m1-q3` immediately (V5 and every stage's baseline release any latch, which would destroy the state the reboot is judged against). The poll timer is started, not enabled, so `install-alerts` is run again before the final V5 only, not between the reboot stages.
+
+| Run | Command (all `sudo python3 tools/vtest/vtest.py ...`) | Estimate |
 |---|---|---|
-| q1 | `run --stages V0,V1 --run-id q1` | 70 min, then archive and export |
-| q2 | `run --stages V2,V3 --run-id q2` | 45 min, then archive and export |
-| q3 | `run --stages V4 --run-id q3` | 40 min, archive and export before the reboot |
-| q4-clean | `sudo reboot`; start nothing; `install-alerts`; `run --stages V4 --after-reboot --run-id q4-clean` | 15 min |
-| q5-capture | `run --stages V4 --capture-reboot-state --run-id q5-capture` | with q5-hard, 20 min |
-| q5-hard | provider hard reset (or sysrq `b`); start nothing; `install-alerts`; `run --stages V4 --after-hard-reset --run-id q5-hard` | |
-| q6 | `run --stages V5 --run-id q6` | 0.9 h, then archive and export |
+| m1-q1 | `run --stages V0,V1 --run-id m1-q1`, then archive, export | 66 min + export |
+| m1-q2 | `run --stages V2,V3 --run-id m1-q2`, archive, export | 42 min + export |
+| m1-q3 | `run --stages V4 --run-id m1-q3`, archive, export (before the reboot) | 36 min + export |
+| m1-q4-clean | `sudo reboot`; start nothing; `run --stages V4 --after-reboot --run-id m1-q4-clean`, archive, export | about 15 min |
+| m1-q5-capture | `run --stages V4 --capture-reboot-state --run-id m1-q5-capture` (units running and held) | about 20 min with q5-hard |
+| m1-q5-hard | provider hard reset (or `echo b > /proc/sysrq-trigger`); start nothing; `run --stages V4 --after-hard-reset --run-id m1-q5-hard`, archive, export | |
+| m1-q6 | `install-alerts` again, then `run --stages V5 --run-id m1-q6`, archive, export | 54 min + export |
 
-Estimated total: Phase A about 1.8 h; Phase B about 4.6 h; about 6.4 h with nothing failing, 7.4 h with margin. Stop rules: the first stage that fails ends execution; archive what exists, verify off-host, destroy the machine, report. No automatic retry, no replacement machine, no extension.
+Each export is about 10 min. Expected timeline with nothing failing: Phase A ends near T0+1:40, Phase B near T0+6:40, leaving about 1 h 20 min before the testing cutoff. After the last export is verified, destroy only this machine. If a run reports `DO NOT CLEAN UP THE HOST` (archive exit 3), export what exists anyway, then destroy; execution ends for review. Failed runs are not retried on the same machine.
 
-## The single request (what the owner is asked to approve once)
+**Stops.** The first failed or incomplete stage ends the session after export and destruction. A candidate or alert-release change is never made in the session. Production is not touched; no machine other than the new one is touched.
 
-- One new disposable machine as above, created by the connected provisioning tool, not by this session.
-- Spend ceiling $2 for the machine (about a cent an hour, so under $0.10 for the full window), no snapshots or backups. The evidence bucket and its key are the existing private route; the key is revoked after verification.
-- Lifetime: 9 hours from creation. No stage starts after hour 8. Verified export and destruction by hour 9. No extension.
-- Valid for one use within 7 days of approval.
-- On a failed run: evidence exported and verified, machine destroyed, execution ends for review.
+## Execution authorization (as corrected by the owner, 2026-11-22 01:17 PST)
 
-## Public feeds: inventory
+One new machine as above, created by the provisioning session; spend ceiling $2, no snapshots or backups (the machine costs about a cent an hour); testing cutoff T0+8 h; verified export and destruction by T0+9 h; evidence by private SSH/SCP to the Chromebook; one use.
 
-Classification is from the repository's documents and code. Nothing was re-checked on the live site (no production access); the last read-only observation of the preview is recorded as 2026-11-06/11-11 at league event 188.
+## Public feeds: inventory (corrected by the owner, 2026-11-22 01:17 PST)
+
+Classification is from the repository's documents and code plus the owner's correction. Nothing was re-checked on the live site (no production access); the last read-only observation of the preview is recorded as 2026-11-06/11-11 at league event 188.
 
 **Already published by the exporter and specified (format v1):**
 - `feed/latest.json`, release manifest, season, calendar, notices, teams, schedule, standings, playoffs, history, venues, rules, 48 rosters (`docs/PUBLIC_FEED_FORMAT.md`)
 - `status.json` (`dfl-feed-status`), `playback/index.json` and per-game playback files (`docs/PUBLIC_PLAYBACK_FORMAT.md`)
 - Broadcast: `clock.json`, `schedule.json`, `live/<game>/…`, `replays/index.json`, and `honors/index.json` (empty until the Bowl ceremony) (`docs/BROADCAST_FRONTEND_CONTRACT.md`)
 
+**Already exist in the separate website preview (not in this repository):** basic player profiles and team/player search, built from the published roster facts. Career statistics and integration of this work into the main repository are separate, still-open work.
+
 **Derivable from existing records (exporter work, no engine change):**
 - Box scores, team game stats, per-player box lines, injuries, penalties, from the game archive (`docs/ARCHIVE.md`)
 - Season summaries and standings history, from the archive and history
-- Season leaderboards and player pages, by aggregating the per-player box lines
+- Career statistics, season leaderboards and the stats side of player pages, by aggregating the per-player box lines
 
 **Requires new engine or data work, or an owner decision:**
-- Analytics (EPA-based scores) and the Hall of Fame pages beyond the honors feed: engine recording and definitions were built in Edition 8.30 (`docs/ANALYTICS_AND_HALL.md`); a public contract does not exist yet
+- Analytics (EPA-based scores) and Hall of Fame pages beyond the honors feed: engine recording and definitions were built in Edition 8.30 (`docs/ANALYTICS_AND_HALL.md`); a public contract does not exist yet
 - Draft, transactions and awards pages: whether the engine records enough to publish is **unverified**; check first in Milestone 2
-- Narrative publishing (recaps, stories): nothing exists; new work
+- Bounded narrative coverage (in the agreed project scope): nothing exists yet; new work, to be defined with measurable completion criteria before implementation
 - Team and player photos or logos: assets, not feeds
 
-## Recommended first-launch scope
+## Scope: initial limited release versus project completion
 
-In: schedule and results; live and replay broadcast of games; standings and playoffs; clubs and rosters; history; notices and status; honors at the Bowl; the existing site preview as the approved visual direction. These feeds exist and need integration and validation, not invention.
-Can wait: leaderboards and player pages (exporter work, after launch), box-score pages (derivable), analytics and Hall pages, draft/transactions/awards, narrative layer, photos and logos.
-Not in scope: changing league rules, canon or the viewer experience.
+**Initial limited release (recommended first launch).** Schedule and results; live and replay broadcast; standings and playoffs; clubs and rosters; the player profiles and team/player search already built in the preview (integrated into the main repository); history; notices and status; honors at the Bowl. The existing site preview stays the visual direction. These exist and need integration and validation, not invention.
+
+**Project completion (agreed scope, after the initial release).** Everything above plus: career statistics, leaderboards and box-score pages (exporter work); analytics and Hall pages; draft, transactions and awards where the engine supports them; bounded narrative coverage; photos and logos. Completion is not claimed until each item meets stated criteria.
+
+Not in scope for either: changing league rules, canon or the viewer experience.
 
 ## Milestone 2 work package (proposed, not authorized)
 
 Limits: 12 hours of active agent work; at most one new validation machine under its own separate authorization; production untouched; criteria defined before implementation.
 1. Separate-machine recovery drill and multi-season continuity run on a disposable machine, using the existing bucket-scoped recovery route (requires its own spend authorization).
-2. Written factual feed contracts for box scores, leaderboards and player pages, derived from the archive, with fixture tests (no engine change); verify the draft/transactions/awards question from records.
+2. Written factual feed contracts for box scores, career statistics, leaderboards and player-page statistics, derived from the archive, with fixture tests (no engine change); verify the draft/transactions/awards question from records; plan the integration of the preview's profiles and search into the main repository.
 3. Bounded narrative layer: first define measurable completion criteria for the owner to approve, then implement only against them.
 Completion: each item passes its stated criteria with evidence, or is reported as not met.
 
