@@ -2,6 +2,15 @@
 
 This is the one document that says where the project stands. Other documents are history or reference. Sanitized: no hosts, machine ids, credentials or hashes of private evidence. Updated at the end of each milestone.
 
+## Baseline defects package (2026-11-22, separate from validation and from the Sacramento work)
+
+Branch `fix/baseline-founding-fa-2026-11-22` from `4a1f26e`; work record `docs/BASELINE_DEFECTS_2026-11-22.md`. The Sacramento cap and upgrade features stay deferred and unmerged (the goal of a useful but fallible Sacramento advantage stands; no other advantage is to be tried yet).
+
+* **Confirmed and fixed:** (1) league founding could raise a cap-illegal club (about 2 seeds in 100, for example 7771413); every seed that founded before is byte-identical; (2) free agency ended a club's whole period when one randomly drawn position had no candidate (about 29% of club-years); now another position is drawn.
+* **Investigated, not a defect, not changed:** signings at filled positions ("below the incumbent"): 84% are starter upgrades or make the depth chart; the 16% below the template are mostly cheap and mostly cut at negligible cost. Recommended: leave as is.
+* **Tests:** new `tests/test_baseline_defects.py` (6, red then green); full regression run passes except the four pin-gate tests that fail on any code change by design.
+* **Validation impact:** the frozen candidate (`205f891`) does not contain these fixes. Adopting them needs a new candidate, a new pin and a V0 to V5 repeat. Not started; not authorized. Until then a launch seed must be created first to confirm it founds.
+
 ## Milestone 1 clock
 
 | | |
