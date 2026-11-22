@@ -488,6 +488,8 @@ class Runner:
     def create(cls, path, tables, seed=1, snapshot_every=1, keep=3, crash_hook=None, archive=True, archive_path=None, **universe_args):
         if os.path.exists(path) and os.path.getsize(path):
             raise PersistError(f"{path} already exists")
+        if universe_args.get("upgrade_policy"):          # a sorted list of canonical abbreviations, so the file records one spelling
+            universe_args = dict(universe_args, upgrade_policy=sorted(set(universe_args["upgrade_policy"])))
         if universe_args.get("cap_multipliers"):          # recorded in the file's metadata as canonical decimal text (exact, and JSON can hold it)
             universe_args = dict(universe_args, cap_multipliers={k: multiplier_text(v, k) for k, v in universe_args["cap_multipliers"].items()})
         u = Universe(tables, seed=seed, archive=archive, **universe_args)
@@ -617,6 +619,31 @@ class Runner:
         for rec in self.meta.get("cap_config", ()):
             if rec["after_seq"] == self.seq:
                 self.u.configure_cap_multipliers(rec["multipliers"])
+        for rec in self.meta.get("mgmt_config", ()):
+            if rec["after_seq"] == self.seq:
+                self.u.configure_upgrade_policy(rec["upgrade_policy"])
+
+    def configure_upgrade_policy(self, abbrs):
+        """The durable offseason step for the optional upgrade policy: the same recording as `configure_cap_multipliers`, in its own metadata key.
+        Refused (changing nothing) in-season or for an unknown club. Returns the record."""
+        self.u.configure_upgrade_policy(abbrs)
+        ids = {t["team_city"]: t["abbr"] for t in self.u.tpl.teams}
+        now = sorted(ids[c] for c in (self.u.world.upgrade_policy or ()))
+        rec = {"after_seq": self.seq, "effective_year": self.u.L.year + (1 if self.u.season else 0), "upgrade_policy": now}
+        cfg = list(self.meta.get("mgmt_config", ())) + [rec]
+        try:
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                self.db.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", ("mgmt_config", json.dumps(cfg, sort_keys=True)))
+                self.db.execute("COMMIT")
+            except BaseException:
+                self.db.execute("ROLLBACK")
+                raise
+        except BaseException:
+            self._reload()
+            raise
+        self.meta["mgmt_config"] = cfg
+        return rec
 
     def configure_cap_multipliers(self, by_abbr):
         """The durable offseason configuration step (docs/SACRAMENTO_CAP_ADVANTAGE_2026-11-22.md): replace the league's per-club cap multipliers
@@ -796,6 +823,8 @@ class Runner:
         meta = {k: m[k] for k in ("seed", "snapshot_every", "keep", "universe_args", "tables", "league_id")}
         if m.get("cap_config"):
             meta["cap_config"] = m["cap_config"]
+        if m.get("mgmt_config"):
+            meta["mgmt_config"] = m["mgmt_config"]
         meta["archive"] = None
         if m.get("archive"):
             from . import archive as A
@@ -824,7 +853,9 @@ def status(path, db=None):
                 "format": meta.get("format"), "base": meta.get("base"), "lineage": len(meta.get("lineage", [])),
                 "fingerprint": meta.get("fingerprint"), "archive": meta.get("archive"),
                 **({"cap_multipliers": meta["universe_args"]["cap_multipliers"]} if meta.get("universe_args", {}).get("cap_multipliers") else {}),
-                **({"cap_config": meta["cap_config"]} if meta.get("cap_config") else {})}
+                **({"cap_config": meta["cap_config"]} if meta.get("cap_config") else {}),
+                **({"upgrade_policy": meta["universe_args"]["upgrade_policy"]} if meta.get("universe_args", {}).get("upgrade_policy") else {}),
+                **({"mgmt_config": meta["mgmt_config"]} if meta.get("mgmt_config") else {})}
     finally:
         if own:
             db.close()

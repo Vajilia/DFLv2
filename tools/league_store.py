@@ -2,8 +2,9 @@
 """Command line for the durable league file (src/dfl/persist.py). Every command prints one JSON object; the exit status is 0 unless
 the file is damaged or the command failed.
 
-  league_store.py init   FILE [--seed N] [--snapshot-every N] [--play-level | --placeholder] [--cap-multiplier ABBR=VALUE ...] [--test-league]
+  league_store.py init   FILE [--seed N] [--snapshot-every N] [--play-level | --placeholder] [--cap-multiplier ABBR=VALUE ...] [--upgrade-policy ABBR ...] [--test-league]
   league_store.py configure-cap FILE [ABBR=VALUE ...]   the offseason step: replace the cap multipliers (none given = clear them); only between league years
+  league_store.py configure-policy FILE [ABBR ...]   the offseason step: replace the clubs whose management takes affordable upgrades at camp (none = clear)
   league_store.py run    FILE (--events N | --years N) [--deep]
   league_store.py status FILE
   league_store.py verify FILE [--deep]
@@ -61,6 +62,8 @@ def main(argv=None):
     p.add_argument("--archive-file")
     p.add_argument("--cap-multiplier", action="append", default=[], metavar="ABBR=VALUE",
                    help="a club's salary-cap multiplier from the start, by canonical abbreviation (SAC=1.15); 1.00 to 1.50; default 1 for every club")
+    p.add_argument("--upgrade-policy", action="append", default=[], metavar="ABBR",
+                   help="a club whose management also takes affordable roster upgrades at camp, by canonical abbreviation (SAC); default none")
     p.add_argument("--test-league", action="store_true", help="required for the seeds reserved for disposable test leagues; they are refused otherwise")
     g = p.add_mutually_exclusive_group()
     g.add_argument("--play-level", action="store_true", help="play games with the fast play-level engine instead of the 22-player default")
@@ -78,6 +81,9 @@ def main(argv=None):
     p = sub.add_parser("configure-cap")
     p.add_argument("file")
     p.add_argument("multipliers", nargs="*", metavar="ABBR=VALUE")
+    p = sub.add_parser("configure-policy")
+    p.add_argument("file")
+    p.add_argument("clubs", nargs="*", metavar="ABBR")
     sub.add_parser("status").add_argument("file")
     p = sub.add_parser("verify")
     p.add_argument("file")
@@ -126,6 +132,8 @@ def main(argv=None):
                 return 1
             if a.cap_multiplier:
                 kw["cap_multipliers"] = _pairs(a.cap_multiplier)
+            if a.upgrade_policy:
+                kw["upgrade_policy"] = list(a.upgrade_policy)
             r = persist.Runner.create(a.file, os.path.join(ROOT, "data", "season1"), seed=a.seed, snapshot_every=a.snapshot_every,
                                       keep=a.keep, archive=not a.no_archive, archive_path=a.archive_file, **kw)
             out(created=a.file, events=r.seq)
@@ -156,6 +164,12 @@ def main(argv=None):
             r = persist.Runner.open(a.file)
             try:
                 out(**r.configure_cap_multipliers(_pairs(a.multipliers)))
+            finally:
+                r.close()
+        elif a.cmd == "configure-policy":
+            r = persist.Runner.open(a.file)
+            try:
+                out(**r.configure_upgrade_policy(a.clubs))
             finally:
                 r.close()
         elif a.cmd == "status":

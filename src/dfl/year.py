@@ -23,7 +23,7 @@ from .resolver import PlaceholderResolver
 
 
 class Universe:
-    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight", spatial=True, archive=False, cap_multipliers=None):
+    def __init__(self, tables, seed=1, reckless=2, engine=True, profile="tight", spatial=True, archive=False, cap_multipliers=None, upgrade_policy=None):
         self.tpl = league.Template(tables)
         self.clubs = sorted(t["team_city"] for t in self.tpl.teams)
         self.profile = profile
@@ -34,6 +34,8 @@ class Universe:
                            priority=priority, cap=settings["cap"])
         if cap_multipliers:                               # the personal-league option: {"SAC": "1.15"}; nothing is stored here, the multipliers live in the ledger
             self.world.L.set_cap_multipliers(self.club_ids(cap_multipliers))
+        if upgrade_policy:                                # the optional management policy: ["SAC"]; the clubs named live in the world
+            self.world.set_upgrade_policy(self.club_ids(dict.fromkeys(upgrade_policy)))
         self.state = self.tpl.initial_state()
         self.resolver = LedgerEngine(self.world, spatial=spatial) if engine else PlaceholderResolver()
         self.rng = random.Random(f"{seed}|league")
@@ -68,6 +70,14 @@ class Universe:
         if self.cursor is not None:
             raise Rejected("cap multipliers are fixed for the season: they change only between league years, before the next year opens")
         return self.world.L.set_cap_multipliers(self.club_ids(by_abbr))
+
+    def configure_upgrade_policy(self, abbrs):
+        """The offseason configuration step for the optional upgrade policy (docs/SACRAMENTO_MANAGEMENT_POLICY_2026-11-22.md): replace the set of clubs
+        whose management takes affordable roster upgrades at camp (the complete set; none clears it). Between league years only; it acts at the
+        next camp. Returns the clubs now named. Durable use goes through Runner.configure_upgrade_policy."""
+        if self.cursor is not None:
+            raise Rejected("the upgrade policy is fixed for the season: it changes only between league years, before the next year opens")
+        return self.world.set_upgrade_policy(self.club_ids(dict.fromkeys(abbrs)))
 
     # ------------------------------------------------------------------ the year
     def play_year(self):

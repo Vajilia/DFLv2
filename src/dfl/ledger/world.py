@@ -52,6 +52,8 @@ def ask(player):
 
 class World:
     waiver_priority = None      # club ids, first claim first: set by the league that owns the calendar and the standings (year.Universe); None: by id
+    upgrade_policy = None       # club ids whose management also takes affordable roster upgrades at camp (docs/SACRAMENTO_MANAGEMENT_POLICY_2026-11-22.md).
+                                # A class default, set on the instance only when a club is named, so a league without the option carries and digests no new state
 
     def __init__(self, cids, seed=1, reckless=(), year=2000, tables=None, engine_injuries=False, priority=(), cap=None):
         self.rng = random.Random(seed)
@@ -140,17 +142,22 @@ class World:
         key = (cid, p.pid)
         v = self._views.get(key)
         if v is None:
-            S = self.tables.scouting
-            gm = self.leaders.get(cid, {}).get("gm")
-            evl = gm.attrs.get("EVL", 50) if gm else 50
-            sd = S["base_sd"] / math.sqrt(1 + S["seasons_k"] * p.seasons)
-            sd *= 1 - S["evl_effect"] * (evl - 50) / 50
-            if p.club == cid:
-                sd *= S["own_factor"]
-            sd = max(S["min_sd"], sd)
+            sd = self.view_sd(cid, p)
             z = rng_for(self.creator.seed, "scout", cid, p.pid, self.L.year).gauss(0, 1)
             v = self._views[key] = self.rating[p.pid] + self.tables.scouting_bias.get(p.pos, 0.0) + sd * z
         return v
+
+    def view_sd(self, cid, p):
+        """How far the club's estimate of this player is likely to be off (the standard deviation of the error in `view`). It follows from what the
+        club knows about its own scouting: the player's credited seasons, its general manager's evaluation, and whether she is its own player."""
+        S = self.tables.scouting
+        gm = self.leaders.get(cid, {}).get("gm")
+        evl = gm.attrs.get("EVL", 50) if gm else 50
+        sd = S["base_sd"] / math.sqrt(1 + S["seasons_k"] * p.seasons)
+        sd *= 1 - S["evl_effect"] * (evl - 50) / 50
+        if p.club == cid:
+            sd *= S["own_factor"]
+        return max(S["min_sd"], sd)
 
     def purge(self):
         """Characters the ledger has retired leave the list; their names may be used again."""
@@ -638,11 +645,78 @@ class World:
             done += self.try_sign(cid, best, value=v)
         self.stats["upgrades"] = self.stats.get("upgrades", 0) + done
 
+    def set_upgrade_policy(self, cids):
+        """Name the clubs whose management takes affordable upgrades beyond the ordinary routine (the complete set; none clears it). Between league
+        years only. Returns the clubs now named."""
+        cids = sorted(set(cids))
+        for c in cids:
+            if c not in self.L.clubs:
+                raise Rejected(f"unknown club {c!r}")
+        if self.L.phase not in ("offseason", "post"):
+            raise Rejected(f"the upgrade policy is fixed for the season: refused in phase {self.L.phase!r}")
+        if cids:
+            self.upgrade_policy = tuple(cids)
+        elif "upgrade_policy" in self.__dict__:
+            del self.upgrade_policy
+        return list(cids)
+
+    def upgrade_more(self, cid):
+        """The optional upgrade policy (docs/SACRAMENTO_MANAGEMENT_POLICY_2026-11-22.md). It continues the ordinary camp upgrade routine (`upgrade`),
+        which signs at most `upgrade_max` free agents and looks only at the best one at each position. Here the club keeps going, one signing at a time,
+        for as long as a free agent is a worthwhile upgrade over a weakest starter at a position it has already filled:
+          * worthwhile: by the club's own view with age counted (`value`), she beats that starter by at least the ordinary margin AND by at least the
+            club's own uncertainty about the comparison (the root-sum-square of the two estimates' standard deviations), so a gap that scouting error
+            alone could produce is not chased;
+          * affordable: the price she accepts (`negotiate`), and the cost of the player who becomes surplus (dead money on her release, if that
+            exceeds the salary relieved), fit under the club's own cap less the reserve;
+          * the roster limits and the contract rules are the ordinary ones, and nothing is bought if nothing qualifies.
+        The club sees only what ordinary management sees: its own views of players, never a hidden rating. Each signing strictly improves a starter
+        slot by the margin, so the loop ends; a signing that fails is not tried again."""
+        L, N = self.L, self.tables.negotiation
+        limit = L.cap_of(cid) - R.RESERVE
+        refused = set()
+        done = 0
+        while L.room(cid, "roster"):
+            best = None
+            for pos, n in STARTERS.items():
+                mine = sorted(((self.value(L.players[i], cid), -i) for i in L.clubs[cid].roster
+                               if L.players[i].pos == pos and L.players[i].out_weeks == 0), reverse=True)
+                if len(mine) < n:
+                    continue            # short of a starter: the minimums rule fills it
+                weakest = L.players[-mine[n - 1][1]]
+                floor = mine[n - 1][0]
+                for q in self.fas(pos, cid):
+                    if q.pid in refused:
+                        continue
+                    gap = self.value(q, cid) - floor
+                    sd = math.hypot(self.view_sd(cid, q), self.view_sd(cid, weakest))
+                    if gap < N["upgrade_margin"] or gap < sd:
+                        continue
+                    if best is None or (gap, pos, -q.pid) > (best[0], best[1], -best[2].pid):
+                        best = (gap, pos, q, weakest)
+            if best is None:
+                break
+            _, pos, q, weakest = best
+            v = self.negotiate(cid, q)
+            k = weakest.contract
+            dead = max(F(0), k.release_charges(L.year, L.week).get(L.year, F(0)) - k.cap_hit(L.year))
+            if v is None or (cid not in self.reckless and L.cap_number(cid) + v + dead > limit):
+                refused.add(q.pid)
+                continue
+            if self.try_sign(cid, q, value=v):
+                done += 1
+            else:
+                refused.add(q.pid)
+        if done:
+            self.stats["upgrades_more"] = self.stats.get("upgrades_more", 0) + done
+
     def camp(self, cid):
         """Cut to 53 and 16, clear any overage (the cap binds from the final cut), make sure the minimums hold."""
         L = self.L
         c = L.clubs[cid]
         self.upgrade(cid)
+        if self.upgrade_policy and cid in self.upgrade_policy:
+            self.upgrade_more(cid)
         for _ in range(200):
             # sizes
             while len(c.roster) > R.ROSTER_MAX:
