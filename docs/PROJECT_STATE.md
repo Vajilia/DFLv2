@@ -12,6 +12,16 @@ Not part of Milestone 1; the frozen candidate (`205f891`), harness (`5a97dad`) a
 * Using it in the viewing league requires a new candidate cycle and V0-V5 repeat (`pin-check` fails on the feature branch by design). Owner/ChatGPT decision.
 * Time: package started 2026-11-22 01:40 PST; within the 6 h limit (about 2 h of it simulation).
 
+### Follow-up: Sacramento management policy (authorized 2026-11-22 03:30 PST)
+
+Work record: `docs/SACRAMENTO_MANAGEMENT_POLICY_2026-11-22.md`. Same branch; frozen configuration untouched; no production or viewing-league data touched.
+
+* Diagnosis: spending appetite and cap room are not the limit (payroll at camp about 79% of the 1,150 cap). Sacramento's free agency mostly stops at the roster ceiling; free agency never compares with incumbents; the camp upgrade routine signs at most 3 and looks at only the best free agent per position.
+* Optional policy (default off, per club, persisted, offseason-only): at camp, sign affordable upgrades over a weakest starter at filled positions when the gap exceeds the ordinary margin and the club's own scouting uncertainty; replacement and cap consequences are checked first. Cap multiplier stays 1.15.
+* Registered comparison (96 leagues, one run): **INEFFECTIVE**. The policy fires but does not measurably raise payroll or true starter strength; worthwhile upgrades are scarce once scouting error is respected. Rules and roster limits held.
+* **Recommendation: do not adopt either option for the viewing league.** Neither the cap multiplier nor the policy gives a measurable advantage; both are unmerged on the feature branch and the frozen candidate stays valid.
+* General defects found (documented, not fixed): league founding fails on about 2% of seeds on the baseline code (seed 7771413: `sign: breaks the cap for Tampa Bay`; any launch seed must be created first); free-agency loop ends at the first position without a worthwhile player; free agency signs at filled positions without comparing to the incumbent; failed negotiations use up the 40-pass allowance; the camp upgrade is capped at 3 and best-per-position. See section 3 of the work record.
+
 ## Milestone 1 clock
 
 | | |

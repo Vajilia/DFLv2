@@ -68,6 +68,18 @@ None of these is changed here. 2 to 5 are the reason the policy has room to matt
 * **Practical limit:** 32 simulated leagues of up to four seasons can show whether the policy gives an advantage that is noticeable on average and whether it produces certain outcomes. They cannot show that any particular future season will end a particular way, and they cannot exclude rare outcomes. The fast engine mode shows direction and rough size, not exact odds.
 * **Disclosed before the run:** a two-league dry run of the tool on other test seeds (7770900, 7770901; discarded) to check the pipeline; it showed the policy firing in 1 of 6 leagues in a first year, which is why the uncertainty rule is stated openly as the likely limit on how often it fires.
 
-## 6. Status
+## 6. Result (verdict only; numbers stay in a private artifact)
 
-(updated below after the run)
+* The registered comparison ran once on 32 seeds (7770101-7770132, none skipped), 96 leagues, about 90 minutes of simulation on two processes. No second run, no change of method, multiplier or policy.
+* **Verdict: INEFFECTIVE.**
+  * Rules and roster limits held in every league: yes.
+  * Uses the extra room for worthwhile upgrades: **no**. The policy does fire (in about 90% of seeds, on average under one signing per camp), so the mechanism works, but it did not measurably raise Sacramento's payroll or its starters' true strength: both paired intervals include zero. This is the rule's criterion 2; the win-percentage criteria were not reached.
+  * Competitive uncertainty remains: yes (nothing was made certain).
+* **Why (diagnosis, not outcome).** At the club's own level of scouting uncertainty (a comparison error of about 5-7 points), few free agents left at camp are clearly better than a filled starter slot, and those that are tend to be small gains. Room was never the constraint (section 1), and supply that survives an honest uncertainty test is thin. Loosening the test would sign more players but mostly chase scouting noise; the registered rule does not allow it and it was not tried.
+* **Limits.** The fast engine mode; four seasons; one execution. A finite experiment shows that the policy gives no measurable benefit of this kind on average; it cannot prove it never would.
+* **Not re-run:** after this commit the existing suites (other than the 27 new tests and the default-league digest, which is identical to the baseline over 120 events) were not repeated, because the two-hour simulation budget was used by the comparison. The changes to existing code are a pure refactor of `World.view` (the error computation moved to `view_sd`, same arithmetic and order) and a call in `camp` that runs only for a named club.
+* **Consequence for validation.** Like the cap option, this changes engine-side code; `pin-check` fails on the feature branch by design and adopting it for the viewing league would require a new candidate cycle. Because both options are ineffective, there is no reason to.
+
+## 7. Status
+
+Complete. Work stops here.
