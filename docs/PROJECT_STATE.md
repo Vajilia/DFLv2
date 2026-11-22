@@ -2,14 +2,22 @@
 
 This is the one document that says where the project stands. Other documents are history or reference. Sanitized: no hosts, machine ids, credentials or hashes of private evidence. Updated at the end of each milestone.
 
-## Baseline defects package (2026-11-22, separate from validation and from the Sacramento work)
+## Candidate 5 package (2026-11-22, authorized 08:17 PST; complete)
 
-Branch `fix/baseline-founding-fa-2026-11-22` from `4a1f26e`; work record `docs/BASELINE_DEFECTS_2026-11-22.md`. The Sacramento cap and upgrade features stay deferred and unmerged (the goal of a useful but fallible Sacramento advantage stands; no other advantage is to be tried yet).
+Candidate 4 (`205f891`) plus the two confirmed baseline engine fixes, as **candidate 5 (`512dd1e`)**, pinned on a preparation lineage. Work record: `docs/BASELINE_DEFECTS_2026-11-22.md`; history: `docs/CANDIDATE_HISTORY.md`. The Sacramento cap and upgrade-policy features are **deferred, not rejected**, unmerged and not in candidate 5 (branch `feature/sacramento-cap-2026-11-22`). Nothing has been run under systemd for candidate 5. Nothing in candidate 4's validation record is a result for candidate 5.
 
-* **Confirmed and fixed:** (1) league founding could raise a cap-illegal club (about 2 seeds in 100, for example 7771413); every seed that founded before is byte-identical; (2) free agency ended a club's whole period when one randomly drawn position had no candidate (about 29% of club-years); now another position is drawn.
-* **Investigated, not a defect, not changed:** signings at filled positions ("below the incumbent"): 84% are starter upgrades or make the depth chart; the 16% below the template are mostly cheap and mostly cut at negligible cost. Recommended: leave as is.
-* **Tests:** new `tests/test_baseline_defects.py` (6, red then green); full regression run passes except the four pin-gate tests that fail on any code change by design.
-* **Validation impact:** the frozen candidate (`205f891`) does not contain these fixes. Adopting them needs a new candidate, a new pin and a V0 to V5 repeat. Not started; not authorized. Until then a launch seed must be created first to confirm it founds.
+* **Fixes.** (1) Founding Day: a drawn rookie round is lowered only as far as needed for the club to complete **all** of its 53 roster and 16 squad signings within the cap (the ledger's own cap number with the signings still to come, top-N rule included); the contract is always an ordinary scale contract of some round. (2) Free agency no longer ends a club's whole period when one drawn position has no candidate; the existing roster, budget, ceiling and 40-pass limits are unchanged and the loop is bounded.
+* **Frequencies and compatibility are sample results.** The founding failure was seen on 1 of 60 screened test seeds (7771400-7771459); one in 60 is too few to estimate a true rate. Founding digests of the 59 screened seeds that founded on `4a1f26e` are identical on the candidate (the failing seed now founds). That is a check on specified seeds, not a proof for every seed. The free-agency fix changes league evolution after the first free agency (a sample observation).
+* **Not changed:** signings below an incumbent (investigated; judged not a defect), scouting accuracy, negotiation rules, camp limits, game outcomes, the pin gate, `pin-check`, acceptance criteria, `tools/vtest` logic, `alerts`.
+* **Derived values, updated through their mechanisms (not papered over):** `tools/vtest/PIN` (new candidate, owner's instruction of 2026-11-22 08:17 PST) and its approval test; the engine code fingerprint constant in `tests/test_replay_tools.py` (the deployed release's `efaa7167...9973` is kept there as a record, the candidate's `059667d2...745b` is asserted). `alerts/RELEASE_MANIFEST.json` is not derived from the engine and still matches (`release_config.py manifest`).
+* **Production implication (note only; production not touched).** The engine fingerprint is no longer the deployed release's, so a league written by the deployed engine is refused by candidate 5 until carried over with `persist.upgrade` (`league_store.py upgrade OLD NEW --run-originating-code --archive ARCHIVE_COPY`, `docs/DEV_LEAGUE_RUNBOOK.md`). Deploying candidate 5 to production is a separate decision, not part of this package.
+* **Checks run (final code revision `512dd1e`, tree `1fbbfeb`).** New `tests/test_baseline_defects.py`: 9 tests, red on `4a1f26e`, green on the fix (worst case: every founding draw forced to round 1 still founds all 48 clubs at 53 + 16 within the cap; lowered rounds are exact scale contracts; free-agency limits with the empty position always drawn first). Full local run, every test file one at a time (118 files, about 1,900 tests): all pass; skipped explicitly: three real-engine tests (`test_backup_resume_real`, `test_supervisor_real`, `test_multiseason_engine`, they need a finished first-season root that is not present) and one case in `test_site_deploy` (needs root or a clean tree). `tools/validate.py`: 75 passed, 0 failed. `pin-check`: OK. The other CI steps (30-season run, soaks, restore soak, spatial smoke) were run by GitHub CI only, not locally (two CPUs shared with the test run). The four pin-gate tests pass after the pin and fingerprint updates. CI results are recorded below.
+
+## Real-system execution handoff (refreshed 2026-11-22 for candidate 5)
+
+For the provisioning session. Everything is prepared; this session buys nothing and creates no machine. Code under test: candidate 5 `512dd1e`. Run from the head of `prep/candidate-5-2026-11-22` (see Revisions). Limits unchanged from the owner's correction of 01:17 PST: one new machine, spend ceiling $2, no snapshots or backups, testing stops at T0+8 h, verified export and destruction by T0+9 h, evidence by private SSH/SCP, one use, production untouched, no credentials entered by this session. The plan below is the one to follow; its S0 checkout now names the preparation branch head. Every old pass is void for candidate 5, so a Phase A pass is the first evidence for it.
+
+**Recommended next action:** the owner authorizes the provisioning session to create the one machine and run Phase A (the narrow V5 smoke) of the plan below against candidate 5, then Phase B only if Phase A passes and time allows.
 
 ## Milestone 1 clock
 
@@ -24,14 +32,14 @@ Branch `fix/baseline-founding-fa-2026-11-22` from `4a1f26e`; work record `docs/B
 
 | Part | Value |
 |---|---|
-| Candidate (code under test) | `205f891fc58eeed5330b36493523be1dc6792859` (candidate 4, pinned in `tools/vtest/PIN`; unchanged) |
-| Alert package | as hashed in `alerts/RELEASE_MANIFEST.json` (unchanged) |
-| Harness | `5a97dad140c7ea4f3c9007c623ef2553a5a31691` on branch `fix/v5-alert-journal-collection-2026-11-19` (CI run 44514172644 passed). `pin-check` passes at this revision |
+| Candidate (code under test) | `512dd1eedc62d013f184377b81b198f53224e7ee` (candidate 5, pinned in `tools/vtest/PIN`), branch `integration/launch-candidate-5-2026-11-22`. Candidate 4 `205f891` stays recorded in `docs/CANDIDATE_HISTORY.md`, unchanged |
+| Harness | Logic `5a97dad140c7ea4f3c9007c623ef2553a5a31691` (CI run 44514172644 passed), unchanged since: `tools/vtest` differs from it only in `PIN`. The commit a run is made from is the head of `prep/candidate-5-2026-11-22` (tests and docs fixed at `1fbbfebf89f2a7c012018b1acf8ffbe8d89271d1`; later docs-only commits are equally valid; run `pin-check` first) |
+| Alert package | `alerts/RELEASE_MANIFEST.json` (git blob `1c0920b6d9637a69c6f4ffb9506437f4da68cfec`), unchanged and matching |
 | Production | untouched. Not accessed in Milestone 1 |
 
-`vtest.py affected --recorded 9bc3197` (the harness of the last qualifying V0-V3 passes) names **V0, V1, V2, V3, V4 and V5** for repeat: the alert package is part of the release configuration and V4 and V5 have never passed in a qualifying run. So one new, complete run under this single release configuration is needed; old passes do not carry over.
+`vtest.py affected --recorded 5a97dad` names **V0 to V5** for repeat (the pin moved, so every stage is affected) and `--recorded 9bc3197` does too. One new, complete run under this single release configuration (candidate 5, this harness, this alert package) is needed; old passes do not carry over.
 
-## Validation results (nothing has been re-run in Milestone 1)
+## Validation results (nothing has been re-run in Milestone 1; every result below is for candidate 4 or earlier; candidate 5 has no result)
 
 | Check | Status | Notes |
 |---|---|---|
@@ -71,14 +79,14 @@ sudo touch /etc/dfl-vtest-disposable
 sudo apt-get install -y git python3 strace util-linux e2fsprogs
 sudo useradd --system --user-group --no-create-home --shell /usr/sbin/nologin dfl-vtest
 git clone https://github.com/Vajilia/DFLv2 && cd DFLv2
-git checkout 5a97dad140c7ea4f3c9007c623ef2553a5a31691
+git checkout prep/candidate-5-2026-11-22         # the head; run pin-check next (candidate 5 is its ancestor; harness logic is 5a97dad's)
 python3 tools/vtest/vtest.py pin-check            # must pass
 sudo python3 tools/vtest/vtest.py preflight       # must end READY
 sudo python3 tools/vtest/vtest.py plan
 sudo python3 tools/vtest/vtest.py install         # starts nothing
 sudo python3 tools/vtest/vtest.py install-alerts  # checks alerts/RELEASE_MANIFEST.json before writing; records effective settings
 ```
-(`fa6ad15` is a docs-only successor of `5a97dad` and is equally valid; `5a97dad` is the named harness revision.) Read `STATE/alerts_install.json` and the effective settings before running anything.
+(Any docs-only successor of `1fbbfeb` on that branch is equally valid; `pin-check` must pass.) Read `STATE/alerts_install.json` and the effective settings before running anything.
 
 **Phase A: narrow V5 smoke (non-qualifying).** `sudo python3 tools/vtest/vtest.py run --stages V5 --smoke --run-id m1-v5-smoke` (about 0.9 h), then `archive --run-id m1-v5-smoke` (exit 0 required), export and verify. Pass means the stage passes, the manifest says `complete: true`, and these exist in the archive: `V5/attribution_{monitor_stopped,daemon_start_limit,monitor_exit2,delivery_failure}.json`, `V5/alert_sandbox.json`, `V5/alert_journal_timestamped.txt`, `V5/alert_journal_status.json`, `V5/alert_journal.txt`. Any failure, missing item or exit other than 0: export, destroy, stop for review.
 
