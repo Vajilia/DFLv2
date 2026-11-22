@@ -194,17 +194,18 @@ class World:
         self.top_up_pool()
 
     def _founding_contract(self, cid, rnd, after):
-        """The rookie contract of a founding signing: the scale of the round that was drawn, unless the club could then no longer sign the `after`
-        signings still to come, each at least the league minimum (the lowest rookie scale), within the cap; then the first round at or after the
-        one drawn that leaves it room. The draw itself is unchanged, so a club that fits is exactly what it always was; only a club that could
-        not be founded legally is touched (an all-rookie club must be cap-legal, as every other signing is)."""
+        """The rookie contract of a founding signing: the scale of the round that was drawn, unless the club could then no longer complete its
+        founding within the cap. Completing means the `after` signings still to come as well (every one of them at least the league minimum, which is
+        the lowest rookie scale), judged by the ledger's own cap number with its top-N rule. Then the first round at or after the one drawn that
+        leaves room is used. Because the projection never exceeds what the club's real cap number will be, a club that could be founded with its
+        drawn rounds is given exactly those rounds, and the draw itself is made as before; only a club that could not be founded legally is touched.
+        The contract is always `rookie_contract` of some round: four fixed years at that round's scale, no bonus, no option."""
         L = self.L
-        held = L.cap_number(cid)
         for r in range(rnd, 8):
             k = rookie_contract(L.year, r)
-            if held + k.cap_hit(L.year) + after * R.MIN_SALARY <= L.cap:
+            if L.cap_number(cid, extra=[k.cap_hit(L.year)] + [R.MIN_SALARY] * after) <= L.cap:
                 return k
-        return rookie_contract(L.year, 7)
+        raise Rejected(f"cannot found {cid} within the cap: no rookie scale leaves room for the {after} signings still to come")
 
     def top_up_pool(self, floor=8):
         """Pools hold at least 8 medically available unsigned players per position (section 13)."""

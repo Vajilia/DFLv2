@@ -1,7 +1,6 @@
 """Regression tests for two defects of the baseline code, found by a screen of disposable test seeds (docs/BASELINE_DEFECTS_2026-11-22.md).
 
-1. Founding Day could build a cap-illegal club: every founding rookie's salary round is drawn at random with no cap check, so on about 2 seeds
-   in 100 a club's all-rookie 53 plus its squad of 16 cannot all be signed and creating the league raises "breaks the cap".
+1. Founding Day could build a cap-illegal club: every founding rookie's salary round is drawn at random with no cap check, so on 1 of the 60 screened seeds (a sample result) a club's all-rookie 53 plus its squad of 16 cannot all be signed and creating the league raises "breaks the cap".
 2. Free agency ended a club's whole period the first time the randomly chosen position had no suitable free agent.
 
 Disposable leagues only: seeds in the block reserved for tests (7771000 to 7771999). None may ever be used for a league someone watches.
@@ -15,6 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from dfl import neutral  # noqa: E402
 from dfl.ledger import rules as R  # noqa: E402
+from dfl.ledger.contracts import rookie_contract  # noqa: E402
 from dfl.ledger.world import TEMPLATE  # noqa: E402
 from dfl.year import Universe  # noqa: E402
 
@@ -62,15 +62,51 @@ class TestFounding(unittest.TestCase):
         otherwise the first round at or after it that fits is used."""
         w = fast(7771400).world
         c = "Sacramento"
-        w.L.cap_number = lambda cid: F(990)
+        w.L.cap_number = lambda cid, year=None, extra=(): F(990) + sum(extra, F(0))
         base = lambda rnd, after: w._founding_contract(c, rnd, after).years[0]          # noqa: E731
         self.assertEqual(base(1, 0), R.ROOKIE_SCALE[4])            # 990 + 25, 18, 14, 11 break the cap; 9 fits
         self.assertEqual(base(5, 0), R.ROOKIE_SCALE[4])            # a round that fits is kept
         self.assertEqual(base(1, 1), R.ROOKIE_SCALE[6])            # one more signing to come at the minimum: only the cheapest scale leaves room
         self.assertEqual(base(7, 1), R.ROOKIE_SCALE[6])
-        w.L.cap_number = lambda cid: F(500)
+        w.L.cap_number = lambda cid, year=None, extra=(): F(500) + sum(extra, F(0))
         for rnd in range(1, 8):
             self.assertEqual(base(rnd, 20), R.ROOKIE_SCALE[rnd - 1])           # plenty of room: the drawn round is used
+
+class TestFoundingWorstCase(unittest.TestCase):
+    """The draw is made as before; only a club that could not otherwise be completed within the cap has a round lowered."""
+
+    @staticmethod
+    def all_round_one(seed):
+        """A disposable league founded with every drawn salary round forced to 1 (the most expensive scale for every one of the 53 roster players)."""
+        import random
+        real = random.Random.randint
+        random.Random.randint = lambda self, a, b: 1 if (a, b) == (1, 7) else real(self, a, b)
+        try:
+            return fast(seed)
+        finally:
+            random.Random.randint = real
+
+    def test_every_club_completes_its_roster_and_squad_legally_even_if_every_draw_is_round_one(self):
+        for seed in (7771400, FAILING_FOUNDING_SEED):
+            with self.subTest(seed=seed):
+                L = self.all_round_one(seed).world.L
+                for cid, c in L.clubs.items():
+                    self.assertEqual((len(c.roster), len(c.ps)), (53, 16), cid)          # all required slots filled, not just the current signing
+                    self.assertLessEqual(L.cap_number(cid), L.cap, cid)
+                    self.assertEqual(L.overage(cid), 0, cid)
+
+    def test_lowered_rounds_are_still_ordinary_rookie_contracts(self):
+        u = self.all_round_one(FAILING_FOUNDING_SEED)
+        L = u.world.L
+        lowered = 0
+        for p in L.players.values():
+            if p.club is None:
+                continue
+            k = p.contract
+            rnd = R.ROOKIE_SCALE.index(k.years[0]) + 1                     # the round whose scale it is (also fails if the salary is not on the scale)
+            self.assertEqual(k, rookie_contract(L.year, rnd))            # exactly the scale contract of that round: 4 fixed years, no bonus, no guarantee, no option
+            lowered += rnd > 1
+        self.assertGreater(lowered, 0, "with every draw at round 1 some contracts must have been lowered, or the test proves nothing")
 
 
 class _Stop(Exception):
@@ -144,6 +180,36 @@ class TestFreeAgencyDoesNotEndOnOneEmptyPosition(unittest.TestCase):
         w.need = lambda cid, slots=("roster",): [(F(1), "MLB"), (F(1), "CB")]
         w.free_agency()                                   # terminates (no endless loop), signing nothing in the loop
         self.assertTrue(all(len(c.roster) + len(c.ps) <= R.PRESEASON_CEILING for c in w.L.clubs.values()))
+
+    def test_the_period_keeps_its_roster_cap_and_iteration_limits(self):
+        from collections import Counter
+        u = before_free_agency(7771501)
+        w = u.world
+        L = w.L
+        real_fas = w.fas
+        w.fas = lambda pos=None, cid=None: [] if pos == "MLB" else real_fas(pos, cid)
+        w.need = lambda cid, slots=("roster",): [(F(1), "MLB"), (F(1), "CB")]
+        w.rng.choice = lambda seq: "MLB" if "MLB" in seq else seq[0]            # the worst case for progress: the empty position is always drawn first
+        start = {cid: len(c.roster) + len(c.ps) for cid, c in L.clubs.items()}
+        under = {cid for cid in L.clubs if L.cap_number(cid) <= L.cap}
+        loop, sizes = Counter(), {}
+        orig = w.try_sign
+
+        def spy(cid, p, *a, **k):
+            if "value" in k:
+                sizes[cid] = max(sizes.get(cid, 0), len(L.clubs[cid].roster) + len(L.clubs[cid].ps))
+            ok = orig(cid, p, *a, **k)
+            if ok and "value" in k:
+                loop[cid] += 1
+            return ok
+        w.try_sign = spy
+        w.free_agency()
+        for cid in L.clubs:
+            self.assertLessEqual(loop[cid], 40, cid)                                       # the existing iteration limit
+            self.assertLess(sizes.get(cid, 0), R.PRESEASON_CEILING - 9, cid)              # no loop signing is made from a full roster
+            self.assertLessEqual(len(L.clubs[cid].roster) + len(L.clubs[cid].ps), max(start[cid], R.PRESEASON_CEILING), cid)
+        for cid in under:
+            self.assertLessEqual(L.cap_number(cid), L.cap, cid)                           # the budget limit
 
 
 if __name__ == "__main__":

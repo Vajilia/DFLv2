@@ -147,10 +147,13 @@ class Ledger:
             return []
         return sorted((R.ROOKIE_SCALE[min(pk[1], 7) - 1] for pk in self.clubs[cid].picks if pk[0] == self.year), reverse=True)
 
-    def cap_number(self, cid, year=None):
+    def cap_number(self, cid, year=None, extra=()):
+        """The club's cap number. `extra`: cap hits of contracts not yet signed, counted as if they were (a projection, under the same top-N rule);
+        nothing is changed."""
         year = self.year if year is None else year
         c = self.clubs[cid]
         hits = [k.cap_hit(year) for k in self.contracts_of(cid) if k]
+        hits += list(extra)
         if year == self.year:
             hits += self.rookie_reserve(cid)
         if year == self.year and self.phase in ("offseason", "camp") and len(hits) > R.CAP_COUNTED_BEFORE_CUT:
