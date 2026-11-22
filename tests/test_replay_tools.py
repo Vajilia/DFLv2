@@ -35,7 +35,12 @@ FIX = os.path.join(ROOT, "tests", "fixtures", "replay_tools_v1")
 ARCHIVE = os.path.join(FIX, "archive_excerpt.sqlite")
 FEED = os.path.join(FIX, "feed")
 GID = "S001/reg:w01:g02"
-DEPLOYED_FINGERPRINT = "efaa7167832713d771942b9504f72f25edb0793af6fa6d2fa2593a8792909973"      # engine release 7e59cbb
+DEPLOYED_FINGERPRINT = "efaa7167832713d771942b9504f72f25edb0793af6fa6d2fa2593a8792909973"      # engine release 7e59cbb: what production serves (a record; see below)
+# Candidate 5 changes the engine on purpose (src/dfl/ledger/world.py and ledger.py: the two baseline fixes of docs/BASELINE_DEFECTS_2026-11-22.md), so its code
+# fingerprint is no longer the deployed one. This is the fingerprint of exactly those two changes on top of the deployed engine; any further change to src/dfl/
+# or data/ moves it and must move this constant deliberately. Leagues written by the deployed release are carried over with persist.upgrade
+# (docs/DEV_LEAGUE_RUNBOOK.md); production is not touched by this.
+CANDIDATE_FINGERPRINT = "059667d22f4f274f37278910840d915325d219e19174c08c5a5247932784745b"       # candidate 5
 
 
 def clone_rows(src, extra):
@@ -336,7 +341,8 @@ class Tools(unittest.TestCase):
         man = persist.code_manifest()
         self.assertTrue(all(k.startswith(("src/dfl/", "data/")) for k in man), "the fingerprint covers the engine and its data only")
         self.assertFalse([k for k in man if "dflsite" in k or "playback" in k or "replay" in k])
-        self.assertEqual(persist.fingerprint(), DEPLOYED_FINGERPRINT, "the engine code and data are those of the deployed release")
+        self.assertEqual(persist.fingerprint(), CANDIDATE_FINGERPRINT, "the engine code and data are those of the candidate (the deployed release plus the two baseline fixes)")
+        self.assertNotEqual(CANDIDATE_FINGERPRINT, DEPLOYED_FINGERPRINT)
 
 
     # ------------------------------------------------------------------------------------------------ the playback cache rules stay in the Caddy template
