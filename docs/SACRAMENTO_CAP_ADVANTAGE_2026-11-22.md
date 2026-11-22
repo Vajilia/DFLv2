@@ -63,6 +63,17 @@ If the engine had needed a rules change beyond this (for example per-club prices
 * **What the owner sees**: the verdict word, one sentence on each of the three questions (works / management uses it / uncertainty remains), and the practical limit below. Numbers stay in the private artifact.
 * **Practical limit**: 32 simulated leagues of 3 scored seasons can show whether the advantage is large enough to notice on average. They cannot show that any single future season will end a particular way, and they cannot exclude rare outcomes; a finite experiment cannot prove that success is never guaranteed. The comparison uses the faster engine mode, so it shows direction and rough size, not exact odds.
 
-## 6. Status
+## 6. Results (verdict only; the numbers stay in a private artifact)
 
-Design written; implementation, tests and the comparison follow in this branch. Results are recorded in `docs/PROJECT_STATE.md` as verdict only.
+* Branch `feature/sacramento-cap-2026-11-22`. Feature tests: 38 in `tests/test_cap_multiplier.py`, all passing; 21 mutations of the cap sites were each caught. Existing ledger, parity, governance, trading, persistence, feed and year suites pass unchanged (the full suite was not run end to end; about 84 minutes).
+* The registered comparison ran once (32 pairs, 4 years each, test seeds 7770001-7770032). **Verdict: EVIDENCE INSUFFICIENT.**
+  * Mechanism works: yes. The limit is exactly 1.15 x base for Sacramento and base for every other club; nobody ended a final cut over their own limit.
+  * Management uses the extra room: **no**, under the registered test. That is the criterion that failed.
+  * Competitive uncertainty remains: yes.
+* **Why management does not use the room (a finding, not a defect of the option).** Management's spending floor and signing checks do scale with the club's cap. But free agency ends on most seeds because the roster-plus-practice-squad ceiling is reached, no position is needy, or the 40-iteration limit is hit, so payroll can stay well below the cap. The cap is rarely the binding constraint, so a larger cap changes little. On a few seeds the room is used (a disposable test seed showed 906 to 1044); on others there is no change. No tuning of the multiplier or the rule followed.
+* **The one recommendation.** Do not change the multiplier. Raising it would not help, because the constraint is not the cap. If Jeph wants the extra room to matter, the decision is a creative one: whether Sacramento management should be given a larger spending appetite (a separate, explicit management setting, for example a higher free-agency spending floor for that club). That goes beyond the approved cap option and needs his approval; it would also be a competitive lever and needs its own bounded comparison.
+* **Consequence for validation.** The option changes engine-side code (`ledger`, `world`, `year`, `persist`). `vtest.py affected --recorded 4a1f26e` names V0-V5 for repeat and `pin-check` fails on this branch by design. Using the option in the viewing league needs a new candidate cycle and an owner/ChatGPT decision. Nothing here changes the frozen candidate, harness or alert package.
+
+## 7. Status
+
+Implementation, tests and the one comparison are complete. Work stops here.

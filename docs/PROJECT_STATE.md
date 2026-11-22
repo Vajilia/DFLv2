@@ -2,6 +2,16 @@
 
 This is the one document that says where the project stands. Other documents are history or reference. Sanitized: no hosts, machine ids, credentials or hashes of private evidence. Updated at the end of each milestone.
 
+## Feature work, separate from validation: Sacramento cap advantage (2026-11-22)
+
+Not part of Milestone 1; the frozen candidate (`205f891`), harness (`5a97dad`) and alert package are untouched (`git diff 4a1f26e -- tools/vtest alerts` is empty). Branch `feature/sacramento-cap-2026-11-22`, not merged. Work record: `docs/SACRAMENTO_CAP_ADVANTAGE_2026-11-22.md`.
+
+* Option: per-club cap multiplier (default 1.00; proposed Sacramento `SAC` 1.15), exact, 1.00-1.50, fixed for a season, changed only by an explicit offseason step, recorded durably. Default leagues are byte-identical (state digest unchanged).
+* Tested on disposable leagues only (seeds 7770000-7771999 are reserved; the CLI refuses them without `--test-league`). No viewing-league or production data touched.
+* Registered comparison verdict: **evidence insufficient** (mechanism works; management does not use the extra room because roster limits bind before the cap; uncertainty remains). Do not change the multiplier. See the work record for the one open creative decision.
+* Using it in the viewing league requires a new candidate cycle and V0-V5 repeat (`pin-check` fails on the feature branch by design). Owner/ChatGPT decision.
+* Time: package started 2026-11-22 01:40 PST; within the 6 h limit (about 2 h of it simulation).
+
 ## Milestone 1 clock
 
 | | |
